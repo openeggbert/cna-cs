@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      Microsoft.Xna.Framework-compatible facade over CNA, for recompiling existing
+      XNA 4.0 / FNA / MonoGame-era C# game source against CNA with minimal changes.
+      See docs/xna-compatibility.md for what "compatible" does and does not mean here.
+      Never references CNA.Interop directly -- see docs/architecture.md.
+    </Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CNA.Framework\CNA.Framework.csproj" />
+  </ItemGroup>
+
+</Project>
