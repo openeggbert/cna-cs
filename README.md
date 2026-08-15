@@ -1,0 +1,127 @@
+# CNA.NET
+
+CNA.NET is the official C#/.NET language binding for [CNA](https://github.com/openeggbert/cna),
+a native C++ implementation of an XNA-inspired game framework with dozens of
+renderer backends (Vulkan, Direct3D, OpenGL family, Metal, WebGPU, SDL GPU,
+and more).
+
+CNA.NET plays the same role for CNA that **XNA 4.0**, **FNA**, or
+**MonoGame** play for C# game code: your game logic stays in C#, targeting
+familiar `Microsoft.Xna.Framework`-style types, while CNA's C++ engine does
+the actual work underneath.
+
+```text
+your C# game
+        ↓
+CNA.XnaCompat   →  Microsoft.Xna.Framework-compatible facade
+        ↓
+CNA.Framework   →  idiomatic CNA .NET API
+        ↓
+CNA.Interop     →  raw P/Invoke over the CNA C ABI
+        ↓
+CNA's stable C ABI  (lives in openeggbert/cna, not here)
+        ↓
+CNA C++ core  →  Sharp Runtime, CNA subsystems, and every CNA renderer
+```
+
+A high-quality `CNA.XnaCompat` layer aims to let many existing XNA 4.0 game
+projects recompile against CNA.NET with little or no source modification —
+their gameplay code stays in C#, and CNA does the rendering. See
+[`docs/xna-compatibility.md`](docs/xna-compatibility.md) for exactly what
+that promise does and does not cover.
+
+## Status
+
+**Early scaffold.** This repository currently contains the project
+structure, the managed API shape for a minimal "clear screen, draw a
+texture, read the keyboard" game loop, and the plan for what comes next —
+see [`plan.md`](plan.md). It does **not** yet work end to end, because it
+depends on a stable C ABI in [`openeggbert/cna`](https://github.com/openeggbert/cna)
+that has not been implemented there yet (`modules/c-api/`). Building this
+solution works today; running `samples/HelloGame` will throw once it tries
+to load the native `cna-native` library, until that upstream work lands.
+
+## Why a C# binding, and why first
+
+XNA itself was a C# framework. A high-fidelity `CNA.XnaCompat` facade is the
+most direct way to let an existing library of XNA/MonoGame/FNA-era C# game
+code run on CNA's engine without a manual C++ rewrite — turning ports that
+might otherwise take thousands of hours into ports that mostly need to
+address genuine API or content incompatibilities. This is why C#/.NET is the
+first official CNA language binding, ahead of JavaScript/TypeScript, Rust,
+Python, and the rest — see
+[`../cnabinding/analysis_binding.md`](../cnabinding/analysis_binding.md) and
+[`../cna/analysis_binding_languages.md`](../cna/analysis_binding_languages.md)
+for the full reasoning.
+
+## Repository layout
+
+```text
+cna-dotnet/
+├── src/
+│   ├── CNA.Interop/      internal, low-level P/Invoke over the CNA C ABI
+│   ├── CNA.Framework/    idiomatic public CNA .NET API
+│   └── CNA.XnaCompat/    Microsoft.Xna.Framework-compatible facade
+├── tests/
+│   ├── CNA.Framework.Tests/
+│   └── CNA.XnaCompat.Tests/
+├── samples/
+│   └── HelloGame/        the minimal end-to-end game from the design docs
+├── tools/
+│   └── binding-generator/  (planned) codegen for repetitive ABI wrappers
+├── docs/
+│   ├── architecture.md
+│   └── xna-compatibility.md
+├── CNA.sln
+└── plan.md
+```
+
+## Building
+
+Requires the [.NET SDK](https://dotnet.microsoft.com/download) (net8.0 or
+later).
+
+```bash
+dotnet build CNA.sln
+dotnet test CNA.sln
+```
+
+Any IDE that understands SDK-style `.csproj`/`.sln` projects works without
+extra configuration: Visual Studio and JetBrains Rider open `CNA.sln`
+directly; VS Code works via the C# Dev Kit / C# extension (a minimal
+`.vscode/` is included); the `dotnet` CLI itself is the common denominator
+for everything else (e.g. Neovim + an LSP, or CI).
+
+`samples/HelloGame` builds as an ordinary `dotnet run` executable once a
+`cna-native` shared library for your platform is available — see
+[`samples/HelloGame/README.md`](samples/HelloGame/README.md).
+
+## Relationship to Sharp Runtime
+
+CNA may use [Sharp Runtime](https://github.com/openeggbert/sharp-runtime)
+internally as a native C++ dependency (it implements a practical subset of
+`System.*` in C++23). **CNA.NET applications run on the normal .NET runtime
+and the real .NET Base Class Library** — `System.String`,
+`System.Collections.Generic.List<T>`, `System.Threading.Tasks.Task`, and so
+on. Sharp Runtime is not exposed anywhere in CNA.NET's managed API, is not a
+CLR, and does not execute your C# code. See
+[`docs/architecture.md`](docs/architecture.md) for the full explanation —
+this distinction is spelled out in detail because the name "Sharp Runtime"
+otherwise invites the wrong assumption.
+
+## License
+
+CNA.NET is licensed under the [Microsoft Public License (Ms-PL)](LICENSE),
+matching `openeggbert/cna`. See [`NOTICE.md`](NOTICE.md) for the project's
+relationship to Microsoft XNA Framework naming, Sharp Runtime, and FNA.
+
+## See also
+
+- [`openeggbert/cna`](https://github.com/openeggbert/cna) — the native C++
+  engine this binding wraps.
+- [`openeggbert/sharp-runtime`](https://github.com/openeggbert/sharp-runtime) —
+  the native .NET-like C++ library CNA may use internally.
+- `../cnabinding/analysis_binding.md`,
+  `../cnabinding/analysis_binding_sharp_runtime.md`,
+  `../cna/analysis_binding_languages.md` — the design analysis this
+  repository's architecture is built from.

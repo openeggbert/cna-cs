@@ -1,0 +1,50 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# .NET / MSBuild
+*.user
+*.userosscache
+*.sln.docstates
+*.dbmdl
+*.jfm
+*.pdb
+*.cache
+
+# Visual Studio
+.vs/
+*.suo
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# VS Code (keep the shared config in .vscode/, ignore only local overrides)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/settings.json
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# Native binaries consumed from openeggbert/cna — never vendor build output
+# into this repo; see plan.md "Native build reuse".
+runtimes/**/native/*.so
+runtimes/**/native/*.dll
+runtimes/**/native/*.dylib
+
+# OS cruft
+.DS_Store
+Thumbs.db
