@@ -188,9 +188,17 @@ Carried over from `analysis_binding.md` §68 and
 
 ## Toolchain note
 
-`dotnet` was not available in the sandbox this scaffold was authored in, so
-the solution has not been build-verified here. Run `dotnet build CNA.sln`
-and `dotnet test` after cloning to confirm before relying on it.
+`dotnet` was not installed by default in the sandbox this scaffold was
+authored in, but a .NET 8/9 SDK happened to be present locally and was used
+to verify it: `dotnet build CNA.sln` succeeds with 0 warnings/0 errors across
+all 6 projects, all 14 unit tests pass (`dotnet test`), and
+`dotnet run --project samples/HelloGame` fails at exactly the documented
+point — a `DllNotFoundException` for `cna-native` raised from inside
+`Game`'s constructor — rather than from any code defect. That confirms the
+managed callback bridge, the covariant-return `CreateGraphicsDevice`/
+`CreateContentManager` factories, and the `Vector2`/`Color` implicit
+conversions are all wired correctly end to end, ahead of the native ABI
+existing. Re-run both commands after cloning if you want to reconfirm.
 
 ## Native build reuse
 

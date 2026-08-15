@@ -1,0 +1,31 @@
+name: build
+
+# Builds and tests the managed solution only. There is no native cna-native
+# library to link/run against yet (see plan.md "Hard dependency on
+# openeggbert/cna"), so this intentionally does not attempt to run
+# samples/HelloGame -- only that it builds, and that the CNA.Framework.Tests /
+# CNA.XnaCompat.Tests unit tests (which do not touch native code) pass.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore CNA.sln
+
+      - name: Build
+        run: dotnet build CNA.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test CNA.sln --no-build --configuration Release

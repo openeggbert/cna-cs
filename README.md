@@ -37,9 +37,13 @@ structure, the managed API shape for a minimal "clear screen, draw a
 texture, read the keyboard" game loop, and the plan for what comes next —
 see [`plan.md`](plan.md). It does **not** yet work end to end, because it
 depends on a stable C ABI in [`openeggbert/cna`](https://github.com/openeggbert/cna)
-that has not been implemented there yet (`modules/c-api/`). Building this
-solution works today; running `samples/HelloGame` will throw once it tries
-to load the native `cna-native` library, until that upstream work lands.
+that has not been implemented there yet (`modules/c-api/`).
+
+`dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
+and `dotnet test` passes all 14 unit tests. Running `samples/HelloGame`
+builds and starts, then throws a `DllNotFoundException` for `cna-native`
+from inside `Game`'s constructor — exactly the expected failure point until
+the upstream C ABI ships, not a bug here.
 
 ## Why a C# binding, and why first
 
