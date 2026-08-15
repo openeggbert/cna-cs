@@ -1,0 +1,25 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>$(MSBuildProjectName)</RootNamespace>
+
+    <Authors>openeggbert</Authors>
+    <Company>openeggbert</Company>
+    <Product>CNA.NET</Product>
+    <PackageLicenseExpression>MS-PL</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/openeggbert/cna-dotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/openeggbert/cna-dotnet</RepositoryUrl>
+    <NeutralLanguage>en</NeutralLanguage>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+  </PropertyGroup>
+
+</Project>

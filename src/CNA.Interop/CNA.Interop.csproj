@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      Low-level, internal P/Invoke layer over the CNA stable C ABI. Not intended
+      for direct use by application code -- see CNA.Framework and CNA.XnaCompat.
+    </Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

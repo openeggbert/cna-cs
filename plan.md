@@ -87,8 +87,10 @@ the sample's README, not a bug in this repository.
       `Texture2D` create/release/set-data, `SpriteBatch`
       begin/draw/end, `Keyboard` snapshot, `ContentManager` load/root
       directory, and last-error retrieval.
-- [x] `CnaNativeException` mapping `CNA_Result` + last-error text to a
-      managed exception (§10, §77).
+- [x] `CnaError.GetLastErrorMessage()` (last-error text retrieval); the
+      public `CnaException` that maps `CNA_Result` + that text to a managed
+      exception lives in `CNA.Framework` (§10, §77), since `CNA.Interop`
+      itself has no public surface at all.
 - [ ] Pure interop unit tests that only require the ABI headers/shape, not a
       built native library (deferred until Track A ships something to link
       against).

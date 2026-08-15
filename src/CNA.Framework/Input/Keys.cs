@@ -1,0 +1,70 @@
+namespace CNA.Framework.Input;
+
+/// <summary>
+/// CNA key ordinals. Numeric values intentionally match the real
+/// <c>Microsoft.Xna.Framework.Input.Keys</c> (themselves Windows virtual-key codes) where a key
+/// exists in both, so <c>CNA.XnaCompat.Input.Keys</c> can convert with a plain numeric cast. This
+/// is a modest starter subset -- the full ~150-member XNA <c>Keys</c> enum is Phase 4 (plan.md).
+/// Upstream <c>openeggbert/cna</c> owns the authoritative native ordinal scheme once its C ABI
+/// ships; reconcile this list against it then.
+/// </summary>
+public enum Keys
+{
+    None = 0,
+    Back = 8,
+    Tab = 9,
+    Enter = 13,
+    Escape = 27,
+    Space = 32,
+    PageUp = 33,
+    PageDown = 34,
+    End = 35,
+    Home = 36,
+    Left = 37,
+    Up = 38,
+    Right = 39,
+    Down = 40,
+    Delete = 46,
+    D0 = 48,
+    D1 = 49,
+    D2 = 50,
+    D3 = 51,
+    D4 = 52,
+    D5 = 53,
+    D6 = 54,
+    D7 = 55,
+    D8 = 56,
+    D9 = 57,
+    A = 65,
+    B = 66,
+    C = 67,
+    D = 68,
+    E = 69,
+    F = 70,
+    G = 71,
+    H = 72,
+    I = 73,
+    J = 74,
+    K = 75,
+    L = 76,
+    M = 77,
+    N = 78,
+    O = 79,
+    P = 80,
+    Q = 81,
+    R = 82,
+    S = 83,
+    T = 84,
+    U = 85,
+    V = 86,
+    W = 87,
+    X = 88,
+    Y = 89,
+    Z = 90,
+    LeftShift = 160,
+    RightShift = 161,
+    LeftControl = 162,
+    RightControl = 163,
+    LeftAlt = 164,
+    RightAlt = 165,
+}

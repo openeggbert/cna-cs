@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      Idiomatic public .NET API for CNA. Built on CNA.Interop; the base layer that
+      CNA.XnaCompat's Microsoft.Xna.Framework-compatible facade is built on top of.
+    </Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CNA.Interop\CNA.Interop.csproj" />
+  </ItemGroup>
+
+</Project>
