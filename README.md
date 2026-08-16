@@ -1,6 +1,6 @@
 # CNA.NET
 
-> **Status: In progress - ZATÍM NEFUNKČNÍ**
+> **Status: In progress - NOT YET FUNCTIONAL**
 
 
 CNA.NET is the official C#/.NET language binding for [CNA](https://github.com/openeggbert/cna),
