@@ -47,8 +47,16 @@ public class ModelMeshPart
     /// does anything once the part actually belongs to a mesh (i.e. after being passed into a
     /// <see cref="ModelMesh"/> constructor, which is what sets its parent link) -- setting
     /// <see cref="Effect"/> before that point is a real, matching-the-real-engine no-op for mesh
-    /// registration purposes, not a bug: hand-build parts, construct the mesh, *then* assign each
-    /// part's effect.
+    /// registration purposes, confirmed against the real openeggbert/cna C++ engine's own
+    /// <c>ModelMesh</c> constructor, which sets each part's parent link via a raw field assignment
+    /// too, with no equivalent re-registration step. <b>This is not merely inconvenient if
+    /// violated</b>: <see cref="Model.Draw"/> only updates <see cref="IEffectMatrices"/> for
+    /// effects it finds in <see cref="ModelMesh.Effects"/>, so an effect assigned before its part
+    /// had a parent silently never gets its <c>World</c>/<c>View</c>/<c>Projection</c> updated (and
+    /// never gets the "does this effect implement <see cref="IEffectMatrices"/>" safety check
+    /// either) while <see cref="ModelMesh.Draw"/> still renders that part with it, using whatever
+    /// stale matrix values the effect already had -- silently wrong rendering, not an exception.
+    /// Always hand-build parts, construct the mesh, *then* assign each part's effect.
     /// </summary>
     public Effect? Effect
     {

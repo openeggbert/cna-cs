@@ -152,6 +152,43 @@ public class ModelTests
     }
 
     [Fact]
+    public void CopyAbsoluteBoneTransformsTo_BoneIndexDoesNotMatchListPosition_Throws()
+    {
+        var bone0 = new ModelBone(0, "a");
+        // bone1's Index (5) deliberately does not match its position (1) in the Bones list below.
+        var bone1 = new ModelBone(5, "b");
+        var model = new Model(CreateDummyDevice(), [bone0, bone1], []);
+
+        Assert.Throws<InvalidOperationException>(() => model.CopyAbsoluteBoneTransformsTo(new Matrix[2]));
+    }
+
+    [Fact]
+    public void CopyAbsoluteBoneTransformsTo_ParentAppearsAfterChildInList_Throws()
+    {
+        var parent = new ModelBone(1, "parent");
+        var child = new ModelBone(0, "child");
+        parent.AddChild(child);
+        // child is at position 0 but its parent is at position 1 -- the parent's absolute
+        // transform has not been computed yet when child's turn comes.
+        var model = new Model(CreateDummyDevice(), [child, parent], []);
+
+        Assert.Throws<InvalidOperationException>(() => model.CopyAbsoluteBoneTransformsTo(new Matrix[2]));
+    }
+
+    [Fact]
+    public void Draw_MeshHasEffectButModelHasNoBones_ThrowsInsteadOfCrashing()
+    {
+        var device = CreateDummyDevice();
+        var effect = new RecordingEffect(device);
+        var part = new ModelMeshPart(null, null, numVertices: 3, primitiveCount: 1, startIndex: 0, vertexOffset: 0);
+        var mesh = new ModelMesh(device, [part]);
+        part.Effect = effect;
+        var model = new Model(device, [], [mesh]);
+
+        Assert.Throws<InvalidOperationException>(() => model.Draw(Matrix.Identity, Matrix.Identity, Matrix.Identity));
+    }
+
+    [Fact]
     public void CopyBoneTransformsFrom_ThenCopyBoneTransformsTo_RoundTrips()
     {
         var bone0 = new ModelBone(0, "a");
@@ -242,5 +279,24 @@ public class ModelTests
         Assert.Equal(bone.Transform * world, effect.World);
         Assert.Equal(view, effect.View);
         Assert.Equal(projection, effect.Projection);
+    }
+
+    [Fact]
+    public void Draw_MeshWithoutExplicitParentBone_FallsBackToRootNotBoneZero()
+    {
+        var device = CreateDummyDevice();
+        var effect = new RecordingEffect(device);
+        var part = new ModelMeshPart(null, null, numVertices: 3, primitiveCount: 1, startIndex: 0, vertexOffset: 0);
+        var bone0 = new ModelBone(0, "not-root") { Transform = Matrix.CreateTranslation(100f, 0f, 0f) };
+        var bone1 = new ModelBone(1, "root") { Transform = Matrix.CreateTranslation(1f, 2f, 3f) };
+        var mesh = new ModelMesh(device, [part]);
+        part.Effect = effect;
+        // rootBoneIndex: 1 with no meshParentBones -- mesh.ParentBone stays null, so Draw() must
+        // fall back to Root (bone1), not position 0 (bone0).
+        var model = new Model(device, [bone0, bone1], [mesh], [], rootBoneIndex: 1);
+
+        Record.Exception(() => model.Draw(Matrix.Identity, Matrix.Identity, Matrix.Identity));
+
+        Assert.Equal(bone1.Transform, effect.World);
     }
 }

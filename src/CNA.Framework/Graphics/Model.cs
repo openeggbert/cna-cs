@@ -74,6 +74,18 @@ public class Model
 
     public object? Tag { get; set; }
 
+    /// <summary>
+    /// Writes each bone's transform relative to the model's root into <paramref name="destinationBoneTransforms"/>,
+    /// composing each bone's own <see cref="ModelBone.Transform"/> with its already-computed parent
+    /// entry. This relies on the same invariant the real openeggbert/cna C++ engine's own
+    /// <c>Model::CopyAbsoluteBoneTransformsTo</c> relies on (and does not validate either): each
+    /// bone's <see cref="ModelBone.Index"/> must equal its position in <see cref="Bones"/>, and a
+    /// parent bone must appear at an earlier position than its children -- both guaranteed by a
+    /// real content-pipeline's output, but this project has no content pipeline (see <see cref="Model"/>'s
+    /// own doc comment), so hand-built bone lists are checked explicitly here instead of silently
+    /// producing a wrong (default/zero) matrix the way the unchecked C++ algorithm would for a
+    /// malformed list.
+    /// </summary>
     public void CopyAbsoluteBoneTransformsTo(Matrix[] destinationBoneTransforms)
     {
         ArgumentNullException.ThrowIfNull(destinationBoneTransforms);
@@ -85,9 +97,27 @@ public class Model
         for (int i = 0; i < Bones.Count; i++)
         {
             ModelBone bone = Bones[i];
-            destinationBoneTransforms[i] = bone.Parent is null
-                ? bone.Transform
-                : bone.Transform * destinationBoneTransforms[bone.Parent.Index];
+            if (bone.Index != i)
+            {
+                throw new InvalidOperationException(
+                    $"Bone '{bone.Name}' has Index {bone.Index}, but is at position {i} in Bones. " +
+                    "Each bone's Index must match its position in Bones.");
+            }
+
+            if (bone.Parent is null)
+            {
+                destinationBoneTransforms[i] = bone.Transform;
+                continue;
+            }
+
+            if (bone.Parent.Index < 0 || bone.Parent.Index >= i)
+            {
+                throw new InvalidOperationException(
+                    $"Bone '{bone.Name}' (index {i}) has parent '{bone.Parent.Name}' (index {bone.Parent.Index}), " +
+                    "which must appear at an earlier position in Bones.");
+            }
+
+            destinationBoneTransforms[i] = bone.Transform * destinationBoneTransforms[bone.Parent.Index];
         }
     }
 
@@ -147,7 +177,23 @@ public class Model
                         $"{effect.GetType().Name} does not implement {nameof(IEffectMatrices)}.");
                 }
 
-                int boneIndex = mesh.ParentBone?.Index ?? 0;
+                // Falls back to Root, not a hardcoded 0, when a mesh has no explicit ParentBone --
+                // a deliberate improvement over the real C++ engine's own literal ": 0" fallback
+                // (confirmed in its Model.cpp): that only coincides with the actual root bone when
+                // rootBoneIndex is 0, which the 3-argument/default-rootBoneIndex constructors always
+                // produce, but a caller using a non-zero rootBoneIndex together with an empty
+                // meshParentBones list (a fully valid, publicly reachable combination -- see the
+                // 5-argument constructor) would otherwise silently draw every parentless mesh
+                // relative to the wrong bone. Root itself falls back to 0 for a model with bones,
+                // matching real XNA's own "first bone is root by default" convention.
+                int boneIndex = mesh.ParentBone?.Index ?? Root?.Index ?? 0;
+                if (boneIndex < 0 || boneIndex >= _sharedDrawBoneMatrices.Length)
+                {
+                    throw new InvalidOperationException(
+                        $"Mesh '{mesh.Name}' references a parent bone index ({boneIndex}) that is out " +
+                        $"of range for this model's {Bones.Count} bone(s).");
+                }
+
                 effectMatrices.World = _sharedDrawBoneMatrices[boneIndex] * world;
                 effectMatrices.View = view;
                 effectMatrices.Projection = projection;

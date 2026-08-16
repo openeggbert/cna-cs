@@ -11,6 +11,86 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Eighth `/code-review high` pass, over the `Model` commit -- three real bugs, one already-verified-against-upstream non-issue (2026-08-16, session 6 continued yet further still again once more still further)
+
+Ran the review an eighth time. This one notified twice for the same run --
+its own continued investigation after the first notification turned up a
+fourth, genuinely new finding the first pass hadn't caught, and revised
+its severity ranking; per this tool's own documented behavior ("the same
+task-id may notify more than once"), acted on the final, corrected list
+rather than the first one. Four real findings total, three fixed, one
+already covered by existing tests/docs and left alone:
+
+- **Fixed, real:** `CopyAbsoluteBoneTransformsTo` (and by extension
+  `Model.Draw`) assumed, unvalidated, that every bone's `Index` matches its
+  position in `Bones` and that parents always appear before children in
+  the list -- a malformed hand-built list silently produced a zero matrix
+  (not even a wrong-but-plausible one) instead of failing. Confirmed the
+  real C++ engine's own `Model::CopyAbsoluteBoneTransformsTo` has the
+  *exact same* unvalidated assumption (read its source again to check) --
+  but since this project uniquely exposes hand-construction as the *only*
+  way to build a `Model` (real XNA never lets a caller violate this
+  invariant, because only the trusted content pipeline ever builds the
+  list), added explicit validation here that the real engine doesn't have:
+  throws `InvalidOperationException` for either a bone whose `Index`
+  doesn't match its list position, or a bone whose parent appears at a
+  later position than itself. Two new regression tests, one per failure
+  shape.
+- **Fixed, real:** `Model.Draw()` on a model with meshes but zero bones
+  crashed with a bare `IndexOutOfRangeException` (`_sharedDrawBoneMatrices`
+  is `new Matrix[0]`, and the null-`ParentBone` fallback index is `0`,
+  which is out of range for a zero-length array). Added a range check that
+  throws a clear, actionable `InvalidOperationException` naming the mesh
+  and the actual bone count instead. One new regression test.
+- **Fixed, real, and the one that needed a second look to find:** the
+  review's own continued investigation (between its two notifications)
+  caught that `Draw()`'s "mesh has no explicit `ParentBone`" fallback
+  hardcoded bone index `0` -- also confirmed against the real C++ engine's
+  own `Model::Draw` (`boneIdx = mesh->getParentBoneProperty() ? ... : 0`),
+  so this one is a faithful reproduction of upstream, not a divergence
+  introduced here. Faithful reproduction of a real bug is still a bug,
+  though: `0` only coincides with the model's actual root bone when
+  `rootBoneIndex` is left at its default -- a caller using the 5-argument
+  constructor with a non-zero `rootBoneIndex` *and* an empty
+  `meshParentBones` list (fully valid, publicly reachable) would silently
+  draw every parentless mesh positioned by the wrong bone's transform, no
+  exception. Changed the fallback to `mesh.ParentBone?.Index ?? Root?.Index
+  ?? 0` -- `Root` is exactly the concept that should have been the
+  fallback in the first place, and was already sitting right there on
+  `Model`. **Worth remembering:** "confirmed faithful to the real C++
+  engine's source" answers "did I introduce this," not "is this correct" --
+  the two questions are independent, and this session's own habit of
+  treating upstream fidelity as a strong signal of correctness needed a
+  deliberate exception here, made with a documented reason, not a reflexive
+  one. One new regression test, using a bone list where position 0 and the
+  actual root are deliberately different bones so the old hardcoded
+  fallback would have failed it.
+- **Left as-is, matches verified upstream behavior, already documented and
+  tested:** setting `ModelMeshPart.Effect` before the part has a `Parent`
+  silently skips registering the effect in `ModelMesh.Effects`, so
+  `Model.Draw()` never updates its matrices or runs its `IEffectMatrices`
+  check, yet `ModelMesh.Draw()` still renders it with stale/unconfigured
+  matrices. Re-confirmed this matches the real C++ engine's own
+  `ModelMesh` constructor exactly (a raw field assignment for the parent
+  link, no re-invocation of the effect-registration logic) -- already
+  covered by `ModelMeshPartTests.Effect_Setter_BeforePartHasParent_DoesNotRegisterOnMesh`
+  and `ModelMeshPart.Effect`'s own doc comment, which was strengthened this
+  pass to spell out the silent-wrong-rendering consequence explicitly
+  (previously it only said "no-op," which undersold the actual severity)
+  rather than changing behavior to diverge from the verified real engine.
+  A fifth finding (the four collection types' shared indexer/enumerator
+  boilerplate) was left alone too, same "small, self-evidently-correct
+  duplication across a handful of already-tested types isn't worth a
+  premature shared-base abstraction" reasoning this session has applied
+  repeatedly (`VertexElementFormat`/`VertexElementUsage`,
+  `GamePadCapabilities`'s flag checks, the `SetRenderTarget`/
+  `SetVertexBuffer`/`Indices` null-to-handle ternary).
+
+218/218 tests passing (up from 214 -- three new regression tests: bone
+index/position mismatch, parent-appears-after-child, and the
+root-bone-fallback case); `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected.
+
 ## `Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart`/`IEffectMatrices`/`IEffectFog`/`IEffectLights` (2026-08-16, session 6 continued yet further still again once more still)
 
 > Picked up per `plan.md`'s own "still not started" pointer after the

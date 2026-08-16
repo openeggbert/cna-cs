@@ -422,9 +422,10 @@ Split by whether the type needs the (still nonexistent) native ABI:
       (plain `var`-typed consumption of `CNA.Graphics.Model` already works
       today, same as `EffectTechnique`/`DirectionalLight`'s existing compat
       gap). Verified: `dotnet build` clean across all 6 projects; `dotnet
-      test`: 214/214 passing (up from 189 — 25 new tests, all passing after
-      one test-ordering fix caught by the tests themselves, not a product
-      bug — see `NEXT.md`). `samples/HelloGame` re-verified unaffected.
+      test`: 218/218 passing (up from 189 — 28 new tests total across the
+      feature and its two review passes, three of which caught real bugs
+      fixed after the fact — see `NEXT.md`). `samples/HelloGame`
+      re-verified unaffected.
 - [ ] **Still not started, still blocked the same way:** `Song`/
       `MediaPlayer` (no public constructor in real XNA for `Song` at all —
       would need native streaming-audio-format loading, a different and
