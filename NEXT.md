@@ -11,6 +11,66 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Sixth `/code-review high` pass, over the `GraphicsDevice` draw-calls commit -- a real shadow-field desync bug (2026-08-16, session 6 continued still further again once more)
+
+Ran the review a sixth time. Found a genuine, confirmed bug (the review
+dispatched its own verification sub-agent, which traced a concrete
+reachable call path, not just a theoretical one) in
+`CNA.XnaCompat.GraphicsDevice.Indices`: the `new`-shadowed property had
+**its own private backing field**, separate from the base class's own
+`_indices` field. Since `GraphicsDeviceManager.Game` is declared with the
+base `CNA.Game` type (not shadowed with `new` in the compat
+`GraphicsDeviceManager`), code reaching a `GraphicsDevice` through
+`manager.Game.GraphicsDevice.Indices` resolves to the *base*, non-virtual
+`Indices` property — which correctly calls native code but only updates
+the *base* class's field. A `Game` subclass reading `this.GraphicsDevice.Indices`
+(the compat-typed path) would then see stale or `null` data despite native
+state having actually changed, and vice versa for writes.
+
+**Root-cause fix, not a patch:** removed the compat property's private
+field entirely. It's now a pure downcast pass-through --
+`get => (IndexBuffer?)base.Indices; set => base.Indices = value;` -- so
+there is only ever *one* piece of storage (the base class's own field),
+regardless of which static type (`CNA.Graphics.GraphicsDevice` or
+`Microsoft.Xna.Framework.Graphics.GraphicsDevice`) a caller happens to be
+holding a reference through. This is the same "no independent state, just
+a typed read-through" shape `SoundEffectInstance.State` already used two
+entries ago -- worth recognizing as the *general* answer whenever a `new`
+property override needs a different declared type for **mutable** state:
+a private shadow field is only safe for state that's set once at
+construction and never changes after (like `VertexBuffer.VertexDeclaration`/
+`BufferUsage`, which really are immutable), never for anything with a
+public setter. This is the pattern to reach for by default now, not just
+an option.
+
+**Lesson worth internalizing, not just fixing:** this bug went undetected
+through the previous commit's own build+test+`HelloGame` verification
+because C#'s `new` (member-hiding) is silent — nothing about writing a
+property with `new` instead of `override` signals "this creates two
+independent storage locations that can now disagree," and the test suite
+has no way to exercise "access the same object through two different
+static types" without a real `GraphicsDevice`/`IndexBuffer` (both
+native-backed, so untestable here regardless). The review caught what
+testing structurally couldn't. **When adding a `new`-shadowed property to
+mirror this codebase's established compat-layer pattern, ask first
+whether the state being shadowed is mutable — if it is, downcast-passthrough
+is very likely the only safe shape**, not a private field mirroring the
+base's.
+
+A second finding (the `value is null ? CnaHandle.Zero : new CnaHandle(...)`
+null-to-handle ternary now duplicated three times across `SetRenderTarget`/
+`SetVertexBuffer`/`Indices`) was left as-is: each is a single obviously-correct
+line over three different, unrelated resource types with no shared base to
+generalize over without a larger interface-introducing refactor across
+already-shipped types -- judged as acceptable duplication, unlike the
+multi-line `BufferRangeValidation` block two entries ago, which had
+already caused a real bug via copy-paste before being extracted.
+
+No new tests possible for the fix itself -- exercising it needs a real
+`GraphicsDevice`/`IndexBuffer` pair, both native-backed. 181/181 existing
+tests still pass; `dotnet build` clean; `samples/HelloGame` re-verified
+unaffected.
+
 ## `GraphicsDevice` draw calls: `SetVertexBuffer`/`Indices`/`DrawPrimitives`/`DrawIndexedPrimitives` (2026-08-16, session 6 continued still further again)
 
 > Third slice of the 3D pipeline. `VertexBuffer`/`IndexBuffer` exist but
