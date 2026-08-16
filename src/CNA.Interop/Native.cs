@@ -153,7 +153,15 @@ internal static partial class Native
         int height,
         out CnaHandle renderTarget);
 
-    // -- SpriteBatch (§22 -- DrawMany batching is a Phase 5 addition, not here) --------------
+    // -- SpriteBatch (§22) ---------------------------------------------------------------------
+    //
+    // Phase 5 (plan.md): every Draw/DrawString call buffers a CnaSpriteDrawCommand in managed code
+    // instead of calling native immediately; End() flushes the whole batch through one
+    // cna_sprite_batch_draw_many call, matching §22's own "managed draw-command buffer, one or a
+    // few native calls" example exactly. This replaced the original per-draw
+    // cna_sprite_batch_draw/cna_sprite_batch_draw_ex calls entirely (removed here, not kept
+    // alongside the batched form) -- once every draw funnels through the same buffer, a
+    // single-draw native primitive has no remaining caller.
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_create(CnaHandle device, out CnaHandle spriteBatch);
@@ -164,24 +172,15 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_begin(CnaHandle spriteBatch);
 
+    /// <summary>Matches the <c>CNA_SpriteDrawCommand</c>/<c>cna_sprite_batch_draw_many</c>
+    /// example in ../../cnabinding/analysis_binding.md §22 exactly -- the one place in this
+    /// project's ABI surface where the analysis docs already specified the batched shape directly,
+    /// not just a naming convention to extrapolate from.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_sprite_batch_draw(
+    internal static unsafe partial CnaResult cna_sprite_batch_draw_many(
         CnaHandle spriteBatch,
-        CnaHandle texture,
-        CnaVector2 position,
-        CnaColor color);
-
-    /// <summary>
-    /// The full XNA <c>Draw</c> overload family's primitive: source rectangle, rotation, origin,
-    /// scale, <c>SpriteEffects</c>, and layer depth, matching the <c>CNA_SpriteDrawCommand</c>
-    /// example struct in ../../cnabinding/analysis_binding.md §22 field-for-field. See
-    /// <see cref="CnaSpriteDrawCommand"/> for why this is a single-draw call, not the batched
-    /// <c>cna_sprite_batch_draw_many</c> the doc example illustrates.
-    /// </summary>
-    [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_sprite_batch_draw_ex(
-        CnaHandle spriteBatch,
-        in CnaSpriteDrawCommand command);
+        CnaSpriteDrawCommand* commands,
+        nuint commandCount);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_end(CnaHandle spriteBatch);

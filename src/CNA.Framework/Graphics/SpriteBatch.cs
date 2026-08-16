@@ -1,16 +1,37 @@
+using System.Runtime.InteropServices;
 using CNA.Interop;
 
 namespace CNA.Graphics;
 
 /// <summary>
-/// The single-draw-call form of <c>SpriteBatch</c>. Command buffering + a batched
-/// <c>cna_sprite_batch_draw_many</c> call, per ../../cnabinding/analysis_binding.md §22, is
-/// Phase 5 (plan.md) -- not implemented yet.
+/// Every <c>Draw</c>/<c>DrawString</c> call buffers a <see cref="CnaSpriteDrawCommand"/> in
+/// managed code instead of calling native immediately; <see cref="End"/> flushes the whole batch
+/// through one <c>cna_sprite_batch_draw_many</c> call, per ../../cnabinding/analysis_binding.md
+/// §22's own "managed draw-command buffer, one or a few native calls" example (plan.md Phase 5).
+/// This also introduced real <c>Begin</c>/<c>End</c> pairing validation this type never had before
+/// (there was nothing to validate when every <c>Draw</c> call went straight to native) --
+/// <c>Draw</c>-before-<see cref="Begin"/>, <see cref="End"/>-before-<see cref="Begin"/>, and
+/// calling <see cref="Begin"/> twice without an intervening <see cref="End"/> all now throw
+/// <see cref="InvalidOperationException"/>, matching real XNA/MonoGame's own behavior there
+/// (message text recalled from memory, not independently verified against a live binary or
+/// decompiled source -- flagged the same way this session flags other recalled-not-verified
+/// details, e.g. the rare <c>Keys</c> ordinals).
+///
+/// Despite all of the above being pure managed logic, still not independently testable: unlike
+/// <see cref="GraphicsDevice"/>/<see cref="Texture2D"/>, <see cref="SpriteBatch"/> has no
+/// raw-handle-wrapping constructor to construct a test instance without a real native call --
+/// it never needed one for any production reason (nothing wraps an already-created
+/// <c>SpriteBatch</c> handle the way <c>ContentManager</c> wraps an already-created
+/// <c>Texture2D</c> one), so adding one purely to unlock testing this new logic in isolation
+/// would be a test-only constructor with no other justification, unlike the two existing
+/// precedents. Noted rather than silently left untested.
 /// </summary>
 public class SpriteBatch : IDisposable
 {
     private readonly NativeResourceHandle _handle;
     private readonly List<SpriteFont.GlyphPlacement> _glyphPlacementBuffer = [];
+    private readonly List<CnaSpriteDrawCommand> _commandBuffer = [];
+    private bool _hasBegun;
 
     public SpriteBatch(GraphicsDevice graphicsDevice)
     {
@@ -26,21 +47,21 @@ public class SpriteBatch : IDisposable
 
     public void Begin()
     {
+        if (_hasBegun)
+        {
+            throw new InvalidOperationException(
+                "Begin cannot be called again until End has been successfully called.");
+        }
+
         CnaResult result = Native.cna_sprite_batch_begin(new CnaHandle(NativeHandleValue));
         CnaException.ThrowIfFailed(result, nameof(Begin));
+
+        _commandBuffer.Clear();
+        _hasBegun = true;
     }
 
-    public void Draw(Texture2D texture, Vector2 position, Color color)
-    {
-        ArgumentNullException.ThrowIfNull(texture);
-
-        CnaResult result = Native.cna_sprite_batch_draw(
-            new CnaHandle(NativeHandleValue),
-            new CnaHandle(texture.NativeHandleValue),
-            position.ToNative(),
-            color.ToNative());
-        CnaException.ThrowIfFailed(result, nameof(Draw));
-    }
+    public void Draw(Texture2D texture, Vector2 position, Color color) =>
+        DrawEx(texture, position, null, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f);
 
     public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color) =>
         DrawEx(texture, position, sourceRectangle, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f);
@@ -86,10 +107,9 @@ public class SpriteBatch : IDisposable
         float layerDepth) =>
         DrawEx(texture, destinationRectangle, sourceRectangle, color, rotation, origin, effects, layerDepth);
 
-    /// <summary>The position/rotation/scale primitive every extended <c>Draw</c> overload above
-    /// funnels through -- one native call (<see cref="Native.cna_sprite_batch_draw_ex"/>) backing
-    /// the whole overload family, per this project's usual "minimal native surface, C# handles
-    /// convenience overloads" approach.</summary>
+    /// <summary>The position/rotation/scale primitive every <c>Draw</c> overload above funnels
+    /// through -- appends one <see cref="CnaSpriteDrawCommand"/> to <see cref="_commandBuffer"/>;
+    /// no native call happens here at all anymore, see this type's own doc comment.</summary>
     private void DrawEx(
         Texture2D texture,
         Vector2 position,
@@ -102,10 +122,11 @@ public class SpriteBatch : IDisposable
         float layerDepth)
     {
         ArgumentNullException.ThrowIfNull(texture);
+        EnsureHasBegun(nameof(Draw));
 
         Rectangle source = sourceRectangle ?? new Rectangle(0, 0, texture.Width, texture.Height);
 
-        var command = new CnaSpriteDrawCommand(
+        _commandBuffer.Add(new CnaSpriteDrawCommand(
             new CnaHandle(texture.NativeHandleValue),
             position.ToNative(),
             source.ToNative(),
@@ -114,10 +135,7 @@ public class SpriteBatch : IDisposable
             origin.ToNative(),
             scale.ToNative(),
             (int)effects,
-            layerDepth);
-
-        CnaResult result = Native.cna_sprite_batch_draw_ex(new CnaHandle(NativeHandleValue), in command);
-        CnaException.ThrowIfFailed(result, nameof(Draw));
+            layerDepth));
     }
 
     /// <summary>The destination-rectangle overloads' primitive: XNA specifies these by the
@@ -214,8 +232,43 @@ public class SpriteBatch : IDisposable
 
     public void End()
     {
+        EnsureHasBegun(nameof(End));
+
+        FlushCommandBuffer();
+
         CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));
         CnaException.ThrowIfFailed(result, nameof(End));
+
+        _hasBegun = false;
+    }
+
+    /// <summary>The one native call the whole buffered batch flushes through -- a no-op if
+    /// nothing was drawn this <c>Begin</c>/<c>End</c> pair, matching real XNA's own "an empty
+    /// batch does nothing" behavior rather than issuing a zero-command native call for no
+    /// reason.</summary>
+    private unsafe void FlushCommandBuffer()
+    {
+        if (_commandBuffer.Count == 0)
+        {
+            return;
+        }
+
+        fixed (CnaSpriteDrawCommand* commands = CollectionsMarshal.AsSpan(_commandBuffer))
+        {
+            CnaResult result = Native.cna_sprite_batch_draw_many(
+                new CnaHandle(NativeHandleValue), commands, (nuint)_commandBuffer.Count);
+            CnaException.ThrowIfFailed(result, nameof(End));
+        }
+
+        _commandBuffer.Clear();
+    }
+
+    private void EnsureHasBegun(string caller)
+    {
+        if (!_hasBegun)
+        {
+            throw new InvalidOperationException($"Begin must be called before {caller}.");
+        }
     }
 
     public void Dispose()

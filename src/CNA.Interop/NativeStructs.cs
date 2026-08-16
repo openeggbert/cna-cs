@@ -161,16 +161,18 @@ internal readonly struct CnaRect
 }
 
 /// <summary>
-/// ABI-shaped single sprite draw command -- field-for-field the same as the batched
+/// ABI-shaped sprite draw command -- field-for-field the same as the
 /// <c>CNA_SpriteDrawCommand</c> example struct in ../../cnabinding/analysis_binding.md §22
-/// (texture, position, source, color, rotation, origin, scale, effects, layer_depth). Used here
-/// for the *single*-draw extended form (<c>cna_sprite_batch_draw_ex</c>), not the Phase 5 batched
-/// call the doc example was actually illustrating -- see plan.md Phase 4/5. There is no dedicated
-/// "no source rectangle" flag: the "draw the whole texture" case is resolved to a concrete
-/// <see cref="Source"/> covering the full texture bounds at the CNA.Framework call site, before
-/// this struct is built, so the ABI shape needs nothing beyond what §22 already shows. This
-/// struct's shape is otherwise unvalidated against any real upstream ABI (none exists yet for
-/// this call); expect a signature audit once Track A ships, same as everything else in Phase 4.
+/// (texture, position, source, color, rotation, origin, scale, effects, layer_depth). One of
+/// these is buffered per <c>SpriteBatch.Draw</c>/<c>DrawString</c> call and the whole batch is
+/// flushed through one <c>cna_sprite_batch_draw_many</c> call at <c>End()</c> -- exactly the
+/// batched shape §22's own example illustrates, not a single-draw primitive anymore (see
+/// plan.md Phase 5). There is no dedicated "no source rectangle" flag: the "draw the whole
+/// texture" case is resolved to a concrete <see cref="Source"/> covering the full texture bounds
+/// at the CNA.Framework call site, before this struct is built, so the ABI shape needs nothing
+/// beyond what §22 already shows. This struct's shape is otherwise unvalidated against any real
+/// upstream ABI (none exists yet for this call); expect a signature audit once Track A ships,
+/// same as everything else in Phase 4/5.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaSpriteDrawCommand

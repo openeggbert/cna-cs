@@ -11,6 +11,100 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `SpriteBatch` command buffering (Phase 5) (2026-08-16, session 6 continued yet further still again once more still further again once more still)
+
+> Every explicitly-flagged Phase 4 item is now done (see the previous
+> entry's own "where to pick up next"). Picked Phase 5's first listed
+> item -- `SpriteBatch` command buffering -- over the deferred
+> `MediaQueue`/`Model`-file-loading follow-ups: it's a real, concretely-
+> scoped task with an exact shape already specified in
+> `analysis_binding.md` §22 (the only place in this whole ABI surface
+> where the analysis docs give a literal struct/function signature to
+> implement against, not just a naming convention), rather than another
+> open-ended feature needing its own from-scratch design pass.
+
+**What changed, mechanically:** every `SpriteBatch.Draw`/`DrawString` call
+used to call native immediately (`cna_sprite_batch_draw`/
+`cna_sprite_batch_draw_ex`, one native call per sprite). Now every call
+appends a `CnaSpriteDrawCommand` to a managed `List<T>` instead, and
+`End()` flushes the whole batch through one new `cna_sprite_batch_draw_many`
+call (`CnaHandle, CnaSpriteDrawCommand*, nuint` -- matches §22's own
+example signature exactly). The old single-draw native functions were
+removed outright, not kept alongside the batched form: once every `Draw`
+call funnels through the same buffer, nothing in this project's C# calls
+them anymore, and keeping unreachable P/Invoke declarations around would
+just be dead code.
+
+**A real correctness gap surfaced for free while doing this, not sought
+out separately:** `SpriteBatch` had never tracked whether `Begin()` had
+been called at all -- there was nothing to track before, since every
+`Draw` went straight to native with no managed state in between. Once a
+managed command buffer existed, "what if `Draw` is called with no active
+`Begin()`" became an actual question with an actual wrong answer if left
+unhandled (silently buffering commands that might never get flushed, or
+flushing stale commands from an earlier unpaired `Begin()`). Added real
+state tracking (`_hasBegun`) and three `InvalidOperationException` guards
+matching real XNA/MonoGame's own actual behavior there: `Draw`/`DrawString`
+before `Begin`, `End` before `Begin`, and calling `Begin` twice without an
+intervening `End`. **Confidence flag, matching this session's own
+recalled-not-verified convention:** the exact exception message text is
+recalled from memory (MonoGame source), not independently verified
+against a live binary or decompiled source in this environment -- same
+honesty standard as the rare `Keys` ordinals/`GamePadType` values earlier
+this session.
+
+**Native struct/function shape needed zero design work, unlike almost
+everything else this session:** `CnaSpriteDrawCommand` already existed
+(added when the single-draw `cna_sprite_batch_draw_ex` primitive was
+built, itself already shaped after §22's example struct field-for-field)
+-- this pass just changed *how many* of them cross the ABI per native
+call and *when*, not their shape. `cna_sprite_batch_draw_many`'s
+signature is likewise a direct, literal implementation of §22's own
+example, not an inference from a naming convention the way `RenderTarget2D`/
+`SoundEffect`/`BasicEffect`/`Song`/`MediaPlayer` all needed this session.
+
+**Real testability limitation, not a new one, but worth naming
+explicitly:** despite all of this being pure managed logic (the buffer,
+the `_hasBegun` guards), it's still not independently testable.
+`SpriteBatch`'s only constructor calls `cna_sprite_batch_create`
+immediately, with no raw-handle-wrapping escape hatch the way
+`GraphicsDevice`/`Texture2D` both have (`protected internal
+GraphicsDevice(nint)` / `Texture2D(nint)`, both added for a real
+production reason -- wrapping an already-created native handle -- with
+testability as a side benefit, not the goal). Considered adding an
+equivalent constructor to `SpriteBatch` purely to unlock testing this new
+logic, and deliberately didn't: there's no production scenario that ever
+wraps an already-created `SpriteBatch` handle the way `ContentManager`
+wraps an already-created `Texture2D` one, so a test-only constructor here
+would be a new, weaker-justified pattern than the two existing precedents,
+not an extension of one. Documented the limitation in `SpriteBatch`'s own
+doc comment instead of silently shipping untested.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects (0 warnings, after fixing one ambiguous-`cref` doc-comment
+warning the class-level summary's own `<see cref="Draw"/>` triggered --
+`Draw` has multiple overloads, so the cref needed to become a plain
+`<c>Draw</c>` instead). `dotnet test CNA.sln`: 242/242 passing, unchanged
+(no new tests possible, per the limitation above -- confirmed this is
+genuinely a "can't", not a "didn't bother", before moving on).
+`samples/HelloGame` re-verified unaffected -- still fails at exactly the
+same documented `DllNotFoundException` point, confirming this refactor
+touched nothing about *when* or *whether* native gets called for the
+sample's own single `Draw` call, only what happens when there's more than
+one.
+
+**Where to pick up next:** `EffectParameter` handle caching (§27) is
+Phase 5's next listed item, but this project doesn't implement
+`EffectParameter` at all yet (`BasicEffect`'s own property surface is its
+parameter interface -- see that type's own doc comment) -- likely not
+worth doing in isolation without a real `EffectParameter` type to cache
+handles *for*. Buffer-based bulk transfer for `Texture2D.SetData`/vertex/
+index data (`analysis_binding_sharp_runtime.md` §40) is more directly
+actionable, closer in shape to this pass. Otherwise, the deferred Phase 4
+follow-ups (`MediaQueue`, `Model` file-format loading,
+`Album`/`Artist`/`Genre`/`MediaLibrary`) remain real, substantial,
+separately-scoped next steps -- see `plan.md`'s own follow-up bullet.
+
 ## Ninth `/code-review high` pass, over the `Song`/`MediaPlayer` commit (2026-08-16, session 6 continued yet further still again once more still further again once more)
 
 Ran the review a ninth time. Four findings; three real and fixed, one

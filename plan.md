@@ -495,7 +495,34 @@ Split by whether the type needs the (still nonexistent) native ABI:
 
 ### Phase 5 — Performance passes
 
-- `SpriteBatch` command buffering + `cna_sprite_batch_draw_many` (§22).
+- [x] **`SpriteBatch` command buffering + `cna_sprite_batch_draw_many` (§22)
+      — done, 2026-08-16 (session 6 continued yet further still again once
+      more still further again once more still).** Every `Draw`/
+      `DrawString` call now buffers a `CnaSpriteDrawCommand` in managed
+      code instead of calling native immediately (`cna_sprite_batch_draw`/
+      `cna_sprite_batch_draw_ex`, the old single-draw natives, were
+      removed entirely rather than kept alongside the batched form — once
+      every draw funnels through one buffer, nothing calls them anymore);
+      `End()` flushes the whole batch through one new
+      `cna_sprite_batch_draw_many` call — this is the one place in this
+      project's ABI surface where `analysis_binding.md` §22 already
+      specified the exact batched struct/function shape, not just a
+      naming convention to extrapolate from. Also added real `Begin`/`End`
+      pairing validation `SpriteBatch` never had before (nothing to
+      validate when every `Draw` went straight to native): calling `Draw`
+      before `Begin`, `End` before `Begin`, or `Begin` twice without an
+      intervening `End` now throw `InvalidOperationException`, matching
+      real XNA/MonoGame's own behavior (message text recalled from
+      memory, not independently verified). Still not independently
+      testable despite being pure managed logic: `SpriteBatch` has no
+      raw-handle-wrapping constructor the way `GraphicsDevice`/`Texture2D`
+      do (never needed one for a real production reason), so constructing
+      *any* instance to exercise this new logic on still requires a real
+      `cna-native` — noted rather than adding a test-only constructor with
+      no other justification. Verified: `dotnet build` clean across all 6
+      projects (0 warnings after fixing one ambiguous-`cref` doc-comment
+      warning); `dotnet test`: 242/242 passing, unchanged (no new tests
+      possible, see above); `samples/HelloGame` re-verified unaffected.
 - `EffectParameter` handle caching (§27).
 - Buffer-based bulk transfer for `Texture2D.SetData` / vertex/index data
   (`analysis_binding_sharp_runtime.md` §40).
