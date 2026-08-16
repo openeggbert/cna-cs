@@ -184,4 +184,14 @@ internal static partial class Native
         CnaHandle content,
         string assetName,
         out CnaHandle texture);
+
+    /// <summary>No ABI shape for this exists upstream -- self-designed for this repository, see
+    /// <see cref="CnaSpriteFontData"/>. Fails with <see cref="CnaResult"/> (not a silent
+    /// truncation) if the asset has more than <see cref="CnaGlyphBuffer.MaxGlyphs"/> glyphs.
+    /// </summary>
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial CnaResult cna_content_load_spritefont(
+        CnaHandle content,
+        string assetName,
+        out CnaSpriteFontData data);
 }

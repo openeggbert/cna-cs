@@ -11,6 +11,69 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `ContentManager.Load<SpriteFont>` (2026-08-16, session 5 continued further)
+
+> Reconsidered the "genuinely open design question" framing from earlier in
+> this file after actually sitting with it: the thing that made it feel
+> uniquely blocked (font *data* needs to cross the FFI as a variable-length
+> table, unlike a texture's fixed handle+dimensions) is a *marshalling
+> complexity* question, not a *does-native-infra-exist* one — and on that
+> front it's in the same boat as `Texture2D` content loading (which already
+> shipped in session 1 under the same "build against the shape, native
+> asset-decoding infra doesn't exist yet either" philosophy). Once framed
+> that way, the only real blocker left was finding a marshalling shape
+> simple enough to trust — see below.
+
+**Mechanical question answered empirically before designing around it:**
+does a C# 12 `[InlineArray(N)]` struct marshal correctly through
+`[LibraryImport]`'s source generator? Built a throwaway scratchpad probe
+(separate tiny project, `[LibraryImport("nonexistent-native-lib")]` over a
+struct containing an `InlineArray`-attributed field) and confirmed it
+compiles clean and throws the expected `DllNotFoundException` (not a
+marshalling-shape error) when called. This is what unlocked the whole
+design: a **fixed-capacity, flat-marshalled glyph buffer**, avoiding the
+two-call pointer/length dance `CnaError.GetLastErrorMessage` needs for a
+truly unbounded value. Deleted the probe after confirming.
+
+**Shape:** `CnaGlyphMetrics` (Unicode code point as `int`, not `char` — no
+surrogate-pair ambiguity; source/cropping rects; the ABC kerning triple as
+three separate named floats, not reusing `CnaVector3` since the semantic
+meaning differs) `× CnaGlyphBuffer` (the `[InlineArray(256)]` wrapper) `×
+CnaSpriteFontData` (texture handle, line spacing, spacing, optional default
+character, actual glyph count, the buffer). One native call,
+`cna_content_load_spritefont` — no ABI shape for any of this exists
+upstream, flagged the same way `RenderTarget2D`'s natives were.
+
+**256-glyph cap is deliberate, not an oversight** — flagged in three places
+(the struct's own doc comment, `ContentManager.LoadSpriteFontData`'s doc
+comment, `plan.md`) specifically because silent caps are worth calling out
+loudly, not because 256 is expected to bind in practice (XNA's default
+ASCII-range content-pipeline output is ~95 characters). A font needing more
+than 256 glyphs is expected to fail the native call with a `CnaResult`
+error, not silently lose glyphs — this repository has no way to verify that
+contract holds on a real native implementation, but the *shape* makes
+silent truncation the wrong thing to implement even without one.
+
+**Split mirrors the existing `Texture2D` pattern exactly, once you see
+it:** `ContentManager.LoadNativeTexture2DHandle` returns a raw `nint`, and
+each of `CNA.Content.ContentManager`/`CNA.XnaCompat.ContentManager`'s
+`Load<T>` wraps it into *that layer's own* `Texture2D` type. Added
+`ContentManager.LoadSpriteFontData` (a new `protected readonly record
+struct SpriteFontData` return type, holding exactly `SpriteFont`'s
+constructor parameter shape) as the `SpriteFont` equivalent of that split —
+each layer's `Load<T>` calls the same protected helper, then builds its own
+namespace's `SpriteFont` from the raw pieces. `CNA.XnaCompat.ContentManager`
+needed its own element-wise `Rectangle[]`/`Vector3[]` conversion helpers
+(CNA types → XnaCompat types) for this — the mirror image of the
+already-existing XnaCompat-to-CNA conversion `CNA.XnaCompat.SpriteFont`'s
+own constructor needed, for the same "C# generics can't convert a
+collection just because its elements convert" reason.
+
+No new tests possible — like `Load<Texture2D>`, this calls into native code
+immediately and throws `DllNotFoundException` without a real `cna-native`.
+112/112 existing tests still pass; `dotnet build` clean across all 6
+projects; `samples/HelloGame` unaffected.
+
 ## `GamePad.GetCapabilities` (2026-08-16, session 5 continued)
 
 > Last remaining explicitly-flagged gap after the code-review fixes above.

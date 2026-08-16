@@ -223,10 +223,20 @@ Split by whether the type needs the (still nonexistent) native ABI:
       environment); verified instead against hand-worked expected values
       in `SpriteFontTests.cs`. Known incompleteness: does not implement
       XNA's `SpriteEffects`-driven line/character reversal for flipped
-      text. `ContentManager.Load<SpriteFont>` is still unsupported — *how
-      font data should cross the FFI boundary* (as opposed to being built
-      by hand via this constructor) is still a genuinely open design
-      question with no doc backing, separate from the object model itself.
+      text. `ContentManager.Load<SpriteFont>` — done as of 2026-08-16
+      (session 5 continued): a new, self-designed (no upstream ABI shape,
+      same caveat as `RenderTarget2D`) `cna_content_load_spritefont` native
+      call returns a fixed-capacity (256 glyphs, using C# 12's `InlineArray`
+      for a flat marshalled buffer with no two-call pointer/length dance)
+      glyph table; `ContentManager.LoadSpriteFontData` unpacks it into
+      exactly the shape `SpriteFont`'s public constructor wants, and each
+      of `CNA.Content.ContentManager`/`CNA.XnaCompat`'s `ContentManager`
+      builds its own namespace's `SpriteFont` from those same raw pieces —
+      the same "return raw pieces, let each layer wrap its own type" split
+      already used for `Texture2D`. The 256-glyph cap is a real, documented
+      limitation (generous for XNA's default ASCII-range content-pipeline
+      output, but a hard cap nonetheless) — a font with more glyphs is
+      expected to fail loudly via `CnaResult`, not silently truncate.
 - [ ] **Still not started, still blocked the same way:** `BasicEffect`/
       `Effect` (parameter-handle caching per §27), 3D (`Model`,
       `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,

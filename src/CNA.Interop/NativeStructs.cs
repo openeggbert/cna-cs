@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace CNA.Interop;
@@ -205,4 +206,68 @@ internal readonly struct CnaSpriteDrawCommand
         Effects = effects;
         LayerDepth = layerDepth;
     }
+}
+
+/// <summary>
+/// ABI-shaped single glyph entry for <see cref="CnaSpriteFontData"/>. <c>Character</c> is a full
+/// Unicode code point (not a UTF-16 <c>char</c>), so this can represent glyphs outside the BMP
+/// without the surrogate-pair ambiguity a 16-bit field would have. <c>LeftSideBearing</c>/
+/// <c>Width</c>/<c>RightSideBearing</c> are the classic "ABC" kerning triple -- see
+/// <c>CNA.Graphics.SpriteFont</c>'s own doc comment for the algorithm these feed. No ABI shape
+/// for any of this exists upstream (same caveat as <c>RenderTarget2D</c>'s natives) --
+/// self-designed for this repository.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaGlyphMetrics
+{
+    public readonly int Character;
+    public readonly CnaRect Bounds;
+    public readonly CnaRect Cropping;
+    public readonly float LeftSideBearing;
+    public readonly float Width;
+    public readonly float RightSideBearing;
+
+    public CnaGlyphMetrics(int character, CnaRect bounds, CnaRect cropping, float leftSideBearing, float width, float rightSideBearing)
+    {
+        Character = character;
+        Bounds = bounds;
+        Cropping = cropping;
+        LeftSideBearing = leftSideBearing;
+        Width = width;
+        RightSideBearing = rightSideBearing;
+    }
+}
+
+/// <summary>
+/// A fixed-capacity inline array of <see cref="CnaGlyphMetrics"/>, using the C# 12 <c>InlineArray</c>
+/// feature so the whole buffer marshals as a flat, contiguous block -- no separate pointer/length
+/// two-call dance (like <c>CnaError.GetLastErrorMessage</c> needs for a truly unbounded string) is
+/// needed as long as a font's glyph count fits the capacity. <see cref="CnaSpriteFontData.GlyphCount"/>
+/// says how many of the <see cref="MaxGlyphs"/> slots are actually populated. This is a real,
+/// deliberate limitation, not an oversight -- flagged in <c>CNA.Content.ContentManager</c>'s doc
+/// comment, not hidden.
+/// </summary>
+[InlineArray(MaxGlyphs)]
+internal struct CnaGlyphBuffer
+{
+    public const int MaxGlyphs = 256;
+
+    private CnaGlyphMetrics _element0;
+}
+
+/// <summary>
+/// The result of loading a <c>SpriteFont</c> asset. No ABI shape for <c>SpriteFont</c> content
+/// loading exists upstream -- self-designed for this repository, see
+/// <c>CNA.Content.ContentManager.LoadSpriteFontData</c>.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaSpriteFontData
+{
+    public CnaHandle Texture;
+    public int LineSpacing;
+    public float Spacing;
+    public byte HasDefaultCharacter;
+    public int DefaultCharacter;
+    public int GlyphCount;
+    public CnaGlyphBuffer Glyphs;
 }

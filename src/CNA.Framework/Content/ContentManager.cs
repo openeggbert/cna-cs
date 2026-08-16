@@ -43,6 +43,20 @@ public class ContentManager
             return (T)(object)new Texture2D(LoadNativeTexture2DHandle(assetName));
         }
 
+        if (typeof(T) == typeof(SpriteFont))
+        {
+            SpriteFontData data = LoadSpriteFontData(assetName);
+            return (T)(object)new SpriteFont(
+                new Texture2D(data.TextureHandle),
+                data.GlyphBounds,
+                data.Cropping,
+                data.Characters,
+                data.LineSpacing,
+                data.Spacing,
+                data.Kerning,
+                data.DefaultCharacter);
+        }
+
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
     }
 
@@ -51,5 +65,58 @@ public class ContentManager
         CnaResult result = Native.cna_content_load_texture2d(new CnaHandle(_nativeHandleValue), assetName, out CnaHandle texture);
         CnaException.ThrowIfFailed(result, nameof(Load));
         return texture.Value;
+    }
+
+    /// <summary>
+    /// The raw pieces of a loaded <c>SpriteFont</c> asset, in exactly the shape
+    /// <see cref="Graphics.SpriteFont"/>'s public constructor wants -- returned rather than an
+    /// already-built <see cref="Graphics.SpriteFont"/> so <c>CNA.XnaCompat</c>'s
+    /// <c>ContentManager</c> can build its own namespace's <c>SpriteFont</c> from the same native
+    /// fetch, the same "return raw pieces, let each layer wrap its own type" split
+    /// <see cref="LoadNativeTexture2DHandle"/> already uses for <c>Texture2D</c>.
+    /// </summary>
+    protected readonly record struct SpriteFontData(
+        nint TextureHandle,
+        IReadOnlyList<Rectangle> GlyphBounds,
+        IReadOnlyList<Rectangle> Cropping,
+        IReadOnlyList<char> Characters,
+        int LineSpacing,
+        float Spacing,
+        IReadOnlyList<Vector3> Kerning,
+        char? DefaultCharacter);
+
+    /// <summary>
+    /// No ABI shape for <c>SpriteFont</c> content loading exists upstream -- self-designed for
+    /// this repository (see <c>CnaSpriteFontData</c> in CNA.Interop). Deliberately caps a font at
+    /// <c>CnaGlyphBuffer.MaxGlyphs</c> (256) glyphs -- generous for XNA's default ASCII-range
+    /// content-pipeline output, but a real, documented limitation, not a silent truncation: the
+    /// native call is expected to fail with a <see cref="CnaResult"/> error for a font with more
+    /// glyphs than that, which <see cref="CnaException.ThrowIfFailed"/> surfaces as a thrown
+    /// exception here, not silent data loss.
+    /// </summary>
+    protected SpriteFontData LoadSpriteFontData(string assetName)
+    {
+        CnaResult result = Native.cna_content_load_spritefont(new CnaHandle(_nativeHandleValue), assetName, out CnaSpriteFontData native);
+        CnaException.ThrowIfFailed(result, nameof(Load));
+
+        int glyphCount = native.GlyphCount;
+        var glyphBounds = new Rectangle[glyphCount];
+        var cropping = new Rectangle[glyphCount];
+        var characters = new char[glyphCount];
+        var kerning = new Vector3[glyphCount];
+
+        for (int i = 0; i < glyphCount; i++)
+        {
+            CnaGlyphMetrics glyph = native.Glyphs[i];
+            glyphBounds[i] = new Rectangle(glyph.Bounds.X, glyph.Bounds.Y, glyph.Bounds.Width, glyph.Bounds.Height);
+            cropping[i] = new Rectangle(glyph.Cropping.X, glyph.Cropping.Y, glyph.Cropping.Width, glyph.Cropping.Height);
+            characters[i] = (char)glyph.Character;
+            kerning[i] = new Vector3(glyph.LeftSideBearing, glyph.Width, glyph.RightSideBearing);
+        }
+
+        char? defaultCharacter = native.HasDefaultCharacter != 0 ? (char)native.DefaultCharacter : null;
+
+        return new SpriteFontData(
+            native.Texture.Value, glyphBounds, cropping, characters, native.LineSpacing, native.Spacing, kerning, defaultCharacter);
     }
 }
