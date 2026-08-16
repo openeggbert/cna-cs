@@ -10,9 +10,11 @@ done); Phase 5 also essentially complete (`SpriteBatch` command batching
 done; bulk-buffer transfer for `Texture2D`/vertex/index data turned out to
 already be done by every native-backed type's own original design;
 `EffectParameter` handle caching is not applicable — this project has no
-name-indexed effect-parameter system for it to apply to). What remains:
-`Model` file-loading and the full `MediaQueue`/library-scanning surface
-(Phase 4 follow-ups, deliberately deferred, not blocked) and Phase 6
+name-indexed effect-parameter system for it to apply to). `MediaQueue`/
+`SongCollection` (multi-song playlists, shuffle, repeat-driven
+auto-advance) also now done. What remains: `Model` file-loading and the
+real `Album`/`Artist`/`Genre`/`MediaLibrary` scanning subsystem (Phase 4
+follow-ups, deliberately deferred, not blocked) and Phase 6
 packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
@@ -454,15 +456,12 @@ Split by whether the type needs the (still nonexistent) native ABI:
       comment claims an empty `name` "defaults to the file name," but the
       constructor body just stores whatever was passed, even empty.
       **Deliberately scoped down** from the C++ engine's much larger
-      surface: no `MediaQueue` (multi-song playlists/shuffle/repeat-driven
-      auto-advance), no `Album`/`Artist`/`Genre`/`MediaLibrary` scanning
-      subsystem, no visualization data, no deferred
-      `ActiveSongChanged`/`MediaStateChanged` events (all of that needs
-      either a per-frame `Update()` this project has nowhere established
-      to call from yet, or tracking structures with no other user) — what
-      real XNA games overwhelmingly actually use
-      (`MediaPlayer.Play(song)`, `Volume`, `IsMuted`, checking `State`) is
-      what's implemented. `State`/`Volume`/`IsMuted`/`PlayPosition` are
+      surface: no `Album`/`Artist`/`Genre`/`MediaLibrary` scanning
+      subsystem, no visualization data — what real XNA games
+      overwhelmingly actually use (`MediaPlayer.Play(song)`, `Volume`,
+      `IsMuted`, checking `State`) is what's implemented (`MediaQueue`
+      followed in a later pass this same session — see below).
+      `State`/`Volume`/`IsMuted`/`PlayPosition` are
       plain C# static state (not native queries), matching the real C++
       engine's own architecture exactly — its own position timer uses
       `std::chrono`, a language facility, not an ABI call, so this project
@@ -483,16 +482,60 @@ Split by whether the type needs the (still nonexistent) native ABI:
       across the feature and its own review pass, one of which caught a
       real bug also present in the upstream C++ engine — see `NEXT.md`).
       `samples/HelloGame` re-verified unaffected.
+- [x] **`MediaQueue`/`SongCollection` (multi-song playlists,
+      `MoveNext`/`MovePrevious`, shuffle, repeat-driven auto-advance) and
+      the `ActiveSongChanged`/`MediaStateChanged` events — done, 2026-08-16
+      (session 6 continued autonomously past the original "Phase 4/5
+      complete" checkpoint).** Closes the one deferral from the
+      `Song`/`MediaPlayer` entry above that turned out to be readily
+      tractable once actually scoped: `MediaQueue`/`SongCollection`'s real
+      C++ shapes (`modules/media/`) are simple (indexer, `Count`, an
+      `ActiveSong`/`ActiveSongIndex` pair defaulting to `-1`/null, no
+      surprises), and `NextSong`'s repeat-wraparound/shuffle/clamped-
+      direction algorithm was already fully read while researching the
+      original `MediaPlayer` pass, so no new research was needed, only
+      implementation. `Update()` (`CNAEXT`, public here since real XNA
+      drives the equivalent through `FrameworkDispatcher.Update()`, which
+      this project doesn't implement) is now wired into `CNA.Game`'s own
+      base `Update(GameTime)`, so any game calling `base.Update(gameTime)`
+      (standard XNA practice) gets song-end detection/auto-advance for
+      free — the closest equivalent to real XNA's automatic per-frame
+      behavior available without a real `FrameworkDispatcher`.
+      `ActiveSongChanged`/`MediaStateChanged` are raised synchronously
+      (this project has no per-frame dispatcher to defer through, unlike
+      the real C++ engine's own flag-then-dispatcher-raises-later
+      mechanism). One real asymmetry reproduced faithfully rather than
+      "fixed": `Play(Song)` plays the caller's original `Song` object
+      directly, while `Play(SongCollection, index)` plays the queue's own
+      defensive copy — a genuinely ambiguous design choice in the real
+      C++ engine (which object should own the resulting `PlayCount`
+      increment), not a knowably-wrong one like `Model.Draw`'s bone-index
+      fallback was, so it wasn't second-guessed. **No `CNA.XnaCompat`
+      mirror for `Queue`/`Play(SongCollection)` — a real, structural
+      blocker, not a scope cut of convenience:** `LoadSong`'s defensive
+      copy always constructs the base `CNA.Media.Song` type regardless of
+      the original `Song`'s actual runtime type, and `MediaPlayer` being a
+      `static` class means (unlike every other compat type this session
+      built) there is no subclassing seam to override that -- a compat
+      `Queue` property would return songs that fail an explicit
+      compat-typed downcast. `IsShuffled`/`MoveNext`/`MovePrevious`/both
+      events have no such problem (no `Song`-typed data crosses their own
+      boundary) and got the full compat mirror. Verified: `dotnet build`
+      clean across all 6 projects; `dotnet test`: 264/264 passing (up from
+      242 — 22 new tests, all passing on first run, most exercising real
+      behavior against isolated `MediaQueue` instances or real temp files
+      rather than argument validation only — see `NEXT.md` for the
+      test-isolation design this needed, since `MediaPlayer`'s shared
+      static state makes "which tests are safe to write" a real
+      constraint). `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model` has no file-format loader (parsing a real model format is a
-      separate, much larger problem — see `Model`'s own doc comment);
-      `MediaPlayer`'s `MediaQueue` (multi-song playlists, shuffle,
-      repeat-driven auto-advance), visualization data, and deferred
-      `ActiveSongChanged`/`MediaStateChanged` events; the real C++ engine's
-      `Album`/`Artist`/`Genre`/`MediaLibrary` scanning subsystem (no real
-      XNA game needs this for basic playback, and it needs a real
-      on-disk-scan/tag-parsing implementation this project has no
-      equivalent for). None of these are blocked on the native C ABI the
+      separate, much larger problem — see `Model`'s own doc comment); the
+      real C++ engine's `Album`/`Artist`/`Genre`/`MediaLibrary` scanning
+      subsystem (no real XNA game needs this for basic playback, and it
+      needs a real on-disk-scan/tag-parsing implementation this project
+      has no equivalent for); visualization data (`GetVisualizationData`,
+      real-time FFT). None of these are blocked on the native C ABI the
       way everything else in this phase is — they're scoped out because
       each is its own substantial, separable feature, not because
       anything is missing upstream to ground them against.

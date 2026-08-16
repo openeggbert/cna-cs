@@ -7,7 +7,7 @@ namespace CNA.Media;
 /// this one takes a file path directly. Construction is pure managed logic -- checks the file
 /// exists via <see cref="File.Exists"/> and throws <see cref="FileNotFoundException"/> if not,
 /// exactly like the real C++ constructor's own <c>std::filesystem::exists</c> check -- no native
-/// call happens until <see cref="MediaPlayer.Play"/> actually streams it.
+/// call happens until <c>MediaPlayer.Play</c> actually streams it.
 ///
 /// Not sealed here (unlike real XNA's actual <c>sealed class Song</c>) specifically so
 /// <c>Microsoft.Xna.Framework.Media.Song</c> can extend this directly, the same "preserve the real

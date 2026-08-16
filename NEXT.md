@@ -11,6 +11,143 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `MediaQueue`/`SongCollection`: multi-song playlists, shuffle, repeat, events (2026-08-16, session 6 continued past the original "Phase 4/5 complete" checkpoint, per explicit instruction to keep going)
+
+> Reported Phase 4 + Phase 5 complete and paused at a natural checkpoint.
+> User replied "pokracuj autonomne dale dokud ti nejdou ukoly" (keep going
+> autonomously until you run out of tasks). Picked `MediaQueue` over
+> `Model` file-loading or the `Album`/`Artist`/`Genre`/`MediaLibrary`
+> subsystem specifically because it was already mostly researched --
+> `MediaPlayer.cpp`'s `NextSong`/`Update`/`Play(SongCollection)` logic was
+> read in full during the original `Song`/`MediaPlayer` pass, just not
+> acted on yet, so this was implementation work more than a fresh design
+> pass.
+
+**Shape, confirmed against the real C++ engine's `MediaQueue.hpp`/`.cpp`
+and `SongCollection.hpp`, not re-derived from scratch:** `MediaQueue`
+starts with `ActiveSongIndex = -1` (not 0) specifically so an empty
+queue's `ActiveSong` correctly returns null rather than indexing a
+would-be entry 0 that doesn't exist -- confirmed by reading the .cpp
+constructor, not assumed from the header. `ActiveSong`'s getter
+bounds-checks defensively (empty queue, negative index, out-of-range
+index all return null) rather than trusting the index is always valid.
+`SongCollection`'s own constructor is `CNAEXT` (public here, same "no
+content pipeline exists" reasoning as `Song`'s own constructor), but
+`MediaQueue`'s constructor and `Add`/`Clear` are `internal`, matching real
+XNA's own encapsulation exactly (not a `CNAEXT` deviation this time --
+nothing outside `MediaPlayer` ever needs to build a `MediaQueue` from
+scratch, since it's always populated through `Play`).
+
+**`NextSong`'s algorithm (shared by `MoveNext`/`MovePrevious`/`Update`'s
+auto-advance) reproduced exactly:** stop first, then wrap to index 0 when
+repeating past the last song, pick a uniformly random index when
+shuffled, otherwise clamp `ActiveSongIndex + direction` to the queue's
+bounds -- so calling `MoveNext` at the last song (or `MovePrevious` at the
+first) is a no-op-at-the-edge, not a silent wraparound, unless repeating
+is on. Used `System.Random` for the shuffle case rather than porting the
+C++ engine's own `std::mt19937`, per design invariant #7 (real BCL types
+for non-CNA-specific concepts).
+
+**`Update()`'s song-end detection always uses the elapsed-time fallback,
+not conditionally:** the real C++ engine prefers a native track-stopped
+signal when compiled with `SOUND_ENABLED`, falling back to comparing
+elapsed playback time against `Song.Duration` only when that native
+signal isn't available. This project's own `MediaPlayer` native surface
+was deliberately scoped (in the original pass) without an equivalent
+track-stopped callback at all, so there's no preferred path to fall back
+*from* here -- `DetectSongEndedByElapsedTime` is unconditionally the only
+detection this project has. Kept public (matching the real engine's own
+`CNAEXT`-public choice) specifically because it's a pure function
+(`Song`, `TimeSpan` in, `bool` out) fully testable without a real queue or
+native call, unlike `Update()` itself.
+
+**A real asymmetry in the C++ engine, reproduced faithfully rather than
+"fixed" the way `Model.Draw`'s bone-index fallback was:** `Play(Song)`
+calls the low-level `PlaySong` with the caller's *original* `Song` object,
+while `Play(SongCollection, index)` calls it with the *queue's own
+defensive copy* (from `LoadSong`). This means a successful `Play(Song)`
+increments `PlayCount` on the exact object the caller passed in, while a
+successful `Play(SongCollection, index)` increments it on a copy the
+caller never sees. Considered "fixing" this to be consistent (matching
+the `Root`-fallback precedent from the `Model` review), but concluded it
+doesn't meet that bar: unlike the `Root` fallback (where "use the actual
+root bone" was obviously more correct than "hardcode bone 0"), there's no
+obviously-more-correct choice here between "the object I asked to play"
+and "the object my internal queue is actually tracking" -- both are
+defensible source-of-truth choices, so guessing at a "fix" would be
+inventing a preference neither this project's own conventions nor the
+real engine's source actually call for. Documented the asymmetry
+explicitly in both `Play` overloads' own doc comments instead.
+
+**Wired `MediaPlayer.Update()` into `CNA.Game`'s base `Update(GameTime)`,
+a new integration point this project didn't have before:** without it,
+nothing would ever call `Update()` at all, so song-end detection and
+queue auto-advance would silently never fire even though all the logic
+for it now exists. Real XNA calls the equivalent (`FrameworkDispatcher.Update()`)
+automatically as part of its own `Game.Update()`; this project has no
+`FrameworkDispatcher`, so `CNA.Game.Update(GameTime)` calling
+`MediaPlayer.Update()` directly is the closest available equivalent --
+works for any game that calls `base.Update(gameTime)` in its own
+override, which is standard XNA practice already.
+
+**Test-isolation design was the hard part of this pass, not the logic
+itself.** `MediaPlayer` is a process-global static class, and populating
+`MediaPlayer.Queue` at all requires a (partially-executed, ultimately
+throwing) `Play` call -- `LoadSong`'s `InnerQueue.Add(...)` runs
+*before* the native call that eventually throws `DllNotFoundException`
+in this environment, so calling `MediaPlayer.Play(validSong)` anywhere in
+a test would leak a non-empty queue into every later test in the same
+assembly for the rest of the run. Two fixes, both real design decisions,
+not workarounds: (1) `MediaQueueTests.cs` tests `MediaQueue`'s own
+logic (`Add`/`Clear`/`ActiveSong`/indexer/enumeration) against **fresh,
+isolated instances** constructed directly via its `internal` constructor
+(reachable via `InternalsVisibleTo`), never touching
+`MediaPlayer.Queue` at all; (2) every `MediaPlayerTests.cs` addition was
+checked against the explicit rule "never call `Play` with a real,
+non-null, non-disposed `Song`" before being written, and the class's own
+doc comment states that rule explicitly for whoever adds the next test
+here. `CNA.XnaCompat.Tests` needed the identical caution independently
+(same static class, but a genuinely separate process per `dotnet test`'s
+own per-project test hosts, so its own state starts fresh regardless).
+
+**Compat-layer decision, following the `Model` precedent for a different,
+more structural reason:** `Model` had no compat mirror because there was
+no content pipeline to ever produce one another way -- a *usage*
+limitation. `Queue`/`Play(SongCollection)` have no compat mirror for a
+*structural* reason: `LoadSong` always constructs the base `CNA.Media.Song`
+type internally (matching the real C++ engine's own `LoadSong` exactly),
+regardless of what type of `Song` was actually passed to `Play` --
+meaning `CNA.Media.MediaPlayer.Queue`'s songs are never actually
+compat-typed, even when the compat layer's own `Play(Song)` was called
+with a compat `Song`. Every other compat type this session built solved
+an equivalent "the base type isn't what I want to expose" problem via
+inheritance (`BasicEffect`, `Song` itself extending its base directly) --
+but `MediaPlayer` is a `static` class, which C# does not allow
+subclassing at all, so there's no seam here to override `LoadSong`'s
+copy-construction the way inheritance solved it everywhere else. A
+compat `Queue` property would therefore return songs that fail an
+explicit compat-typed downcast -- unsafe to ship, not a nice-to-have left
+out. `IsShuffled`/`MoveNext`/`MovePrevious`/`ActiveSongChanged`/
+`MediaStateChanged` have no such problem (no `Song`-typed data crosses
+their own boundary) and got the full compat mirror, same thin-forwarding
+shape as `Mouse`/`Keyboard`.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects (0 warnings, after fixing two ambiguous-`cref` doc-comment
+warnings the new `MediaPlayer.Play` overload set triggered, same shape as
+`SpriteBatch.Draw`'s own earlier this session). `dotnet test CNA.sln`:
+264/264 passing (up from 242 -- 22 new tests across `MediaQueueTests.cs`,
+`MediaPlayerTests.cs`, and `MediaPlayerCompatTests.cs`, all passing on
+first run). `samples/HelloGame` re-verified unaffected.
+
+**Where to pick up next:** `Model` file-format loading and the real
+`Album`/`Artist`/`Genre`/`MediaLibrary` scanning subsystem remain the two
+substantial, separately-scoped Phase 4 follow-ups (see `plan.md`'s own
+follow-up bullet) -- both large enough to be their own dedicated pass
+rather than something to fold into a continuation of this one. A
+`/code-review high` pass over this commit is the next immediate step,
+following this session's own established per-feature rhythm.
+
 ## Tenth `/code-review high` pass, over the `SpriteBatch` batching commit (2026-08-16, session 6 continued yet further still again once more still further again once more still further)
 
 Ran the review a tenth time. Two real findings, both fixed:

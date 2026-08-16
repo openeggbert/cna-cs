@@ -5,17 +5,26 @@ namespace CNA.Tests;
 
 /// <summary>
 /// <see cref="MediaPlayer"/> is a process-global static class, so these tests rely on
-/// <see cref="MediaPlayer.State"/> reliably staying <see cref="MediaState.Stopped"/> throughout
-/// this whole test run: <see cref="MediaPlayer.Play"/> always throws before ever assigning
-/// <c>State</c> (no real <c>cna-native</c> in this environment), so nothing here can ever advance
-/// it past its initial default -- see each test's own reasoning.
+/// <see cref="MediaPlayer.State"/> reliably staying <see cref="MediaState.Stopped"/> and
+/// <see cref="MediaPlayer.Queue"/> reliably staying empty throughout this whole test run: no test
+/// anywhere in this assembly ever calls <c>MediaPlayer.Play</c> with a real, non-null,
+/// non-disposed <see cref="Song"/> -- doing so would mutate <see cref="MediaPlayer.Queue"/> (via
+/// <c>LoadSong</c>) *before* the native call that ultimately throws, leaking state into every
+/// later test in the run. <see cref="MediaQueueTests"/> covers the queue-mutation logic itself
+/// against fresh, isolated <c>MediaQueue</c> instances instead, precisely to avoid this trap.
 /// </summary>
 public class MediaPlayerTests
 {
     [Fact]
     public void Play_NullSong_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => MediaPlayer.Play(null!));
+        Assert.Throws<ArgumentNullException>(() => MediaPlayer.Play((Song)null!));
+    }
+
+    [Fact]
+    public void Play_NullSongCollection_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => MediaPlayer.Play((SongCollection)null!));
     }
 
     [Fact]
@@ -77,6 +86,107 @@ public class MediaPlayerTests
         finally
         {
             MediaPlayer.IsRepeating = original;
+        }
+    }
+
+    [Fact]
+    public void IsShuffled_RoundTrips()
+    {
+        bool original = MediaPlayer.IsShuffled;
+        try
+        {
+            MediaPlayer.IsShuffled = !original;
+            Assert.Equal(!original, MediaPlayer.IsShuffled);
+        }
+        finally
+        {
+            MediaPlayer.IsShuffled = original;
+        }
+    }
+
+    [Fact]
+    public void Queue_WithNothingEverPlayed_IsEmpty()
+    {
+        Assert.Equal(0, MediaPlayer.Queue.Count);
+        Assert.Null(MediaPlayer.Queue.ActiveSong);
+    }
+
+    [Fact]
+    public void MoveNext_WithEmptyQueue_IsNoOpAndDoesNotThrow()
+    {
+        // NextSong() calls Stop() first (a no-op here, State is already Stopped), then returns
+        // early because the queue is empty -- neither path reaches native code.
+        MediaPlayer.MoveNext();
+    }
+
+    [Fact]
+    public void MovePrevious_WithEmptyQueue_IsNoOpAndDoesNotThrow()
+    {
+        MediaPlayer.MovePrevious();
+    }
+
+    [Fact]
+    public void Update_WithEmptyQueue_IsNoOpAndDoesNotThrow()
+    {
+        // Update() returns immediately because Queue.ActiveSong is null -- never reaches
+        // DetectSongEndedByElapsedTime or any native call.
+        MediaPlayer.Update();
+    }
+
+    [Fact]
+    public void DetectSongEndedByElapsedTime_NullSong_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(
+            () => MediaPlayer.DetectSongEndedByElapsedTime(null!, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void DetectSongEndedByElapsedTime_ZeroDuration_NeverReportsEnded()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            var song = new Song(path); // Duration defaults to TimeSpan.Zero.
+
+            Assert.False(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.Zero));
+            Assert.False(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromHours(1)));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void DetectSongEndedByElapsedTime_ElapsedBeforeDuration_ReturnsFalse()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            var song = new Song(path, "name", durationMS: 5000);
+
+            Assert.False(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromSeconds(4)));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void DetectSongEndedByElapsedTime_ElapsedAtOrPastDuration_ReturnsTrue()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            var song = new Song(path, "name", durationMS: 5000);
+
+            Assert.True(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromSeconds(5)));
+            Assert.True(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromSeconds(6)));
+        }
+        finally
+        {
+            File.Delete(path);
         }
     }
 }

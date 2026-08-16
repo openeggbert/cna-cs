@@ -76,10 +76,14 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     Song (construction, Equals/GetHashCode/ToString, FromUri) -- a file-
     existence check, no native call, real and testable against real temp
     files, same "escape hatch" shape as SpriteFont/BasicEffect's
-    construction. MediaPlayer.State/Volume/IsMuted/PlayPosition too --
-    plain C# static state, not native queries, matching the real C++
-    engine's own architecture (see below for why Play/Pause/Resume/Stop
-    themselves are still blocked)
+    construction. MediaPlayer.State/Volume/IsMuted/PlayPosition/IsRepeating/
+    IsShuffled too -- plain C# static state, not native queries, matching
+    the real C++ engine's own architecture (see below for why
+    Play/Pause/Resume/Stop themselves are still blocked). MediaQueue/
+    SongCollection (indexer, Count, ActiveSong/ActiveSongIndex,
+    Add/Clear/enumeration) and MediaPlayer.DetectSongEndedByElapsedTime,
+    MoveNext/MovePrevious's shuffle/repeat/clamped-direction logic -- also
+    zero native ABI, all pure managed logic and math
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -99,9 +103,9 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
 
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
-    Model file-format loading, MediaPlayer's MediaQueue (playlists,
-    shuffle, repeat auto-advance) and visualization data, the real C++
-    engine's Album/Artist/Genre/MediaLibrary scanning subsystem
+    Model file-format loading, MediaPlayer's visualization data
+    (GetVisualizationData), the real C++ engine's
+    Album/Artist/Genre/MediaLibrary scanning subsystem
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -131,8 +135,16 @@ against `modules/media/`'s own working implementation the same way
 `SoundEffect`/`BasicEffect` were, deliberately scoped down from that
 implementation's much larger surface (see the "Not started at all" list
 above) -- and, unlike `Model`, `Song` *does* have a full `CNA.XnaCompat`
-mirror, since its construction has no equivalent blocker. See `plan.md`
-Phase 4 and `NEXT.md`'s per-session entries for the full detail on each.
+mirror, since its construction has no equivalent blocker.
+`MediaPlayer.Queue`/`Play(SongCollection)` are the one part of this whole
+feature *without* a compat mirror, for a different, more structural
+reason than `Model`'s: `LoadSong` always constructs a base `CNA.Media.Song`
+internally, and `MediaPlayer` being a `static` class means (unlike every
+other compat type this session built) there's no subclassing seam to
+override that -- a compat `Queue` property would return songs that fail
+an explicit compat-typed downcast, not just an inconvenience. See
+`plan.md` Phase 4 and `NEXT.md`'s per-session entries for the full detail
+on each.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and

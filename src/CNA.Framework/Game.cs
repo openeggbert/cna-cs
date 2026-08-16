@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using CNA.Content;
 using CNA.Graphics;
 using CNA.Interop;
+using CNA.Media;
 
 namespace CNA;
 
@@ -77,8 +78,16 @@ public abstract class Game : IDisposable
     {
     }
 
+    /// <summary>
+    /// Calls <see cref="MediaPlayer.Update"/> so song-end detection/queue auto-advance actually
+    /// runs somewhere -- the closest equivalent this project can offer to real XNA's own automatic
+    /// per-frame <c>FrameworkDispatcher.Update()</c> call, which this project doesn't implement
+    /// (see <see cref="MediaPlayer"/>'s own doc comment). A game overriding this method should
+    /// call <c>base.Update(gameTime)</c>, standard XNA practice, to keep getting this for free.
+    /// </summary>
     protected virtual void Update(GameTime gameTime)
     {
+        MediaPlayer.Update();
     }
 
     protected virtual void Draw(GameTime gameTime)
