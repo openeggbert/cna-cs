@@ -6,8 +6,14 @@ the scope this plan actually calls for (pure math/value types,
 `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the zero-ABI
 vertex-format layer, `VertexBuffer`/`IndexBuffer`, `GraphicsDevice`'s draw
 calls, `Effect`/`BasicEffect`, `Model`, and a scoped `Song`/`MediaPlayer`
-done; `Model` file-loading, the full `MediaQueue`/library-scanning surface,
-and Phase 5 performance work remain, tracked as their own follow-ups below)
+done); Phase 5 also essentially complete (`SpriteBatch` command batching
+done; bulk-buffer transfer for `Texture2D`/vertex/index data turned out to
+already be done by every native-backed type's own original design;
+`EffectParameter` handle caching is not applicable — this project has no
+name-indexed effect-parameter system for it to apply to). What remains:
+`Model` file-loading and the full `MediaQueue`/library-scanning surface
+(Phase 4 follow-ups, deliberately deferred, not blocked) and Phase 6
+packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -523,9 +529,37 @@ Split by whether the type needs the (still nonexistent) native ABI:
       projects (0 warnings after fixing one ambiguous-`cref` doc-comment
       warning); `dotnet test`: 242/242 passing, unchanged (no new tests
       possible, see above); `samples/HelloGame` re-verified unaffected.
-- `EffectParameter` handle caching (§27).
-- Buffer-based bulk transfer for `Texture2D.SetData` / vertex/index data
-  (`analysis_binding_sharp_runtime.md` §40).
+- [x] **Buffer-based bulk transfer for `Texture2D.SetData` / vertex/index
+      data (`analysis_binding_sharp_runtime.md` §40) — already done,
+      confirmed 2026-08-16 while scoping the rest of this phase, not new
+      work.** §40 asks for exactly one shape: explicit `(pointer,
+      byte_length)` native signatures for bulk binary data (texture
+      pixels, vertex/index data, audio samples), never a Sharp Runtime
+      array/span or `std::vector` crossing the ABI. Checked every
+      bulk-data-crossing native call already in this project against that
+      bar: `cna_texture2d_set_data`, `cna_vertexbuffer_set_data`/
+      `get_data`, `cna_indexbuffer_set_data`/`get_data`, and
+      `cna_soundeffect_create` all already take exactly `(handle, void*
+      data, size_t byteLength)` (or the C# `fixed`-pointer equivalent),
+      built this way from when each type was first added, not
+      retrofitted just now. Nothing in this codebase passes a managed
+      collection type across the ABI anywhere. This bullet was tracking a
+      principle the rest of this session's own work had already been
+      quietly honoring throughout — worth recording as done explicitly
+      rather than leaving it looking like outstanding work.
+- [ ] **`EffectParameter` handle caching (§27) — not applicable, not
+      deferred.** §27 is specifically about caching the native identity
+      behind a *name-based* lookup (`effect.Parameters["World"].SetValue(...)`)
+      so the name string isn't re-marshalled every frame. This project
+      has no `EffectParameter`/`Parameters["Name"]` collection at all —
+      `BasicEffect`'s fixed C# property surface *is* its parameter
+      interface (see that type's and `EffectPass`'s own doc comments:
+      "this project's stock effects only ever have exactly one pass",
+      no general multi-pass/name-indexed parameter system). There is
+      nothing here for this optimization to apply to; it isn't a gap,
+      it's a premise this project's `BasicEffect`-only design doesn't
+      share. Revisit only if a future custom/name-indexed effect system
+      is ever added.
 
 ### Phase 6 — Packaging and cross-platform validation
 
