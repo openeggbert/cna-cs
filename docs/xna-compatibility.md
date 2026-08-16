@@ -59,12 +59,12 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
     SetRenderTarget), SpriteBatch (full Draw/DrawString overload families),
     Texture2D, RenderTarget2D, Keyboard/KeyboardState, Mouse/MouseState,
-    GamePad/GamePadState, ContentManager (RootDirectory, Load<Texture2D>
+    GamePad/GamePadState/GamePadCapabilities, ContentManager (RootDirectory, Load<Texture2D>
     only -- Load<SpriteFont> not supported yet, see plan.md)
 
 Not started at all:
     BasicEffect/Effect, Model, VertexBuffer, IndexBuffer, SoundEffect,
-    SoundEffectInstance, Song, MediaPlayer, GamePad.GetCapabilities
+    SoundEffectInstance, Song, MediaPlayer
 ```
 
 Note on trust level: the `SpriteBatch.Draw` overloads and `RenderTarget2D`

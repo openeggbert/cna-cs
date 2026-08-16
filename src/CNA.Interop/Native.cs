@@ -169,6 +169,11 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial void cna_gamepad_get_state(int playerIndex, out CnaGamePadState state);
 
+    /// <summary>No ABI shape exists upstream for this call -- self-designed for this repository,
+    /// see <see cref="CnaGamePadCapabilities"/>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial void cna_gamepad_get_capabilities(int playerIndex, out CnaGamePadCapabilities capabilities);
+
     // -- ContentManager (§26, §44) -------------------------------------------------------------
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]

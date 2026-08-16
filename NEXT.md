@@ -11,6 +11,43 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `GamePad.GetCapabilities` (2026-08-16, session 5 continued)
+
+> Last remaining explicitly-flagged gap after the code-review fixes above.
+> Grepped the whole `src/` tree for "not implement"/"TODO"/"deferred"
+> comments to confirm this really was the last one before starting —
+> everything else left is either Phase 5 (`SpriteBatch` batching) or
+> already-documented-and-accepted (`GamePadState.PacketNumber`, `SpriteFont`
+> flip-effects text reversal).
+
+New `CNA.Interop` native `cna_gamepad_get_capabilities` and a
+`CnaGamePadCapabilities` struct — **no ABI shape for this exists upstream**
+(same caveat as `RenderTarget2D`'s natives, flagged the same way in the
+struct's own doc comment). `SupportedButtons` reuses `CNA.Input.Buttons`'s
+exact bit layout rather than one bool field per button (so `GamePadCapabilities`
+only reports the same core button subset `GamePadState` does); the
+remaining ~9 thumbstick/trigger/vibration/voice booleans pack into a second
+`Features` bitmask with bit positions that are this repository's own
+invented convention, documented as such since there's nothing upstream to
+match them against.
+
+Added `CNA.Input.GamePadType` (`Unknown`/`GamePad`/`Wheel`/`ArcadeStick`/
+`FlightStick`/`DancePad`/`Guitar`/`AlternateGuitar`/`DrumKit`/`BigButtonPad`)
+alongside it — needed as `GamePadCapabilities.GamePadType`'s type. **Lower
+confidence than everything else added this session**, flagged plainly in
+its own doc comment: the member *names* match real XNA (fairly confident,
+these are commonly-referenced), but the numeric *values* are a
+declaration-order guess (0, 1, 2, ...), not independently confirmed real
+XNA ordinals. This only matters if something serializes/compares the raw
+int rather than the named member, which nothing here does — but say so
+rather than let it look more verified than it is.
+
+No new tests: like `Texture2D`/`SpriteBatch`/`Mouse`/existing `GamePad`,
+this is native-backed and can't be exercised without a real `cna-native` —
+consistent with existing precedent, not a gap specific to this addition.
+112/112 existing tests still pass; `dotnet build` clean; `samples/HelloGame`
+unaffected (still fails at the same documented point).
+
 ## Complete the pure-math layer; fix a real `Vector3.Transform(Quaternion)` bug (2026-08-16, session 5)
 
 > Continuation of the same "keep working through the plan" session run.

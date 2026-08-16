@@ -165,8 +165,13 @@ Split by whether the type needs the (still nonexistent) native ABI:
       below.
 - [x] **`Mouse`/`GamePad` — done** (new `CNA.Interop` natives
       `cna_mouse_get_state`/`cna_gamepad_get_state`, same snapshot pattern as
-      `Keyboard`). `GamePad.GetCapabilities` and `GamePadState.PacketNumber`
-      (always 0) are not implemented; `Buttons` covers the core d-pad/face/
+      `Keyboard`). `GamePad.GetCapabilities` — done as of 2026-08-16 (session
+      5) via a new, self-designed (no upstream ABI shape exists for it)
+      `cna_gamepad_get_capabilities` native call and `GamePadCapabilities`/
+      `GamePadType` types; `GamePadType`'s numeric values are
+      declaration-order guesses, not confirmed real XNA ordinals — see that
+      type's own doc comment. `GamePadState.PacketNumber` (always 0) is
+      still not implemented; `Buttons` covers the core d-pad/face/
       shoulder/stick-click flags but not XNA's thumbstick-direction-as-button
       or trigger-as-button flags — see `CNA.Input.Buttons`. `PlayerIndex`
       lives at the *root* `CNA`/`Microsoft.Xna.Framework` namespace, not
