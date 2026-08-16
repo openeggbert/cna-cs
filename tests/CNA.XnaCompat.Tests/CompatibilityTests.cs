@@ -182,6 +182,34 @@ public class CompatibilityTests
         Assert.Equal(xna, roundTripped);
     }
 
+    /// <summary>Exhaustive (every defined member, not a hand-picked subset) parity check --
+    /// unlike the small spot-checks for Keys/Buttons, this enumerates both enums via reflection
+    /// so a future member added to one side without the other fails automatically, rather than
+    /// relying on someone remembering to add a matching InlineData row.</summary>
+    [Fact]
+    public void VertexElementFormat_AllMembersMatchFrameworkVertexElementFormat() =>
+        AssertEnumsNumericallyIdentical<CNA.Graphics.VertexElementFormat, Microsoft.Xna.Framework.Graphics.VertexElementFormat>();
+
+    [Fact]
+    public void VertexElementUsage_AllMembersMatchFrameworkVertexElementUsage() =>
+        AssertEnumsNumericallyIdentical<CNA.Graphics.VertexElementUsage, Microsoft.Xna.Framework.Graphics.VertexElementUsage>();
+
+    private static void AssertEnumsNumericallyIdentical<TFramework, TXna>()
+        where TFramework : struct, Enum
+        where TXna : struct, Enum
+    {
+        string[] frameworkNames = Enum.GetNames<TFramework>();
+        string[] xnaNames = Enum.GetNames<TXna>();
+        Assert.Equal(frameworkNames.OrderBy(n => n, StringComparer.Ordinal), xnaNames.OrderBy(n => n, StringComparer.Ordinal));
+
+        foreach (string name in frameworkNames)
+        {
+            var frameworkValue = (int)(object)Enum.Parse<TFramework>(name);
+            var xnaValue = (int)(object)Enum.Parse<TXna>(name);
+            Assert.True(frameworkValue == xnaValue, $"{name}: framework={frameworkValue}, xna={xnaValue}");
+        }
+    }
+
     [Fact]
     public void VertexPositionColor_StrideMatchesFrameworkVertexPositionColor()
     {

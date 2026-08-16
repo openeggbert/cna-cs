@@ -20,6 +20,29 @@ public class VertexDeclarationTests
     }
 
     [Fact]
+    public void Constructor_EmptyElements_ThrowsArgumentNullException()
+    {
+        // Matches real XNA/MonoGame exactly: ArgumentNullException (not ArgumentException) for
+        // an empty (not just null) array.
+        var ex = Assert.Throws<ArgumentNullException>(() => new VertexDeclaration());
+        Assert.Equal("elements", ex.ParamName);
+    }
+
+    [Fact]
+    public void Constructor_ExplicitStrideWithEmptyElements_StillThrows()
+    {
+        // The empty-array rejection applies regardless of whether an explicit stride was given --
+        // a stride alone with zero elements is not a valid declaration in real XNA either.
+        Assert.Throws<ArgumentNullException>(() => new VertexDeclaration(32));
+    }
+
+    [Fact]
+    public void Constructor_NullElements_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => new VertexDeclaration((VertexElement[])null!));
+    }
+
+    [Fact]
     public void Constructor_ElementsNotInOffsetOrder_StillComputesCorrectStride()
     {
         // Stride must be the max(offset + size) across all elements, not the sum in declared

@@ -14,13 +14,13 @@ public class VertexDeclaration
     private readonly VertexElement[] _elements;
 
     public VertexDeclaration(params VertexElement[] elements)
-        : this(ComputeStride(elements), elements)
+        : this(ComputeStride(ValidateNotEmpty(elements)), elements)
     {
     }
 
     public VertexDeclaration(int vertexStride, params VertexElement[] elements)
     {
-        ArgumentNullException.ThrowIfNull(elements);
+        ValidateNotEmpty(elements);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(vertexStride);
 
         _elements = (VertexElement[])elements.Clone();
@@ -31,14 +31,28 @@ public class VertexDeclaration
 
     public VertexElement[] GetVertexElements() => (VertexElement[])_elements.Clone();
 
+    /// <summary>Matches real XNA/MonoGame exactly: both constructors reject a null *or empty*
+    /// array with <see cref="ArgumentNullException"/> (not <see cref="ArgumentException"/>, and
+    /// regardless of whether an explicit stride was given) -- verified against real MonoGame
+    /// source, not assumed. Returns <paramref name="elements"/> so it can be chained into the
+    /// elements-only constructor's `: this(...)` initializer, which runs before that
+    /// constructor's own body.</summary>
+    private static VertexElement[] ValidateNotEmpty(VertexElement[] elements)
+    {
+        if (elements is null or { Length: 0 })
+        {
+            throw new ArgumentNullException(nameof(elements), "Elements cannot be empty");
+        }
+
+        return elements;
+    }
+
     /// <summary>Stride is the tightest span covering every element (max of offset + that
     /// element's own byte size), matching real XNA's own auto-stride behavior for the
     /// elements-only constructor -- not simply the sum of element sizes, since elements are not
     /// required to be contiguous or given in offset order.</summary>
     private static int ComputeStride(VertexElement[] elements)
     {
-        ArgumentNullException.ThrowIfNull(elements);
-
         int stride = 0;
         foreach (VertexElement element in elements)
         {

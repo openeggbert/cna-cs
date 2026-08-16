@@ -11,6 +11,58 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Fourth `/code-review high` pass, over the vertex-format commit (2026-08-16, session 6 continued once more)
+
+Ran the same review discipline a fourth time, including for this
+lower-risk (pure-data, no `unsafe` code, no native calls) commit — worth
+doing anyway, since three review passes in a row had each found a real
+bug. This one verified its top finding against **real MonoGame source
+fetched from GitHub**, not just recollection — a stronger verification
+standard than most of this session's other findings had available (no
+"real implementation" analog exists here the way `modules/audio`/
+`modules/graphics` gave `SoundEffect`/`Effect` something concrete to check
+against).
+
+One real, fixed compatibility bug: real XNA/MonoGame's `VertexDeclaration`
+constructors both reject a null **or empty** `elements` array with
+`ArgumentNullException("elements", "Elements cannot be empty")`,
+unconditionally — including the explicit-stride overload, which this
+project's code let through silently (an empty-elements declaration with a
+stride quietly "succeeded" and produced a zero-element, non-empty-stride
+declaration). The elements-only overload also threw the *wrong* exception
+type before this fix (`ArgumentOutOfRangeException` on `vertexStride`, from
+`ComputeStride`'s empty-array walk landing on stride 0) — a caller
+catching real XNA's documented exception type/param name wouldn't have
+caught either failure mode. Fixed with a shared `ValidateNotEmpty` helper
+called from both constructors, matching real XNA's exact exception type,
+param name, and message. New regression tests cover both constructors
+and both null/empty cases.
+
+Also added exhaustive (not hand-picked-subset) parity tests for
+`VertexElementFormat`/`VertexElementUsage` — reflection-based, comparing
+every member `Enum.GetNames` returns on both the `CNA.Graphics` and
+`Microsoft.Xna.Framework.Graphics` sides, rather than the small
+hand-picked `[InlineData]` spot-checks `Keys`/`Buttons` use elsewhere in
+this codebase. **Worth considering as the new default for future
+small-to-medium enum pairs** (roughly a dozen members or fewer, like these
+two): it catches a future member added to one side and not the other
+automatically, where a hand-picked subset only catches whatever the person
+adding the test happened to think to check. Not proposing a retrofit of
+the existing `Keys`/`Buttons`/`SpriteEffects` spot-checks this session —
+noting it as a pattern worth reaching for next time, not a cleanup task
+for what's already shipped and passing.
+
+One finding (`CNA.XnaCompat.VertexDeclaration.GetVertexElements()`
+double-allocating -- clones once inside `CNA.Graphics.VertexDeclaration`,
+then loops again for the type conversion) was left alone: real but minor,
+on a method nothing in this codebase calls yet (`VertexBuffer.SetData<T>`,
+the eventual real caller, isn't implemented), and avoiding it would need a
+new non-cloning internal accessor purely for this micro-optimization --
+not worth the added API surface for code with no measured cost yet.
+
+166/166 tests passing (was 161); `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected.
+
 ## Zero-ABI vertex-format layer: `VertexDeclaration`/`VertexElement`/standard vertex structs (2026-08-16, session 6 continued yet further)
 
 > After the `SoundEffect` review-and-fix round, checked whether `Effect`/
