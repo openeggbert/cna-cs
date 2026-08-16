@@ -62,11 +62,13 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
-    SetRenderTarget), SpriteBatch (full Draw/DrawString overload families),
-    Texture2D, RenderTarget2D, Keyboard/KeyboardState, Mouse/MouseState,
-    GamePad/GamePadState/GamePadCapabilities, SoundEffect/SoundEffectInstance,
-    VertexBuffer/IndexBuffer, ContentManager (RootDirectory, Load<Texture2D>,
-    Load<SoundEffect>, Load<SpriteFont> -- capped at 256 glyphs, see plan.md)
+    SetRenderTarget, SetVertexBuffer, Indices, DrawPrimitives,
+    DrawIndexedPrimitives), SpriteBatch (full Draw/DrawString overload
+    families), Texture2D, RenderTarget2D, Keyboard/KeyboardState,
+    Mouse/MouseState, GamePad/GamePadState/GamePadCapabilities,
+    SoundEffect/SoundEffectInstance, VertexBuffer/IndexBuffer,
+    ContentManager (RootDirectory, Load<Texture2D>, Load<SoundEffect>,
+    Load<SpriteFont> -- capped at 256 glyphs, see plan.md)
 
 Not started at all:
     BasicEffect/Effect, Model, Song, MediaPlayer

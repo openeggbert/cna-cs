@@ -80,6 +80,31 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_render_target(CnaHandle device, CnaHandle renderTarget);
 
+    /// <summary>Binds the active vertex buffer for subsequent <c>Draw*</c> calls, or unbinds when
+    /// <paramref name="vertexBuffer"/> is <see cref="CnaHandle.Zero"/>. Same grounding as
+    /// <c>VertexBuffer</c> itself -- no doc-backed shape, shaped to match the real
+    /// openeggbert/cna C++ engine's own (not yet C-ABI-exposed) implementation.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_vertex_buffer(CnaHandle device, CnaHandle vertexBuffer);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_indices(CnaHandle device, CnaHandle indexBuffer);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_draw_primitives(
+        CnaHandle device,
+        int primitiveType,
+        int startVertex,
+        int primitiveCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_draw_indexed_primitives(
+        CnaHandle device,
+        int primitiveType,
+        int baseVertex,
+        int startIndex,
+        int primitiveCount);
+
     // -- Texture2D (§9, §24 SafeHandle-backed resource) --------------------------------------
 
     [LibraryImport(LibraryName)]

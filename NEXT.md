@@ -11,6 +11,63 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `GraphicsDevice` draw calls: `SetVertexBuffer`/`Indices`/`DrawPrimitives`/`DrawIndexedPrimitives` (2026-08-16, session 6 continued still further again)
+
+> Third slice of the 3D pipeline. `VertexBuffer`/`IndexBuffer` exist but
+> are useless without a way to actually issue a draw call with them —
+> this closes that gap, ahead of `BasicEffect` (the largest, still
+> not-started remaining piece — see "where to pick up next" below).
+
+`DrawIndexedPrimitives`'s public signature matches real XNA's full 6-parameter
+form (`primitiveType, baseVertex, minVertexIndex, numVertices, startIndex,
+primitiveCount`) for API compatibility, but `minVertexIndex`/`numVertices`
+are validated and then **not forwarded** to the native call — they're
+driver hints with no required effect on modern GPUs (real XNA/MonoGame
+themselves mostly ignore them too), so this project's minimal native
+surface doesn't plumb unused parameters through the ABI just to match a
+signature shape. Worth remembering as a general principle for the next
+API-compat-but-minimal-native-surface method: match the *public C#
+signature* to real XNA exactly for source compatibility, but don't feel
+obligated to give every parameter a native counterpart if it wouldn't do
+anything there anyway — say so in a doc comment rather than silently
+dropping it, which is what happened here.
+
+Testability follows the exact same split `VertexBuffer`/`IndexBuffer`
+established: `DrawPrimitives`/`DrawIndexedPrimitives` validate their
+scalar arguments before touching native, so those failure paths are
+tested; `SetVertexBuffer`/`Indices`'s setter call native unconditionally
+(there's nothing to validate first — a null vertex/index buffer is a
+legal "unbind" call, not an error), so they're untested here, matching
+the existing `SetRenderTarget` precedent exactly.
+
+`Indices` needed the same `new`-override-plus-shadow-field treatment
+`CNA.XnaCompat.VertexBuffer.VertexDeclaration`/`BufferUsage` already used
+in the previous entry: declared return type differs between the base
+(`CNA.Graphics.IndexBuffer?`) and compat (`Microsoft.Xna.Framework.Graphics.IndexBuffer?`)
+layers, so the compat `GraphicsDevice` stores its own shadow field and its
+setter calls `base.Indices = value` (the compat `IndexBuffer` upcasts
+fine) before caching the compat-typed reference locally.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects. `dotnet test CNA.sln`: 181/181 passing (up from 173 — 8 new
+`GraphicsDeviceTests`). `samples/HelloGame` re-verified unaffected.
+
+**Where to pick up next:** `BasicEffect`/`Effect` is now the largest
+remaining well-grounded item (real C++ implementation confirmed in
+`modules/graphics/`, per the earlier research entry) — property surface
+alone (`World`/`View`/`Projection`, `VertexColorEnabled`,
+`TextureEnabled`/`Texture`, `Alpha`, lighting via `AmbientLightColor`/
+`DirectionalLight0-2`/`EnableDefaultLighting`/material colors, fog via
+`FogEnabled`/`FogColor`/`FogStart`/`FogEnd`) is bigger than anything
+implemented in a single pass so far this session. With buffers and draw
+calls both done now, a `BasicEffect`-drawn triangle is achievable in
+scope, but budget for it being the largest single addition yet — consider
+whether `Apply()` (which needs to decide how effect parameters actually
+reach a draw call, and the real C++ engine's own `FillGpuDrawParams`
+pattern suggests this project's own draw-call ABI may need to grow a
+parameters-struct concept alongside it) is better split into its own pass
+after the property surface itself lands.
+
 ## Fifth `/code-review high` pass, over the `VertexBuffer`/`IndexBuffer` commit (2026-08-16, session 6 continued once more)
 
 Ran the review a fifth time. Its own last-angle result came back

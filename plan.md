@@ -3,8 +3,9 @@
 **Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
 math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
 `RenderTarget2D`, `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the
-zero-ABI vertex-format layer, and `VertexBuffer`/`IndexBuffer` done;
-`Effect`/`BasicEffect`, `Model`, and `Song`/`MediaPlayer` not started)
+zero-ABI vertex-format layer, `VertexBuffer`/`IndexBuffer`, and
+`GraphicsDevice`'s draw calls done; `Effect`/`BasicEffect`, `Model`, and
+`Song`/`MediaPlayer` not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -316,19 +317,35 @@ Split by whether the type needs the (still nonexistent) native ABI:
       argument checks) are testable here at all — `SetData`/`GetData`
       cannot be exercised without a real `cna-native`, because there is no
       way to reach a successfully-constructed instance to call them on.
+- [x] **`GraphicsDevice.SetVertexBuffer`/`Indices`/`DrawPrimitives`/
+      `DrawIndexedPrimitives`/`PrimitiveType` — done, 2026-08-16 (session 6
+      continued yet further still).** Third slice of the 3D pipeline —
+      the actual draw calls, now that buffers exist to draw from.
+      `DrawIndexedPrimitives`'s signature matches real XNA's full 6-parameter
+      form (`primitiveType, baseVertex, minVertexIndex, numVertices,
+      startIndex, primitiveCount`) exactly for API compatibility, but
+      `minVertexIndex`/`numVertices` are accepted-and-validated without
+      being forwarded to the native call — on modern GPUs they are driver
+      hints real XNA/MonoGame themselves mostly ignore, so this project's
+      minimal native surface omits plumbing them through the ABI at all.
+      `DrawPrimitives`/`DrawIndexedPrimitives`'s own argument validation
+      (non-negative indices, positive primitive count) is testable without
+      native code, same reasoning as `VertexBuffer`/`IndexBuffer`'s
+      constructors; `SetVertexBuffer`/`Indices`'s setter call native
+      unconditionally (nothing to validate first) and are not testable
+      here, same as `SetRenderTarget`.
 - [ ] **Still not started, still blocked the same way:** `BasicEffect`/
       `Effect`/`EffectParameter`/`EffectPass`/`EffectTechnique`, `Model`
       (native-backed; the real C++ engine has full, working, tested,
       renderer-backend-wired implementations of these too, same lucky
       break `SoundEffect`/`VertexBuffer` had, but `BasicEffect` alone needs
       a large property surface — World/View/Projection, lighting,
-      texturing, fog — and `GraphicsDevice.DrawIndexedPrimitives`-style
-      draw calls are needed before any of it produces a visible result),
-      `Song`/`MediaPlayer` (no public constructor in real XNA for `Song` at all —
-      would need native streaming-audio-format loading, a different and
-      harder problem than `SoundEffect`'s raw-PCM-buffer escape hatch
-      solved). Blocked on the native ABI existing upstream, same as
-      everything in Phase 2/3.
+      texturing, fog — this is now the largest remaining well-grounded
+      piece), `Song`/`MediaPlayer` (no public constructor in real XNA for
+      `Song` at all — would need native streaming-audio-format loading, a
+      different and harder problem than `SoundEffect`'s raw-PCM-buffer
+      escape hatch solved). Blocked on the native ABI existing upstream,
+      same as everything in Phase 2/3.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

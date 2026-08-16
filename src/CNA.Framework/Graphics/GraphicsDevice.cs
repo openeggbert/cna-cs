@@ -40,4 +40,54 @@ public class GraphicsDevice
         CnaResult result = Native.cna_graphics_device_set_render_target(new CnaHandle(NativeHandleValue), handle);
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
     }
+
+    public void SetVertexBuffer(VertexBuffer? vertexBuffer)
+    {
+        CnaHandle handle = vertexBuffer is null ? CnaHandle.Zero : new CnaHandle(vertexBuffer.NativeHandleValue);
+        CnaResult result = Native.cna_graphics_device_set_vertex_buffer(new CnaHandle(NativeHandleValue), handle);
+        CnaException.ThrowIfFailed(result, nameof(SetVertexBuffer));
+    }
+
+    private IndexBuffer? _indices;
+
+    public IndexBuffer? Indices
+    {
+        get => _indices;
+        set
+        {
+            CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
+            CnaResult result = Native.cna_graphics_device_set_indices(new CnaHandle(NativeHandleValue), handle);
+            CnaException.ThrowIfFailed(result, nameof(Indices));
+            _indices = value;
+        }
+    }
+
+    public void DrawPrimitives(PrimitiveType primitiveType, int startVertex, int primitiveCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(startVertex);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
+
+        CnaResult result = Native.cna_graphics_device_draw_primitives(
+            new CnaHandle(NativeHandleValue), (int)primitiveType, startVertex, primitiveCount);
+        CnaException.ThrowIfFailed(result, nameof(DrawPrimitives));
+    }
+
+    /// <summary><paramref name="minVertexIndex"/>/<paramref name="numVertices"/> match real XNA's
+    /// full signature exactly, but are not forwarded to native code -- on modern GPUs they are
+    /// driver hints with no required effect on the draw itself (real XNA/MonoGame accept and
+    /// mostly ignore them too), so this project's minimal native surface omits them rather than
+    /// plumb unused parameters through the ABI.</summary>
+    public void DrawIndexedPrimitives(
+        PrimitiveType primitiveType, int baseVertex, int minVertexIndex, int numVertices, int startIndex, int primitiveCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(baseVertex);
+        ArgumentOutOfRangeException.ThrowIfNegative(minVertexIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(numVertices);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
+
+        CnaResult result = Native.cna_graphics_device_draw_indexed_primitives(
+            new CnaHandle(NativeHandleValue), (int)primitiveType, baseVertex, startIndex, primitiveCount);
+        CnaException.ThrowIfFailed(result, nameof(DrawIndexedPrimitives));
+    }
 }
