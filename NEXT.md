@@ -11,6 +11,54 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Second `/code-review high` pass, this time over `GetCapabilities`/`Load<SpriteFont>` (2026-08-16, session 5 continued further still)
+
+Ran the same review discipline again, against the two commits after the
+first review pass. Two real bugs, both in `ContentManager.LoadSpriteFontData`:
+- `native.GlyphCount` (from the untrusted, self-designed native boundary)
+  was used to size arrays and index the fixed-256-slot `InlineArray` buffer
+  with **no validation** — a native implementation returning a bad count
+  (version skew, an ABI bug) would read past the buffer instead of hitting
+  the documented "fails via `CnaResult`" contract. Now explicitly checked
+  against `0..CnaGlyphBuffer.MaxGlyphs` and throws a clear `CnaException`
+  if not.
+- `CnaGlyphMetrics.Character` crosses the ABI as a full Unicode code point
+  specifically to avoid surrogate-pair ambiguity (per its own doc comment),
+  but the code then silently truncated it to `char` with an unchecked
+  cast — defeating the reason that field is an `int` in the first place. A
+  code point outside the BMP would silently wrap into a wrong, possibly
+  glyph-colliding `char` with no error. Now explicitly validated (rejects
+  non-BMP code points and lone surrogates with a clear exception) — the
+  underlying limitation is real and unavoidable (`SpriteFont`'s glyph table
+  is `char`-keyed, matching real XNA's own limitation), but failing loudly
+  beats succeeding wrong.
+
+Also fixed a smaller diagnostic-quality bug: `LoadSpriteFontData` passed
+`nameof(Load)` (the unrelated generic method) to `CnaException.ThrowIfFailed`
+instead of its own name, so a failed native SpriteFont load would have
+misattributed the failure in its exception message.
+
+Three more findings from the same pass were judged not worth acting on,
+each for a specific reason (not just "seemed low severity"): an unvalidated
+`(GamePadType)native.GamePadType` cast is consistent with how every other
+enum crossing this ABI boundary is already handled throughout this
+codebase (`Buttons`, `Keys`, `SpriteEffects`, ...), so singling this one
+out for validation would be an inconsistent one-off, not a real fix. The
+`XnaCompat.ContentManager`/`XnaCompat.SpriteFont` conversion-helper
+duplication (opposite-direction element-wise array conversion, ~6 lines
+each, used once each) would need a shared generic delegate-based helper to
+dedupe — judged as trading a small amount of duplication for a real
+abstraction most readers would find harder to follow, not a net
+improvement. `GamePadCapabilities`'s 15 explicit `HasFlag` lines were
+flagged as repetitive, but they're already self-evidently correct at a
+glance; wrapping them wouldn't have anywhere clean to live (the closest
+existing helper, `GamePadButtons.ToState`, is `private` and returns the
+wrong type), so introducing one *for this* would be the premature
+abstraction this project's own conventions warn against, not a
+simplification.
+
+112/112 tests still pass; `dotnet build` clean.
+
 ## `ContentManager.Load<SpriteFont>` (2026-08-16, session 5 continued further)
 
 > Reconsidered the "genuinely open design question" framing from earlier in

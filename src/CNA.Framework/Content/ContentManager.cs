@@ -91,15 +91,26 @@ public class ContentManager
     /// <c>CnaGlyphBuffer.MaxGlyphs</c> (256) glyphs -- generous for XNA's default ASCII-range
     /// content-pipeline output, but a real, documented limitation, not a silent truncation: the
     /// native call is expected to fail with a <see cref="CnaResult"/> error for a font with more
-    /// glyphs than that, which <see cref="CnaException.ThrowIfFailed"/> surfaces as a thrown
-    /// exception here, not silent data loss.
+    /// glyphs than that. <see cref="CnaGlyphMetrics.Character"/> crosses the ABI as a full Unicode
+    /// code point specifically so it isn't ambiguous for astral-plane characters, but
+    /// <see cref="Graphics.SpriteFont"/>'s glyph table is <c>char</c>-keyed (matching real XNA,
+    /// which has the same limitation) -- a code point that doesn't fit in one UTF-16 code unit is
+    /// rejected here with a clear exception rather than silently truncated into a wrong,
+    /// possibly-colliding <c>char</c>.
     /// </summary>
     protected SpriteFontData LoadSpriteFontData(string assetName)
     {
         CnaResult result = Native.cna_content_load_spritefont(new CnaHandle(_nativeHandleValue), assetName, out CnaSpriteFontData native);
-        CnaException.ThrowIfFailed(result, nameof(Load));
+        CnaException.ThrowIfFailed(result, nameof(LoadSpriteFontData));
 
         int glyphCount = native.GlyphCount;
+        if (glyphCount < 0 || glyphCount > CnaGlyphBuffer.MaxGlyphs)
+        {
+            throw new CnaException(
+                $"{nameof(LoadSpriteFontData)} received an out-of-range glyph count ({glyphCount}) from the native call " +
+                $"-- expected 0..{CnaGlyphBuffer.MaxGlyphs}. This indicates a native/managed ABI mismatch, not a font-content problem.");
+        }
+
         var glyphBounds = new Rectangle[glyphCount];
         var cropping = new Rectangle[glyphCount];
         var characters = new char[glyphCount];
@@ -110,13 +121,25 @@ public class ContentManager
             CnaGlyphMetrics glyph = native.Glyphs[i];
             glyphBounds[i] = new Rectangle(glyph.Bounds.X, glyph.Bounds.Y, glyph.Bounds.Width, glyph.Bounds.Height);
             cropping[i] = new Rectangle(glyph.Cropping.X, glyph.Cropping.Y, glyph.Cropping.Width, glyph.Cropping.Height);
-            characters[i] = (char)glyph.Character;
+            characters[i] = ToChar(glyph.Character);
             kerning[i] = new Vector3(glyph.LeftSideBearing, glyph.Width, glyph.RightSideBearing);
         }
 
-        char? defaultCharacter = native.HasDefaultCharacter != 0 ? (char)native.DefaultCharacter : null;
+        char? defaultCharacter = native.HasDefaultCharacter != 0 ? ToChar(native.DefaultCharacter) : null;
 
         return new SpriteFontData(
             native.Texture.Value, glyphBounds, cropping, characters, native.LineSpacing, native.Spacing, kerning, defaultCharacter);
+
+        static char ToChar(int codePoint)
+        {
+            if (codePoint is < 0 or > char.MaxValue || char.IsSurrogate((char)codePoint))
+            {
+                throw new CnaException(
+                    $"SpriteFont glyph code point U+{codePoint:X} does not fit in a single UTF-16 char " +
+                    "(SpriteFont's glyph table is char-keyed, matching real XNA's own limitation).");
+            }
+
+            return (char)codePoint;
+        }
     }
 }
