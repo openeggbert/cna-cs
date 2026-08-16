@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework.Graphics;
+namespace CNA.Graphics;
 
 /// <summary>
 /// A native-backed 2D texture. Owns a <see cref="NativeResourceHandle"/> per the resource

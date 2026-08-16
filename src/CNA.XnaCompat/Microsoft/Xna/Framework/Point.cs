@@ -21,6 +21,6 @@ public struct Point : IEquatable<Point>
     public override readonly int GetHashCode() => HashCode.Combine(X, Y);
     public override readonly string ToString() => $"{{X:{X} Y:{Y}}}";
 
-    public static implicit operator CNA.Framework.Point(Point value) => new(value.X, value.Y);
-    public static implicit operator Point(CNA.Framework.Point value) => new(value.X, value.Y);
+    public static implicit operator CNA.Point(Point value) => new(value.X, value.Y);
+    public static implicit operator Point(CNA.Point value) => new(value.X, value.Y);
 }

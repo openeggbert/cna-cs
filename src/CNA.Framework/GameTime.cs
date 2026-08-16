@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// A single frame's timing snapshot. See ../../cnabinding/analysis_binding_sharp_runtime.md §42 --

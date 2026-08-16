@@ -10,7 +10,7 @@ namespace CNA.Interop;
 ///
 /// Every function pointer must target a static method annotated with
 /// <see cref="System.Runtime.InteropServices.UnmanagedCallersOnlyAttribute"/> -- see
-/// CNA.Framework's ManagedGameBridge for the managed side of this contract.
+/// CNA's ManagedGameBridge for the managed side of this contract.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct CnaManagedGameCallbacks

@@ -2,5 +2,5 @@ namespace Microsoft.Xna.Framework.Input;
 
 public static class Keyboard
 {
-    public static KeyboardState GetState() => new(CNA.Framework.Input.Keyboard.GetState());
+    public static KeyboardState GetState() => new(CNA.Input.Keyboard.GetState());
 }

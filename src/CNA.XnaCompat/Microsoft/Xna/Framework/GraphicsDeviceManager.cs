@@ -1,6 +1,6 @@
 namespace Microsoft.Xna.Framework;
 
-public class GraphicsDeviceManager : CNA.Framework.GraphicsDeviceManager
+public class GraphicsDeviceManager : CNA.GraphicsDeviceManager
 {
     public GraphicsDeviceManager(Game game)
         : base(game)

@@ -7,7 +7,7 @@ public readonly struct GamePadDPad
     public ButtonState Left { get; }
     public ButtonState Right { get; }
 
-    internal GamePadDPad(CNA.Framework.Input.GamePadDPad framework)
+    internal GamePadDPad(CNA.Input.GamePadDPad framework)
     {
         Up = ToCompat(framework.Up);
         Down = ToCompat(framework.Down);
@@ -15,5 +15,5 @@ public readonly struct GamePadDPad
         Right = ToCompat(framework.Right);
     }
 
-    private static ButtonState ToCompat(CNA.Framework.Input.ButtonState value) => (ButtonState)(int)value;
+    private static ButtonState ToCompat(CNA.Input.ButtonState value) => (ButtonState)(int)value;
 }

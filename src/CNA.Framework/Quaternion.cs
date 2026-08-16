@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>Local, managed rotation quaternion -- see the rationale in Vector2.cs.</summary>
 public struct Quaternion : IEquatable<Quaternion>

@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework.Input;
+namespace CNA.Input;
 
 /// <summary>
 /// A game pad snapshot taken by <see cref="GamePad.GetState(PlayerIndex)"/>. <c>PacketNumber</c>
@@ -9,7 +9,7 @@ namespace CNA.Framework.Input;
 /// </summary>
 public readonly struct GamePadState
 {
-    private readonly CNA.Framework.Input.Buttons _rawButtons;
+    private readonly CNA.Input.Buttons _rawButtons;
 
     public bool IsConnected { get; }
     public GamePadButtons Buttons { get; }
@@ -21,7 +21,7 @@ public readonly struct GamePadState
     internal GamePadState(CnaGamePadState native)
     {
         IsConnected = native.IsConnected != 0;
-        _rawButtons = (CNA.Framework.Input.Buttons)native.Buttons;
+        _rawButtons = (CNA.Input.Buttons)native.Buttons;
         Buttons = new GamePadButtons(_rawButtons);
         DPad = new GamePadDPad(_rawButtons);
         ThumbSticks = new GamePadThumbSticks(
@@ -30,7 +30,7 @@ public readonly struct GamePadState
         Triggers = new GamePadTriggers(native.LeftTrigger, native.RightTrigger);
     }
 
-    public bool IsButtonDown(CNA.Framework.Input.Buttons button) => _rawButtons.HasFlag(button);
+    public bool IsButtonDown(CNA.Input.Buttons button) => _rawButtons.HasFlag(button);
 
-    public bool IsButtonUp(CNA.Framework.Input.Buttons button) => !IsButtonDown(button);
+    public bool IsButtonUp(CNA.Input.Buttons button) => !IsButtonDown(button);
 }

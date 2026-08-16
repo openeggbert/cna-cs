@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// Placeholder for the XNA-style graphics configuration manager. <see cref="Game.GraphicsDevice"/>

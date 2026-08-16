@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework.Input;
+namespace CNA.Input;
 
 /// <summary>
 /// A full-keyboard snapshot taken by <see cref="Keyboard.GetState"/>. One native call per

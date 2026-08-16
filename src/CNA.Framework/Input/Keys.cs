@@ -1,4 +1,4 @@
-namespace CNA.Framework.Input;
+namespace CNA.Input;
 
 /// <summary>
 /// CNA key ordinals. Numeric values match the real <c>Microsoft.Xna.Framework.Input.Keys</c>

@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// A local, managed 2D vector -- no P/Invoke call is made for trivial math, per

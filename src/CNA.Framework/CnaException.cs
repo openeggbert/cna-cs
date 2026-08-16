@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// The managed exception every failing native CNA call is converted to. No <c>CnaResult</c> and

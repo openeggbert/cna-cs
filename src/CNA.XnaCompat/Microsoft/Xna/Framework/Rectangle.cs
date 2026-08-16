@@ -40,13 +40,13 @@ public struct Rectangle : IEquatable<Rectangle>
 
     public readonly bool Contains(Point value) => Contains(value.X, value.Y);
 
-    public readonly bool Contains(Rectangle value) => ((CNA.Framework.Rectangle)this).Contains(value);
+    public readonly bool Contains(Rectangle value) => ((CNA.Rectangle)this).Contains(value);
 
-    public readonly bool Intersects(Rectangle value) => ((CNA.Framework.Rectangle)this).Intersects(value);
+    public readonly bool Intersects(Rectangle value) => ((CNA.Rectangle)this).Intersects(value);
 
-    public static Rectangle Intersect(Rectangle a, Rectangle b) => CNA.Framework.Rectangle.Intersect(a, b);
+    public static Rectangle Intersect(Rectangle a, Rectangle b) => CNA.Rectangle.Intersect(a, b);
 
-    public static Rectangle Union(Rectangle a, Rectangle b) => CNA.Framework.Rectangle.Union(a, b);
+    public static Rectangle Union(Rectangle a, Rectangle b) => CNA.Rectangle.Union(a, b);
 
     public void Inflate(int horizontalAmount, int verticalAmount)
     {
@@ -73,6 +73,6 @@ public struct Rectangle : IEquatable<Rectangle>
     public override readonly int GetHashCode() => HashCode.Combine(X, Y, Width, Height);
     public override readonly string ToString() => $"{{X:{X} Y:{Y} Width:{Width} Height:{Height}}}";
 
-    public static implicit operator CNA.Framework.Rectangle(Rectangle value) => new(value.X, value.Y, value.Width, value.Height);
-    public static implicit operator Rectangle(CNA.Framework.Rectangle value) => new(value.X, value.Y, value.Width, value.Height);
+    public static implicit operator CNA.Rectangle(Rectangle value) => new(value.X, value.Y, value.Width, value.Height);
+    public static implicit operator Rectangle(CNA.Rectangle value) => new(value.X, value.Y, value.Width, value.Height);
 }

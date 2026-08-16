@@ -36,7 +36,7 @@ internal readonly struct CnaColor
 
 /// <summary>
 /// ABI-shaped frame time value. Ticks use the same resolution as
-/// <see cref="System.TimeSpan.Ticks"/> (100ns), converted at the CNA.Framework boundary.
+/// <see cref="System.TimeSpan.Ticks"/> (100ns), converted at the CNA boundary.
 /// See ../../cnabinding/analysis_binding_sharp_runtime.md §42.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
@@ -104,7 +104,7 @@ internal readonly struct CnaMouseState
 /// <summary>
 /// ABI-shaped game pad snapshot for one player index. <c>Buttons</c> is a bitmask matching the
 /// core (non-thumbstick, non-trigger) subset of real XNA's <c>Buttons</c> flags enum -- see
-/// CNA.Framework.Input.Buttons for the exact bit assignments and what is intentionally omitted.
+/// CNA.Input.Buttons for the exact bit assignments and what is intentionally omitted.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaGamePadState

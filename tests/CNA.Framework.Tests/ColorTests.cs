@@ -1,7 +1,7 @@
-using CNA.Framework;
+using CNA;
 using Xunit;
 
-namespace CNA.Framework.Tests;
+namespace CNA.Tests;
 
 public class ColorTests
 {

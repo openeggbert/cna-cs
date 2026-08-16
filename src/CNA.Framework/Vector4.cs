@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>Local, managed 4D vector -- see the rationale in Vector2.cs.</summary>
 public struct Vector4 : IEquatable<Vector4>

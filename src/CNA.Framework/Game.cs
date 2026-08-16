@@ -1,10 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using CNA.Framework.Content;
-using CNA.Framework.Graphics;
+using CNA.Content;
+using CNA.Graphics;
 using CNA.Interop;
 
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// Base class for a CNA game. Native CNA owns window creation, platform event pumping, timing,
@@ -48,7 +48,7 @@ public abstract class Game : IDisposable
     }
 
     /// <summary>
-    /// The raw native game handle value, for the small set of CNA.Framework types (currently none
+    /// The raw native game handle value, for the small set of CNA types (currently none
     /// outside this file) that need it. Deliberately typed as <see cref="nint"/>, not
     /// <see cref="CnaHandle"/>, so it can appear in <c>protected</c> members that CNA.XnaCompat's
     /// subclass overrides touch -- see <see cref="GetNativeGraphicsDeviceHandle"/> and
@@ -103,7 +103,7 @@ public abstract class Game : IDisposable
     /// <summary>
     /// Covariant-return factory hook: CNA.XnaCompat's <c>Game</c> overrides this to return a
     /// <c>Microsoft.Xna.Framework.Graphics.GraphicsDevice</c> instead, so <see cref="GraphicsDevice"/>
-    /// holds the compat-typed instance without CNA.Framework needing to know CNA.XnaCompat exists.
+    /// holds the compat-typed instance without CNA needing to know CNA.XnaCompat exists.
     /// </summary>
     protected virtual GraphicsDevice CreateGraphicsDevice() => new(GetNativeGraphicsDeviceHandle());
 

@@ -19,18 +19,18 @@ public struct Plane : IEquatable<Plane>
 
     public Plane(Vector3 point1, Vector3 point2, Vector3 point3)
     {
-        CNA.Framework.Plane value = new(point1, point2, point3);
+        CNA.Plane value = new(point1, point2, point3);
         Normal = value.Normal;
         D = value.D;
     }
 
-    public readonly float DotCoordinate(Vector3 value) => ((CNA.Framework.Plane)this).DotCoordinate(value);
+    public readonly float DotCoordinate(Vector3 value) => ((CNA.Plane)this).DotCoordinate(value);
 
-    public readonly float DotNormal(Vector3 value) => ((CNA.Framework.Plane)this).DotNormal(value);
+    public readonly float DotNormal(Vector3 value) => ((CNA.Plane)this).DotNormal(value);
 
     public void Normalize()
     {
-        CNA.Framework.Plane value = this;
+        CNA.Plane value = this;
         value.Normalize();
         Normal = value.Normal;
         D = value.D;
@@ -43,10 +43,10 @@ public struct Plane : IEquatable<Plane>
     }
 
     public readonly PlaneIntersectionType Intersects(BoundingSphere sphere) =>
-        ((CNA.Framework.Plane)this).Intersects(sphere).ToCompat();
+        ((CNA.Plane)this).Intersects(sphere).ToCompat();
 
     public readonly PlaneIntersectionType Intersects(BoundingBox box) =>
-        ((CNA.Framework.Plane)this).Intersects(box).ToCompat();
+        ((CNA.Plane)this).Intersects(box).ToCompat();
 
     public static bool operator ==(Plane a, Plane b) => a.Equals(b);
     public static bool operator !=(Plane a, Plane b) => !a.Equals(b);
@@ -56,6 +56,6 @@ public struct Plane : IEquatable<Plane>
     public override readonly int GetHashCode() => HashCode.Combine(Normal, D);
     public override readonly string ToString() => $"{{Normal:{Normal} D:{D}}}";
 
-    public static implicit operator CNA.Framework.Plane(Plane value) => new(value.Normal, value.D);
-    public static implicit operator Plane(CNA.Framework.Plane value) => new(value.Normal, value.D);
+    public static implicit operator CNA.Plane(Plane value) => new(value.Normal, value.D);
+    public static implicit operator Plane(CNA.Plane value) => new(value.Normal, value.D);
 }

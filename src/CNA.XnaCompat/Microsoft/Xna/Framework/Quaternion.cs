@@ -28,18 +28,18 @@ public struct Quaternion : IEquatable<Quaternion>
     public static Quaternion Identity => new(0f, 0f, 0f, 1f);
 
     public static Quaternion CreateFromAxisAngle(Vector3 axis, float angle) =>
-        CNA.Framework.Quaternion.CreateFromAxisAngle(axis, angle);
+        CNA.Quaternion.CreateFromAxisAngle(axis, angle);
 
     public static Quaternion CreateFromYawPitchRoll(float yaw, float pitch, float roll) =>
-        CNA.Framework.Quaternion.CreateFromYawPitchRoll(yaw, pitch, roll);
+        CNA.Quaternion.CreateFromYawPitchRoll(yaw, pitch, roll);
 
-    public readonly float Length() => ((CNA.Framework.Quaternion)this).Length();
+    public readonly float Length() => ((CNA.Quaternion)this).Length();
 
-    public readonly float LengthSquared() => ((CNA.Framework.Quaternion)this).LengthSquared();
+    public readonly float LengthSquared() => ((CNA.Quaternion)this).LengthSquared();
 
     public void Normalize()
     {
-        CNA.Framework.Quaternion value = this;
+        CNA.Quaternion value = this;
         value.Normalize();
         this = value;
     }
@@ -50,21 +50,21 @@ public struct Quaternion : IEquatable<Quaternion>
         return value;
     }
 
-    public static Quaternion Conjugate(Quaternion value) => CNA.Framework.Quaternion.Conjugate(value);
+    public static Quaternion Conjugate(Quaternion value) => CNA.Quaternion.Conjugate(value);
 
-    public static Quaternion Inverse(Quaternion value) => CNA.Framework.Quaternion.Inverse(value);
+    public static Quaternion Inverse(Quaternion value) => CNA.Quaternion.Inverse(value);
 
-    public static float Dot(Quaternion a, Quaternion b) => CNA.Framework.Quaternion.Dot(a, b);
+    public static float Dot(Quaternion a, Quaternion b) => CNA.Quaternion.Dot(a, b);
 
     public static Quaternion Concatenate(Quaternion value1, Quaternion value2) =>
-        CNA.Framework.Quaternion.Concatenate(value1, value2);
+        CNA.Quaternion.Concatenate(value1, value2);
 
-    public static Quaternion Lerp(Quaternion a, Quaternion b, float amount) => CNA.Framework.Quaternion.Lerp(a, b, amount);
+    public static Quaternion Lerp(Quaternion a, Quaternion b, float amount) => CNA.Quaternion.Lerp(a, b, amount);
 
-    public static Quaternion operator *(Quaternion a, Quaternion b) => (CNA.Framework.Quaternion)a * (CNA.Framework.Quaternion)b;
-    public static Quaternion operator +(Quaternion a, Quaternion b) => (CNA.Framework.Quaternion)a + (CNA.Framework.Quaternion)b;
-    public static Quaternion operator -(Quaternion a, Quaternion b) => (CNA.Framework.Quaternion)a - (CNA.Framework.Quaternion)b;
-    public static Quaternion operator -(Quaternion value) => -(CNA.Framework.Quaternion)value;
+    public static Quaternion operator *(Quaternion a, Quaternion b) => (CNA.Quaternion)a * (CNA.Quaternion)b;
+    public static Quaternion operator +(Quaternion a, Quaternion b) => (CNA.Quaternion)a + (CNA.Quaternion)b;
+    public static Quaternion operator -(Quaternion a, Quaternion b) => (CNA.Quaternion)a - (CNA.Quaternion)b;
+    public static Quaternion operator -(Quaternion value) => -(CNA.Quaternion)value;
 
     public static bool operator ==(Quaternion a, Quaternion b) => a.Equals(b);
     public static bool operator !=(Quaternion a, Quaternion b) => !a.Equals(b);
@@ -75,6 +75,6 @@ public struct Quaternion : IEquatable<Quaternion>
     public override readonly int GetHashCode() => HashCode.Combine(X, Y, Z, W);
     public override readonly string ToString() => $"{{X:{X} Y:{Y} Z:{Z} W:{W}}}";
 
-    public static implicit operator CNA.Framework.Quaternion(Quaternion value) => new(value.X, value.Y, value.Z, value.W);
-    public static implicit operator Quaternion(CNA.Framework.Quaternion value) => new(value.X, value.Y, value.Z, value.W);
+    public static implicit operator CNA.Quaternion(Quaternion value) => new(value.X, value.Y, value.Z, value.W);
+    public static implicit operator Quaternion(CNA.Quaternion value) => new(value.X, value.Y, value.Z, value.W);
 }

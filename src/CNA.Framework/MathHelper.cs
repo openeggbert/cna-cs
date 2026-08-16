@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// XNA-compatible math constants/helpers. <c>Barycentric</c>, <c>CatmullRom</c>, and

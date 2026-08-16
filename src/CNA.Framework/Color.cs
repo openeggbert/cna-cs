@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// A local, managed RGBA color (one byte per channel). See ../../cnabinding/analysis_binding.md

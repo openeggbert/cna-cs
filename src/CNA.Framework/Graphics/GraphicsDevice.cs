@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework.Graphics;
+namespace CNA.Graphics;
 
 public class GraphicsDevice
 {

@@ -14,7 +14,7 @@ public readonly struct GamePadButtons
     public ButtonState LeftStick { get; }
     public ButtonState RightStick { get; }
 
-    internal GamePadButtons(CNA.Framework.Input.GamePadButtons framework)
+    internal GamePadButtons(CNA.Input.GamePadButtons framework)
     {
         A = ToCompat(framework.A);
         B = ToCompat(framework.B);
@@ -29,5 +29,5 @@ public readonly struct GamePadButtons
         RightStick = ToCompat(framework.RightStick);
     }
 
-    private static ButtonState ToCompat(CNA.Framework.Input.ButtonState value) => (ButtonState)(int)value;
+    private static ButtonState ToCompat(CNA.Input.ButtonState value) => (ButtonState)(int)value;
 }

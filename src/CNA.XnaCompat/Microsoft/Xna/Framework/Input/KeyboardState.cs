@@ -1,11 +1,11 @@
 namespace Microsoft.Xna.Framework.Input;
 
-/// <summary>XNA 4.0-compatible <c>KeyboardState</c>, wrapping a <see cref="CNA.Framework.Input.KeyboardState"/> snapshot.</summary>
+/// <summary>XNA 4.0-compatible <c>KeyboardState</c>, wrapping a <see cref="CNA.Input.KeyboardState"/> snapshot.</summary>
 public readonly struct KeyboardState
 {
-    private readonly CNA.Framework.Input.KeyboardState _framework;
+    private readonly CNA.Input.KeyboardState _framework;
 
-    internal KeyboardState(CNA.Framework.Input.KeyboardState framework)
+    internal KeyboardState(CNA.Input.KeyboardState framework)
     {
         _framework = framework;
     }

@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework.Input;
+namespace CNA.Input;
 
 /// <summary><c>GetCapabilities</c> is not implemented -- see plan.md Phase 4.</summary>
 public static class GamePad

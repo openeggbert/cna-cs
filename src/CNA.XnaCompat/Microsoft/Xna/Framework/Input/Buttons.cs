@@ -1,6 +1,6 @@
 namespace Microsoft.Xna.Framework.Input;
 
-/// <summary>See CNA.Framework.Input.Buttons for which flags are (and are not) implemented; bit
+/// <summary>See CNA.Input.Buttons for which flags are (and are not) implemented; bit
 /// values here are kept numerically identical to it.</summary>
 [Flags]
 public enum Buttons : uint

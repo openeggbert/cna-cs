@@ -11,11 +11,11 @@ this page is the "what it means for the code in `src/`" version.
 ```text
 your C# game
         ↓
-CNA.XnaCompat   (Microsoft.Xna.Framework namespaces)
+CNA.XnaCompat   (project) → Microsoft.Xna.Framework[.Graphics|.Input|.Content] (namespace)
         ↓
-CNA.Framework   (CNA.Framework namespace; idiomatic .NET API)
+CNA.Framework   (project) → CNA[.Graphics|.Input|.Content]                    (namespace)
         ↓
-CNA.Interop     (internal; raw P/Invoke, CnaHandle, CnaResult)
+CNA.Interop     (project, internal) → CnaHandle, CnaResult, raw P/Invoke
         ↓
 CNA stable C ABI                                    ← in openeggbert/cna
         ↓
@@ -23,6 +23,20 @@ CNA C++ core
         ↓
 Sharp Runtime, CNA subsystems, renderers
 ```
+
+**Project name and C# namespace are deliberately different for the idiomatic
+layer.** The project is called `CNA.Framework` (matching the repository
+layout `analysis_binding.md` §18 prescribes: `src/CNA.Interop/`,
+`src/CNA.Framework/`, `src/CNA.XnaCompat/`), but the types inside it live in
+the bare `CNA` namespace (`CNA.Graphics`, `CNA.Input`, `CNA.Content`, or
+just `CNA` for core types like `Vector2`/`Game`) — matching the *real* CNA
+C++ codebase's own namespace convention, `CNA::Graphics`, `CNA::Input`,
+`CNA::Devices`, bare `CNA::`, *not* `CNA::Framework::`. The C++ side has
+exactly the same asymmetry: its `modules/graphics-ext/` folder produces
+namespace `CNA::Graphics`, not `CNA::GraphicsExt`. `CNA::Internal::*` is the
+separate, private-implementation namespace in the C++ codebase — this
+project's equivalent is `CNA.Interop`, which is why *that* project's
+namespace (`CNA.Interop`) matches its project name, unlike `CNA.Framework`.
 
 Each arrow is a one-way dependency. `CNA.Framework` never references
 `CNA.XnaCompat`; `CNA.Interop` never references `CNA.Framework`. This keeps
@@ -38,10 +52,11 @@ plus the small set of ABI-shaped structs (`CnaResult`, `CnaHandle`,
 it. No ergonomics live here — no operators, no properties, no `SafeHandle`.
 That belongs one layer up.
 
-### `CNA.Framework`
+### `CNA.Framework` (project) → `CNA` namespace
 
-The idiomatic, CNA-native public API (`CNA.Framework` namespace). This is
-where:
+The idiomatic, CNA-native public API, in the `CNA`/`CNA.Graphics`/
+`CNA.Input`/`CNA.Content` namespaces (see above for why the project name and
+namespace differ). This is where:
 
 - managed value types (`Vector2`, `Color`, `GameTime`) are implemented
   directly in C#, with no P/Invoke call for trivial operations
@@ -52,28 +67,28 @@ where:
 - the `Game` lifecycle bridges to native code through an
   `[UnmanagedCallersOnly]` callback adapter (`analysis_binding.md` §20).
 
-`CNA.Framework` is intentionally not required to look like XNA. It is free
-to grow CNA-specific functionality that XNA never had, without that
+The `CNA` namespace is intentionally not required to look like XNA. It is
+free to grow CNA-specific functionality that XNA never had, without that
 functionality being permanently constrained by 2010-era XNA naming
 (`analysis_binding.md` §18).
 
-### `CNA.XnaCompat`
+### `CNA.XnaCompat` (project) → `Microsoft.Xna.Framework` namespace
 
 The `Microsoft.Xna.Framework`-named compatibility facade. Reference types
 (`Game`, `GraphicsDeviceManager`, `GraphicsDevice`, `Texture2D`,
-`SpriteBatch`, `ContentManager`) are thin subclasses of their
-`CNA.Framework` counterparts — no duplicated logic, just XNA-shaped
-constructors and members forwarding to `base`.
+`SpriteBatch`, `ContentManager`) are thin subclasses of their `CNA`-namespace
+counterparts — no duplicated logic, just XNA-shaped constructors and members
+forwarding to `base`.
 
-#### Why the XNA value types are not literally the same type as the `CNA.Framework` ones
+#### Why the XNA value types are not literally the same type as the `CNA` namespace ones
 
 C# structs cannot inherit from another struct, so `Microsoft.Xna.Framework.Vector2`
-cannot simply be a subclass of `CNA.Framework.Vector2` the way
-`Microsoft.Xna.Framework.Game` can subclass `CNA.Framework.Game`. For the
-handful of math value types, `CNA.XnaCompat` defines its own small struct
-with the same field layout and implicit conversion operators to/from the
-`CNA.Framework` version, so a `CNA.Framework.GraphicsDevice.Clear(Color)`
-call still works seamlessly from XNA-style code. This is the one place in
+cannot simply be a subclass of `CNA.Vector2` the way
+`Microsoft.Xna.Framework.Game` can subclass `CNA.Game`. For the handful of
+math value types, `CNA.XnaCompat` defines its own small struct with the same
+field layout and implicit conversion operators to/from the `CNA`-namespace
+version, so a `CNA.Graphics.GraphicsDevice.Clear(Color)` call still works
+seamlessly from XNA-style code. This is the one place in
 the solution with intentional, documented small duplication — see
 `analysis_binding.md` §74 ("simple value structs" and "repetitive resource
 wrappers" are exactly the kind of thing a future codegen tool

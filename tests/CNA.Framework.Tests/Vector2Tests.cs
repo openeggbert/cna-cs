@@ -1,7 +1,7 @@
-using CNA.Framework;
+using CNA;
 using Xunit;
 
-namespace CNA.Framework.Tests;
+namespace CNA.Tests;
 
 /// <summary>
 /// Vector2 is a local, non-native value type (see ../../src/CNA.Framework/Vector2.cs), so these

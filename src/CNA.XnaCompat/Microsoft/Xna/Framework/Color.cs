@@ -2,7 +2,7 @@ namespace Microsoft.Xna.Framework;
 
 /// <summary>
 /// XNA 4.0-compatible <c>Color</c>. See docs/architecture.md for why this duplicates
-/// <see cref="CNA.Framework.Color"/> rather than subclassing it (structs cannot inherit). Named
+/// <see cref="CNA.Color"/> rather than subclassing it (structs cannot inherit). Named
 /// colors here match real XNA's actual byte values (139 colors + Transparent). Packed-uint
 /// (<c>PackedValue</c>) layout parity with real XNA is Phase 4 (plan.md).
 /// </summary>
@@ -180,6 +180,6 @@ public struct Color : IEquatable<Color>
     public override readonly int GetHashCode() => HashCode.Combine(R, G, B, A);
     public override readonly string ToString() => $"{{R:{R} G:{G} B:{B} A:{A}}}";
 
-    public static implicit operator CNA.Framework.Color(Color value) => new(value.R, value.G, value.B, value.A);
-    public static implicit operator Color(CNA.Framework.Color value) => new(value.R, value.G, value.B, value.A);
+    public static implicit operator CNA.Color(Color value) => new(value.R, value.G, value.B, value.A);
+    public static implicit operator Color(CNA.Color value) => new(value.R, value.G, value.B, value.A);
 }

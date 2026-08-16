@@ -6,7 +6,7 @@ namespace Microsoft.Xna.Framework.Content;
 /// native-load helper so this project never references CNA.Interop directly. See
 /// ../../../../../docs/architecture.md and ../../../../../docs/xna-compatibility.md.
 /// </summary>
-public class ContentManager : CNA.Framework.Content.ContentManager
+public class ContentManager : CNA.Content.ContentManager
 {
     protected internal ContentManager(nint nativeHandleValue)
         : base(nativeHandleValue)

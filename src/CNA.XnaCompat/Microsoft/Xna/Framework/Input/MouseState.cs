@@ -2,9 +2,9 @@ namespace Microsoft.Xna.Framework.Input;
 
 public readonly struct MouseState
 {
-    private readonly CNA.Framework.Input.MouseState _framework;
+    private readonly CNA.Input.MouseState _framework;
 
-    internal MouseState(CNA.Framework.Input.MouseState framework)
+    internal MouseState(CNA.Input.MouseState framework)
     {
         _framework = framework;
     }
@@ -21,5 +21,5 @@ public readonly struct MouseState
     public ButtonState XButton1 => ToCompat(_framework.XButton1);
     public ButtonState XButton2 => ToCompat(_framework.XButton2);
 
-    private static ButtonState ToCompat(CNA.Framework.Input.ButtonState value) => (ButtonState)(int)value;
+    private static ButtonState ToCompat(CNA.Input.ButtonState value) => (ButtonState)(int)value;
 }

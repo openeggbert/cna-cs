@@ -17,7 +17,7 @@ public struct BoundingBox : IEquatable<BoundingBox>
 
     public readonly Vector3[] GetCorners()
     {
-        CNA.Framework.Vector3[] source = ((CNA.Framework.BoundingBox)this).GetCorners();
+        CNA.Vector3[] source = ((CNA.BoundingBox)this).GetCorners();
         var result = new Vector3[source.Length];
         for (int i = 0; i < source.Length; i++)
         {
@@ -27,34 +27,34 @@ public struct BoundingBox : IEquatable<BoundingBox>
         return result;
     }
 
-    public readonly bool Contains(Vector3 point) => ((CNA.Framework.BoundingBox)this).Contains(point);
+    public readonly bool Contains(Vector3 point) => ((CNA.BoundingBox)this).Contains(point);
 
-    public readonly ContainmentType Contains(BoundingBox box) => ((CNA.Framework.BoundingBox)this).Contains(box).ToCompat();
+    public readonly ContainmentType Contains(BoundingBox box) => ((CNA.BoundingBox)this).Contains(box).ToCompat();
 
-    public readonly ContainmentType Contains(BoundingSphere sphere) => ((CNA.Framework.BoundingBox)this).Contains(sphere).ToCompat();
+    public readonly ContainmentType Contains(BoundingSphere sphere) => ((CNA.BoundingBox)this).Contains(sphere).ToCompat();
 
-    public readonly bool Intersects(BoundingBox box) => ((CNA.Framework.BoundingBox)this).Intersects(box);
+    public readonly bool Intersects(BoundingBox box) => ((CNA.BoundingBox)this).Intersects(box);
 
-    public readonly bool Intersects(BoundingSphere sphere) => ((CNA.Framework.BoundingBox)this).Intersects(sphere);
+    public readonly bool Intersects(BoundingSphere sphere) => ((CNA.BoundingBox)this).Intersects(sphere);
 
-    public readonly float? Intersects(Ray ray) => ((CNA.Framework.BoundingBox)this).Intersects(ray);
+    public readonly float? Intersects(Ray ray) => ((CNA.BoundingBox)this).Intersects(ray);
 
     public static BoundingBox CreateFromPoints(IEnumerable<Vector3> points)
     {
         ArgumentNullException.ThrowIfNull(points);
-        CNA.Framework.BoundingBox result = CNA.Framework.BoundingBox.CreateFromPoints(points.Select(p => (CNA.Framework.Vector3)p));
+        CNA.BoundingBox result = CNA.BoundingBox.CreateFromPoints(points.Select(p => (CNA.Vector3)p));
         return new BoundingBox(result.Min, result.Max);
     }
 
     public static BoundingBox CreateMerged(BoundingBox original, BoundingBox additional)
     {
-        CNA.Framework.BoundingBox result = CNA.Framework.BoundingBox.CreateMerged(original, additional);
+        CNA.BoundingBox result = CNA.BoundingBox.CreateMerged(original, additional);
         return new BoundingBox(result.Min, result.Max);
     }
 
     public static BoundingBox CreateFromSphere(BoundingSphere sphere)
     {
-        CNA.Framework.BoundingBox result = CNA.Framework.BoundingBox.CreateFromSphere(sphere);
+        CNA.BoundingBox result = CNA.BoundingBox.CreateFromSphere(sphere);
         return new BoundingBox(result.Min, result.Max);
     }
 
@@ -66,6 +66,6 @@ public struct BoundingBox : IEquatable<BoundingBox>
     public override readonly int GetHashCode() => HashCode.Combine(Min, Max);
     public override readonly string ToString() => $"{{Min:{Min} Max:{Max}}}";
 
-    public static implicit operator CNA.Framework.BoundingBox(BoundingBox value) => new(value.Min, value.Max);
-    public static implicit operator BoundingBox(CNA.Framework.BoundingBox value) => new(value.Min, value.Max);
+    public static implicit operator CNA.BoundingBox(BoundingBox value) => new(value.Min, value.Max);
+    public static implicit operator BoundingBox(CNA.BoundingBox value) => new(value.Min, value.Max);
 }

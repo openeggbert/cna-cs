@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// Local, managed row-major 4x4 matrix, row-vector convention (a point transforms as

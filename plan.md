@@ -151,7 +151,7 @@ Split by whether the type needs the (still nonexistent) native ABI:
       `Keyboard`). `GamePad.GetCapabilities` and `GamePadState.PacketNumber`
       (always 0) are not implemented; `Buttons` covers the core d-pad/face/
       shoulder/stick-click flags but not XNA's thumbstick-direction-as-button
-      or trigger-as-button flags — see `CNA.Framework.Input.Buttons`.
+      or trigger-as-button flags — see `CNA.Input.Buttons`.
 - [ ] **Native-backed, not started:** `SpriteFont`, `RenderTarget2D`,
       `BasicEffect`/`Effect` (parameter-handle caching per §27), 3D
       (`Model`, `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,
@@ -200,7 +200,7 @@ Carried over from `analysis_binding.md` §68 and
    `CNA.XnaCompat`, `Vector2`/`Color` (the first two written) fully
    re-implement their formulas a second time; every value type after them
    instead duplicates only the fields and delegates every formula to its
-   `CNA.Framework` counterpart via the implicit conversion operators, so
+   `CNA`-namespace counterpart via the implicit conversion operators, so
    there is one implementation of the actual math — see docs/architecture.md.
 4. Every native handle wrapper implements `SafeHandle` or is owned by one;
    no bare `CnaHandle` is exposed as public API outside `CNA.Interop`.
@@ -212,6 +212,15 @@ Carried over from `analysis_binding.md` §68 and
 7. C# code in this repository uses the real .NET BCL (`System.*`) for
    everything that is not a CNA-specific concept. Never invent a
    `CNA`-flavored reimplementation of an ordinary BCL type.
+8. The `CNA.Framework` *project* is not the same thing as a `CNA.Framework`
+   *namespace* — there is no such namespace. Types inside the `CNA.Framework`
+   project live in `CNA`, `CNA.Graphics`, `CNA.Input`, or `CNA.Content`,
+   matching the real CNA C++ codebase's own public namespace convention
+   (`CNA::Graphics`, `CNA::Input`, `CNA::Devices`, bare `CNA::`; *not*
+   `CNA::Framework::`). `CNA.Interop`'s project name and namespace do match
+   (both `CNA.Interop`) because it corresponds to the C++ side's
+   `CNA::Internal::*`, a genuinely different, private-implementation
+   namespace — see docs/architecture.md.
 
 ## Toolchain note
 

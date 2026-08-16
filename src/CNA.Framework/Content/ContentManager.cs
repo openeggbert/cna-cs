@@ -1,7 +1,7 @@
-using CNA.Framework.Graphics;
+using CNA.Graphics;
 using CNA.Interop;
 
-namespace CNA.Framework.Content;
+namespace CNA.Content;
 
 /// <summary>
 /// The native C ABI cannot expose C# generics directly, so <see cref="Load{T}"/> dispatches by

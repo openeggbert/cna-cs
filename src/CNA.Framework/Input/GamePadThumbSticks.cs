@@ -1,4 +1,4 @@
-namespace CNA.Framework.Input;
+namespace CNA.Input;
 
 public readonly struct GamePadThumbSticks
 {

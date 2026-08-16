@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 /// <summary>
 /// A view-projection frustum. Plane extraction uses the standard homogeneous-clip-space

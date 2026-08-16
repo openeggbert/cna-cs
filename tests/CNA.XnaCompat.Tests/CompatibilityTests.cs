@@ -7,7 +7,7 @@ namespace CNA.XnaCompat.Tests;
 
 /// <summary>
 /// These tests exercise no native CNA library -- they only check that the
-/// Microsoft.Xna.Framework-namespaced value types convert correctly to/from their CNA.Framework
+/// Microsoft.Xna.Framework-namespaced value types convert correctly to/from their CNA
 /// counterparts, and that the two parallel Keys enums stay numerically identical (see
 /// ../../src/CNA.XnaCompat/Microsoft/Xna/Framework/Input/Keys.cs). If either of these ever
 /// breaks, every native-backed API silently starts marshalling the wrong values.
@@ -19,7 +19,7 @@ public class CompatibilityTests
     {
         var xna = new XnaVector2(1f, 2f);
 
-        CNA.Framework.Vector2 framework = xna;
+        CNA.Vector2 framework = xna;
         XnaVector2 roundTripped = framework;
 
         Assert.Equal(1f, framework.X);
@@ -33,7 +33,7 @@ public class CompatibilityTests
     {
         var xna = new XnaColor(10, 20, 30, 40);
 
-        CNA.Framework.Color framework = xna;
+        CNA.Color framework = xna;
         XnaColor roundTripped = framework;
 
         Assert.Equal(xna.R, framework.R);
@@ -44,14 +44,14 @@ public class CompatibilityTests
     }
 
     [Theory]
-    [InlineData(XnaKeys.Escape, CNA.Framework.Input.Keys.Escape)]
-    [InlineData(XnaKeys.Space, CNA.Framework.Input.Keys.Space)]
-    [InlineData(XnaKeys.A, CNA.Framework.Input.Keys.A)]
-    [InlineData(XnaKeys.D0, CNA.Framework.Input.Keys.D0)]
-    [InlineData(XnaKeys.F12, CNA.Framework.Input.Keys.F12)]
-    [InlineData(XnaKeys.LeftShift, CNA.Framework.Input.Keys.LeftShift)]
-    [InlineData(XnaKeys.OemTilde, CNA.Framework.Input.Keys.OemTilde)]
-    public void Keys_NumericValuesMatchFrameworkKeys(XnaKeys xnaKey, CNA.Framework.Input.Keys frameworkKey)
+    [InlineData(XnaKeys.Escape, CNA.Input.Keys.Escape)]
+    [InlineData(XnaKeys.Space, CNA.Input.Keys.Space)]
+    [InlineData(XnaKeys.A, CNA.Input.Keys.A)]
+    [InlineData(XnaKeys.D0, CNA.Input.Keys.D0)]
+    [InlineData(XnaKeys.F12, CNA.Input.Keys.F12)]
+    [InlineData(XnaKeys.LeftShift, CNA.Input.Keys.LeftShift)]
+    [InlineData(XnaKeys.OemTilde, CNA.Input.Keys.OemTilde)]
+    public void Keys_NumericValuesMatchFrameworkKeys(XnaKeys xnaKey, CNA.Input.Keys frameworkKey)
     {
         Assert.Equal((int)frameworkKey, (int)xnaKey);
     }
@@ -72,7 +72,7 @@ public class CompatibilityTests
     {
         var xna = new Microsoft.Xna.Framework.Vector3(3f, 4f, 0f);
 
-        CNA.Framework.Vector3 framework = xna;
+        CNA.Vector3 framework = xna;
 
         Assert.Equal(5f, xna.Length());
         Assert.Equal(5f, framework.Length());

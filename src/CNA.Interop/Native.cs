@@ -5,7 +5,7 @@ namespace CNA.Interop;
 /// <summary>
 /// Raw P/Invoke surface over the CNA stable C ABI (<c>modules/c-api/include/CNA/C/cna.h</c> in
 /// <c>openeggbert/cna</c>). This is the *only* file in the solution that names the native
-/// library. Nothing here is ergonomic on purpose -- see CNA.Framework for the idiomatic layer.
+/// library. Nothing here is ergonomic on purpose -- see CNA for the idiomatic layer.
 ///
 /// This is a minimal slice covering exactly what the <c>samples/HelloGame</c> vertical slice
 /// needs (clear screen, load a texture, draw with SpriteBatch, read the keyboard, exit cleanly),

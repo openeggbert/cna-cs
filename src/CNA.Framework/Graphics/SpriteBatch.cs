@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework.Graphics;
+namespace CNA.Graphics;
 
 /// <summary>
 /// The single-draw-call form of <c>SpriteBatch</c>. Command buffering + a batched

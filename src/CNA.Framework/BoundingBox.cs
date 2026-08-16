@@ -1,4 +1,4 @@
-namespace CNA.Framework;
+namespace CNA;
 
 public struct BoundingBox : IEquatable<BoundingBox>
 {

@@ -1,6 +1,6 @@
 using CNA.Interop;
 
-namespace CNA.Framework.Input;
+namespace CNA.Input;
 
 public static class Keyboard
 {

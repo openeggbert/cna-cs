@@ -2,9 +2,9 @@ namespace Microsoft.Xna.Framework;
 
 /// <summary>
 /// XNA 4.0-compatible <c>Vector2</c>. Structs cannot inherit, so this is a small, deliberately
-/// duplicated struct with implicit conversions to/from <see cref="CNA.Framework.Vector2"/> rather
+/// duplicated struct with implicit conversions to/from <see cref="CNA.Vector2"/> rather
 /// than a subclass -- see docs/architecture.md ("Why the XNA value types are not literally the
-/// same type as the CNA.Framework ones"). A future codegen tool
+/// same type as the CNA ones"). A future codegen tool
 /// (tools/binding-generator/) is the intended long-term fix for this duplication.
 /// </summary>
 public struct Vector2 : IEquatable<Vector2>
@@ -68,6 +68,6 @@ public struct Vector2 : IEquatable<Vector2>
     public override readonly int GetHashCode() => HashCode.Combine(X, Y);
     public override readonly string ToString() => $"{{X:{X} Y:{Y}}}";
 
-    public static implicit operator CNA.Framework.Vector2(Vector2 value) => new(value.X, value.Y);
-    public static implicit operator Vector2(CNA.Framework.Vector2 value) => new(value.X, value.Y);
+    public static implicit operator CNA.Vector2(Vector2 value) => new(value.X, value.Y);
+    public static implicit operator Vector2(CNA.Vector2 value) => new(value.X, value.Y);
 }

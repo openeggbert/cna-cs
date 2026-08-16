@@ -2,10 +2,10 @@ namespace Microsoft.Xna.Framework.Input;
 
 /// <summary>
 /// XNA 4.0-compatible <c>Keys</c>. Enums cannot inherit, so this is a separate enum from
-/// <see cref="CNA.Framework.Input.Keys"/>, kept numerically identical to it (both match real XNA's
+/// <see cref="CNA.Input.Keys"/>, kept numerically identical to it (both match real XNA's
 /// Windows virtual-key-code values) so casting between them is always a no-op value cast -- see
 /// <see cref="KeysExtensions.ToFrameworkKeys"/>. Covers the same subset as
-/// <see cref="CNA.Framework.Input.Keys"/>; broaden both together (Phase 4, plan.md).
+/// <see cref="CNA.Input.Keys"/>; broaden both together (Phase 4, plan.md).
 /// </summary>
 public enum Keys
 {
@@ -154,5 +154,5 @@ public enum Keys
 
 internal static class KeysExtensions
 {
-    public static CNA.Framework.Input.Keys ToFrameworkKeys(this Keys key) => (CNA.Framework.Input.Keys)(int)key;
+    public static CNA.Input.Keys ToFrameworkKeys(this Keys key) => (CNA.Input.Keys)(int)key;
 }

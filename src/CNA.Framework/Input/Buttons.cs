@@ -1,4 +1,4 @@
-namespace CNA.Framework.Input;
+namespace CNA.Input;
 
 /// <summary>
 /// Bit assignments match real XNA's <c>Buttons</c> flags enum for the core button set (D-pad,
