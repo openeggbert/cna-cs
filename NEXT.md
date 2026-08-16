@@ -11,6 +11,46 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Twelfth `/code-review high` pass, over the `VertexBuffer`/`IndexBuffer` `Type`-constructor commit -- clean (2026-08-16, session 6 continued autonomously still further again)
+
+Ran the review a twelfth time, over the `VertexBuffer`/`IndexBuffer`
+`Type`-taking constructors and the `MediaPlayer.cs` doc-only fix from the
+previous entry. Clean pass -- no findings. Checked (and confirmed correct)
+the constructor-initializer evaluation-order reasoning this session's own
+tests already relied on, the compat-layer `FromType`'s correct resolution
+to its own namespace's `IVertexType`, and that the doc/`NEXT.md`/`plan.md`
+changes matched the code. One minor fidelity nuance noted for awareness,
+not filed as a finding since it causes no crash or wrong behavior: real
+MonoGame's `VertexDeclaration.FromType` throws a plain `Exception` if
+`IVertexType.VertexDeclaration` returns null; this port instead lets that
+null flow into `VertexBuffer`'s own existing `ArgumentNullException.ThrowIfNull`
+check, a different (arguably more idiomatic) exception type for the same
+practically-unreachable case (no real `IVertexType` implementer in this
+codebase or a realistic one would ever return null there) -- not worth a
+special-case fix for.
+
+280/280 tests passing, unchanged; `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected. This closes out the `VertexBuffer`/`IndexBuffer`
+`Type`-constructor pass entirely -- no follow-up code changes needed.
+
+**Session status at this point:** every explicitly-flagged Phase 4/5 item
+in `plan.md` is done, all twelve `/code-review high` passes this session
+are clean or fully addressed, and the two remaining follow-ups (`Model`
+file-format loading, the real C++ engine's `Album`/`Artist`/`Genre`/
+`MediaLibrary` scanning subsystem) are both large enough to need their
+own dedicated design pass rather than a natural continuation of anything
+already in flight. Two smaller, previously-flagged gaps
+(`GamePadState.PacketNumber`, `SpriteFont`'s `SpriteEffects`-driven
+text-flip reversal) were considered and deliberately not attempted:
+`PacketNumber` would need new, self-invented native ABI design with
+nothing upstream to validate against (unlike every other native surface
+this session added, all grounded against a real working C++
+implementation); the text-flip reversal needs MonoGame's exact
+line/character-reversal algorithm, which this environment has no way to
+verify against (no decompiled source, no live binary) -- attempting it
+without that grounding would mean guessing at exactly the kind of thing
+this session has consistently avoided guessing at elsewhere.
+
 ## Eleventh `/code-review high` pass, over the `MediaQueue`/`SongCollection` commit (2026-08-16, session 6 continued autonomously still further)
 
 Ran the review an eleventh time. Notable this pass: no `dotnet` toolchain
