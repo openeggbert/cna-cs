@@ -120,6 +120,16 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial void cna_keyboard_get_state(out CnaKeyboardState state);
 
+    // -- Mouse (§25 snapshot pattern) ---------------------------------------------------------
+
+    [LibraryImport(LibraryName)]
+    internal static partial void cna_mouse_get_state(out CnaMouseState state);
+
+    // -- GamePad (§25 snapshot pattern) -------------------------------------------------------
+
+    [LibraryImport(LibraryName)]
+    internal static partial void cna_gamepad_get_state(int playerIndex, out CnaGamePadState state);
+
     // -- ContentManager (§26, §44) -------------------------------------------------------------
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]

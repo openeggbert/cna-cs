@@ -85,3 +85,38 @@ internal readonly struct CnaKeyboardState
         return (word & (1UL << (keyOrdinal % 64))) != 0;
     }
 }
+
+/// <summary>ABI-shaped mouse snapshot. See the "input as snapshots" guidance in
+/// ../../cnabinding/analysis_binding.md §25. Buttons are packed as bit 0=left, 1=middle,
+/// 2=right, 3=XButton1, 4=XButton2.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaMouseState
+{
+    public readonly int X;
+    public readonly int Y;
+    public readonly int ScrollWheelValue;
+    public readonly int HorizontalScrollWheelValue;
+    public readonly byte Buttons;
+
+    public bool IsButtonDown(int bit) => (Buttons & (1 << bit)) != 0;
+}
+
+/// <summary>
+/// ABI-shaped game pad snapshot for one player index. <c>Buttons</c> is a bitmask matching the
+/// core (non-thumbstick, non-trigger) subset of real XNA's <c>Buttons</c> flags enum -- see
+/// CNA.Framework.Input.Buttons for the exact bit assignments and what is intentionally omitted.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaGamePadState
+{
+    public readonly byte IsConnected;
+    public readonly uint Buttons;
+    public readonly float LeftThumbStickX;
+    public readonly float LeftThumbStickY;
+    public readonly float RightThumbStickX;
+    public readonly float RightThumbStickY;
+    public readonly float LeftTrigger;
+    public readonly float RightTrigger;
+
+    public bool HasButton(uint mask) => (Buttons & mask) != 0;
+}

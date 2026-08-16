@@ -10,7 +10,7 @@ namespace CNA.Framework;
 /// for the containment checks this is validated against. <c>Intersects(BoundingFrustum)</c> and
 /// <c>Intersects(Ray)</c> are not implemented yet (Phase 4, plan.md).
 /// </summary>
-public sealed class BoundingFrustum : IEquatable<BoundingFrustum>
+public class BoundingFrustum : IEquatable<BoundingFrustum>
 {
     public const int CornerCount = 8;
 
