@@ -23,4 +23,36 @@ public class IndexBufferTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new IndexBuffer(CreateDummyDevice(), IndexElementSize.SixteenBits, indexCount, BufferUsage.None));
     }
+
+    [Theory]
+    [InlineData(typeof(short), IndexElementSize.SixteenBits)]
+    [InlineData(typeof(ushort), IndexElementSize.SixteenBits)]
+    [InlineData(typeof(int), IndexElementSize.ThirtyTwoBits)]
+    [InlineData(typeof(uint), IndexElementSize.ThirtyTwoBits)]
+    public void SizeForType_ValidIndexType_ReturnsMatchingElementSize(Type indexType, IndexElementSize expected)
+    {
+        Assert.Equal(expected, IndexBuffer.SizeForType(indexType));
+    }
+
+    [Fact]
+    public void SizeForType_UnsupportedType_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => IndexBuffer.SizeForType(typeof(float)));
+    }
+
+    [Fact]
+    public void SizeForType_NullType_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => IndexBuffer.SizeForType(null!));
+    }
+
+    [Fact]
+    public void Constructor_InvalidIndexType_Throws()
+    {
+        // SizeForType(indexType) runs in the constructor initializer, before the chained
+        // constructor's own body (and thus before any native call), so this is testable the same
+        // way VertexBuffer's Type-taking constructor is.
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new IndexBuffer(CreateDummyDevice(), typeof(float), 3, BufferUsage.None));
+    }
 }

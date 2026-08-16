@@ -31,6 +31,34 @@ public class VertexDeclaration
 
     public VertexElement[] GetVertexElements() => (VertexElement[])_elements.Clone();
 
+    /// <summary>
+    /// Derives a <see cref="VertexDeclaration"/> from an <see cref="IVertexType"/>-implementing
+    /// value type via reflection -- matches real XNA/MonoGame's own internal
+    /// <c>VertexDeclaration.FromType</c> exactly (construct a default instance, read its
+    /// <see cref="IVertexType.VertexDeclaration"/> property), including its exception shape.
+    /// Message text recalled from memory (MonoGame source), not independently verified against a
+    /// live binary or decompiled source -- same honesty flag this session already used for
+    /// <c>SpriteBatch</c>'s own <c>Begin</c>/<c>End</c> message text. <c>internal</c>, matching
+    /// real XNA's own accessibility -- this is <see cref="VertexBuffer"/>'s
+    /// <c>Type</c>-taking constructor's implementation detail, not standalone public API.
+    /// </summary>
+    internal static VertexDeclaration FromType(Type vertexType)
+    {
+        ArgumentNullException.ThrowIfNull(vertexType);
+
+        if (!vertexType.IsValueType)
+        {
+            throw new ArgumentException("vertexType must be a value type.", nameof(vertexType));
+        }
+
+        if (Activator.CreateInstance(vertexType) is not IVertexType instance)
+        {
+            throw new ArgumentException("vertexType does not inherit IVertexType.", nameof(vertexType));
+        }
+
+        return instance.VertexDeclaration;
+    }
+
     /// <summary>Matches real XNA/MonoGame exactly: both constructors reject a null *or empty*
     /// array with <see cref="ArgumentNullException"/> (not <see cref="ArgumentException"/>, and
     /// regardless of whether an explicit stride was given) -- verified against real MonoGame

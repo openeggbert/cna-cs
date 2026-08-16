@@ -11,6 +11,132 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Eleventh `/code-review high` pass, over the `MediaQueue`/`SongCollection` commit (2026-08-16, session 6 continued autonomously still further)
+
+Ran the review an eleventh time. Notable this pass: no `dotnet` toolchain
+was available inside the review agent's own sandbox, so it verified by
+direct line-by-line comparison against the real upstream C++ source
+(`MediaPlayer.cpp`/`MediaQueue.cpp`/`SongCollection.cpp`) rather than by
+building/running -- and reported the port as "unusually well-verified,"
+confirming several subtle details it initially suspected were bugs
+(the repeat-wraparound-regardless-of-direction quirk in `NextSong`) were
+actually present in the ground truth too, matching what this session's own
+implementation pass had already found.
+
+One real, confirmed discrepancy from the verified upstream source:
+`Play(SongCollection, int)` unconditionally raises `ActiveSongChanged`,
+but the real C++ engine's equivalent function never raises the
+equivalent flag for this specific overload at all (confirmed in its
+source -- `Play(Song*)` and `NextSong` both do, `Play(SongCollection&, int)`
+doesn't). Considered reverting to match upstream exactly, but concluded
+this is a case for consistency over literal fidelity, not the other way
+around: this session's own `Play(Song)` implementation *already* made a
+deliberate, documented choice to simplify its C++ counterpart's
+practically-always-true pointer-comparison guard into an unconditional
+raise, reasoning that a `Play()` call always changes what's playing in
+any meaningful sense. Applying that same reasoning here, an event whose
+entire purpose is "tell observers the active song changed" firing for
+some "the song definitely changed" call paths and not others would be a
+worse, harder-to-discover API inconsistency than the upstream omission it
+would be reproducing -- especially since starting a whole new playlist is
+at least as meaningful a change as continuing within an existing one.
+Kept the unconditional raise; fixed the doc comment instead, which had
+overclaimed "matches the real C++ engine... exactly" without carving out
+this one deliberate deviation.
+
+280/280 tests passing, unchanged; `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected.
+
+## `VertexBuffer`/`IndexBuffer`'s `Type`-taking constructors (2026-08-16, session 6 continued autonomously still further)
+
+> Picked up a small, well-bounded, previously-flagged gap while looking
+> for the next task after `MediaQueue`: `VertexBuffer`/`IndexBuffer`'s
+> real XNA `Type`-taking constructor overloads had been explicitly
+> deferred since the vertex-format-layer session (`IVertexType.cs`'s own
+> doc comment still said "not implemented yet"). Zero native ABI impact
+> (both overloads are pure reflection feeding the *same* existing native
+> call), well-understood real XNA/MonoGame semantics recalled with high
+> confidence, and directly testable -- a good-sized next task rather than
+> reaching for the much larger deferred features (`Model` file-loading,
+> `MediaLibrary`).
+
+**`VertexDeclaration.FromType(Type)`** (`internal`, matching real XNA's
+own accessibility -- not standalone public API, just
+`VertexBuffer(GraphicsDevice, Type, int, BufferUsage)`'s implementation
+detail): constructs a default instance of the given value type via
+`Activator.CreateInstance`, casts to `IVertexType`, reads its
+`VertexDeclaration` property. Matches real XNA/MonoGame's own internal
+`VertexDeclaration.FromType` exactly, including its exception shape
+(`ArgumentException` for a non-value-type or a value type that doesn't
+implement `IVertexType`) -- message text recalled from memory, not
+independently verified against a live binary, flagged the same way
+`SpriteBatch`'s `Begin`/`End` exception text already was this session.
+
+**`IndexBuffer`'s equivalent, `SizeForType(Type)`**, is simpler and needs
+no interface/reflection at all: `typeof(short)`/`typeof(ushort)` →
+`SixteenBits`, `typeof(int)`/`typeof(uint)` → `ThirtyTwoBits`, anything
+else throws `ArgumentOutOfRangeException`. Made `internal` rather than
+`private` specifically so it's directly unit-testable (`VertexDeclaration.FromType`
+already needed to be `internal` for its own real reason -- matching real
+XNA's accessibility -- so this one extra step for `IndexBuffer`'s equally
+simple helper was a deliberate, minor testability-motivated accessibility
+choice, not a fidelity one).
+
+**Both `Type`-taking constructors chain into their existing
+`VertexDeclaration`/`IndexElementSize`-taking constructors** (`: this(graphicsDevice,
+VertexDeclaration.FromType(vertexType), vertexCount, bufferUsage)`, and
+the `IndexBuffer` equivalent) rather than duplicating the native-call
+logic -- convenience sugar over the same native call, not a second one.
+A real, useful side effect of C#'s constructor-initializer evaluation
+order: `FromType`/`SizeForType` run *before* the target constructor's own
+body (where `graphicsDevice`'s null check and the native call live), so
+an invalid `vertexType`/`indexType` throws before any native call is
+reached -- fully testable without a real `cna-native`, unlike almost
+everything else about these two types.
+
+**`CNA.XnaCompat` mirror needed a genuinely separate `FromType`
+implementation for `VertexBuffer`, not a forwarding call, for a real
+reason:** a compat-namespaced vertex struct (e.g.
+`Microsoft.Xna.Framework.Graphics.VertexPositionColor`) implements *this
+namespace's own* `IVertexType`, a distinct interface from
+`CNA.Graphics.IVertexType` -- the base layer's `FromType` would never
+match it via its own pattern match (`is CNA.Graphics.IVertexType` fails
+for an object that only implements the compat interface). Added a
+second, compat-namespaced `VertexDeclaration.FromType` that operates on
+the compat `IVertexType`/`VertexDeclaration` types instead -- structurally
+identical to the base one, but a real second implementation, not
+duplicated code with no reason to differ. `IndexBuffer`'s equivalent
+needed no such split: `Type`-to-`IndexElementSize` inference has no
+compat-specific dependency at all (no interface involved), so the compat
+`IndexBuffer(GraphicsDevice, Type, int, BufferUsage)` constructor calls
+`CNA.Graphics.IndexBuffer.SizeForType` directly.
+
+**Attempted a compat-layer test file, then deleted it once the real
+blocker became clear:** every compat `VertexBuffer`/`IndexBuffer`
+constructor needs a compat `GraphicsDevice`, and that type's only
+constructor is `protected internal` with no `InternalsVisibleTo` grant to
+`CNA.XnaCompat.Tests` (this project has no `AssemblyInfo.cs` of its own --
+a discovery from earlier this session, not new). No compat `GraphicsDevice`
+instance can be constructed in that test project at all, so nothing
+requiring one -- including these two new constructors -- can be exercised
+there, matching `SpriteBatch`'s own already-documented limitation exactly.
+Documented this in `CNA.XnaCompat.VertexBuffer`'s own doc comment instead
+of leaving a non-viable test file in place.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects. `dotnet test CNA.sln`: 280/280 passing (up from 264 -- 16 new
+tests: `VertexDeclaration.FromType`'s success/failure paths for all five
+standard vertex structs plus invalid-type cases, `IndexBuffer.SizeForType`'s
+four valid mappings plus the unsupported-type/null-type cases, and each
+`Type`-taking constructor's own invalid-type failure path). `samples/HelloGame`
+re-verified unaffected.
+
+**Where to pick up next:** the two remaining Phase 4 follow-ups (`Model`
+file-format loading, the real C++ engine's `Album`/`Artist`/`Genre`/
+`MediaLibrary` scanning subsystem) are both large enough to be their own
+dedicated pass. A `/code-review high` pass over this commit is the
+immediate next step, following this session's own established rhythm.
+
 ## `MediaQueue`/`SongCollection`: multi-song playlists, shuffle, repeat, events (2026-08-16, session 6 continued past the original "Phase 4/5 complete" checkpoint, per explicit instruction to keep going)
 
 > Reported Phase 4 + Phase 5 complete and paused at a natural checkpoint.

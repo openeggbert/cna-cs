@@ -26,7 +26,16 @@ public class VertexBufferTests
     [Fact]
     public void Constructor_NullVertexDeclaration_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new VertexBuffer(CreateDummyDevice(), null!, 4, BufferUsage.None));
+        Assert.Throws<ArgumentNullException>(() => new VertexBuffer(CreateDummyDevice(), (VertexDeclaration)null!, 4, BufferUsage.None));
+    }
+
+    [Fact]
+    public void Constructor_InvalidVertexType_Throws()
+    {
+        // VertexDeclaration.FromType(vertexType) runs in the constructor initializer, before the
+        // chained constructor's own body (and thus before any native call), so this is testable
+        // the same way the null-declaration case above is.
+        Assert.Throws<ArgumentException>(() => new VertexBuffer(CreateDummyDevice(), typeof(int), 4, BufferUsage.None));
     }
 
     [Theory]

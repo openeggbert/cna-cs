@@ -59,6 +59,10 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     VertexDeclaration/VertexElement/IVertexType, the five standard vertex
     structs (VertexPosition/PositionColor/PositionTexture/
     PositionColorTexture/PositionNormalTexture),
+    VertexDeclaration.FromType/IndexBuffer.SizeForType (the Type-taking
+    VertexBuffer/IndexBuffer constructors' reflection logic -- pure, no
+    native call, though VertexBuffer/IndexBuffer themselves stay
+    native-backed, see below),
     BasicEffect's constructor and full property surface (World/View/
     Projection, DiffuseColor/EmissiveColor/SpecularColor/SpecularPower,
     AmbientLightColor/DirectionalLight0-2/EnableDefaultLighting, fog,

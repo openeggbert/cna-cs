@@ -12,7 +12,8 @@ already be done by every native-backed type's own original design;
 `EffectParameter` handle caching is not applicable — this project has no
 name-indexed effect-parameter system for it to apply to). `MediaQueue`/
 `SongCollection` (multi-song playlists, shuffle, repeat-driven
-auto-advance) also now done. What remains: `Model` file-loading and the
+auto-advance) and `VertexBuffer`/`IndexBuffer`'s real-XNA `Type`-taking
+constructors also now done. What remains: `Model` file-loading and the
 real `Album`/`Artist`/`Genre`/`MediaLibrary` scanning subsystem (Phase 4
 follow-ups, deliberately deferred, not blocked) and Phase 6
 packaging/cross-platform validation, tracked below.
@@ -314,12 +315,16 @@ Split by whether the type needs the (still nonexistent) native ABI:
       (real XNA uses the broader `where T : struct`) — a deliberate
       tightening, since `unmanaged` is what makes the `sizeof(T)`/`fixed`
       pointer marshalling actually valid, and every realistic vertex/index
-      type is unmanaged anyway. Only the `VertexDeclaration`-taking (not
-      `Type`-taking) `VertexBuffer` constructor and the
-      `IndexElementSize`-taking (not `Type`-taking) `IndexBuffer`
-      constructor are implemented — the `Type`-taking overloads are
-      reflection-based convenience sugar over these, left for a follow-up.
-      **Real testability limitation, not just an untested corner:** unlike
+      type is unmanaged anyway. Both the `VertexDeclaration`/`IndexElementSize`-taking
+      constructors *and* real XNA's `Type`-taking overloads are implemented
+      (the latter added 2026-08-16, session 6 continued autonomously past
+      the original Phase 4/5 checkpoint — `VertexDeclaration.FromType`/
+      `IndexBuffer.SizeForType`, reflection-based convenience sugar over
+      the exact same native calls, zero new native ABI needed; see
+      `NEXT.md` for the detail, including the `CNA.XnaCompat` mirror
+      needing its own genuinely separate `FromType` since a
+      compat-namespaced vertex struct implements a distinct `IVertexType`
+      interface from the base layer's). **Real testability limitation, not just an untested corner:** unlike
       `SoundEffect`, whose constructor validates every argument before
       ever touching native code, `VertexBuffer`/`IndexBuffer`'s
       constructors call native immediately after minimal validation, so

@@ -26,6 +26,32 @@ public class VertexDeclaration
 
     public int VertexStride => _framework.VertexStride;
 
+    /// <summary>
+    /// This namespace's own equivalent of <see cref="CNA.Graphics.VertexDeclaration.FromType"/> --
+    /// needed as a genuinely separate implementation, not a forwarding call, because a
+    /// compat-namespaced vertex struct (e.g. <see cref="VertexPositionColor"/>) implements *this*
+    /// namespace's <see cref="IVertexType"/>, a distinct interface from
+    /// <c>CNA.Graphics.IVertexType</c> -- the base layer's <c>FromType</c> would never match it via
+    /// its own pattern match. <c>internal</c>, matching real XNA's own accessibility (same as the
+    /// base layer's).
+    /// </summary>
+    internal static VertexDeclaration FromType(Type vertexType)
+    {
+        ArgumentNullException.ThrowIfNull(vertexType);
+
+        if (!vertexType.IsValueType)
+        {
+            throw new ArgumentException("vertexType must be a value type.", nameof(vertexType));
+        }
+
+        if (Activator.CreateInstance(vertexType) is not IVertexType instance)
+        {
+            throw new ArgumentException("vertexType does not inherit IVertexType.", nameof(vertexType));
+        }
+
+        return instance.VertexDeclaration;
+    }
+
     /// <summary>The wrapped <c>CNA.Graphics.VertexDeclaration</c> -- <c>internal</c> (same
     /// assembly, no cross-assembly grant needed) so <c>VertexBuffer</c>'s constructor can forward
     /// it to <c>CNA.Graphics.VertexBuffer</c>'s base constructor without re-converting the

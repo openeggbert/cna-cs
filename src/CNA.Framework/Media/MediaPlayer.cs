@@ -114,11 +114,18 @@ public static class MediaPlayer
 
     public static void Play(SongCollection songs) => Play(songs, 0);
 
-    /// <summary>Matches the real C++ engine's own <c>Play(SongCollection&amp;, int)</c>: clears the
-    /// queue, adds a defensive copy of every song in <paramref name="songs"/>, then plays the
-    /// queue's own copy of the song at <paramref name="index"/> (not the original from
-    /// <paramref name="songs"/>) -- see <see cref="Play(Song)"/>'s own doc comment for the
-    /// asymmetry this has with that overload.</summary>
+    /// <summary>Matches the real C++ engine's own <c>Play(SongCollection&amp;, int)</c> queue
+    /// management exactly: clears the queue, adds a defensive copy of every song in
+    /// <paramref name="songs"/>, then plays the queue's own copy of the song at
+    /// <paramref name="index"/> (not the original from <paramref name="songs"/>) -- see
+    /// <see cref="Play(Song)"/>'s own doc comment for the asymmetry this has with that overload.
+    /// One deliberate deviation: the real C++ engine's equivalent function never raises
+    /// <see cref="ActiveSongChanged"/> at all for this overload (confirmed in its source -- unlike
+    /// <see cref="Play(Song)"/> and <see cref="MoveNext"/>/<see cref="MovePrevious"/>, which both
+    /// do). Raised here anyway, for consistency with those: starting a whole new playlist changes
+    /// what's playing at least as meaningfully as continuing within an existing one, and an event
+    /// that only some "the active song changed" call paths raise would be a harder-to-discover API
+    /// inconsistency than the upstream omission it would be reproducing.</summary>
     public static void Play(SongCollection songs, int index)
     {
         ArgumentNullException.ThrowIfNull(songs);

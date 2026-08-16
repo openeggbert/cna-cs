@@ -9,15 +9,19 @@ namespace CNA.Graphics;
 /// handle plus a CPU-side shadow buffer enabling <see cref="GetData{T}(T[])"/> readback) -- see
 /// <see cref="CNA.Interop.Native"/>'s vertex/index buffer section.
 ///
-/// Only the <see cref="VertexDeclaration"/>-taking constructor is implemented -- real XNA's
-/// additional <c>VertexBuffer(GraphicsDevice, Type, int, BufferUsage)</c> overload (which derives
-/// the declaration from an <see cref="IVertexType"/> implementer via reflection) is convenience
-/// sugar over this one and was left for a follow-up rather than adding reflection-based type
-/// discovery to this pass.
+/// Both the <see cref="VertexDeclaration"/>-taking and real XNA's <c>Type</c>-taking constructors
+/// are implemented -- the latter (<see cref="VertexBuffer(GraphicsDevice,Type,int,BufferUsage)"/>)
+/// is convenience sugar over the former via <see cref="VertexDeclaration.FromType"/>'s reflection,
+/// not a second native call.
 /// </summary>
 public class VertexBuffer : IDisposable
 {
     private readonly NativeResourceHandle _handle;
+
+    public VertexBuffer(GraphicsDevice graphicsDevice, Type vertexType, int vertexCount, BufferUsage bufferUsage)
+        : this(graphicsDevice, VertexDeclaration.FromType(vertexType), vertexCount, bufferUsage)
+    {
+    }
 
     public VertexBuffer(GraphicsDevice graphicsDevice, VertexDeclaration vertexDeclaration, int vertexCount, BufferUsage bufferUsage)
     {

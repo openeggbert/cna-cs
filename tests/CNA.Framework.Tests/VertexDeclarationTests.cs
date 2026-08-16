@@ -147,4 +147,35 @@ public class VertexDeclarationTests
         Assert.Equal(a, b);
         Assert.NotEqual(a, c);
     }
+
+    [Theory]
+    [InlineData(typeof(VertexPosition), 12)]
+    [InlineData(typeof(VertexPositionColor), 16)]
+    [InlineData(typeof(VertexPositionTexture), 20)]
+    [InlineData(typeof(VertexPositionColorTexture), 24)]
+    [InlineData(typeof(VertexPositionNormalTexture), 32)]
+    public void FromType_StandardVertexStruct_ReturnsItsOwnDeclaration(Type vertexType, int expectedStride)
+    {
+        VertexDeclaration declaration = VertexDeclaration.FromType(vertexType);
+
+        Assert.Equal(expectedStride, declaration.VertexStride);
+    }
+
+    [Fact]
+    public void FromType_NullType_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => VertexDeclaration.FromType(null!));
+    }
+
+    [Fact]
+    public void FromType_ReferenceType_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => VertexDeclaration.FromType(typeof(string)));
+    }
+
+    [Fact]
+    public void FromType_ValueTypeNotImplementingIVertexType_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => VertexDeclaration.FromType(typeof(int)));
+    }
 }

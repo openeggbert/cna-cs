@@ -8,6 +8,16 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// </summary>
 public class IndexBuffer : CNA.Graphics.IndexBuffer
 {
+    /// <summary>Reuses <c>CNA.Graphics.IndexBuffer.SizeForType</c> directly rather than a
+    /// compat-namespaced copy -- unlike vertex declarations (which depend on the
+    /// namespace-specific <c>IVertexType</c> interface), <c>Type</c>-to-<see cref="IndexElementSize"/>
+    /// inference has no compat-specific dependency at all, so there's nothing here for a separate
+    /// implementation to differ on.</summary>
+    public IndexBuffer(GraphicsDevice graphicsDevice, Type indexType, int indexCount, BufferUsage bufferUsage)
+        : base(graphicsDevice, CNA.Graphics.IndexBuffer.SizeForType(indexType), indexCount, (CNA.Graphics.BufferUsage)(int)bufferUsage)
+    {
+    }
+
     public IndexBuffer(GraphicsDevice graphicsDevice, IndexElementSize indexElementSize, int indexCount, BufferUsage bufferUsage)
         : base(graphicsDevice, (CNA.Graphics.IndexElementSize)(int)indexElementSize, indexCount, (CNA.Graphics.BufferUsage)(int)bufferUsage)
     {
