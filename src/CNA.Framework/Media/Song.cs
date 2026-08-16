@@ -72,6 +72,16 @@ public class Song : IDisposable, IEquatable<Song>
 
     public void Dispose() => IsDisposed = true;
 
+    /// <summary>
+    /// Ordinal, case-sensitive comparison of <see cref="Handle"/> -- matches the real C++ engine's
+    /// own <c>Song::Equals</c> exactly (a plain <c>std::string ==</c>, no case-folding there
+    /// either), not a gap introduced here. This means two paths that differ only in case but name
+    /// the same file on a case-insensitive filesystem (Windows, default macOS) compare unequal --
+    /// a real, known limitation, but reproducing it is deliberate: the "correct" case-insensitive
+    /// comparison is platform-dependent, and nothing in the analysis docs or the real engine's own
+    /// implementation specifies one, so guessing at one here would be inventing behavior neither
+    /// this project's own conventions nor its source of truth actually call for.
+    /// </summary>
     public bool Equals(Song? other) => other is not null && Handle == other.Handle;
 
     public override bool Equals(object? obj) => Equals(obj as Song);
@@ -96,11 +106,23 @@ public class Song : IDisposable, IEquatable<Song>
     public static Song FromUri(string name, string uri)
     {
         ArgumentNullException.ThrowIfNull(name);
+
+        return new Song(ResolvePathFromUri(uri), name);
+    }
+
+    /// <summary>
+    /// Shared by this type's own <see cref="FromUri"/> and
+    /// <c>Microsoft.Xna.Framework.Media.Song.FromUri</c>'s compat override -- extracted
+    /// specifically so the two can't silently drift apart the way a future fix to this logic
+    /// applied to only one of them would otherwise risk.
+    /// </summary>
+    internal static string ResolvePathFromUri(string uri)
+    {
         ArgumentNullException.ThrowIfNull(uri);
 
         if (!Uri.TryCreate(uri, UriKind.RelativeOrAbsolute, out Uri? parsed) || !parsed.IsAbsoluteUri)
         {
-            return new Song(uri, name);
+            return uri;
         }
 
         if (parsed.Scheme != Uri.UriSchemeFile)
@@ -108,6 +130,6 @@ public class Song : IDisposable, IEquatable<Song>
             throw new InvalidOperationException("Only local file URIs are supported for now.");
         }
 
-        return new Song(parsed.LocalPath, name);
+        return parsed.LocalPath;
     }
 }

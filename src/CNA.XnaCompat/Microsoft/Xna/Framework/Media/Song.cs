@@ -21,27 +21,17 @@ public sealed class Song : CNA.Media.Song
     }
 
     /// <summary>
-    /// Resolves <paramref name="uri"/> the same way <c>CNA.Media.Song.FromUri</c> does, but
-    /// constructs this namespace's own <see cref="Song"/> directly instead of delegating and then
-    /// re-wrapping -- delegating would construct (and file-existence-check) a throwaway
-    /// <c>CNA.Media.Song</c> only to immediately discard it for this one, checking the same file
-    /// twice for no benefit.
+    /// Resolves <paramref name="uri"/> via <c>CNA.Media.Song.ResolvePathFromUri</c> (shared with
+    /// <c>CNA.Media.Song.FromUri</c> so the two can't drift apart), but constructs this namespace's
+    /// own <see cref="Song"/> directly instead of delegating to the base <c>FromUri</c> and
+    /// re-wrapping -- delegating to the base overload would construct (and file-existence-check) a
+    /// throwaway <c>CNA.Media.Song</c> only to immediately discard it for this one, checking the
+    /// same file twice for no benefit.
     /// </summary>
     public static new Song FromUri(string name, string uri)
     {
         ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(uri);
 
-        if (!Uri.TryCreate(uri, UriKind.RelativeOrAbsolute, out Uri? parsed) || !parsed.IsAbsoluteUri)
-        {
-            return new Song(uri, name);
-        }
-
-        if (parsed.Scheme != Uri.UriSchemeFile)
-        {
-            throw new InvalidOperationException("Only local file URIs are supported for now.");
-        }
-
-        return new Song(parsed.LocalPath, name);
+        return new Song(CNA.Media.Song.ResolvePathFromUri(uri), name);
     }
 }

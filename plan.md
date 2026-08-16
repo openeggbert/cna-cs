@@ -473,10 +473,10 @@ Split by whether the type needs the (still nonexistent) native ABI:
       `Microsoft.Xna.Framework.Media.MediaPlayer` is a thin forwarding
       static class, same shape as this compat layer's existing `Mouse`/
       `Keyboard`. Verified: `dotnet build` clean across all 6 projects;
-      `dotnet test`: 241/241 passing (up from 218 — 23 new tests, most of
-      them real behavioral tests against real temp files, not just
-      argument-validation checks, since `Song` needed no native
-      dependency). `samples/HelloGame` re-verified unaffected.
+      `dotnet test`: 242/242 passing (up from 218 — 24 new tests total
+      across the feature and its own review pass, one of which caught a
+      real bug also present in the upstream C++ engine — see `NEXT.md`).
+      `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model` has no file-format loader (parsing a real model format is a
       separate, much larger problem — see `Model`'s own doc comment);

@@ -74,13 +74,25 @@ public static class MediaPlayer
     /// <c>PlaySong</c>: stop whatever's currently playing, reset the position timer, then start
     /// the new song. Unlike the real C++ engine (which silently does nothing on a native load
     /// failure), throws <see cref="CnaException"/> on failure, matching every other native call's
-    /// established convention in this project.
+    /// established convention in this project -- but <see cref="State"/> is still reset to
+    /// <see cref="MediaState.Stopped"/> first, even on failure: the real <c>PlaySong</c>
+    /// unconditionally destroys whatever was previously playing *before* attempting to load the
+    /// new song (confirmed in its source), so nothing from a previous song is actually playing
+    /// anymore once the native call returns, success or not. The real C++ engine itself leaves
+    /// its own <c>state_</c> stale in this exact case (it only ever calls <c>setStateProperty</c>
+    /// on the success path) -- a real bug there, not reproduced here, since this project's own
+    /// exception-based failure convention makes fixing it straightforward.
     /// </summary>
     public static void Play(Song song)
     {
         ArgumentNullException.ThrowIfNull(song);
+        ObjectDisposedException.ThrowIf(song.IsDisposed, song);
 
         CnaResult result = Native.cna_mediaplayer_play(song.Handle);
+
+        Timer.Reset();
+        State = MediaState.Stopped;
+
         CnaException.ThrowIfFailed(result, nameof(Play));
 
         Timer.Restart();

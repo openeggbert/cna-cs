@@ -19,6 +19,25 @@ public class MediaPlayerTests
     }
 
     [Fact]
+    public void Play_DisposedSong_ThrowsObjectDisposedException()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            var song = new Song(path);
+            song.Dispose();
+
+            // Both checks run before the native call, so this is testable without a real
+            // cna-native, same as the null check above.
+            Assert.Throws<ObjectDisposedException>(() => MediaPlayer.Play(song));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Pause_WhenNotPlaying_IsNoOpAndDoesNotThrow()
     {
         // Pause()'s own guard (State != Playing) returns before ever reaching the native call, so

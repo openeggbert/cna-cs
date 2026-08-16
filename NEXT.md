@@ -11,6 +11,67 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Ninth `/code-review high` pass, over the `Song`/`MediaPlayer` commit (2026-08-16, session 6 continued yet further still again once more still further again once more)
+
+Ran the review a ninth time. Four findings; three real and fixed, one
+confirmed to match the real C++ engine's own verified behavior and left
+as-is with strengthened documentation, same disposition as the
+`ModelMeshPart.Effect`-registration-timing finding two reviews ago:
+
+- **Fixed, real, and confirmed to exist in the upstream C++ engine too:**
+  `MediaPlayer.Play`'s native call always stops whatever was previously
+  playing *before* attempting to load the new song (confirmed by reading
+  `PlaySong` again: `DestroyMusicTrack`/`DestroyMusicAudio` run
+  unconditionally at the top, before the load attempt) -- so a failed
+  `Play()` left the managed `State`/`PlayPosition` referring to a song
+  that was no longer actually playing. The real C++ engine has this exact
+  bug itself (`setStateProperty(MediaState::Playing)` is only ever called
+  on `PlaySong`'s success path, never reset on a failure path), but unlike
+  most of this session's "faithful reproduction over invention" calls,
+  this one was worth fixing rather than reproducing: this project's own
+  exception-based failure convention (unlike the C++ engine's silent
+  early-`return`) makes correcting it a two-line change with no
+  architectural cost. `Play` now unconditionally resets `Timer`/`State` to
+  `Stopped` immediately after the native call returns, *before* checking
+  whether it succeeded -- so a thrown `CnaException` still leaves managed
+  state consistent with what the native call actually did.
+- **Fixed, real, genuinely cheap:** `Play` never checked
+  `song.IsDisposed` before handing its handle to native code. Neither real
+  XNA nor the C++ engine document/enforce this either, and `Song` has no
+  actual native handle to protect (`Dispose()` just flips a bool), so the
+  practical risk is low -- but `ObjectDisposedException.ThrowIf` is a
+  one-line, zero-cost addition that keeps `Song`'s `IDisposable` contract
+  honest, and it's a real, if narrow, misuse this project can now catch
+  where the C++ engine can't. New regression test, fully native-independent
+  (both checks run before the native call).
+- **Fixed, real, worth the small refactor:** `CNA.XnaCompat.Song.FromUri`
+  duplicated `CNA.Media.Song.FromUri`'s ~10-line URI-resolution algorithm
+  verbatim -- a real drift risk, unlike this session's other "small,
+  self-evidently-correct duplication" precedents (`SetRenderTarget`/
+  `Indices`'s null-to-handle ternary, the four `Model*Collection` types'
+  boilerplate), because those duplicate *different* small operations,
+  while this duplicated the *exact same* algorithm for the *same*
+  conceptual operation twice. Extracted `CNA.Media.Song.ResolvePathFromUri`
+  (`internal`, visible to `CNA.XnaCompat` the usual way) and pointed both
+  `FromUri` overloads at it -- eliminates the drift risk with zero
+  behavior change and no new public API surface.
+- **Left as-is, matches verified upstream behavior:** `Song.Equals`/
+  `GetHashCode` compare `Handle` with plain ordinal (case-sensitive)
+  string equality, so two paths differing only in case but naming the
+  same file on a case-insensitive filesystem (Windows, default macOS)
+  compare unequal. Confirmed the real C++ engine's own `Song::Equals` does
+  the identical plain `std::string ==` comparison, no case-folding there
+  either -- and unlike the `Play()`-state-reset fix above, there's no
+  obviously-correct fix available to prefer over reproduction here: the
+  "right" case-sensitivity is genuinely platform-dependent, and neither
+  the analysis docs nor the real engine's own implementation specify one,
+  so guessing at a fix would be inventing behavior rather than correcting
+  a knowably-wrong one. Strengthened `Equals`'s own doc comment to say so
+  explicitly rather than let this look like an accidental oversight.
+
+242/242 tests passing (up from 241); `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected.
+
 ## `Song`/`MediaPlayer`/`MediaState` (2026-08-16, session 6 continued yet further still again once more still further again)
 
 > Last explicitly-flagged Phase 4 item, per the previous entry's own
