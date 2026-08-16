@@ -149,6 +149,54 @@ touched `Game`/`GraphicsDeviceManager`/native interop this session — this
 was entirely the pure-math layer, so that's expected, but checked anyway
 rather than assumed).
 
+**Post-hoc `/code-review high` pass over all three of this session's
+commits** (against `f139f95`, the state before this session started) found
+three real, fixed issues, and several restatements of tradeoffs already
+documented in code comments (not re-litigated — see below):
+- **Real bug, fixed:** `CreateBillboard`/`CreateConstrainedBillboard`'s
+  degenerate (coincident-positions) fallback used `cameraForwardVector`
+  un-negated; real XNA/MonoGame negates it. The method's own doc comment
+  had already flagged this exact spot as "wasn't confidently recalled" —
+  the review converted a flagged uncertainty into a confirmed, fixed bug.
+  New test (`CreateBillboard_CoincidentPositions_BillboardFacesSameWayAsCamera`)
+  needed its own sign derivation double-checked by hand against
+  `Matrix.Forward`'s `-row3` definition before trusting it — worth noting
+  since it's easy to get backwards a second time even right after fixing
+  the first instance.
+- **Real gap, fixed:** `CreatePerspectiveFieldOfView`/`CreatePerspective`/
+  `CreatePerspectiveOffCenter` had no argument validation; real XNA throws
+  for `nearPlaneDistance<=0`, `farPlaneDistance<=0`, or
+  `nearPlaneDistance>=farPlaneDistance`. Added a shared
+  `ValidatePerspectivePlanes` helper (also fixes the `negFarRange` formula
+  being triplicated across the three methods, a separate simplification
+  finding from the same review pass, folded into the same fix since it's
+  the same three call sites).
+- **Real inefficiency, fixed:** `SpriteBatch.DrawString` allocated a new
+  `List<GlyphPlacement>` on every call — a per-frame text-rendering hot
+  path. Now reuses one `List` per `SpriteBatch` instance, cleared (not
+  reallocated) each call.
+- **Not fixed, and shouldn't be:** three more findings restated tradeoffs
+  already deliberately made and documented in this session's own doc
+  comments (`XnaCompat.Vector2` fully duplicating formulas instead of
+  delegating — intentional, matches plan.md invariant #3's documented
+  `Vector2`/`Color` exception; `GraphicsDevice.SetRenderTarget` accepting
+  `Texture2D` instead of strictly `RenderTarget2D` — intentional, documented
+  in that method's own doc comment; `RenderTarget2D.CreateNativeHandle`'s
+  single-inheritance workaround — intentional, `NEXT.md`'s session-4 entry
+  already predicted this exact pattern would recur). One finding
+  (`Matrix.Invert`'s nested-ternary row loading) turned out to be
+  pre-existing code from session 2 (`git blame` confirms `ec75e9d`, dated
+  before this session), out of scope for a review of this session's own
+  diff — left alone. **Lesson for future sessions:** a review pass finding
+  something you already deliberately chose and documented isn't itself a
+  signal to change course; re-derive whether the finding is actually new
+  information (the billboard sign truly was, having been flagged as
+  low-confidence) or just a restatement of a tradeoff already made with
+  its reasoning on record.
+
+All 112 tests pass (up from 103) after these fixes; `dotnet build`/
+`dotnet run --project samples/HelloGame` re-verified clean/unchanged.
+
 **Where to pick up next:** `plan.md` Phase 4's remaining items (`SpriteFont`
 content loading, then `Effect`/`Model`/3D/audio) — see the session-4 entry
 below for the `SpriteFont` design sketch and why the rest need real,

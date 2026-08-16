@@ -10,6 +10,7 @@ namespace CNA.Graphics;
 public class SpriteBatch : IDisposable
 {
     private readonly NativeResourceHandle _handle;
+    private readonly List<SpriteFont.GlyphPlacement> _glyphPlacementBuffer = [];
 
     public SpriteBatch(GraphicsDevice graphicsDevice)
     {
@@ -176,7 +177,9 @@ public class SpriteBatch : IDisposable
     /// than pre-transforming each glyph's <paramref name="position"/>, is what makes the whole
     /// string rotate/scale as one rigid body around <paramref name="origin"/>/<paramref name="position"/>
     /// -- the same trick <c>Draw</c>'s own origin already performs for a single sprite, just
-    /// applied once per glyph.</summary>
+    /// applied once per glyph. Reuses a single per-<c>SpriteBatch</c> list across calls (cleared,
+    /// not reallocated) rather than allocating one per <c>DrawString</c> call, since this runs in
+    /// the per-frame render path.</summary>
     public void DrawString(
         SpriteFont spriteFont,
         string text,
@@ -191,10 +194,10 @@ public class SpriteBatch : IDisposable
         ArgumentNullException.ThrowIfNull(spriteFont);
         ArgumentNullException.ThrowIfNull(text);
 
-        var placements = new List<SpriteFont.GlyphPlacement>();
-        spriteFont.AppendGlyphPlacements(text, placements);
+        _glyphPlacementBuffer.Clear();
+        spriteFont.AppendGlyphPlacements(text, _glyphPlacementBuffer);
 
-        foreach (SpriteFont.GlyphPlacement placement in placements)
+        foreach (SpriteFont.GlyphPlacement placement in _glyphPlacementBuffer)
         {
             DrawEx(
                 spriteFont.Texture,

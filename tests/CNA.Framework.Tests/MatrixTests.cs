@@ -143,6 +143,41 @@ public class MatrixTests
         AssertApproximatelyEqual(centered, offCenter);
     }
 
+    [Theory]
+    [InlineData(0f, 100f, "nearPlaneDistance")]
+    [InlineData(-1f, 100f, "nearPlaneDistance")]
+    [InlineData(1f, 0f, "farPlaneDistance")]
+    [InlineData(10f, 5f, "nearPlaneDistance")]
+    [InlineData(10f, 10f, "nearPlaneDistance")]
+    public void CreatePerspectiveFieldOfView_InvalidPlanes_Throws(float near, float far, string expectedParamName)
+    {
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, 1f, near, far));
+        Assert.Equal(expectedParamName, ex.ParamName);
+    }
+
+    [Fact]
+    public void CreatePerspective_InvalidPlanes_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Matrix.CreatePerspective(4f, 3f, 0f, 100f));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Matrix.CreatePerspective(4f, 3f, 10f, 5f));
+    }
+
+    [Fact]
+    public void CreatePerspectiveOffCenter_InvalidPlanes_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Matrix.CreatePerspectiveOffCenter(-2f, 2f, -1.5f, 1.5f, 0f, 100f));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Matrix.CreatePerspectiveOffCenter(-2f, 2f, -1.5f, 1.5f, 10f, 5f));
+    }
+
+    [Fact]
+    public void CreatePerspective_InfiniteFarPlane_DoesNotThrow()
+    {
+        Matrix result = Matrix.CreatePerspective(4f, 3f, 0.1f, float.PositiveInfinity);
+
+        Assert.Equal(-1f, result.M33);
+    }
+
     public static IEnumerable<object[]> DecomposableMatrices()
     {
         yield return new object[] { new Vector3(1f, 1f, 1f), Quaternion.Identity, Vector3.Zero };
@@ -205,6 +240,24 @@ public class MatrixTests
         Assert.Equal(expectedForward.Z, billboard.Forward.Z, precision: 4);
 
         AssertOrthonormalBasis(billboard);
+    }
+
+    [Fact]
+    public void CreateBillboard_CoincidentPositions_BillboardFacesSameWayAsCamera()
+    {
+        // objectPosition == cameraPosition is the degenerate case with no direction to face;
+        // real XNA/MonoGame falls back to -cameraForwardVector for this method's internal
+        // "away from camera" row, which -- because Matrix.Forward negates that row back -- means
+        // the billboard's own Forward ends up equal to cameraForwardVector: the billboard faces
+        // the same way the camera itself faces, a sane default when there's no real direction.
+        var position = new Vector3(5f, 5f, 5f);
+        var cameraForward = new Vector3(0f, 0f, -1f);
+
+        Matrix billboard = Matrix.CreateBillboard(position, position, Vector3.Up, cameraForward);
+
+        Assert.Equal(cameraForward.X, billboard.Forward.X, precision: 4);
+        Assert.Equal(cameraForward.Y, billboard.Forward.Y, precision: 4);
+        Assert.Equal(cameraForward.Z, billboard.Forward.Z, precision: 4);
     }
 
     private static void AssertOrthonormalBasis(Matrix m)

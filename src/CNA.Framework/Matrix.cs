@@ -190,13 +190,41 @@ public struct Matrix : IEquatable<Matrix>
             position.X, position.Y, position.Z, 1f);
     }
 
+    /// <summary>Shared precondition for every perspective-matrix constructor, matching real
+    /// XNA's own validation. <c>farPlaneDistance</c> is deliberately allowed to be
+    /// <see cref="float.PositiveInfinity"/> (an infinite far plane is a real, supported case --
+    /// see <see cref="NegFarRange"/>), so only the ordering/non-positivity checks apply to it.
+    /// </summary>
+    private static void ValidatePerspectivePlanes(float nearPlaneDistance, float farPlaneDistance)
+    {
+        if (nearPlaneDistance <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance), nearPlaneDistance, "Must be greater than zero.");
+        }
+
+        if (farPlaneDistance <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(farPlaneDistance), farPlaneDistance, "Must be greater than zero.");
+        }
+
+        if (nearPlaneDistance >= farPlaneDistance)
+        {
+            throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance), nearPlaneDistance, "Must be less than farPlaneDistance.");
+        }
+    }
+
+    /// <summary>Shared by every perspective-matrix constructor for the <c>M33</c>/<c>M43</c>
+    /// far-plane terms -- previously reimplemented identically three times in this file.</summary>
+    private static float NegFarRange(float nearPlaneDistance, float farPlaneDistance) =>
+        float.IsPositiveInfinity(farPlaneDistance) ? -1f : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
+
     public static Matrix CreatePerspectiveFieldOfView(float fieldOfView, float aspectRatio, float nearPlaneDistance, float farPlaneDistance)
     {
+        ValidatePerspectivePlanes(nearPlaneDistance, farPlaneDistance);
+
         float yScale = 1f / MathF.Tan(fieldOfView * 0.5f);
         float xScale = yScale / aspectRatio;
-        float negFarRange = float.IsPositiveInfinity(farPlaneDistance)
-            ? -1f
-            : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
+        float negFarRange = NegFarRange(nearPlaneDistance, farPlaneDistance);
 
         return new Matrix(
             xScale, 0f, 0f, 0f,
@@ -233,9 +261,8 @@ public struct Matrix : IEquatable<Matrix>
     /// MatrixTests for an equivalent width/height/fov/aspect combination.</summary>
     public static Matrix CreatePerspective(float width, float height, float nearPlaneDistance, float farPlaneDistance)
     {
-        float negFarRange = float.IsPositiveInfinity(farPlaneDistance)
-            ? -1f
-            : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
+        ValidatePerspectivePlanes(nearPlaneDistance, farPlaneDistance);
+        float negFarRange = NegFarRange(nearPlaneDistance, farPlaneDistance);
 
         Matrix result = default;
         result.M11 = (2f * nearPlaneDistance) / width;
@@ -252,9 +279,8 @@ public struct Matrix : IEquatable<Matrix>
     /// MatrixTests.</summary>
     public static Matrix CreatePerspectiveOffCenter(float left, float right, float bottom, float top, float nearPlaneDistance, float farPlaneDistance)
     {
-        float negFarRange = float.IsPositiveInfinity(farPlaneDistance)
-            ? -1f
-            : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
+        ValidatePerspectivePlanes(nearPlaneDistance, farPlaneDistance);
+        float negFarRange = NegFarRange(nearPlaneDistance, farPlaneDistance);
 
         Matrix result = default;
         result.M11 = (2f * nearPlaneDistance) / (right - left);
@@ -314,9 +340,10 @@ public struct Matrix : IEquatable<Matrix>
     /// locks one axis). Row layout mirrors <see cref="CreateLookAt"/>'s right/up/forward
     /// construction. <paramref name="cameraForwardVector"/> is only consulted in the degenerate
     /// case where <paramref name="objectPosition"/> and <paramref name="cameraPosition"/>
-    /// coincide (no direction to face); real XNA's exact sign convention for that fallback
-    /// wasn't confidently recalled, so it is used un-negated here -- lower confidence than the
-    /// rest of this method, but a rarely-hit edge case.
+    /// coincide (no direction to face) -- negated, matching real XNA/MonoGame's own fallback
+    /// (<c>cameraForwardVector</c> is "the direction the camera is looking," i.e. into the
+    /// scene, whereas this method's <c>forward</c> variable points away from the camera, so the
+    /// two need a sign flip between them).
     /// </summary>
     public static Matrix CreateBillboard(
         Vector3 objectPosition, Vector3 cameraPosition, Vector3 cameraUpVector, Vector3? cameraForwardVector)
@@ -324,7 +351,7 @@ public struct Matrix : IEquatable<Matrix>
         Vector3 delta = objectPosition - cameraPosition;
         float deltaLengthSquared = delta.LengthSquared();
         Vector3 forward = deltaLengthSquared < 0.0001f
-            ? (cameraForwardVector ?? Vector3.Forward)
+            ? (cameraForwardVector.HasValue ? -cameraForwardVector.Value : Vector3.Forward)
             : delta * (1f / MathF.Sqrt(deltaLengthSquared));
 
         Vector3 right = Vector3.Normalize(Vector3.Cross(cameraUpVector, forward));
@@ -344,7 +371,9 @@ public struct Matrix : IEquatable<Matrix>
     /// The near-parallel-axis degenerate branch (facing direction and rotate axis almost
     /// coincide, so "right" can't be derived from their cross product) is a simplified fallback,
     /// not a reproduction of real XNA's specific fallback-axis-selection logic -- lower confidence
-    /// than <see cref="CreateBillboard"/>'s primary path, which this otherwise matches exactly.
+    /// than <see cref="CreateBillboard"/>'s primary path, which this otherwise matches exactly,
+    /// including the <paramref name="cameraForwardVector"/> negation in the coincident-positions
+    /// fallback (see that method's doc comment).
     /// </summary>
     public static Matrix CreateConstrainedBillboard(
         Vector3 objectPosition,
@@ -356,7 +385,7 @@ public struct Matrix : IEquatable<Matrix>
         Vector3 delta = objectPosition - cameraPosition;
         float deltaLengthSquared = delta.LengthSquared();
         Vector3 faceDirection = deltaLengthSquared < 0.0001f
-            ? (cameraForwardVector ?? Vector3.Forward)
+            ? (cameraForwardVector.HasValue ? -cameraForwardVector.Value : Vector3.Forward)
             : delta * (1f / MathF.Sqrt(deltaLengthSquared));
 
         Vector3 up = Vector3.Normalize(rotateAxis);
