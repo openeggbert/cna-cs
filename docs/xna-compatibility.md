@@ -42,28 +42,34 @@ to accidentally overclaim in a README or release note:
 
 ## What "publish a compatibility matrix" means here
 
-Once real API surface exists, this repository should maintain a table like:
+A real compatibility matrix should eventually be generated from tests
+against a running native ABI, not hand-maintained prose (`analysis_binding.md`
+§73, §84) — that does not exist yet. In the meantime, the honest three-way
+split as of this writing is:
 
 ```text
-API                                 Status
-------------------------------------------------
-Game                                Full
-GameTime                            Full
-GraphicsDeviceManager               Full
-GraphicsDevice                      Partial
-SpriteBatch                         Full
-Texture2D                           Full
-SpriteFont                          Not started
-Keyboard                            Full
-Mouse                               Not started
-GamePad                             Not started
-BasicEffect                         Not started
-Model                               Not started
-RenderTarget2D                      Not started
+Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
+    Vector3, Vector4, Quaternion, Matrix, Rectangle, Point, Ray, Plane,
+    BoundingBox, BoundingSphere, BoundingFrustum, MathHelper,
+    the full 139-color Color table, ~150-member Keys
+
+Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
+    Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear only),
+    SpriteBatch (single Draw overload only), Texture2D,
+    Keyboard/KeyboardState, Mouse/MouseState, GamePad/GamePadState,
+    ContentManager (RootDirectory, Load<Texture2D> only)
+
+Not started at all:
+    SpriteFont, RenderTarget2D, BasicEffect/Effect, Model, VertexBuffer,
+    IndexBuffer, SoundEffect, SoundEffectInstance, Song, MediaPlayer,
+    additional SpriteBatch.Draw overloads, GamePad.GetCapabilities
 ```
 
-populated from real tests, not aspiration (`analysis_binding.md` §73, §84).
-This does not exist yet — Phase 4 in `../plan.md` is where it starts.
+"Compiles + verified" means real unit tests pass with no native library
+present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and
+`BoundingFrustumTests.cs` in particular, since matrix inversion and frustum
+plane extraction are exactly the kind of math that's easy to get subtly
+wrong.
 
 ## Simple 2D games are the realistic first target
 

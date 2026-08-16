@@ -128,17 +128,39 @@ the sample's README, not a bug in this repository.
 
 ### Phase 4 — Broaden XNA API coverage
 
-Not started. Tracked here rather than designed now, to avoid freezing an
-ABI shape upstream hasn't built yet. Candidates, in the order suggested by
-`analysis_binding.md` §4, §73:
+Split by whether the type needs the (still nonexistent) native ABI:
 
-- `SpriteFont`, `RenderTarget2D`, `Rectangle`, `Point`, `Matrix`,
-  `Quaternion`, full XNA `Color` table.
-- `Mouse`, `GamePad`.
-- `BasicEffect`/`Effect` (parameter-handle caching per §27).
-- 3D: `Model`, `VertexBuffer`, `IndexBuffer`.
-- Audio: `SoundEffect`, `SoundEffectInstance`, `Song`, `MediaPlayer`.
-- Build the compatibility matrix (§73) from real tests, not from this list.
+- [x] **Pure math/value types — done, and real (no native dependency, so
+      unlike everything below these are 100% functional today, not stubs):**
+      `Vector3`, `Vector4`, `Quaternion`, `Matrix`, `Rectangle`, `Point`,
+      `Ray`, `Plane`, `BoundingBox`, `BoundingSphere`, `BoundingFrustum`,
+      `MathHelper`, the full 139-color XNA/X11 named-color table, and the
+      ~150-member `Keys` enum (Windows virtual-key codes). Verified with
+      `MatrixTests` (`Invert` round-trips across 9 matrices including
+      `LookAt`/`PerspectiveFieldOfView`) and `BoundingFrustumTests`
+      (containment, near/far corner ordering) — see the "Toolchain note"
+      below. Not implemented within this set: `Matrix.Decompose`,
+      `CreateBillboard`/`CreateConstrainedBillboard`/`CreateShadow`/
+      `CreateReflection`, the non-FOV `CreatePerspective` overload,
+      `BoundingFrustum.Intersects(BoundingFrustum)`/`Intersects(Ray)`,
+      spline interpolation (`Barycentric`/`CatmullRom`/`Hermite`), and the
+      IME/ChatPad/rare-OEM `Keys` members — see the "not implemented" notes
+      in each type's own file.
+- [x] **`Mouse`/`GamePad` — done** (new `CNA.Interop` natives
+      `cna_mouse_get_state`/`cna_gamepad_get_state`, same snapshot pattern as
+      `Keyboard`). `GamePad.GetCapabilities` and `GamePadState.PacketNumber`
+      (always 0) are not implemented; `Buttons` covers the core d-pad/face/
+      shoulder/stick-click flags but not XNA's thumbstick-direction-as-button
+      or trigger-as-button flags — see `CNA.Framework.Input.Buttons`.
+- [ ] **Native-backed, not started:** `SpriteFont`, `RenderTarget2D`,
+      `BasicEffect`/`Effect` (parameter-handle caching per §27), 3D
+      (`Model`, `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,
+      `SoundEffectInstance`, `Song`, `MediaPlayer`), extra `SpriteBatch.Draw`
+      overloads (source rect, rotation, scale, `SpriteEffects`, layer
+      depth). Blocked on the native ABI existing upstream, same as
+      everything in Phase 2/3.
+- [ ] Build the compatibility matrix (§73) from real tests, not from this
+      list.
 
 ### Phase 5 — Performance passes
 
@@ -173,8 +195,13 @@ Carried over from `analysis_binding.md` §68 and
 2. No `CNA_Result`/native exception ever crosses out of `CNA.Interop`
    unconverted — it becomes a managed `CnaException` (or subclass) before
    reaching `CNA.Framework` callers.
-3. Math/value types (`Vector2`, `Color`, `GameTime`, …) do not make P/Invoke
-   calls for trivial operations. They are plain managed structs.
+3. Math/value types (`Vector2`, `Matrix`, `Color`, `GameTime`, …) do not make
+   P/Invoke calls for trivial operations. They are plain managed structs. In
+   `CNA.XnaCompat`, `Vector2`/`Color` (the first two written) fully
+   re-implement their formulas a second time; every value type after them
+   instead duplicates only the fields and delegates every formula to its
+   `CNA.Framework` counterpart via the implicit conversion operators, so
+   there is one implementation of the actual math — see docs/architecture.md.
 4. Every native handle wrapper implements `SafeHandle` or is owned by one;
    no bare `CnaHandle` is exposed as public API outside `CNA.Interop`.
 5. `CNA.XnaCompat` never references `CNA.Interop` directly — only through
@@ -191,14 +218,15 @@ Carried over from `analysis_binding.md` §68 and
 `dotnet` was not installed by default in the sandbox this scaffold was
 authored in, but a .NET 8/9 SDK happened to be present locally and was used
 to verify it: `dotnet build CNA.sln` succeeds with 0 warnings/0 errors across
-all 6 projects, all 14 unit tests pass (`dotnet test`), and
+all 6 projects, all 44 unit tests pass (`dotnet test`), and
 `dotnet run --project samples/HelloGame` fails at exactly the documented
 point — a `DllNotFoundException` for `cna-native` raised from inside
 `Game`'s constructor — rather than from any code defect. That confirms the
 managed callback bridge, the covariant-return `CreateGraphicsDevice`/
-`CreateContentManager` factories, and the `Vector2`/`Color` implicit
-conversions are all wired correctly end to end, ahead of the native ABI
-existing. Re-run both commands after cloning if you want to reconfirm.
+`CreateContentManager` factories, the `Matrix.Invert`/`BoundingFrustum` math,
+and the value-type implicit conversions are all wired correctly end to end,
+ahead of the native ABI existing. Re-run both commands after cloning if you
+want to reconfirm.
 
 ## Native build reuse
 
