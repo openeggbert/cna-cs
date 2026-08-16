@@ -15,6 +15,12 @@ public struct Ray : IEquatable<Ray>
 
     public readonly float? Intersects(BoundingSphere sphere) => sphere.Intersects(this);
 
+    public readonly float? Intersects(BoundingFrustum frustum)
+    {
+        ArgumentNullException.ThrowIfNull(frustum);
+        return frustum.Intersects(this);
+    }
+
     public readonly float? Intersects(Plane plane)
     {
         float denominator = Vector3.Dot(plane.Normal, Direction);

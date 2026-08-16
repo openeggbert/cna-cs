@@ -11,6 +11,149 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Complete the pure-math layer; fix a real `Vector3.Transform(Quaternion)` bug (2026-08-16, session 5)
+
+> Continuation of the same "keep working through the plan" session run.
+> After `SpriteFont` (session 4, below), the next `plan.md` Phase 4 items
+> are `Effect`/`Model`/3D/audio — all flagged riskier than everything done
+> so far, needing genuinely speculative native ABI design with even less
+> doc backing than `RenderTarget2D` had. Better use of the remaining budget:
+> `plan.md`'s "pure math/value types" bullet had a long-standing list of
+> explicitly-flagged gaps (`Matrix.Decompose`, spline interpolation, etc.)
+> that are 100% real, fully testable work with *zero* native dependency —
+> closed all of them this session instead of reaching for more speculative
+> ABI surface.
+
+**Toolchain, same fix as session 4, re-applied:** the `/tmp/platformer-dotnet`
+↔ `/tmp/racinggame-dotnet` symlink from session 4 was still in place and
+still worked (`dotnet test` runs both projects normally). Also used a
+throwaway scratchpad probe project (`dotnet run` against a tiny `Program.cs`
+referencing `CNA.Framework.csproj`) to empirically check quaternion/matrix
+sign conventions before trusting them in real code — see the bug below, this
+is exactly what caught it. Deleted after use; this is squarely the "short
+scripts, small intermediate files" scratchpad use case in `../CLAUDE.md`,
+not a build directory.
+
+**Real bug found and fixed: `Vector3.Transform(Vector3, Quaternion)` was
+rotating by the inverse angle.** Not something introduced this session —
+this method has existed since session 2 (the "full XNA math layer" session)
+and had never had a dedicated test with a non-identity rotation, so nothing
+caught it until now. Root cause: this project's `Quaternion.operator *`
+computes what standard Hamilton-product notation would call `b*a` for code
+written `a*b` (needed so quaternion composition agrees with this project's
+row-vector matrix convention — see the operator's own math, worked out via
+the scratchpad probe above). The textbook sandwich formula `rotation * v *
+conjugate` computes the *correct* rotation only if `operator *` is the
+*standard* (non-reversed) Hamilton product; against this project's reversed
+one, it silently computes `conjugate * v * rotation` in standard notation —
+i.e., the inverse rotation. Caught empirically: built
+`Matrix.CreateFromQuaternion(q)` (independently-implemented, uses no
+quaternion multiplication at all) and compared `Vector3.Transform(v, q)`
+against `Vector3.Transform(v, Matrix.CreateFromQuaternion(q))` for a 90°
+rotation about Y — they disagreed in sign (`Z:+1` vs `Z:-1`). Cross-checked
+against the independently-simple, obviously-correct `Matrix.CreateRotationY`
+to confirm which one was actually wrong before touching anything. Fix:
+swap the multiplication order to `conjugate * v * rotation`
+(`Vector3.cs`) — this is the one-line fix once you understand *why*, but
+finding *why* needed the empirical cross-check, not more staring at the
+formula. **Lesson for future sessions:** when this project's `Quaternion`
+math and `Matrix`-based math should agree (they're two representations of
+the same rotation), don't trust that agreement without a real test — write
+one, the way `QuaternionTests.CreateFromRotationMatrix_TransformsVectors...`
+now does permanently.
+
+**New `Quaternion` members, needed for `Matrix.Decompose` and useful on
+their own:** `CreateFromRotationMatrix` (standard "largest diagonal term" /
+Shepperd's-method matrix-to-quaternion extraction — verified by the same
+round-trip-through-`CreateFromQuaternion` technique that caught the bug
+above, now a permanent `QuaternionTests` case across 6 rotation samples) and
+`Slerp` (shortest-path-corrected spherical interpolation, tested for
+endpoint values, half-angle midpoint, and the shortest-path correction
+itself with a deliberately-negated quaternion).
+
+**`MathHelper`:** `Barycentric`, `CatmullRom`, `Hermite` — standard textbook
+spline formulas (not XNA-specific), verified against hand-computed values
+in `MathHelperTests.cs` (Catmull-Rom's well-known "passes exactly through
+the two inner control points at t=0/t=1" property; Hermite's endpoint
+short-circuits and a symmetric-tangent midpoint case).
+
+**`Vector2`/`Vector3`/`Vector4`:** added `Lerp` (missing from `Vector2`
+specifically — `Vector3`/`Vector4` already had it), `SmoothStep`,
+`Barycentric`, `CatmullRom`, `Hermite` (all delegate to the now-complete
+`MathHelper` scalar formulas, applied per-component) to whichever of the
+three didn't already have each one; also `DistanceSquared`, `Min`, `Max`,
+`Clamp` where `Vector2` was missing them relative to `Vector3`/`Vector4`.
+
+**`Matrix`:** `CreatePerspective`/`CreatePerspectiveOffCenter` (cross-checked
+in `MatrixTests` against `CreatePerspectiveFieldOfView` for an equivalent
+width/height/fov/aspect combination, and against each other for a centered
+frustum — both pass exactly). `Decompose` (row-length scale extraction +
+row-normalize + `Quaternion.CreateFromRotationMatrix`; deliberately does
+*not* attempt real XNA's own (independently known-imperfect) negative-scale
+detection heuristic — flagged explicitly in the doc comment as a known,
+accepted gap rather than silently differing from real XNA). `CreateBillboard`
+(tested for orthonormality and correct camera-facing direction).
+`CreateConstrainedBillboard` (primary path mirrors `CreateBillboard`'s math
+exactly; the degenerate near-parallel-axis fallback branch is a simplified
+approximation, not a reproduction of real XNA's specific fallback logic —
+flagged as lower-confidence in its own doc comment, not tested). `CreateShadow`
+(standard planar-shadow-projection matrix; tested via a real homogeneous
+divide through `Vector4.Transform`, since shadow matrices generally have
+`M44 != 1` and the affine-only `Vector3.Transform` would silently give a
+wrong answer — this distinction is called out in the method's own doc
+comment specifically so a future caller doesn't make that mistake).
+`CreateReflection` (standard planar reflection; tested for mirroring a point
+across a plane and leaving an on-plane point unchanged).
+
+**`BoundingFrustum`:** `Intersects(BoundingFrustum)`/`Contains(BoundingFrustum)`
+reuse the *exact same* corner-vs-plane loop `Contains(BoundingBox)` already
+had (extracted into a shared private `ContainsCorners` helper — no new
+algorithm, just parametrized differently) — this is deliberately the same
+approximation real XNA/MonoGame's own `BoundingFrustum.Contains(BoundingFrustum)`
+uses (can report `Intersects` for the rare edge/face-crossing-with-no-vertex-
+containment case a true separating-axis test would resolve differently);
+matching real XNA's actual behavior was the goal, not building something
+more theoretically correct that behaves differently. `Intersects(Ray)`
+returns `float?` via the standard "ray vs. intersection of half-spaces"
+slab test (the textbook AABB slab test generalized from 3 axis-aligned
+plane pairs to the frustum's 6 arbitrary planes) — also added
+`Ray.Intersects(BoundingFrustum)` for symmetry with the box/sphere/plane
+overloads that already existed. One test needed loosening after a real
+failure, not a bug: `Contains(BoundingFrustum)` compared against an
+identical copy of itself put every corner exactly on the boundary planes,
+which floating-point rounding can push to either side — same looseness
+the pre-existing `Contains_BoundingSphereAroundOrigin_ReturnsIntersectsOrContains`
+test already uses for an analogous boundary case, so this isn't a new
+pattern, just a new instance of an already-accepted one.
+
+**`Keys`:** added the IME (`Kana`/`Kanji`/`ImeConvert`/`ImeNoConvert`/
+`ProcessKey`), Xbox 360 ChatPad (`ChatPadGreen`/`ChatPadOrange`), and
+legacy-OEM-hardware (`Oem8`/`OemAuto`/`OemEnlW`/`Attn`/`Crsel`/`Exsel`/
+`EraseEof`/`Play`/`Zoom`/`NoName`/`Pa1`/`OemClear`) members that were
+previously omitted — 19 new members, 160 total. **Lower-confidence than
+everything else in this session's entry**, flagged explicitly in the code:
+these are Windows virtual-key ordinals recalled from memory, cross-checked
+against this file's own pre-existing `Escape`=27/`Space`=32 (real
+VK_ESCAPE/VK_SPACE) as a sanity check of the recollection, but *not*
+independently verified against a live system or a real XNA binary — there's
+no way to actually execute-and-check an enum ordinal the way the math
+formulas above could be. If a future session has access to a real XNA/
+MonoGame reference or a live Windows system, these are the values worth
+double-checking first.
+
+**Verified, not just written:** `dotnet build CNA.sln` (0 warnings/errors,
+all 6 projects), `dotnet test CNA.sln` (103/103 passing, up from 54 at the
+start of this session), `dotnet run --project samples/HelloGame` still
+fails at exactly the same documented `DllNotFoundException` point (nothing
+touched `Game`/`GraphicsDeviceManager`/native interop this session — this
+was entirely the pure-math layer, so that's expected, but checked anyway
+rather than assumed).
+
+**Where to pick up next:** `plan.md` Phase 4's remaining items (`SpriteFont`
+content loading, then `Effect`/`Model`/3D/audio) — see the session-4 entry
+below for the `SpriteFont` design sketch and why the rest need real,
+speculative ABI design rather than doc-shape-following.
+
 ## Extended `SpriteBatch.Draw` overloads; `RenderTarget2D` (2026-08-16, session 4)
 
 > Continuation of Phase 4 per the user's "keep working through the plan"

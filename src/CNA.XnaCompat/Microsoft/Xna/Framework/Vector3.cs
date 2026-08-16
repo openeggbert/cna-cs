@@ -78,6 +78,17 @@ public struct Vector3 : IEquatable<Vector3>
 
     public static Vector3 Clamp(Vector3 value, Vector3 min, Vector3 max) => CNA.Vector3.Clamp(value, min, max);
 
+    public static Vector3 SmoothStep(Vector3 a, Vector3 b, float amount) => CNA.Vector3.SmoothStep(a, b, amount);
+
+    public static Vector3 Barycentric(Vector3 value1, Vector3 value2, Vector3 value3, float amount1, float amount2) =>
+        CNA.Vector3.Barycentric(value1, value2, value3, amount1, amount2);
+
+    public static Vector3 CatmullRom(Vector3 value1, Vector3 value2, Vector3 value3, Vector3 value4, float amount) =>
+        CNA.Vector3.CatmullRom(value1, value2, value3, value4, amount);
+
+    public static Vector3 Hermite(Vector3 value1, Vector3 tangent1, Vector3 value2, Vector3 tangent2, float amount) =>
+        CNA.Vector3.Hermite(value1, tangent1, value2, tangent2, amount);
+
     public static Vector3 Transform(Vector3 position, Matrix matrix) => CNA.Vector3.Transform(position, matrix);
 
     public static Vector3 TransformNormal(Vector3 normal, Matrix matrix) => CNA.Vector3.TransformNormal(normal, matrix);

@@ -49,7 +49,34 @@ public struct Vector2 : IEquatable<Vector2>
 
     public static float Distance(Vector2 a, Vector2 b) => (a - b).Length();
 
+    public static float DistanceSquared(Vector2 a, Vector2 b) => (a - b).LengthSquared();
+
     public static float Dot(Vector2 a, Vector2 b) => a.X * b.X + a.Y * b.Y;
+
+    public static Vector2 Lerp(Vector2 a, Vector2 b, float amount) =>
+        new(a.X + ((b.X - a.X) * amount), a.Y + ((b.Y - a.Y) * amount));
+
+    public static Vector2 Min(Vector2 a, Vector2 b) => new(MathF.Min(a.X, b.X), MathF.Min(a.Y, b.Y));
+
+    public static Vector2 Max(Vector2 a, Vector2 b) => new(MathF.Max(a.X, b.X), MathF.Max(a.Y, b.Y));
+
+    public static Vector2 Clamp(Vector2 value, Vector2 min, Vector2 max) => Min(Max(value, min), max);
+
+    public static Vector2 SmoothStep(Vector2 a, Vector2 b, float amount) => new(
+        MathHelper.SmoothStep(a.X, b.X, amount),
+        MathHelper.SmoothStep(a.Y, b.Y, amount));
+
+    public static Vector2 Barycentric(Vector2 value1, Vector2 value2, Vector2 value3, float amount1, float amount2) => new(
+        MathHelper.Barycentric(value1.X, value2.X, value3.X, amount1, amount2),
+        MathHelper.Barycentric(value1.Y, value2.Y, value3.Y, amount1, amount2));
+
+    public static Vector2 CatmullRom(Vector2 value1, Vector2 value2, Vector2 value3, Vector2 value4, float amount) => new(
+        MathHelper.CatmullRom(value1.X, value2.X, value3.X, value4.X, amount),
+        MathHelper.CatmullRom(value1.Y, value2.Y, value3.Y, value4.Y, amount));
+
+    public static Vector2 Hermite(Vector2 value1, Vector2 tangent1, Vector2 value2, Vector2 tangent2, float amount) => new(
+        MathHelper.Hermite(value1.X, tangent1.X, value2.X, tangent2.X, amount),
+        MathHelper.Hermite(value1.Y, tangent1.Y, value2.Y, tangent2.Y, amount));
 
     public static Vector2 operator +(Vector2 a, Vector2 b) => new(a.X + b.X, a.Y + b.Y);
     public static Vector2 operator -(Vector2 a, Vector2 b) => new(a.X - b.X, a.Y - b.Y);

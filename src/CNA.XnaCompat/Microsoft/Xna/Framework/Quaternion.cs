@@ -33,6 +33,8 @@ public struct Quaternion : IEquatable<Quaternion>
     public static Quaternion CreateFromYawPitchRoll(float yaw, float pitch, float roll) =>
         CNA.Quaternion.CreateFromYawPitchRoll(yaw, pitch, roll);
 
+    public static Quaternion CreateFromRotationMatrix(Matrix matrix) => CNA.Quaternion.CreateFromRotationMatrix(matrix);
+
     public readonly float Length() => ((CNA.Quaternion)this).Length();
 
     public readonly float LengthSquared() => ((CNA.Quaternion)this).LengthSquared();
@@ -60,6 +62,8 @@ public struct Quaternion : IEquatable<Quaternion>
         CNA.Quaternion.Concatenate(value1, value2);
 
     public static Quaternion Lerp(Quaternion a, Quaternion b, float amount) => CNA.Quaternion.Lerp(a, b, amount);
+
+    public static Quaternion Slerp(Quaternion a, Quaternion b, float amount) => CNA.Quaternion.Slerp(a, b, amount);
 
     public static Quaternion operator *(Quaternion a, Quaternion b) => (CNA.Quaternion)a * (CNA.Quaternion)b;
     public static Quaternion operator +(Quaternion a, Quaternion b) => (CNA.Quaternion)a + (CNA.Quaternion)b;

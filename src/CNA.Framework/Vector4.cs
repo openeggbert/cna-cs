@@ -60,6 +60,8 @@ public struct Vector4 : IEquatable<Vector4>
 
     public static float Distance(Vector4 a, Vector4 b) => (a - b).Length();
 
+    public static float DistanceSquared(Vector4 a, Vector4 b) => (a - b).LengthSquared();
+
     public static float Dot(Vector4 a, Vector4 b) => (a.X * b.X) + (a.Y * b.Y) + (a.Z * b.Z) + (a.W * b.W);
 
     public static Vector4 Lerp(Vector4 a, Vector4 b, float amount) => new(
@@ -75,6 +77,30 @@ public struct Vector4 : IEquatable<Vector4>
         new(MathF.Max(a.X, b.X), MathF.Max(a.Y, b.Y), MathF.Max(a.Z, b.Z), MathF.Max(a.W, b.W));
 
     public static Vector4 Clamp(Vector4 value, Vector4 min, Vector4 max) => Min(Max(value, min), max);
+
+    public static Vector4 SmoothStep(Vector4 a, Vector4 b, float amount) => new(
+        MathHelper.SmoothStep(a.X, b.X, amount),
+        MathHelper.SmoothStep(a.Y, b.Y, amount),
+        MathHelper.SmoothStep(a.Z, b.Z, amount),
+        MathHelper.SmoothStep(a.W, b.W, amount));
+
+    public static Vector4 Barycentric(Vector4 value1, Vector4 value2, Vector4 value3, float amount1, float amount2) => new(
+        MathHelper.Barycentric(value1.X, value2.X, value3.X, amount1, amount2),
+        MathHelper.Barycentric(value1.Y, value2.Y, value3.Y, amount1, amount2),
+        MathHelper.Barycentric(value1.Z, value2.Z, value3.Z, amount1, amount2),
+        MathHelper.Barycentric(value1.W, value2.W, value3.W, amount1, amount2));
+
+    public static Vector4 CatmullRom(Vector4 value1, Vector4 value2, Vector4 value3, Vector4 value4, float amount) => new(
+        MathHelper.CatmullRom(value1.X, value2.X, value3.X, value4.X, amount),
+        MathHelper.CatmullRom(value1.Y, value2.Y, value3.Y, value4.Y, amount),
+        MathHelper.CatmullRom(value1.Z, value2.Z, value3.Z, value4.Z, amount),
+        MathHelper.CatmullRom(value1.W, value2.W, value3.W, value4.W, amount));
+
+    public static Vector4 Hermite(Vector4 value1, Vector4 tangent1, Vector4 value2, Vector4 tangent2, float amount) => new(
+        MathHelper.Hermite(value1.X, tangent1.X, value2.X, tangent2.X, amount),
+        MathHelper.Hermite(value1.Y, tangent1.Y, value2.Y, tangent2.Y, amount),
+        MathHelper.Hermite(value1.Z, tangent1.Z, value2.Z, tangent2.Z, amount),
+        MathHelper.Hermite(value1.W, tangent1.W, value2.W, tangent2.W, amount));
 
     public static Vector4 Transform(Vector4 vector, Matrix matrix) => new(
         (vector.X * matrix.M11) + (vector.Y * matrix.M21) + (vector.Z * matrix.M31) + (vector.W * matrix.M41),

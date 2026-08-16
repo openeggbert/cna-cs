@@ -51,7 +51,7 @@ split as of this writing is:
 Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     Vector3, Vector4, Quaternion, Matrix, Rectangle, Point, Ray, Plane,
     BoundingBox, BoundingSphere, BoundingFrustum, MathHelper,
-    the full 139-color Color table, ~150-member Keys,
+    the full 139-color Color table, the 160-member Keys enum,
     SpriteFont (glyph table + MeasureString only -- DrawString needs
     SpriteBatch, which is native-backed, see below)
 

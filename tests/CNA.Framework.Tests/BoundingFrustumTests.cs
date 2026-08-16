@@ -65,6 +65,65 @@ public class BoundingFrustumTests
     }
 
     [Fact]
+    public void Contains_SameFrustum_ReturnsContainsOrIntersects()
+    {
+        // All 8 corners sit exactly on the other frustum's planes for this case, so which side
+        // of "outside" floating-point rounding lands on is not guaranteed -- same boundary-case
+        // looseness as Contains_BoundingSphereAroundOrigin_ReturnsIntersectsOrContains above.
+        BoundingFrustum frustum = CreateStandardFrustum();
+        BoundingFrustum same = CreateStandardFrustum();
+
+        ContainmentType result = frustum.Contains(same);
+
+        Assert.True(result is ContainmentType.Contains or ContainmentType.Intersects);
+        Assert.True(frustum.Intersects(same));
+    }
+
+    [Fact]
+    public void Contains_FarAwayFrustum_IsDisjoint()
+    {
+        BoundingFrustum frustum = CreateStandardFrustum();
+        Matrix farView = Matrix.CreateLookAt(new Vector3(0f, 0f, -1000f), new Vector3(0f, 0f, -1010f), Vector3.Up);
+        Matrix projection = Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, 1f, 1f, 5f);
+        var farFrustum = new BoundingFrustum(farView * projection);
+
+        Assert.Equal(ContainmentType.Disjoint, frustum.Contains(farFrustum));
+        Assert.False(frustum.Intersects(farFrustum));
+    }
+
+    [Fact]
+    public void Intersects_Ray_OriginInsideFrustum_ReturnsZero()
+    {
+        BoundingFrustum frustum = CreateStandardFrustum();
+        var ray = new Ray(Vector3.Zero, Vector3.UnitX);
+
+        float? result = frustum.Intersects(ray);
+
+        Assert.Equal(0f, result);
+    }
+
+    [Fact]
+    public void Intersects_Ray_PointingAtFrustumFromOutside_ReturnsPositiveDistance()
+    {
+        BoundingFrustum frustum = CreateStandardFrustum();
+        var ray = new Ray(new Vector3(0f, 0f, 500f), new Vector3(0f, 0f, -1f));
+
+        float? result = frustum.Intersects(ray);
+
+        Assert.NotNull(result);
+        Assert.True(result > 0f);
+    }
+
+    [Fact]
+    public void Intersects_Ray_PointingAwayFromFrustum_ReturnsNull()
+    {
+        BoundingFrustum frustum = CreateStandardFrustum();
+        var ray = new Ray(new Vector3(0f, 0f, 500f), new Vector3(0f, 0f, 1f));
+
+        Assert.Null(frustum.Intersects(ray));
+    }
+
+    [Fact]
     public void GetCorners_NearCornersAreCloserToCameraThanFarCorners()
     {
         BoundingFrustum frustum = CreateStandardFrustum();

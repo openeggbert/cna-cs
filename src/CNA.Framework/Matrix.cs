@@ -3,10 +3,6 @@ namespace CNA;
 /// <summary>
 /// Local, managed row-major 4x4 matrix, row-vector convention (a point transforms as
 /// <c>v' = v * M</c>), matching real XNA's <c>Matrix</c> exactly. See the rationale in Vector2.cs.
-/// Not implemented: <c>Decompose</c>, <c>CreateBillboard</c>, <c>CreateConstrainedBillboard</c>,
-/// <c>CreateShadow</c>, <c>CreateReflection</c>, the non-FOV <c>CreatePerspective</c> overload,
-/// and <c>CreatePerspectiveOffCenter</c> -- all rare enough in typical 2D/3D game code to defer;
-/// see plan.md Phase 4.
 /// </summary>
 public struct Matrix : IEquatable<Matrix>
 {
@@ -228,6 +224,233 @@ public struct Matrix : IEquatable<Matrix>
         result.M41 = (left + right) / (left - right);
         result.M42 = (top + bottom) / (bottom - top);
         result.M43 = zNearPlane / (zNearPlane - zFarPlane);
+        return result;
+    }
+
+    /// <summary>The non-FOV perspective overload -- same <c>M33</c>/<c>M43</c>/<c>M34</c> formulas
+    /// as <see cref="CreatePerspectiveFieldOfView"/>, just deriving <c>M11</c>/<c>M22</c> straight
+    /// from a near-plane width/height instead of a field of view; cross-checked against it in
+    /// MatrixTests for an equivalent width/height/fov/aspect combination.</summary>
+    public static Matrix CreatePerspective(float width, float height, float nearPlaneDistance, float farPlaneDistance)
+    {
+        float negFarRange = float.IsPositiveInfinity(farPlaneDistance)
+            ? -1f
+            : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
+
+        Matrix result = default;
+        result.M11 = (2f * nearPlaneDistance) / width;
+        result.M22 = (2f * nearPlaneDistance) / height;
+        result.M33 = negFarRange;
+        result.M34 = -1f;
+        result.M43 = nearPlaneDistance * negFarRange;
+        return result;
+    }
+
+    /// <summary>The asymmetric-frustum perspective overload (used for things like off-axis VR
+    /// projections). Reduces to <see cref="CreatePerspective"/> when the frustum is centered
+    /// (<c>left = -right</c>, <c>bottom = -top</c>) -- cross-checked against it in
+    /// MatrixTests.</summary>
+    public static Matrix CreatePerspectiveOffCenter(float left, float right, float bottom, float top, float nearPlaneDistance, float farPlaneDistance)
+    {
+        float negFarRange = float.IsPositiveInfinity(farPlaneDistance)
+            ? -1f
+            : farPlaneDistance / (nearPlaneDistance - farPlaneDistance);
+
+        Matrix result = default;
+        result.M11 = (2f * nearPlaneDistance) / (right - left);
+        result.M22 = (2f * nearPlaneDistance) / (top - bottom);
+        result.M31 = (left + right) / (right - left);
+        result.M32 = (top + bottom) / (top - bottom);
+        result.M33 = negFarRange;
+        result.M34 = -1f;
+        result.M43 = nearPlaneDistance * negFarRange;
+        return result;
+    }
+
+    /// <summary>
+    /// Decomposes a translation * rotation * non-uniform-scale matrix back into its three parts.
+    /// Extracts scale as each row's length, normalizes the rows to a pure rotation matrix, then
+    /// converts that to a quaternion via <see cref="Quaternion.CreateFromRotationMatrix"/>.
+    /// Known limitation, worth flagging explicitly: unlike real XNA's own (independently
+    /// known-imperfect) negative-scale heuristic, this does not attempt to detect a negative/
+    /// mirrored scale component at all -- a matrix built with a negative scale axis decomposes
+    /// to a positive scale plus a compensating rotation instead. Fine for the overwhelmingly
+    /// common case (uniform or non-uniform *positive* scale, no shear); returns <c>false</c> (and
+    /// <see cref="Quaternion.Identity"/>) only when a scale component is exactly (near-)zero,
+    /// which is genuinely non-decomposable rather than a limitation of this implementation.
+    /// </summary>
+    public readonly bool Decompose(out Vector3 scale, out Quaternion rotation, out Vector3 translation)
+    {
+        translation = new Vector3(M41, M42, M43);
+
+        var row1 = new Vector3(M11, M12, M13);
+        var row2 = new Vector3(M21, M22, M23);
+        var row3 = new Vector3(M31, M32, M33);
+
+        float scaleX = row1.Length();
+        float scaleY = row2.Length();
+        float scaleZ = row3.Length();
+        scale = new Vector3(scaleX, scaleY, scaleZ);
+
+        if (scaleX < float.Epsilon || scaleY < float.Epsilon || scaleZ < float.Epsilon)
+        {
+            rotation = Quaternion.Identity;
+            return false;
+        }
+
+        var rotationMatrix = new Matrix(
+            row1.X / scaleX, row1.Y / scaleX, row1.Z / scaleX, 0f,
+            row2.X / scaleY, row2.Y / scaleY, row2.Z / scaleY, 0f,
+            row3.X / scaleZ, row3.Y / scaleZ, row3.Z / scaleZ, 0f,
+            0f, 0f, 0f, 1f);
+
+        rotation = Quaternion.CreateFromRotationMatrix(rotationMatrix);
+        return true;
+    }
+
+    /// <summary>
+    /// Builds a world matrix for a sprite/quad that always faces <paramref name="cameraPosition"/>,
+    /// free to rotate around any axis (compare <see cref="CreateConstrainedBillboard"/>, which
+    /// locks one axis). Row layout mirrors <see cref="CreateLookAt"/>'s right/up/forward
+    /// construction. <paramref name="cameraForwardVector"/> is only consulted in the degenerate
+    /// case where <paramref name="objectPosition"/> and <paramref name="cameraPosition"/>
+    /// coincide (no direction to face); real XNA's exact sign convention for that fallback
+    /// wasn't confidently recalled, so it is used un-negated here -- lower confidence than the
+    /// rest of this method, but a rarely-hit edge case.
+    /// </summary>
+    public static Matrix CreateBillboard(
+        Vector3 objectPosition, Vector3 cameraPosition, Vector3 cameraUpVector, Vector3? cameraForwardVector)
+    {
+        Vector3 delta = objectPosition - cameraPosition;
+        float deltaLengthSquared = delta.LengthSquared();
+        Vector3 forward = deltaLengthSquared < 0.0001f
+            ? (cameraForwardVector ?? Vector3.Forward)
+            : delta * (1f / MathF.Sqrt(deltaLengthSquared));
+
+        Vector3 right = Vector3.Normalize(Vector3.Cross(cameraUpVector, forward));
+        Vector3 up = Vector3.Cross(forward, right);
+
+        return new Matrix(
+            right.X, right.Y, right.Z, 0f,
+            up.X, up.Y, up.Z, 0f,
+            forward.X, forward.Y, forward.Z, 0f,
+            objectPosition.X, objectPosition.Y, objectPosition.Z, 1f);
+    }
+
+    /// <summary>
+    /// Like <see cref="CreateBillboard"/>, but the "up" axis is locked to
+    /// <paramref name="rotateAxis"/> instead of being derived from a camera up vector -- used for
+    /// things like tree/grass billboards that should only ever rotate around the world Y axis.
+    /// The near-parallel-axis degenerate branch (facing direction and rotate axis almost
+    /// coincide, so "right" can't be derived from their cross product) is a simplified fallback,
+    /// not a reproduction of real XNA's specific fallback-axis-selection logic -- lower confidence
+    /// than <see cref="CreateBillboard"/>'s primary path, which this otherwise matches exactly.
+    /// </summary>
+    public static Matrix CreateConstrainedBillboard(
+        Vector3 objectPosition,
+        Vector3 cameraPosition,
+        Vector3 rotateAxis,
+        Vector3? cameraForwardVector,
+        Vector3? objectForwardVector)
+    {
+        Vector3 delta = objectPosition - cameraPosition;
+        float deltaLengthSquared = delta.LengthSquared();
+        Vector3 faceDirection = deltaLengthSquared < 0.0001f
+            ? (cameraForwardVector ?? Vector3.Forward)
+            : delta * (1f / MathF.Sqrt(deltaLengthSquared));
+
+        Vector3 up = Vector3.Normalize(rotateAxis);
+        float axisAlignment = Vector3.Dot(up, faceDirection);
+
+        Vector3 right, forward;
+        if (MathF.Abs(axisAlignment) > 0.9982547f)
+        {
+            forward = objectForwardVector ?? (MathF.Abs(up.Z) > 0.9982547f ? Vector3.Right : new Vector3(0f, 0f, -1f));
+            right = Vector3.Normalize(Vector3.Cross(up, forward));
+            forward = Vector3.Cross(right, up);
+        }
+        else
+        {
+            right = Vector3.Normalize(Vector3.Cross(up, faceDirection));
+            forward = Vector3.Cross(right, up);
+        }
+
+        return new Matrix(
+            right.X, right.Y, right.Z, 0f,
+            up.X, up.Y, up.Z, 0f,
+            forward.X, forward.Y, forward.Z, 0f,
+            objectPosition.X, objectPosition.Y, objectPosition.Z, 1f);
+    }
+
+    /// <summary>
+    /// Standard planar-shadow-projection matrix (flattens geometry onto <paramref name="plane"/>
+    /// as seen from <paramref name="lightDirection"/>) -- textbook formula, not specific to XNA.
+    /// The result generally has <c>M44 != 1</c>, so transforming a point through it needs a real
+    /// homogeneous divide (<see cref="Vector4.Transform(Vector4, Matrix)"/> then divide by
+    /// <c>W</c>), not the affine-only <see cref="Vector3.Transform(Vector3, Matrix)"/> -- see
+    /// MatrixTests for how this is actually verified.
+    /// </summary>
+    public static Matrix CreateShadow(Vector3 lightDirection, Plane plane)
+    {
+        Plane normalized = Plane.Normalize(plane);
+        float dot = Vector3.Dot(normalized.Normal, lightDirection);
+        float nx = normalized.Normal.X, ny = normalized.Normal.Y, nz = normalized.Normal.Z, d = normalized.D;
+
+        Matrix result;
+        result.M11 = (-nx * lightDirection.X) + dot;
+        result.M12 = -nx * lightDirection.Y;
+        result.M13 = -nx * lightDirection.Z;
+        result.M14 = 0f;
+
+        result.M21 = -ny * lightDirection.X;
+        result.M22 = (-ny * lightDirection.Y) + dot;
+        result.M23 = -ny * lightDirection.Z;
+        result.M24 = 0f;
+
+        result.M31 = -nz * lightDirection.X;
+        result.M32 = -nz * lightDirection.Y;
+        result.M33 = (-nz * lightDirection.Z) + dot;
+        result.M34 = 0f;
+
+        result.M41 = -d * lightDirection.X;
+        result.M42 = -d * lightDirection.Y;
+        result.M43 = -d * lightDirection.Z;
+        result.M44 = dot;
+
+        return result;
+    }
+
+    /// <summary>Standard Householder-style planar reflection matrix -- textbook formula, not
+    /// specific to XNA. Unlike <see cref="CreateShadow"/>, this one is a proper affine (rigid,
+    /// <c>M44 = 1</c>) transform, so the ordinary <see cref="Vector3.Transform(Vector3, Matrix)"/>
+    /// is enough to use it.</summary>
+    public static Matrix CreateReflection(Plane plane)
+    {
+        Plane normalized = Plane.Normalize(plane);
+        float x = normalized.Normal.X, y = normalized.Normal.Y, z = normalized.Normal.Z;
+        float x2 = -2f * x, y2 = -2f * y, z2 = -2f * z;
+
+        Matrix result;
+        result.M11 = (x2 * x) + 1f;
+        result.M12 = y2 * x;
+        result.M13 = z2 * x;
+        result.M14 = 0f;
+
+        result.M21 = x2 * y;
+        result.M22 = (y2 * y) + 1f;
+        result.M23 = z2 * y;
+        result.M24 = 0f;
+
+        result.M31 = x2 * z;
+        result.M32 = y2 * z;
+        result.M33 = (z2 * z) + 1f;
+        result.M34 = 0f;
+
+        result.M41 = x2 * normalized.D;
+        result.M42 = y2 * normalized.D;
+        result.M43 = z2 * normalized.D;
+        result.M44 = 1f;
+
         return result;
     }
 

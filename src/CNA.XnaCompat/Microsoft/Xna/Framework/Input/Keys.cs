@@ -4,8 +4,9 @@ namespace Microsoft.Xna.Framework.Input;
 /// XNA 4.0-compatible <c>Keys</c>. Enums cannot inherit, so this is a separate enum from
 /// <see cref="CNA.Input.Keys"/>, kept numerically identical to it (both match real XNA's
 /// Windows virtual-key-code values) so casting between them is always a no-op value cast -- see
-/// <see cref="KeysExtensions.ToFrameworkKeys"/>. Covers the same subset as
-/// <see cref="CNA.Input.Keys"/>; broaden both together (Phase 4, plan.md).
+/// <see cref="KeysExtensions.ToFrameworkKeys"/>. Kept in lockstep with
+/// <see cref="CNA.Input.Keys"/> -- see that file's doc comment for the members added since the
+/// initial pass and the confidence caveat on their exact ordinals.
 /// </summary>
 public enum Keys
 {
@@ -15,7 +16,11 @@ public enum Keys
     Enter = 13,
     Pause = 19,
     CapsLock = 20,
+    Kana = 21,
+    Kanji = 25,
     Escape = 27,
+    ImeConvert = 28,
+    ImeNoConvert = 29,
     Space = 32,
     PageUp = 33,
     PageDown = 34,
@@ -145,11 +150,26 @@ public enum Keys
     OemPeriod = 190,
     OemQuestion = 191,
     OemTilde = 192,
+    ChatPadGreen = 202,
+    ChatPadOrange = 203,
     OemOpenBrackets = 219,
     OemPipe = 220,
     OemCloseBrackets = 221,
     OemQuotes = 222,
+    Oem8 = 223,
     OemBackslash = 226,
+    ProcessKey = 229,
+    OemAuto = 243,
+    OemEnlW = 244,
+    Attn = 246,
+    Crsel = 247,
+    Exsel = 248,
+    EraseEof = 249,
+    Play = 250,
+    Zoom = 251,
+    NoName = 252,
+    Pa1 = 253,
+    OemClear = 254,
 }
 
 internal static class KeysExtensions

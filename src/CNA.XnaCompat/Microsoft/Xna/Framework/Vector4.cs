@@ -56,6 +56,8 @@ public struct Vector4 : IEquatable<Vector4>
 
     public static float Distance(Vector4 a, Vector4 b) => CNA.Vector4.Distance(a, b);
 
+    public static float DistanceSquared(Vector4 a, Vector4 b) => CNA.Vector4.DistanceSquared(a, b);
+
     public static float Dot(Vector4 a, Vector4 b) => CNA.Vector4.Dot(a, b);
 
     public static Vector4 Lerp(Vector4 a, Vector4 b, float amount) => CNA.Vector4.Lerp(a, b, amount);
@@ -65,6 +67,17 @@ public struct Vector4 : IEquatable<Vector4>
     public static Vector4 Max(Vector4 a, Vector4 b) => CNA.Vector4.Max(a, b);
 
     public static Vector4 Clamp(Vector4 value, Vector4 min, Vector4 max) => CNA.Vector4.Clamp(value, min, max);
+
+    public static Vector4 SmoothStep(Vector4 a, Vector4 b, float amount) => CNA.Vector4.SmoothStep(a, b, amount);
+
+    public static Vector4 Barycentric(Vector4 value1, Vector4 value2, Vector4 value3, float amount1, float amount2) =>
+        CNA.Vector4.Barycentric(value1, value2, value3, amount1, amount2);
+
+    public static Vector4 CatmullRom(Vector4 value1, Vector4 value2, Vector4 value3, Vector4 value4, float amount) =>
+        CNA.Vector4.CatmullRom(value1, value2, value3, value4, amount);
+
+    public static Vector4 Hermite(Vector4 value1, Vector4 tangent1, Vector4 value2, Vector4 tangent2, float amount) =>
+        CNA.Vector4.Hermite(value1, tangent1, value2, tangent2, amount);
 
     public static Vector4 Transform(Vector4 vector, Matrix matrix) => CNA.Vector4.Transform(vector, matrix);
 

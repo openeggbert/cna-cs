@@ -17,6 +17,8 @@ public struct Ray : IEquatable<Ray>
 
     public readonly float? Intersects(Plane plane) => ((CNA.Ray)this).Intersects(plane);
 
+    public readonly float? Intersects(BoundingFrustum frustum) => ((CNA.Ray)this).Intersects(frustum);
+
     public static bool operator ==(Ray a, Ray b) => a.Equals(b);
     public static bool operator !=(Ray a, Ray b) => !a.Equals(b);
 

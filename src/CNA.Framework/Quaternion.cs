@@ -34,6 +34,58 @@ public struct Quaternion : IEquatable<Quaternion>
         return new Quaternion(axis.X * sin, axis.Y * sin, axis.Z * sin, cos);
     }
 
+    /// <summary>
+    /// Standard "largest diagonal term" (Shepperd's method) matrix-to-quaternion extraction --
+    /// branches on which diagonal term is largest to avoid dividing by a near-zero value, the
+    /// textbook fix for the naive trace-based formula's numerical instability near 180-degree
+    /// rotations. Assumes <paramref name="matrix"/> is a pure rotation (no scale/shear) in this
+    /// project's row-vector convention; round-trips with <see cref="Matrix.CreateFromQuaternion"/>
+    /// are checked in QuaternionTests.
+    /// </summary>
+    public static Quaternion CreateFromRotationMatrix(Matrix matrix)
+    {
+        float trace = matrix.M11 + matrix.M22 + matrix.M33;
+
+        if (trace > 0f)
+        {
+            float s = MathF.Sqrt(trace + 1f) * 2f;
+            return new Quaternion(
+                (matrix.M23 - matrix.M32) / s,
+                (matrix.M31 - matrix.M13) / s,
+                (matrix.M12 - matrix.M21) / s,
+                0.25f * s);
+        }
+
+        if (matrix.M11 > matrix.M22 && matrix.M11 > matrix.M33)
+        {
+            float s = MathF.Sqrt(1f + matrix.M11 - matrix.M22 - matrix.M33) * 2f;
+            return new Quaternion(
+                0.25f * s,
+                (matrix.M21 + matrix.M12) / s,
+                (matrix.M31 + matrix.M13) / s,
+                (matrix.M23 - matrix.M32) / s);
+        }
+
+        if (matrix.M22 > matrix.M33)
+        {
+            float s = MathF.Sqrt(1f + matrix.M22 - matrix.M11 - matrix.M33) * 2f;
+            return new Quaternion(
+                (matrix.M21 + matrix.M12) / s,
+                0.25f * s,
+                (matrix.M32 + matrix.M23) / s,
+                (matrix.M31 - matrix.M13) / s);
+        }
+
+        {
+            float s = MathF.Sqrt(1f + matrix.M33 - matrix.M11 - matrix.M22) * 2f;
+            return new Quaternion(
+                (matrix.M31 + matrix.M13) / s,
+                (matrix.M32 + matrix.M23) / s,
+                0.25f * s,
+                (matrix.M12 - matrix.M21) / s);
+        }
+    }
+
     public static Quaternion CreateFromYawPitchRoll(float yaw, float pitch, float roll)
     {
         float halfYaw = yaw * 0.5f;
@@ -119,6 +171,42 @@ public struct Quaternion : IEquatable<Quaternion>
 
         result.Normalize();
         return result;
+    }
+
+    /// <summary>Spherical linear interpolation, shortest-path-corrected (negates
+    /// <paramref name="b"/> when the quaternions are more than 90 degrees apart, matching real
+    /// XNA) and falling back to linear interpolation when the two are nearly parallel, where the
+    /// great-circle formula becomes numerically unstable.</summary>
+    public static Quaternion Slerp(Quaternion a, Quaternion b, float amount)
+    {
+        float cosOmega = Dot(a, b);
+        bool flip = cosOmega < 0f;
+        if (flip)
+        {
+            cosOmega = -cosOmega;
+        }
+
+        float weightA, weightB;
+        if (cosOmega > 0.999999f)
+        {
+            weightA = 1f - amount;
+            weightB = flip ? -amount : amount;
+        }
+        else
+        {
+            float omega = MathF.Acos(cosOmega);
+            float inverseSinOmega = 1f / MathF.Sin(omega);
+            weightA = MathF.Sin((1f - amount) * omega) * inverseSinOmega;
+            weightB = flip
+                ? -MathF.Sin(amount * omega) * inverseSinOmega
+                : MathF.Sin(amount * omega) * inverseSinOmega;
+        }
+
+        return new Quaternion(
+            (weightA * a.X) + (weightB * b.X),
+            (weightA * a.Y) + (weightB * b.Y),
+            (weightA * a.Z) + (weightB * b.Z),
+            (weightA * a.W) + (weightB * b.W));
     }
 
     public static Quaternion operator *(Quaternion a, Quaternion b) => new(

@@ -7,8 +7,7 @@ namespace CNA;
 /// <see cref="Matrix.CreateLookAt"/> conventions for consistency. Corners are computed by
 /// unprojecting the NDC cube through <see cref="Matrix.Invert(Matrix)"/> rather than by
 /// intersecting planes, which keeps the two derivations independent. See BoundingFrustumTests
-/// for the containment checks this is validated against. <c>Intersects(BoundingFrustum)</c> and
-/// <c>Intersects(Ray)</c> are not implemented yet (Phase 4, plan.md).
+/// for the containment checks this is validated against.
 /// </summary>
 public class BoundingFrustum : IEquatable<BoundingFrustum>
 {
@@ -56,9 +55,27 @@ public class BoundingFrustum : IEquatable<BoundingFrustum>
         return true;
     }
 
-    public ContainmentType Contains(BoundingBox box)
+    public ContainmentType Contains(BoundingBox box) => ContainsCorners(box.GetCorners());
+
+    /// <summary>
+    /// Same corner-vs-plane test as <see cref="Contains(BoundingBox)"/>, applied to
+    /// <paramref name="frustum"/>'s 8 corners instead of a box's. This is the same
+    /// approximation real XNA/MonoGame's own <c>BoundingFrustum.Contains(BoundingFrustum)</c>
+    /// uses -- matching real XNA's actual (imperfect) behavior is the goal here, not a
+    /// mathematically exact convex-polytope separating-axis test. It can report
+    /// <see cref="ContainmentType.Intersects"/> in the rare case where two frustums overlap with
+    /// no corner of either inside the other (an edge/face crossing with no vertex containment) --
+    /// a true SAT test would need the face normals of both frustums plus their pairwise edge
+    /// cross products as separating axes, which real XNA does not do either.
+    /// </summary>
+    public ContainmentType Contains(BoundingFrustum frustum)
     {
-        Vector3[] corners = box.GetCorners();
+        ArgumentNullException.ThrowIfNull(frustum);
+        return ContainsCorners(frustum.GetCorners());
+    }
+
+    private ContainmentType ContainsCorners(Vector3[] corners)
+    {
         bool intersecting = false;
 
         foreach (Plane plane in _planes)
@@ -111,6 +128,56 @@ public class BoundingFrustum : IEquatable<BoundingFrustum>
     public bool Intersects(BoundingBox box) => Contains(box) != ContainmentType.Disjoint;
 
     public bool Intersects(BoundingSphere sphere) => Contains(sphere) != ContainmentType.Disjoint;
+
+    public bool Intersects(BoundingFrustum frustum) => Contains(frustum) != ContainmentType.Disjoint;
+
+    /// <summary>
+    /// Standard "ray vs. intersection of half-spaces" slab test, generalized from the classic
+    /// AABB slab test to the frustum's 6 arbitrary planes instead of 3 axis-aligned pairs. Not
+    /// XNA-specific -- this is the textbook technique for ray-vs-convex-region intersection.
+    /// Returns 0 (not <c>null</c>) when <paramref name="ray"/>'s origin already starts inside the
+    /// frustum, matching <see cref="Ray.Intersects(BoundingBox)"/>'s existing "distance from
+    /// origin" contract.
+    /// </summary>
+    public float? Intersects(Ray ray)
+    {
+        float tMin = 0f;
+        float tMax = float.MaxValue;
+
+        foreach (Plane plane in _planes)
+        {
+            float denominator = Vector3.Dot(plane.Normal, ray.Direction);
+            float distance = plane.DotCoordinate(ray.Position);
+
+            if (MathF.Abs(denominator) < 1e-6f)
+            {
+                if (distance < 0f)
+                {
+                    return null;
+                }
+
+                continue;
+            }
+
+            float t = -distance / denominator;
+
+            if (denominator > 0f)
+            {
+                tMin = MathF.Max(tMin, t);
+            }
+            else
+            {
+                tMax = MathF.Min(tMax, t);
+            }
+
+            if (tMin > tMax)
+            {
+                return null;
+            }
+        }
+
+        return tMin;
+    }
 
     private void ExtractPlanes()
     {

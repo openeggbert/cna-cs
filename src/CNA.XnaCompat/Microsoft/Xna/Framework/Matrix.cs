@@ -108,6 +108,32 @@ public struct Matrix : IEquatable<Matrix>
     public static Matrix CreateOrthographicOffCenter(float left, float right, float bottom, float top, float zNearPlane, float zFarPlane) =>
         From(CNA.Matrix.CreateOrthographicOffCenter(left, right, bottom, top, zNearPlane, zFarPlane));
 
+    public static Matrix CreatePerspective(float width, float height, float nearPlaneDistance, float farPlaneDistance) =>
+        From(CNA.Matrix.CreatePerspective(width, height, nearPlaneDistance, farPlaneDistance));
+
+    public static Matrix CreatePerspectiveOffCenter(float left, float right, float bottom, float top, float nearPlaneDistance, float farPlaneDistance) =>
+        From(CNA.Matrix.CreatePerspectiveOffCenter(left, right, bottom, top, nearPlaneDistance, farPlaneDistance));
+
+    public static Matrix CreateBillboard(Vector3 objectPosition, Vector3 cameraPosition, Vector3 cameraUpVector, Vector3? cameraForwardVector) =>
+        From(CNA.Matrix.CreateBillboard(objectPosition, cameraPosition, cameraUpVector, cameraForwardVector));
+
+    public static Matrix CreateConstrainedBillboard(
+        Vector3 objectPosition, Vector3 cameraPosition, Vector3 rotateAxis, Vector3? cameraForwardVector, Vector3? objectForwardVector) =>
+        From(CNA.Matrix.CreateConstrainedBillboard(objectPosition, cameraPosition, rotateAxis, cameraForwardVector, objectForwardVector));
+
+    public static Matrix CreateShadow(Vector3 lightDirection, Plane plane) => From(CNA.Matrix.CreateShadow(lightDirection, plane));
+
+    public static Matrix CreateReflection(Plane plane) => From(CNA.Matrix.CreateReflection(plane));
+
+    public readonly bool Decompose(out Vector3 scale, out Quaternion rotation, out Vector3 translation)
+    {
+        bool result = ((CNA.Matrix)this).Decompose(out CNA.Vector3 nativeScale, out CNA.Quaternion nativeRotation, out CNA.Vector3 nativeTranslation);
+        scale = nativeScale;
+        rotation = nativeRotation;
+        translation = nativeTranslation;
+        return result;
+    }
+
     public readonly float Determinant() => ((CNA.Matrix)this).Determinant();
 
     public static Matrix Transpose(Matrix matrix) => From(CNA.Matrix.Transpose(matrix));

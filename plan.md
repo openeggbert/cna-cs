@@ -133,22 +133,36 @@ the sample's README, not a bug in this repository.
 
 Split by whether the type needs the (still nonexistent) native ABI:
 
-- [x] **Pure math/value types — done, and real (no native dependency, so
-      unlike everything below these are 100% functional today, not stubs):**
-      `Vector3`, `Vector4`, `Quaternion`, `Matrix`, `Rectangle`, `Point`,
-      `Ray`, `Plane`, `BoundingBox`, `BoundingSphere`, `BoundingFrustum`,
-      `MathHelper`, the full 139-color XNA/X11 named-color table, and the
-      ~150-member `Keys` enum (Windows virtual-key codes). Verified with
-      `MatrixTests` (`Invert` round-trips across 9 matrices including
-      `LookAt`/`PerspectiveFieldOfView`) and `BoundingFrustumTests`
-      (containment, near/far corner ordering) — see the "Toolchain note"
-      below. Not implemented within this set: `Matrix.Decompose`,
+- [x] **Pure math/value types — done, complete, and real (no native
+      dependency, so unlike everything below these are 100% functional
+      today, not stubs).** `Vector3`, `Vector4`, `Quaternion`, `Matrix`,
+      `Rectangle`, `Point`, `Ray`, `Plane`, `BoundingBox`, `BoundingSphere`,
+      `BoundingFrustum`, `MathHelper`, the full 139-color XNA/X11
+      named-color table, and the 160-member `Keys` enum (Windows
+      virtual-key codes). As of the 2026-08-16 (session 5) pass, every gap
+      this bullet used to list is closed: `Matrix.Decompose`,
       `CreateBillboard`/`CreateConstrainedBillboard`/`CreateShadow`/
-      `CreateReflection`, the non-FOV `CreatePerspective` overload,
+      `CreateReflection`/`CreatePerspective`/`CreatePerspectiveOffCenter`,
       `BoundingFrustum.Intersects(BoundingFrustum)`/`Intersects(Ray)`,
-      spline interpolation (`Barycentric`/`CatmullRom`/`Hermite`), and the
-      IME/ChatPad/rare-OEM `Keys` members — see the "not implemented" notes
-      in each type's own file.
+      `Quaternion.Slerp`/`CreateFromRotationMatrix`, spline interpolation
+      (`Lerp`/`SmoothStep`/`Barycentric`/`CatmullRom`/`Hermite` across
+      `Vector2`/`3`/`4`), and the IME/ChatPad/rare-OEM `Keys` members are
+      all implemented — see `NEXT.md`'s session-5 entry for per-method
+      confidence notes (most are cross-checked/round-trip-tested with real
+      unit tests; the rare-`Keys` ordinals and `CreateConstrainedBillboard`'s
+      degenerate branch are recalled/approximated rather than independently
+      verified, flagged as such in their own doc comments). That same pass
+      also fixed a real pre-existing bug: `Vector3.Transform(Vector3,
+      Quaternion)` was rotating by the *inverse* angle (wrong multiplication
+      order against this project's `Quaternion.operator *` convention) —
+      see `NEXT.md` for how it was caught and the fix. Verified with
+      `MatrixTests` (`Invert`/`Decompose`/`CreatePerspective*` round-trips
+      and cross-checks, including 9 matrices covering `LookAt`/
+      `PerspectiveFieldOfView`), `QuaternionTests` (`CreateFromRotationMatrix`
+      round-trips, `Slerp` endpoint/shortest-path checks), and
+      `BoundingFrustumTests` (containment, frustum-vs-frustum, ray
+      intersection, near/far corner ordering) — see the "Toolchain note"
+      below.
 - [x] **`Mouse`/`GamePad` — done** (new `CNA.Interop` natives
       `cna_mouse_get_state`/`cna_gamepad_get_state`, same snapshot pattern as
       `Keyboard`). `GamePad.GetCapabilities` and `GamePadState.PacketNumber`

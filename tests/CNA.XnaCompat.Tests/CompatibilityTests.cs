@@ -52,6 +52,12 @@ public class CompatibilityTests
     [InlineData(XnaKeys.F12, CNA.Input.Keys.F12)]
     [InlineData(XnaKeys.LeftShift, CNA.Input.Keys.LeftShift)]
     [InlineData(XnaKeys.OemTilde, CNA.Input.Keys.OemTilde)]
+    [InlineData(XnaKeys.Kana, CNA.Input.Keys.Kana)]
+    [InlineData(XnaKeys.ImeConvert, CNA.Input.Keys.ImeConvert)]
+    [InlineData(XnaKeys.ChatPadGreen, CNA.Input.Keys.ChatPadGreen)]
+    [InlineData(XnaKeys.ProcessKey, CNA.Input.Keys.ProcessKey)]
+    [InlineData(XnaKeys.Pa1, CNA.Input.Keys.Pa1)]
+    [InlineData(XnaKeys.OemClear, CNA.Input.Keys.OemClear)]
     public void Keys_NumericValuesMatchFrameworkKeys(XnaKeys xnaKey, CNA.Input.Keys frameworkKey)
     {
         Assert.Equal((int)frameworkKey, (int)xnaKey);

@@ -3,9 +3,16 @@ namespace CNA.Input;
 /// <summary>
 /// CNA key ordinals. Numeric values match the real <c>Microsoft.Xna.Framework.Input.Keys</c>
 /// (themselves Windows virtual-key codes), so <c>CNA.XnaCompat.Input.Keys</c> converts with a
-/// plain numeric cast. Covers the common gameplay/UI subset; the rarer IME, ChatPad, and OEM
-/// legacy-hardware keys (Kana, Kanji, ProcessKey, ChatPadGreen/Orange, Oem8, OemAuto, OemEnlW,
-/// Attn, Crsel, Exsel, EraseEof, Pa1, ...) are not included -- see plan.md Phase 4. Upstream
+/// plain numeric cast. Now includes the rare IME (<c>Kana</c>/<c>Kanji</c>/<c>ImeConvert</c>/
+/// <c>ImeNoConvert</c>/<c>ProcessKey</c>), Xbox 360 ChatPad (<c>ChatPadGreen</c>/
+/// <c>ChatPadOrange</c>), and legacy-OEM-hardware (<c>Oem8</c>, <c>OemAuto</c>, <c>OemEnlW</c>,
+/// <c>Attn</c>, <c>Crsel</c>, <c>Exsel</c>, <c>EraseEof</c>, <c>Play</c>, <c>Zoom</c>,
+/// <c>NoName</c>, <c>Pa1</c>, <c>OemClear</c>) members that were previously omitted -- their
+/// ordinals are recalled Windows virtual-key codes, cross-checked against this file's own
+/// already-present <c>Escape</c>=27/<c>Space</c>=32 (real VK_ESCAPE/VK_SPACE) for a sanity check,
+/// but *not independently verified* against a live system or a real XNA binary in this
+/// environment -- treat as good-confidence, not test-verified, the same distinction this file
+/// already draws for the rest of Phase 4's self-designed/recalled surfaces. Upstream
 /// <c>openeggbert/cna</c> owns the authoritative native ordinal scheme once its C ABI ships;
 /// reconcile this list against it then.
 /// </summary>
@@ -17,7 +24,11 @@ public enum Keys
     Enter = 13,
     Pause = 19,
     CapsLock = 20,
+    Kana = 21,
+    Kanji = 25,
     Escape = 27,
+    ImeConvert = 28,
+    ImeNoConvert = 29,
     Space = 32,
     PageUp = 33,
     PageDown = 34,
@@ -147,9 +158,24 @@ public enum Keys
     OemPeriod = 190,
     OemQuestion = 191,
     OemTilde = 192,
+    ChatPadGreen = 202,
+    ChatPadOrange = 203,
     OemOpenBrackets = 219,
     OemPipe = 220,
     OemCloseBrackets = 221,
     OemQuotes = 222,
+    Oem8 = 223,
     OemBackslash = 226,
+    ProcessKey = 229,
+    OemAuto = 243,
+    OemEnlW = 244,
+    Attn = 246,
+    Crsel = 247,
+    Exsel = 248,
+    EraseEof = 249,
+    Play = 250,
+    Zoom = 251,
+    NoName = 252,
+    Pa1 = 253,
+    OemClear = 254,
 }

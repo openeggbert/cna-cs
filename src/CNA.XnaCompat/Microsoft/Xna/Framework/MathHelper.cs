@@ -29,4 +29,13 @@ public static class MathHelper
     public static float SmoothStep(float a, float b, float amount) => CNA.MathHelper.SmoothStep(a, b, amount);
 
     public static float WrapAngle(float angle) => CNA.MathHelper.WrapAngle(angle);
+
+    public static float Barycentric(float value1, float value2, float value3, float amount1, float amount2) =>
+        CNA.MathHelper.Barycentric(value1, value2, value3, amount1, amount2);
+
+    public static float CatmullRom(float value1, float value2, float value3, float value4, float amount) =>
+        CNA.MathHelper.CatmullRom(value1, value2, value3, value4, amount);
+
+    public static float Hermite(float value1, float tangent1, float value2, float tangent2, float amount) =>
+        CNA.MathHelper.Hermite(value1, tangent1, value2, tangent2, amount);
 }

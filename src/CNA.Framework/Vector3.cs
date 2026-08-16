@@ -87,6 +87,26 @@ public struct Vector3 : IEquatable<Vector3>
 
     public static Vector3 Clamp(Vector3 value, Vector3 min, Vector3 max) => Min(Max(value, min), max);
 
+    public static Vector3 SmoothStep(Vector3 a, Vector3 b, float amount) => new(
+        MathHelper.SmoothStep(a.X, b.X, amount),
+        MathHelper.SmoothStep(a.Y, b.Y, amount),
+        MathHelper.SmoothStep(a.Z, b.Z, amount));
+
+    public static Vector3 Barycentric(Vector3 value1, Vector3 value2, Vector3 value3, float amount1, float amount2) => new(
+        MathHelper.Barycentric(value1.X, value2.X, value3.X, amount1, amount2),
+        MathHelper.Barycentric(value1.Y, value2.Y, value3.Y, amount1, amount2),
+        MathHelper.Barycentric(value1.Z, value2.Z, value3.Z, amount1, amount2));
+
+    public static Vector3 CatmullRom(Vector3 value1, Vector3 value2, Vector3 value3, Vector3 value4, float amount) => new(
+        MathHelper.CatmullRom(value1.X, value2.X, value3.X, value4.X, amount),
+        MathHelper.CatmullRom(value1.Y, value2.Y, value3.Y, value4.Y, amount),
+        MathHelper.CatmullRom(value1.Z, value2.Z, value3.Z, value4.Z, amount));
+
+    public static Vector3 Hermite(Vector3 value1, Vector3 tangent1, Vector3 value2, Vector3 tangent2, float amount) => new(
+        MathHelper.Hermite(value1.X, tangent1.X, value2.X, tangent2.X, amount),
+        MathHelper.Hermite(value1.Y, tangent1.Y, value2.Y, tangent2.Y, amount),
+        MathHelper.Hermite(value1.Z, tangent1.Z, value2.Z, tangent2.Z, amount));
+
     public static Vector3 Transform(Vector3 position, Matrix matrix) => new(
         (position.X * matrix.M11) + (position.Y * matrix.M21) + (position.Z * matrix.M31) + matrix.M41,
         (position.X * matrix.M12) + (position.Y * matrix.M22) + (position.Z * matrix.M32) + matrix.M42,
@@ -97,10 +117,23 @@ public struct Vector3 : IEquatable<Vector3>
         (normal.X * matrix.M12) + (normal.Y * matrix.M22) + (normal.Z * matrix.M32),
         (normal.X * matrix.M13) + (normal.Y * matrix.M23) + (normal.Z * matrix.M33));
 
+    /// <summary>
+    /// Bugfix note: the standard "q*v*q_conjugate" quaternion sandwich formula must be written
+    /// here as <c>conjugate * v * rotation</c>, not <c>rotation * v * conjugate</c>, given this
+    /// project's <see cref="Quaternion.operator *"/> -- that operator computes what
+    /// standard Hamilton-product notation would call <c>b*a</c> for a call written <c>a*b</c>
+    /// (needed so quaternion composition matches this project's row-vector matrix convention).
+    /// Writing the textbook <c>rotation * v * conjugate</c> order against *that* operator
+    /// silently rotates by the inverse angle instead -- caught by comparing against the
+    /// independently-implemented <see cref="Matrix.CreateFromQuaternion"/> +
+    /// <see cref="Transform(Vector3, Matrix)"/> path in QuaternionTests, which had been the only
+    /// simple sanity source, no dedicated test existed for this method before with a non-identity
+    /// rotation.
+    /// </summary>
     public static Vector3 Transform(Vector3 value, Quaternion rotation)
     {
         Quaternion conjugate = Quaternion.Conjugate(rotation);
-        Quaternion result = rotation * new Quaternion(value.X, value.Y, value.Z, 0f) * conjugate;
+        Quaternion result = conjugate * new Quaternion(value.X, value.Y, value.Z, 0f) * rotation;
         return new Vector3(result.X, result.Y, result.Z);
     }
 
