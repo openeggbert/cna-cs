@@ -36,7 +36,11 @@ public class SoundEffect : IDisposable
     /// 8,000-48,000 Hz range with its own <see cref="ArgumentOutOfRangeException"/>, which isn't
     /// reproduced here (lower confidence in the exact bounds than in the rest of this
     /// constructor's validation, so this deliberately validates less rather than risk enforcing
-    /// the wrong limits).
+    /// the wrong limits). <paramref name="loopStart"/>/<paramref name="loopLength"/> are only
+    /// checked for being non-negative, not for actually fitting within the sample count implied
+    /// by <paramref name="count"/> -- the native side is the one place that can validate a loop
+    /// region's own units (samples) against the buffer without duplicating its channel/bit-depth
+    /// interpretation here.
     /// </summary>
     public unsafe SoundEffect(
         byte[] buffer, int offset, int count, int sampleRate, AudioChannels channels, int loopStart, int loopLength)
@@ -44,12 +48,20 @@ public class SoundEffect : IDisposable
         ArgumentNullException.ThrowIfNull(buffer);
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
         ArgumentOutOfRangeException.ThrowIfNegative(count);
-        if (offset + count > buffer.Length)
+        // Checked as offset > Length / count > (Length - offset) rather than offset + count >
+        // Length -- the addition form can integer-overflow for adversarial (offset, count) pairs
+        // and wrap negative, silently passing a check it should fail. This form can't overflow:
+        // once offset <= buffer.Length is established, buffer.Length - offset is a safe,
+        // non-negative subtraction.
+        if (offset > buffer.Length || count > buffer.Length - offset)
         {
             throw new ArgumentException($"{nameof(offset)} + {nameof(count)} exceeds the buffer length.");
         }
 
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sampleRate, 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(loopStart);
+        ArgumentOutOfRangeException.ThrowIfNegative(loopLength);
+        ValidateChannels(channels);
 
         fixed (byte* basePtr = buffer)
         {
@@ -98,6 +110,7 @@ public class SoundEffect : IDisposable
     {
         ArgumentOutOfRangeException.ThrowIfNegative(sizeInBytes);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sampleRate, 0);
+        ValidateChannels(channels);
 
         if (sizeInBytes == 0)
         {
@@ -107,6 +120,19 @@ public class SoundEffect : IDisposable
         int blockAlign = 2 * (int)channels;
         long sampleCount = sizeInBytes / blockAlign;
         return TimeSpan.FromSeconds(sampleCount / (double)sampleRate);
+    }
+
+    /// <summary><see cref="AudioChannels"/> is a plain enum, so C# does not itself reject a cast
+    /// like <c>(AudioChannels)0</c> -- without this check, that value would make
+    /// <see cref="GetSampleDuration"/> divide by zero and <see cref="GetSampleSizeInBytes"/>
+    /// silently return 0 for any duration, instead of failing with a clear argument error.
+    /// </summary>
+    private static void ValidateChannels(AudioChannels channels)
+    {
+        if (channels is not (AudioChannels.Mono or AudioChannels.Stereo))
+        {
+            throw new ArgumentOutOfRangeException(nameof(channels), channels, "Must be Mono or Stereo.");
+        }
     }
 
     /// <summary>The inverse of <see cref="GetSampleDuration"/> -- also pure arithmetic. Rounds the
@@ -120,6 +146,7 @@ public class SoundEffect : IDisposable
         }
 
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sampleRate, 0);
+        ValidateChannels(channels);
 
         int blockAlign = 2 * (int)channels;
         long sampleCount = (long)(duration.TotalSeconds * sampleRate);

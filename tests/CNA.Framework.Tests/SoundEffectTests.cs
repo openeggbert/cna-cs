@@ -7,7 +7,10 @@ namespace CNA.Tests;
 /// SoundEffect.GetSampleDuration/GetSampleSizeInBytes are pure arithmetic (see
 /// ../../src/CNA.Framework/Audio/SoundEffect.cs) -- no native dependency, so these run without a
 /// real cna-native, unlike SoundEffect's own constructors (which create a native resource
-/// immediately, so they're untestable here the same way Texture2D's constructor is).
+/// immediately, so they're untestable here the same way Texture2D's constructor is) *on their
+/// success path*. Their argument-validation failure paths are testable, though: validation runs
+/// before the native call, so a constructor call with bad arguments throws in pure managed code
+/// and never reaches native at all -- see the Constructor_* tests below.
 /// </summary>
 public class SoundEffectTests
 {
@@ -78,5 +81,61 @@ public class SoundEffectTests
     public void GetSampleSizeInBytes_NegativeDuration_Throws()
     {
         Assert.Throws<ArgumentException>(() => SoundEffect.GetSampleSizeInBytes(TimeSpan.FromSeconds(-1), 44100, AudioChannels.Mono));
+    }
+
+    [Fact]
+    public void GetSampleDuration_UndefinedChannelsValue_ThrowsInsteadOfDividingByZero()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => SoundEffect.GetSampleDuration(100, 44100, (AudioChannels)0));
+    }
+
+    [Fact]
+    public void GetSampleSizeInBytes_UndefinedChannelsValue_ThrowsInsteadOfSilentlyReturningZero()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => SoundEffect.GetSampleSizeInBytes(TimeSpan.FromSeconds(1), 44100, (AudioChannels)0));
+    }
+
+    [Fact]
+    public void Constructor_OffsetPlusCountOverflowsInt32_ThrowsRatherThanWrappingPastValidation()
+    {
+        // offset + count would overflow int32 and wrap negative if checked with a naive
+        // "offset + count > buffer.Length" comparison, silently passing validation it should
+        // fail. Must still throw ArgumentException, not reach the native call with a bad pointer.
+        var buffer = new byte[16];
+
+        Assert.Throws<ArgumentException>(() => new SoundEffect(buffer, int.MaxValue - 5, 20, 44100, AudioChannels.Mono, 0, 0));
+    }
+
+    [Fact]
+    public void Constructor_OffsetBeyondBufferLength_Throws()
+    {
+        var buffer = new byte[16];
+
+        Assert.Throws<ArgumentException>(() => new SoundEffect(buffer, 20, 0, 44100, AudioChannels.Mono, 0, 0));
+    }
+
+    [Fact]
+    public void Constructor_NegativeLoopStart_Throws()
+    {
+        var buffer = new byte[16];
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SoundEffect(buffer, 0, buffer.Length, 44100, AudioChannels.Mono, -1, 0));
+    }
+
+    [Fact]
+    public void Constructor_NegativeLoopLength_Throws()
+    {
+        var buffer = new byte[16];
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SoundEffect(buffer, 0, buffer.Length, 44100, AudioChannels.Mono, 0, -1));
+    }
+
+    [Fact]
+    public void Constructor_UndefinedChannelsValue_Throws()
+    {
+        var buffer = new byte[16];
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SoundEffect(buffer, 0, buffer.Length, 44100, (AudioChannels)0, 0, 0));
     }
 }

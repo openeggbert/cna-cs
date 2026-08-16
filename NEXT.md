@@ -11,6 +11,54 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Third `/code-review high` pass, over the `SoundEffect`/`SoundEffectInstance` commit (2026-08-16, session 6 continued)
+
+Ran the same review discipline a third time. Found three real, fixed bugs
+in `SoundEffect.cs`, none of them in the parts checked against the real
+C++ engine's documented semantics (those held up) -- all three were in
+validation code this session wrote itself, not reproduced from anywhere:
+- **Integer overflow**: the constructor's `offset + count > buffer.Length`
+  bounds check can overflow `int32` and wrap negative for an adversarial
+  `(offset, count)` pair, silently passing validation it should fail and
+  handing native code an out-of-bounds pointer. Rewritten as
+  `offset > buffer.Length || count > buffer.Length - offset` — the
+  subtraction form can't overflow once `offset <= buffer.Length` is
+  already established by the first half of the check.
+- **Division by zero**: `AudioChannels` is a plain enum with no CLR-enforced
+  range, so `(AudioChannels)0` is a legal cast that reached
+  `GetSampleDuration`'s `blockAlign = 2 * (int)channels` and divided by
+  zero; the sibling `GetSampleSizeInBytes` had the same gap but failed
+  silently instead (multiplied by 0, always returned 0 bytes). Added a
+  shared `ValidateChannels` check, used by both plus the constructor.
+- **Unvalidated loop parameters**: `loopStart`/`loopLength` were passed
+  straight to native with no check at all — not even non-negative, unlike
+  every other constructor parameter. Added `ThrowIfNegative` for both;
+  deliberately did *not* try to validate they fit within the sample count
+  implied by `count` (documented as a real, intentional gap — that
+  validation needs the same channel/bit-depth interpretation the native
+  side already owns).
+
+All three are now covered by regression tests in `SoundEffectTests.cs`,
+including ones that exercise the *validation failure path* of
+`SoundEffect`'s constructor without needing native code at all — validation
+runs and throws before the native call is ever reached, so a bad-argument
+test never touches `cna_soundeffect_create`. This is a real, useful
+distinction worth remembering for any future native-backed constructor: the
+success path needs a real `cna-native` to test, but the validation-failure
+paths usually don't, and are worth testing even when the type as a whole
+"can't be tested."
+
+The fourth finding from this pass (`ContentManager.Load<T>`'s per-type
+`if`/`typeof` chain, now three deep across two files, could be a registry
+instead) was judged not worth acting on: it is a pre-existing pattern from
+before this session (already used for `Texture2D`/`SpriteFont`), extended
+consistently rather than newly introduced, and replacing it now would be a
+speculative refactor of already-shipped, tested code for a marginal
+maintainability gain, not a bug fix.
+
+136/136 tests passing (was 129 going into this pass, +7 new regression
+tests); `dotnet build` clean.
+
 ## `SoundEffect`/`SoundEffectInstance` (2026-08-16, session 6 -- after the weekly Claude Max 20x limit reset)
 
 > User's weekly limit reset and they asked to keep working autonomously
