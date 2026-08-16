@@ -1,0 +1,61 @@
+using System.Collections;
+using System.Diagnostics.CodeAnalysis;
+
+namespace CNA.Graphics;
+
+/// <summary>
+/// Real XNA's <c>ModelMeshCollection</c> -- same int/name-indexer shape as
+/// <see cref="ModelBoneCollection"/>, confirmed against the real openeggbert/cna C++ engine's own
+/// <c>ModelMeshCollection</c>.
+/// </summary>
+public class ModelMeshCollection : IEnumerable<ModelMesh>
+{
+    private readonly List<ModelMesh> _meshes;
+
+    internal ModelMeshCollection(List<ModelMesh> meshes)
+    {
+        _meshes = meshes;
+    }
+
+    public ModelMesh this[int index] => _meshes[index];
+
+    public ModelMesh this[string name]
+    {
+        get
+        {
+            if (TryGetValue(name, out ModelMesh? mesh))
+            {
+                return mesh;
+            }
+
+            throw new KeyNotFoundException($"A mesh named '{name}' was not found in this collection.");
+        }
+    }
+
+    public int Count => _meshes.Count;
+
+    public bool TryGetValue(string meshName, [NotNullWhen(true)] out ModelMesh? value)
+    {
+        ArgumentNullException.ThrowIfNull(meshName);
+
+        foreach (ModelMesh mesh in _meshes)
+        {
+            if (mesh.Name == meshName)
+            {
+                value = mesh;
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
+    public bool Contains(ModelMesh item) => _meshes.Contains(item);
+
+    public List<ModelMesh>.Enumerator GetEnumerator() => _meshes.GetEnumerator();
+
+    IEnumerator<ModelMesh> IEnumerable<ModelMesh>.GetEnumerator() => _meshes.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => _meshes.GetEnumerator();
+}

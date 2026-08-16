@@ -4,7 +4,7 @@
 math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
 `RenderTarget2D`, `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the
 zero-ABI vertex-format layer, `VertexBuffer`/`IndexBuffer`,
-`GraphicsDevice`'s draw calls, and `Effect`/`BasicEffect` done; `Model` and
+`GraphicsDevice`'s draw calls, `Effect`/`BasicEffect`, and `Model` done;
 `Song`/`MediaPlayer` not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
@@ -380,10 +380,52 @@ Split by whether the type needs the (still nonexistent) native ABI:
       unit-testable without a real `cna-native`, same reasoning as
       `VertexBuffer`/`IndexBuffer`'s constructor-validation-only
       testability split.
-- [ ] **Still not started, still blocked the same way:** `Model`
-      (native-backed; the real C++ engine likely has a working,
-      renderer-backend-wired implementation too, same lucky break as
-      everything above, but not yet checked this session), `Song`/
+- [x] **`Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart` and their four
+      collection types (`ModelBoneCollection`/`ModelMeshCollection`/
+      `ModelMeshPartCollection`/`ModelEffectCollection`), plus
+      `IEffectMatrices`/`IEffectFog`/`IEffectLights` — done, 2026-08-16
+      (session 6 continued yet further still again once more).** Fifth
+      slice of the 3D pipeline, and the first one that needed **zero new
+      native ABI surface** — the real `openeggbert/cna` C++ engine's
+      `modules/graphics/` `Model`/`ModelMesh`/`ModelMeshPart`/`ModelBone`
+      are pure C++ object composition, not renderer-handle-backed types at
+      all: `Model.Draw()`/`ModelMesh.Draw()` are just C++ logic that calls
+      already-existing native-backed primitives (`SetVertexBuffer`,
+      `Indices`, `Effect.Apply()`, `DrawIndexedPrimitives`) — confirmed by
+      reading the real engine's own `Model.cpp`/`ModelMesh.cpp`/
+      `ModelMeshPart.cpp`, not invented. Every constructor, property, and
+      the exact `Draw()` algorithm (absolute-bone-transform composition via
+      a reused buffer, then per-mesh-effect `World = boneTransform * world`
+      assignment through `IEffectMatrices`) is reproduced from that source.
+      `IEffectMatrices`/`IEffectFog`/`IEffectLights` (real XNA interfaces,
+      confirmed against the C++ engine's own headers) were added to
+      `CNA.Graphics.BasicEffect` specifically because `Model.Draw()` needs
+      to set `World`/`View`/`Projection` on whatever effect each mesh part
+      uses without knowing its concrete type — `IEffectFog`/`IEffectLights`
+      were free additions once `IEffectMatrices` existed, since
+      `BasicEffect`'s existing properties already matched their members
+      exactly. Real XNA's own `Model`/`ModelBone`/`ModelMesh`/
+      `ModelMeshPart` constructors and several setters (`ModelBone.AddChild`,
+      `ModelMeshPart.SetVertexOffset`/etc., `ModelEffectCollection.Add`/
+      `Remove`) are content-pipeline-only (`internal`) in real XNA — this
+      project has no content pipeline / model-file loader (a separate, much
+      larger problem), so, matching the real C++ engine's own `CNAEXT`
+      markings exactly, all of these are public here: the *only* way to
+      obtain a `Model` in this repository right now is hand-building one.
+      **No `CNA.XnaCompat` mirror this pass** — deliberate, documented scope
+      cut: with no `ContentManager.Load<Model>` to produce a `Model` any
+      other way, a compat mirror's practical value is close to zero right
+      now, and it would roughly double this pass's surface (four more
+      wrapped/extended collection types, three more wrapped interfaces).
+      Follow-up once either `ContentManager.Load<Model>` exists or a real
+      caller needs `Microsoft.Xna.Framework.Graphics.Model` specifically
+      (plain `var`-typed consumption of `CNA.Graphics.Model` already works
+      today, same as `EffectTechnique`/`DirectionalLight`'s existing compat
+      gap). Verified: `dotnet build` clean across all 6 projects; `dotnet
+      test`: 214/214 passing (up from 189 — 25 new tests, all passing after
+      one test-ordering fix caught by the tests themselves, not a product
+      bug — see `NEXT.md`). `samples/HelloGame` re-verified unaffected.
+- [ ] **Still not started, still blocked the same way:** `Song`/
       `MediaPlayer` (no public constructor in real XNA for `Song` at all —
       would need native streaming-audio-format loading, a different and
       harder problem than `SoundEffect`'s raw-PCM-buffer escape hatch

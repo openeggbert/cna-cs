@@ -63,7 +63,16 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     Projection, DiffuseColor/EmissiveColor/SpecularColor/SpecularPower,
     AmbientLightColor/DirectionalLight0-2/EnableDefaultLighting, fog,
     TextureEnabled/Texture, VertexColorEnabled, Alpha, LightingEnabled) --
-    Apply() itself is native-backed, see below
+    Apply() itself is native-backed, see below,
+    Model/ModelBone/ModelMesh/ModelMeshPart and their collection types
+    (ModelBoneCollection/ModelMeshCollection/ModelMeshPartCollection/
+    ModelEffectCollection) -- unlike everything else in this list, this
+    entire feature needs zero native ABI, not just a construction-time
+    escape hatch: Model.Draw()/ModelMesh.Draw() are pure managed logic
+    built on top of already native-backed primitives (see below for why
+    drawing a Model end to end is still blocked anyway),
+    IEffectMatrices/IEffectFog/IEffectLights (interfaces, no state of
+    their own to be native-backed)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -76,9 +85,11 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Load<SpriteFont> -- capped at 256 glyphs, see plan.md),
     Effect.Apply/BasicEffect.Apply (EffectTechnique/EffectPass/
     DirectionalLight are pure scaffolding around this, no ABI of their own)
+    -- and by extension Model.Draw()/ModelMesh.Draw(), since drawing a
+    mesh part means calling the effect's Apply() partway through
 
 Not started at all:
-    Model, Song, MediaPlayer
+    Song, MediaPlayer
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -94,8 +105,17 @@ method surface and documented semantics. `BasicEffect` is grounded the same
 way, against `modules/graphics/`'s own working `BasicEffect` implementation
 -- every property, `EnableDefaultLighting()`'s exact default light values,
 and `Apply()`'s parameter-computation algorithm were read from its real
-source, not invented. See `plan.md` Phase 4 and `NEXT.md`'s per-session
-entries for the full detail on each.
+source, not invented. `Model`/`ModelMesh`/`ModelMeshPart`/`ModelBone` are
+grounded the strongest of any Phase 4 item so far: not just "shaped to
+match a real implementation" but built entirely out of already-native-backed
+primitives, needing no new native function at all -- see `plan.md` Phase 4
+for the detail. Note also that `Model`/its collection types have **no
+`CNA.XnaCompat` mirror yet** -- a deliberate scope cut, not an oversight,
+since there is no `ContentManager.Load<Model>` to produce one any other way
+right now; `var`-typed/chained consumption of the `CNA.Graphics`-namespaced
+types works fine in the meantime, same as `EffectTechnique`/
+`DirectionalLight`'s existing compat gap. See `plan.md` Phase 4 and
+`NEXT.md`'s per-session entries for the full detail on each.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and

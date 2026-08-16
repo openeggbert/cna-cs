@@ -11,6 +11,148 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart`/`IEffectMatrices`/`IEffectFog`/`IEffectLights` (2026-08-16, session 6 continued yet further still again once more still)
+
+> Picked up per `plan.md`'s own "still not started" pointer after the
+> `BasicEffect` review-and-fix round: `Model` was flagged as needing a
+> check for the same "real, working, not-yet-C-ABI-exposed C++
+> implementation" lucky break `SoundEffect`/`VertexBuffer`/`BasicEffect`
+> each had, before assuming it needed pure invention. It did -- and turned
+> out to need *more* of a lucky break than any of those: zero new native
+> ABI surface at all.
+
+**The big discovery: `Model` isn't a native-resource-backed type family in
+the real engine, it's pure object composition on top of ones that already
+exist.** Read `modules/graphics/`'s `Model.hpp`/`.cpp`,
+`ModelMesh.hpp`/`.cpp`, `ModelMeshPart.hpp`/`.cpp`, `ModelBone.hpp`/`.cpp`,
+and all four collection headers (`ModelBoneCollection`/`ModelMeshCollection`/
+`ModelMeshPartCollection`/`ModelEffectCollection`) in full before writing
+anything. `Model::Draw()`/`ModelMesh::Draw()` don't call any GPU/renderer
+API directly at all -- they're just C++ logic that calls the *already
+native-backed* primitives this session already built (`SetVertexBuffer`,
+`Indices`, `Effect::Apply()`/`EffectPass::Apply()`, `DrawIndexedPrimitives`).
+So the entire `Model` feature -- five classes plus four collections --
+needed **one new native ABI function total: zero.** This is a stronger
+version of the "escape hatch" pattern that's shown up repeatedly this
+session (`SpriteFont`'s raw-glyph constructor, `VertexDeclaration`'s stride
+arithmetic, `BasicEffect`'s zero-ABI-until-`Apply()` construction) --
+previous instances were "this *specific member* needs no native call,"
+this one is "this *entire feature* needs no native call, because it's
+built entirely out of already-native-backed pieces."
+
+**`Model::Draw()`'s algorithm, reproduced exactly, not approximated:**
+compute every bone's absolute (world-relative) transform once into a
+reused buffer (`dest[i] = bone.Transform` if root, else
+`bone.Transform * dest[bone.Parent.Index]` -- the real C++ code's own
+`sharedDrawBoneMatrices_` static buffer, reproduced as an instance field
+here rather than a `static`, since C++'s file-scope static would be a
+cross-instance data race waiting to happen in C# the moment two `Model`s
+draw on different threads, even though real XNA's own single-threaded
+assumption means it was never actually unsafe there either -- a case where
+literal fidelity to the C++ source would have *introduced* a new footgun,
+not preserved a real one, so this one detail was deliberately not copied
+verbatim). Then for each mesh, for each effect its parts use, cast to
+`IEffectMatrices` (throw `InvalidOperationException` if it doesn't
+implement that interface -- matches the real engine's `std::runtime_error`
+exactly), and set `World = boneAbsoluteTransform[boneIndex] * world`,
+`View = view`, `Projection = projection`, before finally calling
+`mesh.Draw()`.
+
+**`IEffectMatrices`/`IEffectFog`/`IEffectLights` added to `CNA.Graphics`,
+confirmed against the real engine's own headers, not invented.**
+`IEffectMatrices` is the one `Model.Draw()` actually needs (to set
+`World`/`View`/`Projection` on an effect without knowing its concrete
+type). `BasicEffect.World`/`View`/`Projection` are public *fields*
+(matching the real C++ engine's own field-not-property choice, confirmed
+by reading `BasicEffect.hpp` again for this) -- a field can't satisfy an
+interface property in C#, so `BasicEffect` needed an explicit interface
+implementation forwarding to the fields
+(`Matrix IEffectMatrices.World { get => World; set => World = value; }`),
+the identical shape the real C++ engine itself uses (`getWorldProperty()`/
+`setWorldProperty()` override methods wrapping the same public field).
+`IEffectFog`/`IEffectLights` were essentially free once `IEffectMatrices`
+existed: `BasicEffect`'s `FogColor`/`FogEnabled`/`FogEnd`/`FogStart`/
+`AmbientLightColor`/`DirectionalLight0-2`/`LightingEnabled`/
+`EnableDefaultLighting()` already matched every interface member's name
+and type exactly (they're real *properties*, not fields, so ordinary
+implicit interface implementation just worked -- no forwarding needed).
+
+**Real XNA's `ModelBone`/`ModelMesh`/`ModelMeshPart`/`ModelEffectCollection`
+have no public construction/mutation surface at all -- content-pipeline-only
+(`internal`) -- because real games only ever get a populated model back
+from `Content.Load<Model>()`.** This project has no model-file loader
+(parsing a real model format is a separate, much larger problem than
+anything else built this session). The real C++ engine resolves this by
+marking the equivalent constructors/setters `CNAEXT` (public, documented
+deviations) specifically so hand-written code has *some* way to build a
+model at all -- reproduced verbatim here rather than re-deciding
+independently, matching this session's own established "when the real
+engine already made this exact call, don't re-litigate it" habit.
+`ModelBone.AddChild`, `ModelMeshPart`'s six `SetXxx` methods, and
+`ModelEffectCollection.Add`/`Remove` are all public for this reason.
+
+**`ModelMeshPart.Effect`'s setter auto-maintains its parent mesh's
+`Effects` collection, reproduced from `ModelMeshPart::setEffectProperty`
+exactly: adds the new effect only if no sibling part already references
+it, removes the old effect only if this was the last part still using
+it.** This surfaced a genuine, non-obvious ordering requirement while
+writing the very first `Model.Draw()` test: setting `Effect` via an object
+initializer *before* the part belongs to a mesh (i.e. before `ModelMesh`'s
+constructor sets `part.Parent`) is a no-op for registration purposes --
+`Parent` is still null when the setter runs, so the "add to
+`Parent.Effects`" branch never executes, and nothing retroactively
+re-registers it once `Parent` actually gets set. This matches the real
+C++ code's behavior exactly (it's a raw field assignment in `ModelMesh`'s
+constructor, not a re-invocation of `setEffectProperty`), so it's not a
+bug -- but it *did* fail two tests on first run before the cause was
+understood, both fixed by reordering the test (construct parts, construct
+the mesh, *then* assign each part's `Effect`) rather than changing the
+product code. Added a dedicated regression test for the ordering itself
+(`Effect_Setter_BeforePartHasParent_DoesNotRegisterOnMesh`) so this
+behavior stays intentional and documented rather than being a trap for
+the next session. **Lesson worth carrying forward:** when a hand-built
+object graph has this "later construction step wires up a link that
+earlier property setters silently depend on" shape, the right fix for a
+test failure is almost always reordering the test to match the real
+required construction sequence, not assuming the product logic is wrong --
+but only *after* actually reading why (here: tracing that `mesh.Effects`
+came back empty, then finding the `Parent is not null` guard), not by
+reflexively reordering and hoping.
+
+**Test technique worth reusing:** `Model.Draw()`'s bone-transform/matrix-
+assignment logic runs entirely in managed code *before* `mesh.Draw()`'s
+first native call, so `Draw_SetsEffectMatricesBeforeDrawingMesh` lets the
+expected native failure (no real `cna-native` in this environment) happen
+via `Record.Exception(...)` and then asserts on the effect's `World`/
+`View`/`Projection` having already been set correctly -- same idea as
+`BasicEffectTests`' `FogVectorForTests`/`EyePositionWorldForTests`
+internal-property exposure, but applied here by simply tolerating (not
+suppressing) the native call's failure instead of needing a dedicated
+test-only accessor, since the state under test is on a plain test-only
+`RecordingEffect : Effect, IEffectMatrices`, not on the type actually
+being exercised.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects (0 warnings after fixing two `CS8603` nullability warnings on
+`ModelBoneCollection`/`ModelMeshCollection`'s name-indexer, both needing a
+`[NotNullWhen(true)]` annotation on their `TryGetValue` `out` parameter for
+the compiler to trust the null-check-then-throw pattern). `dotnet test
+CNA.sln`: 214/214 passing (up from 189 -- 25 new tests across
+`ModelTests.cs`/`ModelMeshPartTests.cs`, two of which failed on first run
+for the real-but-non-obvious ordering reason above, both fixed by
+correcting the test). `samples/HelloGame` re-verified unaffected.
+
+**Where to pick up next:** `Song`/`MediaPlayer` is the last explicitly-flagged
+Phase 4 item, and a harder problem than everything done so far this
+session even with the "check the real C++ engine first" habit applied --
+real XNA's `Song` has no public constructor at all (unlike every
+native-backed type built this session, all of which had *some* real public
+escape hatch), so it would need native streaming-audio-format loading
+designed close to from scratch. Worth checking `modules/audio/` for a
+`Song`/`MediaPlayer` implementation before assuming that, though -- the
+`Model` discovery above is a reminder not to assume a feature is
+unusually hard without actually looking first.
+
 ## Seventh `/code-review high` pass, over the `BasicEffect` commit (2026-08-16, session 6 continued yet further still again once more)
 
 Ran the review a seventh time. The agent independently rebuilt and re-ran

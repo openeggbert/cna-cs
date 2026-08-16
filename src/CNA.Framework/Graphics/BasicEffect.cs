@@ -21,8 +21,20 @@ namespace CNA.Graphics;
 /// (<c>DualTextureEffect</c>-only), environment/cube mapping, skinning (bone transforms),
 /// PBR, and fresnel -- none of which <c>BasicEffect</c> itself uses; see
 /// <c>CnaBasicEffectParams</c>'s own doc comment for the full reduced-field-set reasoning.
+///
+/// Implements <see cref="IEffectMatrices"/>/<see cref="IEffectFog"/>/<see cref="IEffectLights"/>,
+/// same as the real C++ engine's own <c>BasicEffect</c> (confirmed against its header, not
+/// invented) -- <see cref="Model.Draw"/> is the reason <see cref="IEffectMatrices"/> exists at
+/// all in this project. <see cref="IEffectFog"/>/<see cref="IEffectLights"/>'s members already
+/// match this class's own property names/types exactly, so they're implicitly satisfied; only
+/// <see cref="IEffectMatrices"/> needs an explicit forwarding implementation, because
+/// <see cref="World"/>/<see cref="View"/>/<see cref="Projection"/> are public fields here (matching
+/// the real C++ engine's own field-not-property choice) and a field cannot satisfy an interface
+/// property directly in C# -- the real C++ engine hits the same shape mismatch against its own
+/// <c>IEffectMatrices</c> and resolves it the identical way, with explicit override methods
+/// wrapping the field.
 /// </summary>
-public class BasicEffect : Effect
+public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     private Texture2D? _texture;
 
@@ -30,6 +42,24 @@ public class BasicEffect : Effect
     public Matrix View = Matrix.Identity;
     public Matrix Projection = Matrix.Identity;
     public bool VertexColorEnabled;
+
+    Matrix IEffectMatrices.World
+    {
+        get => World;
+        set => World = value;
+    }
+
+    Matrix IEffectMatrices.View
+    {
+        get => View;
+        set => View = value;
+    }
+
+    Matrix IEffectMatrices.Projection
+    {
+        get => Projection;
+        set => Projection = value;
+    }
 
     public BasicEffect(GraphicsDevice graphicsDevice)
         : base(graphicsDevice)
