@@ -46,19 +46,8 @@ public class SoundEffect : IDisposable
         byte[] buffer, int offset, int count, int sampleRate, AudioChannels channels, int loopStart, int loopLength)
     {
         ArgumentNullException.ThrowIfNull(buffer);
-        ArgumentOutOfRangeException.ThrowIfNegative(offset);
-        ArgumentOutOfRangeException.ThrowIfNegative(count);
-        // Checked as offset > Length / count > (Length - offset) rather than offset + count >
-        // Length -- the addition form can integer-overflow for adversarial (offset, count) pairs
-        // and wrap negative, silently passing a check it should fail. This form can't overflow:
-        // once offset <= buffer.Length is established, buffer.Length - offset is a safe,
-        // non-negative subtraction.
-        if (offset > buffer.Length || count > buffer.Length - offset)
-        {
-            throw new ArgumentException($"{nameof(offset)} + {nameof(count)} exceeds the buffer length.");
-        }
-
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sampleRate, 0);
+        BufferRangeValidation.ValidateRange(buffer.Length, offset, count);
         ArgumentOutOfRangeException.ThrowIfNegative(loopStart);
         ArgumentOutOfRangeException.ThrowIfNegative(loopLength);
         ValidateChannels(channels);

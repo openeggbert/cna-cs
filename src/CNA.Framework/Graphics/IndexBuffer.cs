@@ -48,12 +48,7 @@ public class IndexBuffer : IDisposable
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
-        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
-        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
-        if (startIndex > data.Length || elementCount > data.Length - startIndex)
-        {
-            throw new ArgumentException($"{nameof(startIndex)} + {nameof(elementCount)} exceeds the data array's length.");
-        }
+        BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
 
         fixed (T* basePtr = data)
         {
@@ -74,12 +69,7 @@ public class IndexBuffer : IDisposable
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
-        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
-        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
-        if (startIndex > data.Length || elementCount > data.Length - startIndex)
-        {
-            throw new ArgumentException($"{nameof(startIndex)} + {nameof(elementCount)} exceeds the data array's length.");
-        }
+        BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
 
         fixed (T* basePtr = data)
         {

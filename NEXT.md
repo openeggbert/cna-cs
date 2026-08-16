@@ -11,6 +11,63 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Fifth `/code-review high` pass, over the `VertexBuffer`/`IndexBuffer` commit (2026-08-16, session 6 continued once more)
+
+Ran the review a fifth time. Its own last-angle result came back
+inconclusive on first read, so the recap in the completion notification
+under-reported the findings — had to resume the agent
+(`SendMessage`) and ask it to restate the full JSON before acting, rather
+than proceed on a partial summary. Worth remembering: if a review
+notification's `<result>` reads like a status update ("no changes to the
+findings... the review stands as delivered") rather than the findings
+themselves, that's a sign the full JSON is sitting one message earlier in
+that agent's own history — resume it and ask, don't guess from the recap.
+
+Two real, fixed issues, plus one architectural observation left as a note
+rather than a code change:
+- **Validation-ordering bug**: `VertexBuffer.SetData`/`GetData`'s 5-arg
+  overload checked `startIndex`/`elementCount` bounds *before*
+  `vertexStride`'s positivity, so a caller with both wrong got the wrong
+  exception (bounds-related `ArgumentException`, masking the also-invalid
+  `vertexStride`). Reordered so all simple scalar checks
+  (`offsetInBytes`, `vertexStride`) run before the compound bounds check.
+- **Real duplication, now proven by recurrence**: the overflow-safe
+  `startIndex`/`elementCount`-fits-within-length check (the same one
+  `SoundEffect`'s constructor already had its own overflow bug fixed in,
+  two review passes ago) had been copy-pasted five times total across
+  `SoundEffect.cs`'s constructor and `VertexBuffer.cs`/`IndexBuffer.cs`'s
+  `SetData`/`GetData`. Extracted into a shared
+  `BufferRangeValidation.ValidateRange(length, startIndex, elementCount)`
+  (root `CNA` namespace, `internal`, visible to both `CNA.Audio` and
+  `CNA.Graphics` since they're the same project) and switched all five
+  call sites to it. **Worth reaching for by name** the next time a
+  native-backed data-transfer method needs this exact check, rather than
+  copy-pasting a sixth time — `BasicEffect`/`Model`'s eventual `SetData`-shaped
+  methods (per the previous entry's "where to pick up next") are the
+  likely next candidate.
+- **Left as a note, not a code change**: the review flagged that
+  `CNA.XnaCompat.VertexDeclaration.Framework` (an `internal` accessor
+  exposing a wrapped `CNA.Graphics` instance) is a different shape from
+  `RenderTarget2D.CreateNativeHandle` (a static factory that performs a
+  native call and returns a raw handle) for "compat type reaches into
+  native/wrapped state for a sibling constructor." Both are correct for
+  the sub-problem each actually solves (unwrap-existing vs.
+  create-and-return-raw-handle) — not proposing to force them into one
+  shape, but noting here for whoever adds the next wrap-and-forward compat
+  type: check whether the need is "get the thing I already wrapped" (use
+  the `Framework`-accessor shape) or "create a new native resource my base
+  class also needs to create" (use the `CreateNativeHandle`-factory shape)
+  before picking one by pattern-matching on whichever example is closest
+  at hand.
+
+No new tests possible for the `VertexBuffer`/`GetData`/`SetData` ordering
+fix specifically (same testability limitation as before -- `SetData` needs
+an already-constructed instance, which needs real native code); the
+`SoundEffect`/`BufferRangeValidation` behavior is still covered by the
+existing overflow regression test, now exercising the shared helper
+instead of the inlined check it replaced. 173/173 tests still passing;
+`dotnet build` clean; `samples/HelloGame` re-verified unaffected.
+
 ## `VertexBuffer`/`IndexBuffer` (2026-08-16, session 6 continued still further)
 
 > Continuation of the vertex-format work, per its own "where to pick up
