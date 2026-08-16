@@ -48,3 +48,7 @@ runtimes/**/native/*.dylib
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# Stray tool/session output not produced by this project
+.output.txt
+assets_tmp/
