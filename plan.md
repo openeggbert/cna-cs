@@ -3,8 +3,8 @@
 **Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
 math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
 `RenderTarget2D`, `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the
-zero-ABI vertex-format layer, `VertexBuffer`/`IndexBuffer`, and
-`GraphicsDevice`'s draw calls done; `Effect`/`BasicEffect`, `Model`, and
+zero-ABI vertex-format layer, `VertexBuffer`/`IndexBuffer`,
+`GraphicsDevice`'s draw calls, and `Effect`/`BasicEffect` done; `Model` and
 `Song`/`MediaPlayer` not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
@@ -334,18 +334,61 @@ Split by whether the type needs the (still nonexistent) native ABI:
       constructors; `SetVertexBuffer`/`Indices`'s setter call native
       unconditionally (nothing to validate first) and are not testable
       here, same as `SetRenderTarget`.
-- [ ] **Still not started, still blocked the same way:** `BasicEffect`/
-      `Effect`/`EffectParameter`/`EffectPass`/`EffectTechnique`, `Model`
-      (native-backed; the real C++ engine has full, working, tested,
-      renderer-backend-wired implementations of these too, same lucky
-      break `SoundEffect`/`VertexBuffer` had, but `BasicEffect` alone needs
-      a large property surface — World/View/Projection, lighting,
-      texturing, fog — this is now the largest remaining well-grounded
-      piece), `Song`/`MediaPlayer` (no public constructor in real XNA for
-      `Song` at all — would need native streaming-audio-format loading, a
-      different and harder problem than `SoundEffect`'s raw-PCM-buffer
-      escape hatch solved). Blocked on the native ABI existing upstream,
-      same as everything in Phase 2/3.
+- [x] **`Effect`/`BasicEffect`/`EffectTechnique`/`EffectPass`/
+      `EffectPassCollection`/`DirectionalLight` — done, 2026-08-16 (session
+      6 continued yet further still again).** Fourth slice of the 3D
+      pipeline, and — same lucky break `SoundEffect`/`VertexBuffer` had —
+      grounded against the real `openeggbert/cna` C++ engine's own working,
+      tested `modules/graphics/` `BasicEffect` implementation, not
+      invented: every property, `EnableDefaultLighting()`'s exact default
+      three-light rig, and `OnApply()`'s parameter-computation algorithm
+      are read directly from that implementation's own headers and
+      `BasicEffect.cpp`'s `FillGpuDrawParams` method. Confirmed a second
+      zero-ABI-until-Apply() escape hatch this session: constructing a
+      `BasicEffect` and setting any of its properties is pure managed
+      object state, no native call, same as `SpriteFont`'s own — only
+      `Apply()` (via `Effect.Apply` → `BasicEffect.OnApply`) crosses into
+      native code, through one new `cna_graphics_device_apply_basic_effect`
+      native call taking a `CnaBasicEffectParams` struct (a plain mutable
+      struct with object-initializer construction, not a large positional
+      constructor — see `NativeStructs.cs`'s own doc comment for why that
+      shape was chosen over the first draft). `EffectTechnique`/
+      `EffectPass`/`EffectPassCollection` are minimal scaffolding so
+      `effect.CurrentTechnique.Passes[0].Apply()` compiles and works, not a
+      general effect-parameter system (`EffectParameter` itself is not
+      implemented — nothing in `BasicEffect`'s own surface needs it).
+      `CNA.XnaCompat.BasicEffect` deliberately extends
+      `CNA.Graphics.BasicEffect` directly rather than getting its own
+      compat `Effect`/`EffectTechnique`/`EffectPass`/`DirectionalLight`
+      hierarchy — same "preserve the real logic's lineage over namespace
+      purity" trade-off `RenderTarget2D` already made, and required here
+      specifically because `DirectionalLight0/1/2` are constructed once
+      inside the base class's own constructor with no seam for a compat
+      subclass to intervene safely (see `NEXT.md` for the full reasoning,
+      including why this is *not* a case for the `Indices`-style
+      downcast-passthrough fix). Real, narrow, documented compat gap as a
+      result: `effect.CurrentTechnique`/`.Passes`/`DirectionalLight0-2` are
+      inherited unchanged and return `CNA.Graphics`-namespaced types, not
+      XNA-namespaced ones — ordinary `var`-typed/chained usage
+      (`effect.CurrentTechnique.Passes[0].Apply();`,
+      `effect.DirectionalLight0.Enabled = true;`) still compiles and works;
+      only an explicit XNA-namespaced type declaration for one of those
+      three would fail to compile. `OnApply`'s pure-computation halves
+      (`ComputeFogVector`/`ComputeLightingParams`'s eye-position) are
+      exposed via `internal`-only test-only properties
+      (`FogVectorForTests`/`EyePositionWorldForTests`) so they're directly
+      unit-testable without a real `cna-native`, same reasoning as
+      `VertexBuffer`/`IndexBuffer`'s constructor-validation-only
+      testability split.
+- [ ] **Still not started, still blocked the same way:** `Model`
+      (native-backed; the real C++ engine likely has a working,
+      renderer-backend-wired implementation too, same lucky break as
+      everything above, but not yet checked this session), `Song`/
+      `MediaPlayer` (no public constructor in real XNA for `Song` at all —
+      would need native streaming-audio-format loading, a different and
+      harder problem than `SoundEffect`'s raw-PCM-buffer escape hatch
+      solved). Blocked on the native ABI existing upstream, same as
+      everything in Phase 2/3.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

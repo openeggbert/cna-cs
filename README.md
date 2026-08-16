@@ -49,13 +49,18 @@ needs no native ABI at all. Everything else native-backed (`Game`,
 `ContentManager`, `Keyboard`, `Mouse`, `GamePad`) has its managed side built
 and compiles, but does **not** yet work end to end, because it depends on a
 stable C ABI in [`openeggbert/cna`](https://github.com/openeggbert/cna) that
-has not been implemented there yet (`modules/c-api/`). See
+has not been implemented there yet (`modules/c-api/`). `BasicEffect`
+straddles both groups: its constructor and full property surface
+(`World`/`View`/`Projection`, lighting, fog, texturing,
+`EnableDefaultLighting()`) are real and tested today with no native
+dependency, same escape hatch `SpriteFont` found, but `Apply()` itself is
+native-backed like everything else in this paragraph. See
 [`plan.md`](plan.md) for the full phase-by-phase status and
 [`NEXT.md`](NEXT.md) for the session-by-session history of how it got here
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 181 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 189 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

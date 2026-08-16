@@ -11,6 +11,158 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `Effect`/`BasicEffect`/`EffectTechnique`/`EffectPass`/`DirectionalLight` (2026-08-16, session 6 continued yet further still again)
+
+> Fourth slice of the 3D pipeline, per the previous entry's own "where to
+> pick up next" pointer -- the largest single addition this session, as
+> flagged in advance. Confirmed the same research-before-design payoff one
+> more time: the real `openeggbert/cna` C++ engine's `modules/graphics/`
+> has a full, working, tested `BasicEffect` implementation (headers plus
+> `BasicEffect.cpp`), not yet C-ABI-exposed but real -- every property,
+> `EnableDefaultLighting()`'s exact numeric literals, and the
+> `Apply()`-time parameter-computation algorithm were read from it, not
+> invented.
+
+**A second zero-ABI-until-Apply() escape hatch, same shape `SpriteFont`
+found first:** the real C++ constructor chain for `BasicEffect` is pure
+object state -- no renderer/GPU handle allocation happens until a draw call
+actually applies the effect. So constructing a `BasicEffect` and setting
+any of its properties (`World`/`View`/`Projection`, `DiffuseColor`,
+`SpecularPower`, `AmbientLightColor`, `DirectionalLight0-2`'s own
+properties, `FogEnabled`/`FogColor`/`FogStart`/`FogEnd`, `TextureEnabled`/
+`Texture`, `VertexColorEnabled`, `Alpha`, `LightingEnabled`,
+`PreferPerPixelLighting`) is real, tested, native-independent code today --
+only `Apply()` (via `Effect.Apply` → `BasicEffect.OnApply`) crosses into
+native code, through one new native call,
+`cna_graphics_device_apply_basic_effect(CnaHandle device, in
+CnaBasicEffectParams effectParams)`.
+
+**`CnaBasicEffectParams` shape, and a self-correction before it shipped:**
+first draft was a ~33-parameter positional constructor, mirroring the
+"validate everything up front" habit this session's earlier native-backed
+constructors (`SoundEffect`, `VertexBuffer`) established. Reconsidered
+before writing any call site: a constructor that long is far more
+error-prone (parameter-order transposition) than the risk it was guarding
+against (this struct has no validation to perform -- every field is either
+already-validated managed state or a derived computation). Switched to a
+plain mutable struct with no constructor, populated via C# object-initializer
+syntax at the one call site (`OnApply()`) instead -- named-field assignment
+makes a transposition bug structurally impossible instead of just less
+likely. `CnaMatrix16` (a `[InlineArray(16)]` column-major float buffer, same
+marshalling pattern `CnaGlyphBuffer` already proved works through
+`[LibraryImport]`) carries `World` across the ABI; `WriteColumnMajor`
+transposes from this project's row-major `Matrix` at the call site rather
+than changing `Matrix`'s own convention.
+
+**`OnApply()` reproduces the real `FillGpuDrawParams` algorithm exactly,
+not approximately:**
+- Diffuse baking: when lighting is off, `EmissiveColor` gets folded into
+  the forwarded diffuse (`DiffuseColor + EmissiveColor`) before the
+  alpha-premultiply, because the lit-path material computation that would
+  otherwise apply `EmissiveColor` separately never runs -- the real code's
+  own comment explains this is deliberate, not an oversight, so it was
+  reproduced rather than "simplified."
+- Eye position: only computed when lit, via `Matrix.Invert(View).Translation`
+  -- exercised directly in `EyePositionWorld_WhenLightingEnabled_RecoversCameraPosition`,
+  which builds a `View` via `Matrix.CreateLookAt` from a known camera
+  position and confirms the round-trip recovers it (this doubles as a
+  fresh cross-check of `Matrix.Invert`, already tested elsewhere, against a
+  second independent formula).
+- Fog vector: zero when fog is off; `(0,0,0,1)` (fully fogged) for the
+  degenerate `FogStart == FogEnd` case (avoids the divide-by-zero the real
+  code also explicitly guards against); otherwise derived from
+  `World * View`'s third row, scaled by `1/(FogStart-FogEnd)` -- verified
+  against a hand-computed value in
+  `FogVector_IdentityWorldView_MatchesHandComputedValue` (worked the
+  arithmetic out by hand for `FogStart=10, FogEnd=20` before writing the
+  assertion, rather than trusting the code's own output as the oracle).
+
+Both derived computations are pulled out into private helpers
+(`ComputeLightingParams`/`ComputeFogVector`) with `internal`-only
+test-exposing properties (`EyePositionWorldForTests`/`FogVectorForTests`)
+wrapping them -- the same "expose the pure-computation half for direct
+testing since the public entry point needs native code" split
+`VertexBuffer`/`IndexBuffer`'s constructor-validation-only testability
+already established, applied here to a return-value computation instead of
+an argument-validation one.
+
+**Constructor default worth double-checking against the real engine again
+later:** only `DirectionalLight0` starts `Enabled = true` (confirmed
+against the real C++ constructor, which calls
+`DirectionalLight0.setEnabledProperty(true);` and nothing equivalent for
+`1`/`2`) -- verified with its own dedicated test
+(`Constructor_OnlyDirectionalLight0StartsEnabled`). The not-yet-configured
+lights' `Direction`/color defaults (`Vector3.Down`, zero diffuse/specular)
+are *not* sourced from the research -- nothing in the C++ implementation
+specifies what an unconfigured, disabled light's fields start as, since
+real code never reads them before `EnableDefaultLighting()` or manual
+configuration sets them. Flagged as a reasonable-but-unverified default in
+the constructor's own doc comment, matching this session's established
+practice of saying so rather than letting an invented value look
+equally-grounded as the researched ones next to it.
+
+**Compat-layer trade-off, same shape `RenderTarget2D` already chose, for a
+new reason this time:** considered giving `CNA.XnaCompat` its own
+`Effect`/`EffectTechnique`/`EffectPass`/`DirectionalLight` hierarchy
+mirroring `CNA.Graphics`'s, the same way most other compat types wrap
+rather than extend. Rejected because `DirectionalLight0/1/2` are
+constructed exactly once, inside `CNA.Graphics.BasicEffect`'s own
+constructor, with no seam for a compat subclass to intervene -- giving them
+a compat-typed wrapper would need either duplicating construction (risking
+`OnApply()`'s computation reading a *different* light object than compat
+code mutated -- a new instance of the exact bug class the `Indices`
+shadow-field fix, two entries below, exists to prevent) or an unsafe
+downcast of an object that was genuinely never constructed as any compat
+subclass. So `CNA.XnaCompat.BasicEffect` extends `CNA.Graphics.BasicEffect`
+directly instead, same as `RenderTarget2D` extending `CNA.XnaCompat`'s own
+`Texture2D`. Real, narrow, documented compat gap as a result:
+`effect.CurrentTechnique`, `.Passes`, and `DirectionalLight0/1/2` are all
+inherited unchanged and return `CNA.Graphics`-namespaced types -- ordinary
+`var`-typed/chained call-site usage
+(`effect.CurrentTechnique.Passes[0].Apply();`,
+`effect.DirectionalLight0.Enabled = true;`) still compiles and works fine;
+only an explicit XNA-namespaced type declaration for one of those three
+members would fail to compile. Only `Texture` needed its own compat
+override (same `new` + covariant-return reasoning `SpriteFont.Texture`
+already used), since it's the only member whose declared type actually
+needs to be XNA-namespaced at the call site for common code
+(`SpriteBatch.Draw`-style texture assignment) to work.
+
+**`EffectTechnique`/`EffectPass`/`EffectPassCollection` are minimal
+scaffolding, not a general effect-parameter system:** exist only so
+`effect.CurrentTechnique.Passes[0].Apply();` (the idiom every real
+XNA/MonoGame `Effect` consumer uses, regardless of which effect) compiles
+and forwards to `Effect.Apply()`/`OnApply()` correctly. `EffectParameter`
+itself is not implemented -- `BasicEffect`'s own property surface is its
+parameter interface, nothing in this pass needs a generic
+name-to-parameter lookup.
+
+**Discovered, not acted on:** `CNA.XnaCompat` has no `AssemblyInfo.cs` of
+its own (unlike `CNA.Framework`/`CNA.Interop`), so `CNA.XnaCompat.Tests`
+has no `InternalsVisibleTo`-granted access to any `protected internal`
+constructor the way `CNA.Framework.Tests` does for
+`GraphicsDevice(nint)`. This is why `BasicEffectTests.cs` lives only in
+`CNA.Framework.Tests` (constructing `CNA.Graphics.GraphicsDevice(0)`
+directly, same pattern the rest of this session's native-backed-type tests
+already use) with no `CNA.XnaCompat.Tests` mirror -- consistent with
+existing precedent (`Texture2D`/`SpriteBatch`/etc. have no compat-layer
+construction tests either), not a new gap introduced here.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects. `dotnet test CNA.sln`: 189/189 passing (up from 181 -- 8 new
+`BasicEffectTests`, all passing on first run). `samples/HelloGame`
+re-verified unaffected (still fails at exactly the same documented
+`DllNotFoundException` point).
+
+**Where to pick up next:** `Model` is the next well-grounded 3D-pipeline
+item (not yet checked this session whether `modules/graphics/` has an
+equally-real, working implementation the way it did for `BasicEffect`/
+`VertexBuffer` -- check before assuming it needs pure invention, per this
+session's own established habit). `Song`/`MediaPlayer` is a separate,
+likely-harder problem regardless (`Song` has no public constructor in real
+XNA at all, unlike every native-backed type done so far this session, all
+of which had *some* real public escape hatch to build from).
+
 ## Sixth `/code-review high` pass, over the `GraphicsDevice` draw-calls commit -- a real shadow-field desync bug (2026-08-16, session 6 continued still further again once more)
 
 Ran the review a sixth time. Found a genuine, confirmed bug (the review

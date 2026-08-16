@@ -105,6 +105,13 @@ internal static partial class Native
         int startIndex,
         int primitiveCount);
 
+    /// <summary>Pushes <see cref="CnaBasicEffectParams"/> as pending per-draw effect state for the
+    /// next <c>Draw*</c> call to use -- see that struct's own doc comment for the full grounding
+    /// (a reduced, faithfully-derived subset of the real C++ engine's internal
+    /// <c>GpuDrawParams</c>, not invented from nothing).</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_apply_basic_effect(CnaHandle device, in CnaBasicEffectParams effectParams);
+
     // -- Texture2D (§9, §24 SafeHandle-backed resource) --------------------------------------
 
     [LibraryImport(LibraryName)]

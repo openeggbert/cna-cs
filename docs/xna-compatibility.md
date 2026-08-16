@@ -58,7 +58,12 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     SoundEffect itself is native-backed, see below),
     VertexDeclaration/VertexElement/IVertexType, the five standard vertex
     structs (VertexPosition/PositionColor/PositionTexture/
-    PositionColorTexture/PositionNormalTexture)
+    PositionColorTexture/PositionNormalTexture),
+    BasicEffect's constructor and full property surface (World/View/
+    Projection, DiffuseColor/EmissiveColor/SpecularColor/SpecularPower,
+    AmbientLightColor/DirectionalLight0-2/EnableDefaultLighting, fog,
+    TextureEnabled/Texture, VertexColorEnabled, Alpha, LightingEnabled) --
+    Apply() itself is native-backed, see below
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -68,10 +73,12 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Mouse/MouseState, GamePad/GamePadState/GamePadCapabilities,
     SoundEffect/SoundEffectInstance, VertexBuffer/IndexBuffer,
     ContentManager (RootDirectory, Load<Texture2D>, Load<SoundEffect>,
-    Load<SpriteFont> -- capped at 256 glyphs, see plan.md)
+    Load<SpriteFont> -- capped at 256 glyphs, see plan.md),
+    Effect.Apply/BasicEffect.Apply (EffectTechnique/EffectPass/
+    DirectionalLight are pure scaffolding around this, no ABI of their own)
 
 Not started at all:
-    BasicEffect/Effect, Model, Song, MediaPlayer
+    Model, Song, MediaPlayer
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -83,8 +90,12 @@ to check them against. `SoundEffect`/`SoundEffectInstance` also have no doc
 backing, but are better-grounded than that: the real `openeggbert/cna` C++
 engine already has a working (if not yet C-ABI-exposed) implementation of
 both over SDL3_mixer, and every function here was shaped to match its real
-method surface and documented semantics. See `plan.md` Phase 4 and
-`NEXT.md`'s per-session entries for the full detail on each.
+method surface and documented semantics. `BasicEffect` is grounded the same
+way, against `modules/graphics/`'s own working `BasicEffect` implementation
+-- every property, `EnableDefaultLighting()`'s exact default light values,
+and `Apply()`'s parameter-computation algorithm were read from its real
+source, not invented. See `plan.md` Phase 4 and `NEXT.md`'s per-session
+entries for the full detail on each.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and

@@ -123,4 +123,6 @@ public struct Vector4 : IEquatable<Vector4>
     public override readonly bool Equals(object? obj) => obj is Vector4 other && Equals(other);
     public override readonly int GetHashCode() => HashCode.Combine(X, Y, Z, W);
     public override readonly string ToString() => $"{{X:{X} Y:{Y} Z:{Z} W:{W}}}";
+
+    internal readonly CNA.Interop.CnaVector4 ToNative() => new(X, Y, Z, W);
 }

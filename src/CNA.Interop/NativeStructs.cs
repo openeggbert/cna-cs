@@ -271,3 +271,131 @@ internal struct CnaSpriteFontData
     public int GlyphCount;
     public CnaGlyphBuffer Glyphs;
 }
+
+/// <summary>ABI-shaped 3D vector, needed starting with <see cref="CnaBasicEffectParams"/> --
+/// nothing before it needed one crossing the ABI.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaVector3
+{
+    public readonly float X;
+    public readonly float Y;
+    public readonly float Z;
+
+    public CnaVector3(float x, float y, float z)
+    {
+        X = x;
+        Y = y;
+        Z = z;
+    }
+}
+
+/// <summary>ABI-shaped 4D vector -- needed for <see cref="CnaBasicEffectParams.DiffuseColor"/>
+/// (RGBA) and <c>FogVector</c>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaVector4
+{
+    public readonly float X;
+    public readonly float Y;
+    public readonly float Z;
+    public readonly float W;
+
+    public CnaVector4(float x, float y, float z, float w)
+    {
+        X = x;
+        Y = y;
+        Z = z;
+        W = w;
+    }
+}
+
+/// <summary>A flat 16-float buffer for a column-major 4x4 matrix, using the same C# 12
+/// <c>InlineArray</c> technique <see cref="CnaGlyphBuffer"/> already uses -- avoids either 16
+/// separate named fields or a 16-parameter constructor section just for one matrix.</summary>
+[InlineArray(16)]
+internal struct CnaMatrix16
+{
+    private float _element0;
+}
+
+/// <summary>
+/// One directional light, matching the fields the real openeggbert/cna C++ engine's
+/// <c>BasicEffect::FillGpuDrawParams</c> actually reads from each of its own three
+/// <c>DirectionalLight</c> members (confirmed by reading that method's source directly, not
+/// guessed) -- <c>Direction</c> is always sent regardless of <c>Enabled</c>, but
+/// <c>CNA.Graphics.BasicEffect</c> zeroes <see cref="DiffuseColor"/>/<see cref="SpecularColor"/>
+/// itself before crossing the ABI when a light is disabled, mirroring that method's own behavior
+/// exactly (the real C++ <c>DirectionalLight</c> type does not zero these itself on its
+/// <c>Enabled</c> setter, so the zeroing has to happen at the point <c>FillGpuDrawParams</c> --
+/// and here, this project's equivalent -- actually reads the light, not earlier).
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaDirectionalLight
+{
+    public CnaVector3 Direction;
+    public CnaVector3 DiffuseColor;
+    public CnaVector3 SpecularColor;
+}
+
+/// <summary>
+/// The data <c>BasicEffect.Apply()</c> pushes to the device as pending per-draw effect state, for
+/// the next <c>DrawPrimitives</c>/<c>DrawIndexedPrimitives</c> call to actually use -- matching
+/// real XNA's own two-step "Apply() first, then Draw()" contract (nothing about this project's
+/// existing <c>Draw*</c> methods needed to change). No ABI shape for any of this exists in the
+/// analysis docs, but this is meaningfully better-grounded than most of this session's other
+/// self-designed ABI surfaces: it's a deliberately-reduced subset of the real C++ engine's own
+/// internal <c>CNA::Internal::Renderers::GpuDrawParams</c> struct (read directly from
+/// <c>IGraphicsRenderer.hpp</c>), containing only the fields <c>BasicEffect::FillGpuDrawParams</c>
+/// actually populates -- everything else in the real struct exists for other stock effects
+/// (<c>SkinnedEffect</c>'s bone transforms, <c>DualTextureEffect</c>'s second texture,
+/// <c>EnvironmentMapEffect</c>'s cube map, ...) this project doesn't implement yet.
+///
+/// The real struct's <c>worldColMajor</c> is the *only* matrix field -- View/Projection never
+/// cross into it at all; the real <c>FillGpuDrawParams</c> only uses them internally to *derive*
+/// <c>eyePositionWorld</c> (<c>Matrix.Invert(View).Translation</c>) and <c>fogVector</c> (from
+/// <c>World*View</c> plus fog start/end). This project computes those same two derived values in
+/// managed code instead (using its own already-implemented, already-tested
+/// <c>CNA.Matrix.Invert</c>/multiplication), so the native struct only needs
+/// the *results*, not the raw View/Projection matrices themselves -- see
+/// <c>CNA.Graphics.BasicEffect</c> for that computation, verified against the real algorithm's
+/// exact formula, not reinvented.
+///
+/// Plain mutable struct (not <c>readonly</c> with a constructor, unlike most other structs in
+/// this file) built via object-initializer syntax at its one call site -- a 33-field
+/// constructor would be far more error-prone (easy to transpose two same-typed positional
+/// arguments) than named field assignment.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaBasicEffectParams
+{
+    public CnaHandle Texture;
+    public byte TextureEnabled;
+    public byte VertexColorEnabled;
+    public byte LightingEnabled;
+    public byte PreferPerPixelLighting;
+
+    /// <summary>RGB = forwarded diffuse (baking in EmissiveColor when unlit, matching the real
+    /// algorithm's own comment on why -- see <c>BasicEffect.cs</c>), already alpha-multiplied.
+    /// W = alpha.</summary>
+    public CnaVector4 DiffuseColor;
+
+    public CnaVector3 AmbientColor;
+    public CnaDirectionalLight Light0;
+    public CnaDirectionalLight Light1;
+    public CnaDirectionalLight Light2;
+
+    /// <summary>Zero when <see cref="LightingEnabled"/> is false -- EmissiveColor was already
+    /// folded into <see cref="DiffuseColor"/> above instead, matching the real algorithm's
+    /// lit-path-only block exactly.</summary>
+    public CnaVector3 EmissiveColor;
+    public CnaVector3 SpecularColor;
+    public float SpecularPower;
+    public CnaVector3 EyePositionWorld;
+
+    /// <summary>World matrix, column-major -- matching the real struct's own <c>worldColMajor</c>
+    /// naming and layout exactly, since this project's own <c>Matrix</c> is row-major.</summary>
+    public CnaMatrix16 WorldColMajor;
+
+    public byte FogEnabled;
+    public CnaVector3 FogColor;
+    public CnaVector4 FogVector;
+}
