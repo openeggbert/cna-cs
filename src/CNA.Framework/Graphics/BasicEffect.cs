@@ -40,9 +40,9 @@ public class BasicEffect : Effect
         // lights aren't specified by anything the source research turned up -- Vector3.Down with
         // zero diffuse/specular is a reasonable inert default (matches the real GpuDrawParams
         // struct's own default light direction), not a value read from real XNA/the C++ engine.
-        DirectionalLight0 = new DirectionalLight(new Vector3(0f, -1f, 0f), Vector3.Zero, Vector3.Zero, enabled: true);
-        DirectionalLight1 = new DirectionalLight(new Vector3(0f, -1f, 0f), Vector3.Zero, Vector3.Zero, enabled: false);
-        DirectionalLight2 = new DirectionalLight(new Vector3(0f, -1f, 0f), Vector3.Zero, Vector3.Zero, enabled: false);
+        DirectionalLight0 = new DirectionalLight(Vector3.Down, Vector3.Zero, Vector3.Zero, enabled: true);
+        DirectionalLight1 = new DirectionalLight(Vector3.Down, Vector3.Zero, Vector3.Zero, enabled: false);
+        DirectionalLight2 = new DirectionalLight(Vector3.Down, Vector3.Zero, Vector3.Zero, enabled: false);
     }
 
     public DirectionalLight DirectionalLight0 { get; }
@@ -214,12 +214,17 @@ public class BasicEffect : Effect
         };
     }
 
+    /// <summary>Writing <see cref="Matrix.Transpose"/>'s result out in ordinary row order produces
+    /// the same 16 floats as writing the original matrix out in column order -- reuses the
+    /// already-tested <see cref="Matrix.Transpose"/> instead of re-deriving the same element
+    /// mapping by hand a second time.</summary>
     private static void WriteColumnMajor(Matrix m, ref CnaMatrix16 target)
     {
-        target[0] = m.M11; target[1] = m.M21; target[2] = m.M31; target[3] = m.M41;
-        target[4] = m.M12; target[5] = m.M22; target[6] = m.M32; target[7] = m.M42;
-        target[8] = m.M13; target[9] = m.M23; target[10] = m.M33; target[11] = m.M43;
-        target[12] = m.M14; target[13] = m.M24; target[14] = m.M34; target[15] = m.M44;
+        Matrix t = Matrix.Transpose(m);
+        target[0] = t.M11; target[1] = t.M12; target[2] = t.M13; target[3] = t.M14;
+        target[4] = t.M21; target[5] = t.M22; target[6] = t.M23; target[7] = t.M24;
+        target[8] = t.M31; target[9] = t.M32; target[10] = t.M33; target[11] = t.M34;
+        target[12] = t.M41; target[13] = t.M42; target[14] = t.M43; target[15] = t.M44;
     }
 
     /// <summary>Exposes <see cref="ComputeFogVector"/>'s result for direct unit testing (the
