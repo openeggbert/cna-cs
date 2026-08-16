@@ -1,5 +1,8 @@
 # CNA.NET
 
+> **Status: In progress - ZATÍM NEFUNKČNÍ**
+
+
 CNA.NET is the official C#/.NET language binding for [CNA](https://github.com/openeggbert/cna),
 a native C++ implementation of an XNA-inspired game framework with dozens of
 renderer backends (Vulkan, Direct3D, OpenGL family, Metal, WebGPU, SDL GPU,
