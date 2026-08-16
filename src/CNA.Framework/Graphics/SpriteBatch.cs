@@ -154,6 +154,61 @@ public class SpriteBatch : IDisposable
             layerDepth);
     }
 
+    public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color) =>
+        DrawString(spriteFont, text, position, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f);
+
+    public void DrawString(
+        SpriteFont spriteFont,
+        string text,
+        Vector2 position,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        float scale,
+        SpriteEffects effects,
+        float layerDepth) =>
+        DrawString(spriteFont, text, position, color, rotation, origin, new Vector2(scale, scale), effects, layerDepth);
+
+    /// <summary>Draws each glyph as its own <c>Draw</c> call against <see cref="SpriteFont.Texture"/>,
+    /// using the glyph placements <see cref="SpriteFont.AppendGlyphPlacements"/> computes -- there
+    /// is no dedicated native draw-string call (see <see cref="SpriteFont"/>'s doc comment for why
+    /// none was needed). Offsetting each glyph's own <c>origin</c> by its placement anchor, rather
+    /// than pre-transforming each glyph's <paramref name="position"/>, is what makes the whole
+    /// string rotate/scale as one rigid body around <paramref name="origin"/>/<paramref name="position"/>
+    /// -- the same trick <c>Draw</c>'s own origin already performs for a single sprite, just
+    /// applied once per glyph.</summary>
+    public void DrawString(
+        SpriteFont spriteFont,
+        string text,
+        Vector2 position,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        Vector2 scale,
+        SpriteEffects effects,
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(spriteFont);
+        ArgumentNullException.ThrowIfNull(text);
+
+        var placements = new List<SpriteFont.GlyphPlacement>();
+        spriteFont.AppendGlyphPlacements(text, placements);
+
+        foreach (SpriteFont.GlyphPlacement placement in placements)
+        {
+            DrawEx(
+                spriteFont.Texture,
+                position,
+                placement.SourceRectangle,
+                color,
+                rotation,
+                origin - placement.Anchor,
+                scale,
+                effects,
+                layerDepth);
+        }
+    }
+
     public void End()
     {
         CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));

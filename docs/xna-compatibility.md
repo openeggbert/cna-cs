@@ -51,18 +51,20 @@ split as of this writing is:
 Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     Vector3, Vector4, Quaternion, Matrix, Rectangle, Point, Ray, Plane,
     BoundingBox, BoundingSphere, BoundingFrustum, MathHelper,
-    the full 139-color Color table, ~150-member Keys
+    the full 139-color Color table, ~150-member Keys,
+    SpriteFont (glyph table + MeasureString only -- DrawString needs
+    SpriteBatch, which is native-backed, see below)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
-    SetRenderTarget), SpriteBatch (full Draw overload family), Texture2D,
-    RenderTarget2D, Keyboard/KeyboardState, Mouse/MouseState,
-    GamePad/GamePadState, ContentManager (RootDirectory, Load<Texture2D> only)
+    SetRenderTarget), SpriteBatch (full Draw/DrawString overload families),
+    Texture2D, RenderTarget2D, Keyboard/KeyboardState, Mouse/MouseState,
+    GamePad/GamePadState, ContentManager (RootDirectory, Load<Texture2D>
+    only -- Load<SpriteFont> not supported yet, see plan.md)
 
 Not started at all:
-    SpriteFont, BasicEffect/Effect, Model, VertexBuffer, IndexBuffer,
-    SoundEffect, SoundEffectInstance, Song, MediaPlayer,
-    GamePad.GetCapabilities
+    BasicEffect/Effect, Model, VertexBuffer, IndexBuffer, SoundEffect,
+    SoundEffectInstance, Song, MediaPlayer, GamePad.GetCapabilities
 ```
 
 Note on trust level: the `SpriteBatch.Draw` overloads and `RenderTarget2D`

@@ -1,8 +1,8 @@
 # CNA.NET (`cna-dotnet`) — Implementation Plan
 
 **Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
-math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads, and
-`RenderTarget2D` done; `SpriteFont`, `Effect`, 3D, and audio not started)
+math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
+`RenderTarget2D`, and `SpriteFont` done; `Effect`, 3D, and audio not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -190,16 +190,24 @@ Split by whether the type needs the (still nonexistent) native ABI:
       compiles in game code — see that file and
       `GraphicsDevice.SetRenderTarget`'s doc comment for the
       accepts-`Texture2D`-not-`RenderTarget2D` looseness this required.
-- [ ] **`SpriteFont` — not started, and expect it to need actual ABI
-      design, not just doc-shape-following.** A full-text grep of both
-      analysis docs found *zero* mentions of glyph metrics, kerning, a
-      font atlas, `MeasureString`, or `DrawString` ABI shape — `SpriteFont`
-      is listed only as a name in status tables. Whoever picks this up next
-      should budget for genuinely designing the glyph-data-crossing-the-FFI
-      problem (character→glyph-rect/kerning/advance-width table format,
-      whether it rides through `ContentManager.Load` like `Texture2D` does
-      or needs its own load call), not just translating a doc section — see
-      `NEXT.md` for a design sketch.
+- [x] **`SpriteFont` — done, and needed *zero* new native ABI surface.**
+      Real XNA 4.0 exposes a public `SpriteFont` constructor taking raw
+      glyph arrays (for third-party font-building tools, not just its
+      content pipeline) — reproduced field-for-field, which makes
+      `MeasureString` pure managed code (real unit tests, no native
+      dependency, same as the math value types) and `SpriteBatch.DrawString`
+      a thin loop over the already-implemented `Draw` primitive (one native
+      call per glyph, no dedicated draw-string native call). Follows the
+      standard XNA/MonoGame "ABC" kerning-triple + cropping-rectangle
+      layout algorithm — not invented for this repository, but also not
+      verified against a real XNA binary (none available in this
+      environment); verified instead against hand-worked expected values
+      in `SpriteFontTests.cs`. Known incompleteness: does not implement
+      XNA's `SpriteEffects`-driven line/character reversal for flipped
+      text. `ContentManager.Load<SpriteFont>` is still unsupported — *how
+      font data should cross the FFI boundary* (as opposed to being built
+      by hand via this constructor) is still a genuinely open design
+      question with no doc backing, separate from the object model itself.
 - [ ] **Still not started, still blocked the same way:** `BasicEffect`/
       `Effect` (parameter-handle caching per §27), 3D (`Model`,
       `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,

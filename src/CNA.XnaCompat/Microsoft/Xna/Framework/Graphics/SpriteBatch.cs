@@ -53,4 +53,32 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         SpriteEffects effects,
         float layerDepth) =>
         base.Draw(texture, destinationRectangle, sourceRectangle, color, rotation, origin, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+
+    /// <summary><c>DrawString(SpriteFont, string, Vector2, Color)</c> is inherited unchanged
+    /// (its <c>SpriteFont</c> argument upcasts, same as <c>Draw</c>'s <c>Texture2D</c>); these
+    /// two overloads need the same <c>SpriteEffects</c> override treatment as <c>Draw</c>
+    /// above.</summary>
+    public void DrawString(
+        SpriteFont spriteFont,
+        string text,
+        Vector2 position,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        float scale,
+        SpriteEffects effects,
+        float layerDepth) =>
+        base.DrawString(spriteFont, text, position, color, rotation, origin, scale, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+
+    public void DrawString(
+        SpriteFont spriteFont,
+        string text,
+        Vector2 position,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        Vector2 scale,
+        SpriteEffects effects,
+        float layerDepth) =>
+        base.DrawString(spriteFont, text, position, color, rotation, origin, scale, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 }

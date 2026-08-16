@@ -144,7 +144,71 @@ still fails at exactly the same documented point
 every prior session — confirms nothing in this session's changes altered
 that code path, since none of it touches `Game`/`GraphicsDeviceManager`.
 
-**Where to pick up next: `SpriteFont`, a design sketch, not a translation.**
+**`SpriteFont` (same session, right after the above):** turned out to need
+*zero* new native ABI surface, better than the design sketch this section
+originally predicted (see the crossed-out plan below, kept because the
+reasoning that got here is worth keeping). The unlock: real XNA 4.0's
+`SpriteFont` has a **public constructor** — `SpriteFont(Texture2D texture,
+List<Rectangle> glyphBounds, List<Rectangle> cropping, List<char> characters,
+int lineSpacing, float spacing, List<Vector3> kerning, char?
+defaultCharacter)` — meant for third-party font-building tools, not just
+XNA's own content pipeline. Reproducing that constructor field-for-field
+(`CNA.Framework/Graphics/SpriteFont.cs`) means the whole glyph table lives
+in plain managed arrays from the moment a `SpriteFont` exists, with no FFI
+boundary in the object model itself. That makes `MeasureString` pure
+managed code — real unit tests today, no native dependency, same as
+`Vector2`/`Matrix` — and `SpriteBatch.DrawString` a thin loop over the
+`Draw` primitive from earlier this session (one `Draw(texture, position,
+sourceRectangle, ...)` call per glyph, no dedicated native draw-string
+call needed).
+
+Implementation notes:
+- `MeasureString` and the glyph-placement walk `DrawString` uses share one
+  private `Walk` method (`SpriteFont.cs`) rather than duplicating the
+  ABC-kerning-triple (`Vector3(leftBearing, width, rightBearing)`) +
+  cropping-rectangle traversal — this is the standard XNA/MonoGame bitmap
+  font algorithm, not invented here, but it's also not been checked against
+  a real XNA binary (none available in this environment). Verified instead
+  with hand-worked expected values for several short strings (single glyph,
+  two glyphs with spacing, a newline) in `SpriteFontTests.cs` — the numbers
+  were computed by hand from the same formula being tested, so this catches
+  *regressions* in the walk logic, not disagreement with real XNA's actual
+  output; say so plainly if this ever needs auditing against a real engine.
+- `DrawString`'s rotation/scale/origin apply to the *whole string* as one
+  rigid body, not per-glyph independently. Implemented by offsetting each
+  glyph's own `Draw` call's `origin` parameter by that glyph's placement
+  anchor (`origin - placement.Anchor`) rather than by pre-transforming each
+  glyph's position — the same trick a single `Draw` call's `origin`
+  parameter already performs, just applied once per glyph. Known
+  incompleteness, flagged in the code: doesn't implement XNA's
+  `SpriteEffects`-driven character/line reversal for flipped text (flip
+  effects currently just flip each glyph sprite in place).
+- Testing needed a dummy `Texture2D` with no working native library behind
+  it. Solution: `new Texture2D(nativeHandleValue: 0)` — handle value `0` is
+  what `NativeResourceHandle.IsInvalid` treats as invalid, and `SafeHandle`
+  never calls the release callback for an invalid handle, so disposal (or
+  GC finalization, if the test never disposes it) never touches native
+  code. This works from `CNA.Framework.Tests` because that project already
+  has the `protected internal` raw-handle constructor's `internal` half
+  granted via `CNA.Framework`'s `InternalsVisibleTo` — but **not** from
+  `CNA.XnaCompat.Tests`, which only gets that grant transitively through
+  `CNA.XnaCompat` itself, not extended to its own test project. That's why
+  there's no XnaCompat-layer runtime test for `SpriteFont` this session —
+  matches the existing precedent that `Texture2D`/`SpriteBatch`/`Mouse`/
+  `GamePad` don't have XnaCompat runtime tests either, for the same reason.
+- `CNA.XnaCompat`'s `SpriteFont` needed a `new Texture2D Texture { get; }`
+  property hiding the base class's `CNA.Graphics.Texture2D`-typed one — the
+  first place in this codebase a compat subclass needed to hide (not just
+  inherit-unchanged) a property, because `Texture` is the one XNA
+  `SpriteFont` member whose declared type actually differs between the two
+  namespaces. Worth remembering as a precedent if a future type has the
+  same shape (a property whose value is always actually a compat-typed
+  instance, but whose base-declared type is the CNA.Framework one).
+
+<details>
+<summary>Original (2026-08-16, pre-`SpriteFont`) design sketch — kept for
+the reasoning, superseded by what's above</summary>
+
 Unlike everything else done in Phase 4 so far, there is no doc shape to
 build against at all (confirmed by grep, see above) — this needs an actual
 small ABI design, in the spirit of §8/§9's conventions (opaque handles,
@@ -171,9 +235,19 @@ genuinely new. Worth considering before starting:
   picking this up, the same way this file has said so plainly about
   `RenderTarget2D` above, rather than presenting an invented shape as if it
   had more grounding than it does.
-- After `SpriteFont`: `plan.md` Phase 4's remaining items (`Effect`/`Model`/
-  3D/audio) are explicitly flagged riskier than everything done so far —
-  the analysis docs specify even less for those than for `SpriteFont`.
+
+*(This is what got predicted before actually reading real XNA's `SpriteFont`
+constructor signature closely enough to notice the public-constructor
+escape hatch above. Left in place as a reminder: check whether the "obvious"
+hard case is actually hard before designing new ABI surface for it.)*
+</details>
+
+**Where to pick up next:** `ContentManager.Load<SpriteFont>` (how font data
+crosses the FFI boundary, still genuinely open, no doc backing — see above),
+then `plan.md` Phase 4's remaining items (`Effect`/`Model`/3D/audio), which
+are explicitly flagged riskier than everything done so far — the analysis
+docs specify even less for those than they did for `SpriteFont`'s ABI-free
+path.
 
 ## Namespace correction: `CNA.Framework` → `CNA`; `PlayerIndex` moved to root (2026-08-16)
 
