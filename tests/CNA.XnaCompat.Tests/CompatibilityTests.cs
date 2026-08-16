@@ -2,6 +2,7 @@ using Xunit;
 using XnaAudioChannels = Microsoft.Xna.Framework.Audio.AudioChannels;
 using XnaColor = Microsoft.Xna.Framework.Color;
 using XnaKeys = Microsoft.Xna.Framework.Input.Keys;
+using XnaMediaState = Microsoft.Xna.Framework.Media.MediaState;
 using XnaSoundState = Microsoft.Xna.Framework.Audio.SoundState;
 using XnaSpriteEffects = Microsoft.Xna.Framework.Graphics.SpriteEffects;
 using XnaVector2 = Microsoft.Xna.Framework.Vector2;
@@ -151,6 +152,16 @@ public class CompatibilityTests
     [InlineData(XnaSoundState.Stopped, CNA.Audio.SoundState.Stopped)]
     public void SoundState_NumericValuesMatchFrameworkSoundState(
         XnaSoundState xnaState, CNA.Audio.SoundState frameworkState)
+    {
+        Assert.Equal((int)frameworkState, (int)xnaState);
+    }
+
+    [Theory]
+    [InlineData(XnaMediaState.Stopped, CNA.Media.MediaState.Stopped)]
+    [InlineData(XnaMediaState.Playing, CNA.Media.MediaState.Playing)]
+    [InlineData(XnaMediaState.Paused, CNA.Media.MediaState.Paused)]
+    public void MediaState_NumericValuesMatchFrameworkMediaState(
+        XnaMediaState xnaState, CNA.Media.MediaState frameworkState)
     {
         Assert.Equal((int)frameworkState, (int)xnaState);
     }

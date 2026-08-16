@@ -1,11 +1,13 @@
 # CNA.NET (`cna-dotnet`) — Implementation Plan
 
-**Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
-math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
-`RenderTarget2D`, `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the
-zero-ABI vertex-format layer, `VertexBuffer`/`IndexBuffer`,
-`GraphicsDevice`'s draw calls, `Effect`/`BasicEffect`, and `Model` done;
-`Song`/`MediaPlayer` not started)
+**Status:** Active — Phases 0-3 complete; Phase 4 essentially complete for
+the scope this plan actually calls for (pure math/value types,
+`Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads, `RenderTarget2D`,
+`SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the zero-ABI
+vertex-format layer, `VertexBuffer`/`IndexBuffer`, `GraphicsDevice`'s draw
+calls, `Effect`/`BasicEffect`, `Model`, and a scoped `Song`/`MediaPlayer`
+done; `Model` file-loading, the full `MediaQueue`/library-scanning surface,
+and Phase 5 performance work remain, tracked as their own follow-ups below)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -426,12 +428,68 @@ Split by whether the type needs the (still nonexistent) native ABI:
       feature and its two review passes, three of which caught real bugs
       fixed after the fact — see `NEXT.md`). `samples/HelloGame`
       re-verified unaffected.
-- [ ] **Still not started, still blocked the same way:** `Song`/
-      `MediaPlayer` (no public constructor in real XNA for `Song` at all —
-      would need native streaming-audio-format loading, a different and
-      harder problem than `SoundEffect`'s raw-PCM-buffer escape hatch
-      solved). Blocked on the native ABI existing upstream, same as
-      everything in Phase 2/3.
+- [x] **`Song`/`MediaPlayer`/`MediaState` — done, scoped to real XNA's
+      actual most-used surface, 2026-08-16 (session 6 continued yet
+      further still again once more still further again).** No ABI shape
+      for media/music playback exists in the analysis docs (confirmed by
+      grep, same as audio), but grounded the same way `SoundEffect`/
+      `BasicEffect` were: the real `openeggbert/cna` C++ engine already has
+      a working (if not yet C-ABI-exposed) `MediaPlayer` implementation
+      over SDL3_mixer (`modules/media/`), and this project's six new
+      `cna_mediaplayer_*` native functions are shaped to match its actual
+      `Play`/`Pause`/`Resume`/`Stop`/`Volume`/`IsMuted` semantics. `Song`
+      construction turned out to be **another zero-native-ABI escape
+      hatch**: the real C++ constructor is pure managed logic (a file-
+      existence check, nothing else) — reproduced in C# the same way, so
+      `Song` is real and testable today against real temporary files, a
+      rarity among this session's native-backed types. Also found and
+      reproduced (not the inaccurate doc, the actual verified behavior) a
+      real doc/code mismatch in the upstream C++ header: its own doc
+      comment claims an empty `name` "defaults to the file name," but the
+      constructor body just stores whatever was passed, even empty.
+      **Deliberately scoped down** from the C++ engine's much larger
+      surface: no `MediaQueue` (multi-song playlists/shuffle/repeat-driven
+      auto-advance), no `Album`/`Artist`/`Genre`/`MediaLibrary` scanning
+      subsystem, no visualization data, no deferred
+      `ActiveSongChanged`/`MediaStateChanged` events (all of that needs
+      either a per-frame `Update()` this project has nowhere established
+      to call from yet, or tracking structures with no other user) — what
+      real XNA games overwhelmingly actually use
+      (`MediaPlayer.Play(song)`, `Volume`, `IsMuted`, checking `State`) is
+      what's implemented. `State`/`Volume`/`IsMuted`/`PlayPosition` are
+      plain C# static state (not native queries), matching the real C++
+      engine's own architecture exactly — its own position timer uses
+      `std::chrono`, a language facility, not an ABI call, so this project
+      uses `System.Diagnostics.Stopwatch` the same way. `Song.FromUri`
+      uses `System.Uri` for path resolution rather than porting the real
+      C++ engine's own hand-rolled percent-decoding/scheme/UNC-path parser
+      — the .NET BCL already solves exactly that problem (design invariant
+      #7), so reproducing the manual parser would just be duplicating it
+      with more room for bugs. Full `CNA.XnaCompat` mirror this time
+      (unlike `Model`): `Song` has no construction blocker the way `Model`
+      did, so `Microsoft.Xna.Framework.Media.Song` extends
+      `CNA.Media.Song` directly (not sealed there, specifically so the
+      compat type — sealed, matching real XNA — can extend it), and
+      `Microsoft.Xna.Framework.Media.MediaPlayer` is a thin forwarding
+      static class, same shape as this compat layer's existing `Mouse`/
+      `Keyboard`. Verified: `dotnet build` clean across all 6 projects;
+      `dotnet test`: 241/241 passing (up from 218 — 23 new tests, most of
+      them real behavioral tests against real temp files, not just
+      argument-validation checks, since `Song` needed no native
+      dependency). `samples/HelloGame` re-verified unaffected.
+- [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
+      `Model` has no file-format loader (parsing a real model format is a
+      separate, much larger problem — see `Model`'s own doc comment);
+      `MediaPlayer`'s `MediaQueue` (multi-song playlists, shuffle,
+      repeat-driven auto-advance), visualization data, and deferred
+      `ActiveSongChanged`/`MediaStateChanged` events; the real C++ engine's
+      `Album`/`Artist`/`Genre`/`MediaLibrary` scanning subsystem (no real
+      XNA game needs this for basic playback, and it needs a real
+      on-disk-scan/tag-parsing implementation this project has no
+      equivalent for). None of these are blocked on the native C ABI the
+      way everything else in this phase is — they're scoped out because
+      each is its own substantial, separable feature, not because
+      anything is missing upstream to ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

@@ -72,7 +72,14 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     built on top of already native-backed primitives (see below for why
     drawing a Model end to end is still blocked anyway),
     IEffectMatrices/IEffectFog/IEffectLights (interfaces, no state of
-    their own to be native-backed)
+    their own to be native-backed),
+    Song (construction, Equals/GetHashCode/ToString, FromUri) -- a file-
+    existence check, no native call, real and testable against real temp
+    files, same "escape hatch" shape as SpriteFont/BasicEffect's
+    construction. MediaPlayer.State/Volume/IsMuted/PlayPosition too --
+    plain C# static state, not native queries, matching the real C++
+    engine's own architecture (see below for why Play/Pause/Resume/Stop
+    themselves are still blocked)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -86,10 +93,15 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Effect.Apply/BasicEffect.Apply (EffectTechnique/EffectPass/
     DirectionalLight are pure scaffolding around this, no ABI of their own)
     -- and by extension Model.Draw()/ModelMesh.Draw(), since drawing a
-    mesh part means calling the effect's Apply() partway through
+    mesh part means calling the effect's Apply() partway through,
+    MediaPlayer.Play/Pause/Resume/Stop (six new cna_mediaplayer_* natives,
+    shaped to match the real C++ engine's own MediaPlayer over SDL3_mixer)
 
-Not started at all:
-    Song, MediaPlayer
+Not started at all (all deliberately deferred, not blocked -- see plan.md
+Phase 4's own follow-up bullet):
+    Model file-format loading, MediaPlayer's MediaQueue (playlists,
+    shuffle, repeat auto-advance) and visualization data, the real C++
+    engine's Album/Artist/Genre/MediaLibrary scanning subsystem
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -114,8 +126,13 @@ for the detail. Note also that `Model`/its collection types have **no
 since there is no `ContentManager.Load<Model>` to produce one any other way
 right now; `var`-typed/chained consumption of the `CNA.Graphics`-namespaced
 types works fine in the meantime, same as `EffectTechnique`/
-`DirectionalLight`'s existing compat gap. See `plan.md` Phase 4 and
-`NEXT.md`'s per-session entries for the full detail on each.
+`DirectionalLight`'s existing compat gap. `Song`/`MediaPlayer` are grounded
+against `modules/media/`'s own working implementation the same way
+`SoundEffect`/`BasicEffect` were, deliberately scoped down from that
+implementation's much larger surface (see the "Not started at all" list
+above) -- and, unlike `Model`, `Song` *does* have a full `CNA.XnaCompat`
+mirror, since its construction has no equivalent blocker. See `plan.md`
+Phase 4 and `NEXT.md`'s per-session entries for the full detail on each.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and

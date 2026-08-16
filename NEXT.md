@@ -11,6 +11,140 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `Song`/`MediaPlayer`/`MediaState` (2026-08-16, session 6 continued yet further still again once more still further again)
+
+> Last explicitly-flagged Phase 4 item, per the previous entry's own
+> "where to pick up next" pointer, which also flagged it as needing a
+> check for the same "real, working, not-yet-C-ABI-exposed C++
+> implementation" lucky break -- and, per that same pointer's own
+> reminder not to assume a feature is unusually hard without looking
+> first (the lesson `Model` itself had just taught), checked
+> `modules/media/` before assuming `Song`/`MediaPlayer` needed pure
+> invention or were out of reach.
+
+**They did have that lucky break, and it was bigger than expected --
+`modules/media/` has a full, real, working `Song`/`SongCollection`/
+`MediaPlayer` implementation, complete with real test audio assets
+(mp3/opus/flac) and even actual `.xnb` content-pipeline loading for
+songs.** But reading `Song.hpp`/`.cpp` and `MediaPlayer.hpp`/`.cpp` in
+full (before designing anything, same discipline as every native-backed
+feature this session) showed the real engine's version is substantially
+larger than what a typical XNA game actually uses: a full
+`Album`/`Artist`/`Genre`/`MediaLibrary` scanning subsystem (tag parsing,
+on-disk indexing, ratings), `MediaQueue` (multi-song playlists, shuffle,
+repeat-driven auto-advance), visualization data capture (FFT, post-mix
+audio-thread taps), and deferred events routed through a
+`FrameworkDispatcher` this project doesn't implement. Deliberately scoped
+this pass down to real XNA's actual most-used surface --
+`MediaPlayer.Play(song)` for background music, `Volume`/`IsMuted`,
+checking `State` -- rather than porting the whole thing in one pass,
+matching this session's own repeated "explicit, documented scope cut,
+not a silent gap" practice (`SoundEffect.Play()`'s convenience overloads,
+`VertexBuffer`'s `Type`-taking constructor, and now this). Each deferred
+piece is called out by name in `plan.md`'s own follow-up bullet so it
+doesn't quietly disappear from the record.
+
+**`Song` construction turned out to be a *third* zero-native-ABI escape
+hatch this session** (after `SpriteFont`'s raw-glyph constructor and
+`BasicEffect`'s zero-ABI-until-`Apply()` construction): the real C++
+`Song` constructor is pure managed logic -- a `std::filesystem::exists`
+check, nothing else, no renderer/audio handle allocated until
+`MediaPlayer` actually plays it. Reproduced identically with
+`File.Exists`/`FileNotFoundException` in C#, which makes `Song` real and
+testable *today* against real temporary files -- a rarity among this
+session's native-backed types, most of which can only test their
+argument-validation failure paths, not real success-path behavior.
+
+**Found (and correctly resolved) a real doc/code mismatch in the
+upstream C++ header while grounding this:** `Song.hpp`'s own doc comment
+claims an empty `name` argument "defaults to the file name," but
+`Song.cpp`'s actual constructor body just stores whatever was passed,
+`std::move(name)`, with no fallback logic at all -- confirmed by reading
+the .cpp, not assumed from the .hpp. Reproduced the *verified behavior*
+(name stays empty if passed empty), not the doc comment's claim, and
+added a dedicated regression test
+(`Constructor_EmptyNameNotDefaulted_MatchesVerifiedRealBehavior`) so this
+doesn't quietly "fix itself" back to the doc-comment's claimed behavior
+later. **Worth restating as a general habit:** when a header's doc
+comment and its own .cpp body disagree, the .cpp is the ground truth --
+this is the second time this exact class of discrepancy has mattered this
+session (the first was catching `CreateBillboard`'s fallback sign being
+exactly what an existing doc comment had already flagged as unconfirmed).
+
+**`MediaPlayer.State`/`Volume`/`IsMuted`/`PlayPosition` are plain C#
+static state, not native queries -- matches the real C++ engine's own
+architecture, not a simplification invented for this project.** The real
+`state_`/`volume_` are plain C++ static fields set locally by
+`Play`/`Pause`/`Resume`/`Stop` themselves (never queried from SDL3_mixer),
+and its own playback-position timer uses `std::chrono::steady_clock` -- a
+language-level facility, not an ABI call. `System.Diagnostics.Stopwatch`
+is the exact .NET BCL equivalent (design invariant #7: never invent a
+CNA-flavored reimplementation of an ordinary BCL type) -- and unlike the
+C++ engine's own manual `TimerStart`/`TimerStop`/accumulate bookkeeping,
+`Stopwatch` already tracks elapsed time correctly across multiple
+start/stop cycles on its own, so no manual accumulation logic was needed
+at all.
+
+**`Song.FromUri` deliberately does NOT port the real C++ engine's own
+URI-parsing logic**, even though everything else this pass reproduces
+that engine's algorithms faithfully. The C++ version hand-rolls
+percent-decoding, scheme detection, and UNC-path handling (Windows
+`file://<host>/` paths) because C++ has no equivalent to `System.Uri` in
+its standard library. C# does -- `Uri.TryCreate`/`.LocalPath` already
+solve exactly this problem, correctly, including the RFC 8089 edge cases
+the C++ version's ~90 lines of manual parsing exist to handle. Porting
+that logic by hand would have been reproducing a workaround for a gap
+that doesn't exist on this side of the binding. Design invariant #7 made
+this an easy call, not a judgment call.
+
+**Native surface, six functions, all shaped to match the real C++
+engine's actual method surface:** `cna_mediaplayer_play`/`pause`/`resume`/
+`stop`/`set_volume`/`set_muted`. `MediaPlayer` is process-global/static in
+real XNA (not tied to a `GraphicsDevice` or any other handle) -- these
+take no `CnaHandle` parameter at all, matching the existing
+`Keyboard`/`Mouse`/`GamePad` state calls' own no-handle shape rather than
+inventing a new calling convention for this project's first
+static-subsystem native surface. Unlike the real C++ engine (which
+silently does nothing on a native load failure inside `PlaySong`), this
+project's `Play` throws `CnaException` on failure -- matching *this
+project's own* established convention (every other native call does),
+not the C++ engine's, a deliberate divergence for consistency with the
+rest of this codebase rather than a reproduction choice.
+
+**Compat-layer decision, opposite of `Model`'s, for a documented reason:**
+`Model` got no `CNA.XnaCompat` mirror this session because there's no
+content pipeline to ever produce one any other way, making a mirror's
+practical value near zero. `Song` has no equivalent blocker --
+construction is a public, real, usable CNAEXT path with no hierarchical
+construction-seam problem the way `ModelBone`/`DirectionalLight` had -- so
+it got a full mirror: `Microsoft.Xna.Framework.Media.Song` extends
+`CNA.Media.Song` directly (the "preserve the real logic's lineage" trade-off
+`RenderTarget2D`/`BasicEffect` already established), and is `sealed` there
+specifically because real XNA's own `Song` is `sealed` -- `CNA.Media.Song`
+itself is deliberately left unsealed only so the compat subclass has
+something to extend. `Microsoft.Xna.Framework.Media.MediaPlayer` is a thin
+forwarding static class, the exact shape this compat layer's `Mouse`/
+`Keyboard` already use for process-global subsystems.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects. `dotnet test CNA.sln`: 241/241 passing (up from 218 -- 23 new
+tests: 11 in `SongTests.cs` exercising real file-existence/equality/
+`FromUri` behavior against real temp files, 6 in `MediaPlayerTests.cs`
+covering its native-independent guard clauses, 3 in `SongCompatTests.cs`,
+1 new `MediaState` parity entry in `CompatibilityTests.cs`, all passing on
+first run). `samples/HelloGame` re-verified unaffected.
+
+**Where to pick up next:** this closes out every item `plan.md` Phase 4
+originally called out by name. What's left is either genuinely deferred
+follow-up work (the `MediaQueue`/`Album`/`Artist`/`Genre`/`MediaLibrary`
+subsystem, `Model` file-format loading -- see `plan.md`'s own new
+follow-up bullet for the full list) or Phase 5 performance work
+(`SpriteBatch` command buffering, `EffectParameter` handle caching, bulk
+buffer transfer) -- both are real, substantial, separately-scoped next
+steps rather than small continuations of what this session already did.
+Worth deciding explicitly which of those (if either) is the best use of
+remaining budget, rather than defaulting to whichever is listed first.
+
 ## Eighth `/code-review high` pass, over the `Model` commit -- three real bugs, one already-verified-against-upstream non-issue (2026-08-16, session 6 continued yet further still again once more still further)
 
 Ran the review an eighth time. This one notified twice for the same run --

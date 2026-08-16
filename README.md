@@ -47,6 +47,9 @@ and their collection types go a step further: the *entire* feature needs
 **zero** native ABI, since `Model.Draw()`/`ModelMesh.Draw()` are pure
 managed logic built entirely on top of already native-backed primitives
 (`SetVertexBuffer`, `Indices`, `Effect.Apply()`, `DrawIndexedPrimitives`).
+`Song` (construction, equality, `FromUri`) is real and testable today
+too, against real temporary files — its own escape hatch is a plain
+file-existence check, no native call at all.
 Everything else native-backed (`Game`, `GraphicsDevice`, `Texture2D`,
 `SpriteBatch` including the full extended `Draw`/`DrawString` overload
 families, `RenderTarget2D`, `SoundEffect`/`SoundEffectInstance`,
@@ -62,12 +65,15 @@ found, but `Apply()` itself is native-backed like everything else in this
 paragraph — and since `Model.Draw()` ultimately calls `Effect.Apply()` too,
 drawing a `Model` end to end is still blocked on the same native ABI as
 everything else, even though the model/mesh/bone bookkeeping around it
-isn't. See [`plan.md`](plan.md) for the full phase-by-phase status and
+isn't. `MediaPlayer` straddles the same way: `State`/`Volume`/`IsMuted`/
+`PlayPosition` are plain C# static state needing no native call, but
+`Play`/`Pause`/`Resume`/`Stop` are native-backed. See
+[`plan.md`](plan.md) for the full phase-by-phase status and
 [`NEXT.md`](NEXT.md) for the session-by-session history of how it got here
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 218 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 241 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

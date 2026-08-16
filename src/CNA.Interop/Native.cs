@@ -376,4 +376,38 @@ internal static partial class Native
         int offsetInBytes,
         byte* data,
         nuint byteLength);
+
+    // -- MediaPlayer (Microsoft.Xna.Framework.Media) --------------------------------------------
+    //
+    // No ABI shape for music/media playback exists in the analysis docs at all (confirmed by a
+    // full-text grep of both, same as audio). Better grounded than that makes it sound, same
+    // reasoning as SoundEffect above: the real openeggbert/cna C++ engine already has a working
+    // (if not yet C-ABI-exposed) Microsoft::Xna::Framework::Media::MediaPlayer implementation over
+    // SDL3_mixer (modules/media/), and these six functions are shaped to match its actual
+    // Play/Pause/Resume/Stop/Volume/Muted semantics. MediaPlayer is process-global/static in real
+    // XNA (not tied to a GraphicsDevice or any other handle) -- these take no CnaHandle parameter,
+    // matching the existing Keyboard/Mouse/GamePad state calls' own no-handle shape rather than
+    // inventing a new calling convention for this project's first static-subsystem native surface.
+    // State/Volume/IsMuted/PlayPosition are deliberately NOT native calls: the real C++ engine's
+    // own MediaPlayer tracks all of that in plain C++ static state (state_/volume_/a chrono-based
+    // timer), not by querying the audio backend, so CNA.Media.MediaPlayer reproduces that as plain
+    // C# static state too -- see MediaPlayer.cs.
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial CnaResult cna_mediaplayer_play(string filePath);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mediaplayer_pause();
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mediaplayer_resume();
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mediaplayer_stop();
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mediaplayer_set_volume(float volume);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mediaplayer_set_muted(byte muted);
 }
