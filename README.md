@@ -32,15 +32,20 @@ that promise does and does not cover.
 
 ## Status
 
-**Early scaffold.** This repository currently contains the project
-structure, the managed API shape for a minimal "clear screen, draw a
-texture, read the keyboard" game loop, and the plan for what comes next —
-see [`plan.md`](plan.md). It does **not** yet work end to end, because it
-depends on a stable C ABI in [`openeggbert/cna`](https://github.com/openeggbert/cna)
-that has not been implemented there yet (`modules/c-api/`).
+The pure math/value-type layer (`Vector2`/`3`/`4`, `Matrix`, `Quaternion`,
+`Color`, `Rectangle`, `Point`, `Ray`, `Plane`, the `Bounding*` types,
+`MathHelper`) is complete and fully real today — no native dependency, so
+unlike everything else it isn't a stub. Everything native-backed (`Game`,
+`GraphicsDevice`, `Texture2D`, `SpriteBatch`, `ContentManager`, `Keyboard`,
+`Mouse`, `GamePad`) has its managed side built and compiles, but does
+**not** yet work end to end, because it depends on a stable C ABI in
+[`openeggbert/cna`](https://github.com/openeggbert/cna) that has not been
+implemented there yet (`modules/c-api/`). See [`plan.md`](plan.md) for the
+full phase-by-phase status and [`NEXT.md`](NEXT.md) for the session-by-session
+history of how it got here and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 14 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 44 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

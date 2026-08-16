@@ -1,7 +1,9 @@
 # CNA.NET (`cna-dotnet`) — Implementation Plan
 
-**Status:** Active — foundation scaffold in place
-**Date:** 2026-08-15
+**Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
+math/value types and `Mouse`/`GamePad` done, native-backed types not started)
+**Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
+where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
 `../cnabinding/analysis_binding_sharp_runtime.md`,
 `../cna/analysis_binding_languages.md`
@@ -114,11 +116,11 @@ the sample's README, not a bug in this repository.
 ### Phase 3 — `CNA.XnaCompat` facade + `HelloGame` sample
 
 - [x] `Microsoft.Xna.Framework[.Graphics|.Input|.Content]` types that
-      subclass or thinly wrap their `CNA.Framework` counterparts — no
+      subclass or thinly wrap their `CNA`-namespace counterparts — no
       logic duplication for reference types; documented, minimal
       duplication for value types via implicit conversion operators (§18,
       §19; see `docs/architecture.md` "Why the XNA value types are not
-      literally the same type as the CNA.Framework ones").
+      literally the same type as the CNA namespace ones").
 - [x] `samples/HelloGame` reproducing the reference `HelloGame` from
       `analysis_binding.md` §38 exactly: clear the screen, load a texture,
       draw it with `SpriteBatch`, read `Keyboard`, exit on Escape.
@@ -151,7 +153,11 @@ Split by whether the type needs the (still nonexistent) native ABI:
       `Keyboard`). `GamePad.GetCapabilities` and `GamePadState.PacketNumber`
       (always 0) are not implemented; `Buttons` covers the core d-pad/face/
       shoulder/stick-click flags but not XNA's thumbstick-direction-as-button
-      or trigger-as-button flags — see `CNA.Input.Buttons`.
+      or trigger-as-button flags — see `CNA.Input.Buttons`. `PlayerIndex`
+      lives at the *root* `CNA`/`Microsoft.Xna.Framework` namespace, not
+      `.Input` — matches real XNA, where it's shared by `GamePad` and the
+      GamerServices/Storage APIs. When adding a new type, don't assume its
+      real XNA namespace from where it "feels" like it belongs; check.
 - [ ] **Native-backed, not started:** `SpriteFont`, `RenderTarget2D`,
       `BasicEffect`/`Effect` (parameter-handle caching per §27), 3D
       (`Model`, `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,
