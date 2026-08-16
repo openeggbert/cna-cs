@@ -10,9 +10,9 @@ namespace CNA.Graphics;
 /// goes through the native-backed <c>Draw</c> primitive (once per glyph), so it inherits the same
 /// "compiles, blocked on the native ABI" status as the rest of <c>SpriteBatch</c>.
 ///
-/// <c>ContentManager.Load&lt;T&gt;</c> does not support <c>SpriteFont</c> yet -- how font *data*
-/// should cross the FFI boundary (as opposed to being built by hand via this constructor) has no
-/// doc backing and is a genuinely open design question; see NEXT.md.
+/// <c>ContentManager.Load&lt;SpriteFont&gt;</c> is also supported (see
+/// <c>ContentManager.LoadSpriteFontData</c>), via a self-designed native call with no upstream
+/// ABI shape to match against -- see that method's doc comment and NEXT.md.
 /// </summary>
 public class SpriteFont
 {
