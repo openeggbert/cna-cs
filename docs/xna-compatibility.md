@@ -53,27 +53,33 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     BoundingBox, BoundingSphere, BoundingFrustum, MathHelper,
     the full 139-color Color table, the 160-member Keys enum,
     SpriteFont (glyph table + MeasureString only -- DrawString needs
-    SpriteBatch, which is native-backed, see below)
+    SpriteBatch, which is native-backed, see below),
+    SoundEffect.GetSampleDuration/GetSampleSizeInBytes (pure arithmetic;
+    SoundEffect itself is native-backed, see below)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
     SetRenderTarget), SpriteBatch (full Draw/DrawString overload families),
     Texture2D, RenderTarget2D, Keyboard/KeyboardState, Mouse/MouseState,
-    GamePad/GamePadState/GamePadCapabilities, ContentManager (RootDirectory,
-    Load<Texture2D>, Load<SpriteFont> -- capped at 256 glyphs, see plan.md)
+    GamePad/GamePadState/GamePadCapabilities, SoundEffect/SoundEffectInstance,
+    ContentManager (RootDirectory, Load<Texture2D>, Load<SoundEffect>,
+    Load<SpriteFont> -- capped at 256 glyphs, see plan.md)
 
 Not started at all:
-    BasicEffect/Effect, Model, VertexBuffer, IndexBuffer, SoundEffect,
-    SoundEffectInstance, Song, MediaPlayer
+    BasicEffect/Effect, Model, VertexBuffer, IndexBuffer, Song, MediaPlayer
 ```
 
-Note on trust level: the `SpriteBatch.Draw` overloads and `RenderTarget2D`
-above are *not* equally well-grounded. The extended `Draw` primitive matches
-a concrete struct shape given in `analysis_binding.md` §22.
-`RenderTarget2D`'s two native functions have **no doc backing at all** —
-they were designed from scratch this session, following this project's
-general ABI conventions but with nothing upstream to check them against.
-See `plan.md` Phase 4 and `NEXT.md`'s 2026-08-16 session-4 entry for detail.
+Note on trust level: the items above are *not* all equally well-grounded.
+The extended `SpriteBatch.Draw` primitive matches a concrete struct shape
+given in `analysis_binding.md` §22. `RenderTarget2D`/`GamePadCapabilities`'s
+native functions have **no doc backing at all** — designed from scratch,
+following this project's general ABI conventions but with nothing upstream
+to check them against. `SoundEffect`/`SoundEffectInstance` also have no doc
+backing, but are better-grounded than that: the real `openeggbert/cna` C++
+engine already has a working (if not yet C-ABI-exposed) implementation of
+both over SDL3_mixer, and every function here was shaped to match its real
+method surface and documented semantics. See `plan.md` Phase 4 and
+`NEXT.md`'s per-session entries for the full detail on each.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and

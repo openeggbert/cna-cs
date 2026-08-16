@@ -2,7 +2,8 @@
 
 **Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
 math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
-`RenderTarget2D`, and `SpriteFont` done; `Effect`, 3D, and audio not started)
+`RenderTarget2D`, `SpriteFont`, and `SoundEffect`/`SoundEffectInstance` done;
+`Effect`, 3D, and `Song`/`MediaPlayer` not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -237,11 +238,46 @@ Split by whether the type needs the (still nonexistent) native ABI:
       limitation (generous for XNA's default ASCII-range content-pipeline
       output, but a hard cap nonetheless) — a font with more glyphs is
       expected to fail loudly via `CnaResult`, not silently truncate.
+- [x] **`SoundEffect`/`SoundEffectInstance` — done, 2026-08-16 (session 5,
+      after the weekly reset).** No ABI shape for audio exists anywhere in
+      the analysis docs (confirmed by a full-text grep of both — audio gets
+      no concrete struct anywhere, unlike `SpriteBatch.Draw`'s §22 example,
+      just class names to preserve and one `cna_audio_*` naming-convention
+      bullet). Better-grounded than that makes it sound, though: the real
+      `openeggbert/cna` C++ engine already has a working (if not yet
+      C-ABI-exposed) `Microsoft::Xna::Framework::Audio::SoundEffect`/
+      `SoundEffectInstance` implementation over SDL3_mixer
+      (`modules/audio/`), and every native function/parameter added here is
+      deliberately shaped to match that real implementation's actual method
+      surface and documented semantics — not invented from nothing. Follows
+      real XNA's public `SoundEffect(byte[], int, AudioChannels)` /
+      7-arg-with-loop-points constructors exactly; `SoundEffectInstance` has
+      no public constructor (matching real XNA, and the real C++ engine's
+      own `private`, `SoundEffect`-friend-only constructor), reachable only
+      via `SoundEffect.CreateInstance()`. `Volume`/`Pitch` pass through
+      unclamped and `Pan` validates to `[-1, 1]`/`IsLooped` throws if
+      already played, both reproduced in managed code specifically because
+      the real C++ implementation performs those checks in the same place.
+      `GetSampleDuration`/`GetSampleSizeInBytes` are pure arithmetic (no
+      native call) and fully tested. Known gaps, deliberately not
+      implemented: `SoundEffect`'s fire-and-forget `Play()`/
+      `Play(volume,pitch,pan)` convenience methods (would need an
+      instance-pooling mechanism this repository doesn't have — use
+      `CreateInstance()` explicitly instead), 3D positional audio
+      (`Apply3D`/`AudioListener`/`AudioEmitter`), the static
+      `MasterVolume`/`DistanceScale`/`DopplerScale`/`SpeedOfSound`
+      settings, and `SoundEffect`'s exact sample-rate range validation
+      (8,000-48,000 Hz in real XNA — only a positive check is done here,
+      lower confidence in the exact bounds). `ContentManager.Load<SoundEffect>`
+      is also supported, same split-and-wrap pattern as `Texture2D`/
+      `SpriteFont`.
 - [ ] **Still not started, still blocked the same way:** `BasicEffect`/
       `Effect` (parameter-handle caching per §27), 3D (`Model`,
-      `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,
-      `SoundEffectInstance`, `Song`, `MediaPlayer`). Blocked on the native
-      ABI existing upstream, same as everything in Phase 2/3.
+      `VertexBuffer`, `IndexBuffer`), `Song`/`MediaPlayer` (no public
+      constructor in real XNA for `Song` at all — would need native
+      streaming-audio-format loading, a different and harder problem than
+      `SoundEffect`'s raw-PCM-buffer escape hatch solved). Blocked on the
+      native ABI existing upstream, same as everything in Phase 2/3.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

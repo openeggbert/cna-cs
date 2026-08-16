@@ -1,6 +1,8 @@
 using Xunit;
+using XnaAudioChannels = Microsoft.Xna.Framework.Audio.AudioChannels;
 using XnaColor = Microsoft.Xna.Framework.Color;
 using XnaKeys = Microsoft.Xna.Framework.Input.Keys;
+using XnaSoundState = Microsoft.Xna.Framework.Audio.SoundState;
 using XnaSpriteEffects = Microsoft.Xna.Framework.Graphics.SpriteEffects;
 using XnaVector2 = Microsoft.Xna.Framework.Vector2;
 
@@ -132,6 +134,34 @@ public class CompatibilityTests
         XnaSpriteEffects xnaEffects, CNA.Graphics.SpriteEffects frameworkEffects)
     {
         Assert.Equal((int)frameworkEffects, (int)xnaEffects);
+    }
+
+    [Theory]
+    [InlineData(XnaAudioChannels.Mono, CNA.Audio.AudioChannels.Mono)]
+    [InlineData(XnaAudioChannels.Stereo, CNA.Audio.AudioChannels.Stereo)]
+    public void AudioChannels_NumericValuesMatchFrameworkAudioChannels(
+        XnaAudioChannels xnaChannels, CNA.Audio.AudioChannels frameworkChannels)
+    {
+        Assert.Equal((int)frameworkChannels, (int)xnaChannels);
+    }
+
+    [Theory]
+    [InlineData(XnaSoundState.Playing, CNA.Audio.SoundState.Playing)]
+    [InlineData(XnaSoundState.Paused, CNA.Audio.SoundState.Paused)]
+    [InlineData(XnaSoundState.Stopped, CNA.Audio.SoundState.Stopped)]
+    public void SoundState_NumericValuesMatchFrameworkSoundState(
+        XnaSoundState xnaState, CNA.Audio.SoundState frameworkState)
+    {
+        Assert.Equal((int)frameworkState, (int)xnaState);
+    }
+
+    [Fact]
+    public void SoundEffect_GetSampleDuration_MatchesFrameworkGetSampleDuration()
+    {
+        TimeSpan xna = Microsoft.Xna.Framework.Audio.SoundEffect.GetSampleDuration(88200, 44100, XnaAudioChannels.Mono);
+        TimeSpan framework = CNA.Audio.SoundEffect.GetSampleDuration(88200, 44100, CNA.Audio.AudioChannels.Mono);
+
+        Assert.Equal(framework, xna);
     }
 
     [Fact]

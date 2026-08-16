@@ -34,6 +34,11 @@ public class ContentManager : CNA.Content.ContentManager
                 data.DefaultCharacter);
         }
 
+        if (typeof(T) == typeof(Audio.SoundEffect))
+        {
+            return (T)(object)new Audio.SoundEffect(LoadNativeSoundEffectHandle(assetName));
+        }
+
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
     }
 

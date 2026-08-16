@@ -1,3 +1,4 @@
+using CNA.Audio;
 using CNA.Graphics;
 using CNA.Interop;
 
@@ -57,6 +58,11 @@ public class ContentManager
                 data.DefaultCharacter);
         }
 
+        if (typeof(T) == typeof(SoundEffect))
+        {
+            return (T)(object)new SoundEffect(LoadNativeSoundEffectHandle(assetName));
+        }
+
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
     }
 
@@ -65,6 +71,13 @@ public class ContentManager
         CnaResult result = Native.cna_content_load_texture2d(new CnaHandle(_nativeHandleValue), assetName, out CnaHandle texture);
         CnaException.ThrowIfFailed(result, nameof(Load));
         return texture.Value;
+    }
+
+    protected nint LoadNativeSoundEffectHandle(string assetName)
+    {
+        CnaResult result = Native.cna_content_load_soundeffect(new CnaHandle(_nativeHandleValue), assetName, out CnaHandle soundEffect);
+        CnaException.ThrowIfFailed(result, nameof(Load));
+        return soundEffect.Value;
     }
 
     /// <summary>

@@ -11,6 +11,133 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `SoundEffect`/`SoundEffectInstance` (2026-08-16, session 6 -- after the weekly Claude Max 20x limit reset)
+
+> User's weekly limit reset and they asked to keep working autonomously
+> ("pokracuj autonomne v praci"). Picked up past the point session 5 had
+> reached (all explicitly-flagged, well-scoped gaps closed; remaining
+> Phase 4 items were `Effect`/3D/audio, all flagged as needing genuinely
+> speculative ABI design). Confirmed the toolchain fix from earlier
+> sessions (the `/tmp/racinggame-dotnet` → `/tmp/platformer-dotnet/sdk`
+> runtime symlink) had survived the reset and still worked — re-verified
+> rather than assumed. Also noticed (via a system note, not asked about)
+> that the user had directly committed two README changes of their own
+> between sessions, adding a "Status: In progress - NOT YET FUNCTIONAL"
+> banner — left as-is, not reverted, per the explicit instruction that
+> accompanied that note.
+
+**Chose audio over `Effect`/3D specifically because it turned out to be
+better-grounded than expected.** A full-text grep of both analysis docs
+confirmed audio gets no concrete ABI shape anywhere (unlike `SpriteBatch`'s
+§22 draw-call struct) — just class names to preserve and one
+`cna_audio_*` naming-convention bullet. But a follow-up look at the actual
+`openeggbert/cna` C++ engine found `modules/audio/` already has a **working
+C++ implementation** of `Microsoft::Xna::Framework::Audio::SoundEffect`/
+`SoundEffectInstance` over SDL3_mixer — not yet exposed through any
+`extern "C"` API, but real, working code with real documented semantics
+(exact constructor signatures, `Volume`/`Pitch` pass-through-unclamped vs.
+`Pan`'s `[-1,1]`-validated setter vs. `IsLooped`'s already-played guard,
+`SoundState`/`AudioChannels`' exact enum values). Read those headers in
+full before designing anything. This is meaningfully better grounding than
+`RenderTarget2D`/`GamePadCapabilities` had (pure invention) — the native
+ABI added here is this repository's best guess at what a future
+`cna_soundeffect_*` C API would need to expose *over an implementation that
+already exists*, not a guess made from nothing. `Effect`/3D got no such
+lucky break (no equivalent look was taken at `modules/graphics`/`graphics-ext`
+for this session — a reasonable next thing to check before assuming they're
+equally ungrounded).
+
+**Real XNA's own public escape hatches made the object model tractable,
+same pattern as `SpriteFont`:** `SoundEffect(byte[] buffer, int sampleRate,
+AudioChannels channels)` (and the 7-arg loop-point overload) are real XNA
+API, not an invention, and `SoundEffect.GetSampleDuration`/
+`GetSampleSizeInBytes` are pure 16-bit-PCM arithmetic — no native call, real
+and tested today (`SoundEffectTests.cs`, including a round-trip test
+tolerant of sample-alignment rounding). Everything else -- construction
+itself, `CreateInstance`, `Play`/`Pause`/`Resume`/`Stop`, and every
+`SoundEffectInstance` property -- calls into native immediately, unlike
+`SpriteFont`'s `MeasureString`: audio playback has no CPU-side escape from
+needing a real device, so this doesn't get to be a zero-ABI type the way
+`SpriteFont` did.
+
+**A real double-release bug caught and fixed before it shipped, not after:**
+first draft of `CNA.XnaCompat.SoundEffect.CreateInstance()` called
+`base.CreateInstance()` (which already wraps the native handle in its own
+`SafeHandle`-owning `CNA.Audio.SoundEffectInstance`) and then wrapped that
+*same* handle a second time in a new compat-typed instance -- two owners of
+one native resource, so whichever got disposed/finalized second would
+release an already-released handle. Caught while writing the code, not by
+a separate review pass this time (worth noting since the *previous* two
+review passes this session each found something exactly this shape --
+pattern-matched to it faster on the third occurrence). Fixed the same way
+`RenderTarget2D.CreateNativeHandle` already solved this exact problem:
+factored an `internal nint CreateNativeInstanceHandle()` on
+`CNA.Audio.SoundEffect` that does *only* the native call, and both
+`SoundEffect.CreateInstance()` and `CNA.XnaCompat.SoundEffect.CreateInstance()`
+call it once each, each wrapping the result in exactly its own type.
+**Worth remembering as a standing pattern:** any time an XnaCompat override
+needs "the same native resource, wrapped in my own type" rather than
+"convert an existing wrapped object," reach for a shared raw-handle
+factory, not a double-wrap.
+
+**Design choices worth recording:**
+- `SoundEffectInstance` has no public constructor anywhere (`CNA.Framework`
+  or `CNA.XnaCompat`), matching real XNA and the real C++ engine's own
+  `private`, `SoundEffect`-friend-only constructor as closely as C#'s
+  accessibility model allows -- `protected internal`, reachable only via
+  `SoundEffect.CreateInstance()`.
+- `Volume`/`Pitch` setters call native but do **not** validate range in
+  managed code (matching the real C++ engine's documented "passed through
+  unclamped, matching FNA" behavior exactly) -- deliberately different
+  from `Pan` (validates `[-1,1]`, throws `ArgumentOutOfRangeException` in
+  managed code before reaching native) and `IsLooped` (throws
+  `InvalidOperationException` if already played, tracked via a private
+  `_hasBeenPlayed` bool in managed code). All four asymmetries are
+  reproductions of where the *real* C++ implementation itself performs
+  each check, not arbitrary choices.
+- Deliberately did **not** implement `SoundEffect.Play()`/
+  `Play(volume,pitch,pan)` (real XNA's fire-and-forget convenience
+  methods) -- those rely on an internal instance-limit-tracking pool this
+  repository has no equivalent for, including the "returns `false` if the
+  limit is reached" behavior. `CreateInstance()` (which this repository
+  does implement fully) is explicit-lifetime, real XNA API in its own
+  right, not a workaround for the gap.
+- Skipped for this pass, not because they're hard exactly but because
+  they're separate, boundable follow-ups: `Apply3D`/`AudioListener`/
+  `AudioEmitter` (3D positional audio), the static `SoundEffect.MasterVolume`/
+  `DistanceScale`/`DopplerScale`/`SpeedOfSound` settings, `SoundEffect`'s
+  exact sample-rate range validation (real XNA: 8,000-48,000 Hz; this
+  repository only checks positivity, flagged as lower-confidence in the
+  constructor's own doc comment rather than guessing the exact bounds).
+- `Buttons`/`Keys`/`SpriteEffects`-style enum-crossing pattern shows up
+  twice more here: `AudioChannels` and `SoundState` are each a numerically-
+  identical but distinct pair (`CNA.Audio.*` / `Microsoft.Xna.Framework.Audio.*`),
+  parity-tested in `CompatibilityTests.cs` same as the others.
+  `SoundEffectInstance.State`'s declared return type needed a `new`
+  override in the compat subclass for the same reason
+  `BoundingFrustum.GetCorners()` and `SpriteFont.Texture` did.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects (this is also the first real compile-time proof that the whole
+`unsafe`/fixed-pointer-with-offset construction path and the `internal`
+cross-assembly raw-handle-factory pattern both hold up for a *third*
+native-backed type family, not just the two from earlier this session).
+`dotnet test CNA.sln`: 129/129 passing (up from 112 -- 11 new
+`SoundEffectTests`, 6 new `CompatibilityTests` entries). `samples/HelloGame`
+re-verified unaffected (still fails at the same documented
+`DllNotFoundException` point).
+
+**Where to pick up next:** `Effect`/3D remain the least-grounded, largest
+remaining items -- worth checking whether `modules/graphics`/`graphics-ext`
+has a similarly-real-but-unexposed C++ implementation the way `modules/audio`
+did before assuming they need to be designed from nothing; that lucky break
+is what made this session's audio work meaningfully more trustworthy than
+`RenderTarget2D`/`GamePadCapabilities` were. `Song`/`MediaPlayer` are a
+separate, likely-harder problem even with that same lucky break, since real
+XNA's `Song` has no public constructor at all (unlike `SoundEffect`'s raw-PCM
+escape hatch) -- would need native streaming-audio-format loading designed
+essentially from scratch.
+
 ## Second `/code-review high` pass, this time over `GetCapabilities`/`Load<SpriteFont>` (2026-08-16, session 5 continued further still)
 
 Ran the same review discipline again, against the two commits after the
