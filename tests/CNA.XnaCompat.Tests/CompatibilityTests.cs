@@ -165,6 +165,32 @@ public class CompatibilityTests
     }
 
     [Fact]
+    public void VertexElement_ImplicitlyConvertsToAndFromFrameworkVertexElement()
+    {
+        var xna = new Microsoft.Xna.Framework.Graphics.VertexElement(
+            12,
+            Microsoft.Xna.Framework.Graphics.VertexElementFormat.Color,
+            Microsoft.Xna.Framework.Graphics.VertexElementUsage.Color,
+            0);
+
+        CNA.Graphics.VertexElement framework = xna;
+        Microsoft.Xna.Framework.Graphics.VertexElement roundTripped = framework;
+
+        Assert.Equal(12, framework.Offset);
+        Assert.Equal(CNA.Graphics.VertexElementFormat.Color, framework.VertexElementFormat);
+        Assert.Equal(CNA.Graphics.VertexElementUsage.Color, framework.VertexElementUsage);
+        Assert.Equal(xna, roundTripped);
+    }
+
+    [Fact]
+    public void VertexPositionColor_StrideMatchesFrameworkVertexPositionColor()
+    {
+        Assert.Equal(
+            CNA.Graphics.VertexPositionColor.VertexDeclaration.VertexStride,
+            Microsoft.Xna.Framework.Graphics.VertexPositionColor.VertexDeclaration.VertexStride);
+    }
+
+    [Fact]
     public void BoundingFrustum_GetCorners_ReturnsCompatVector3Array()
     {
         Microsoft.Xna.Framework.Matrix view = Microsoft.Xna.Framework.Matrix.CreateLookAt(

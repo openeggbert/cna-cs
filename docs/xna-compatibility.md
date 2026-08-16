@@ -55,7 +55,10 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     SpriteFont (glyph table + MeasureString only -- DrawString needs
     SpriteBatch, which is native-backed, see below),
     SoundEffect.GetSampleDuration/GetSampleSizeInBytes (pure arithmetic;
-    SoundEffect itself is native-backed, see below)
+    SoundEffect itself is native-backed, see below),
+    VertexDeclaration/VertexElement/IVertexType, the five standard vertex
+    structs (VertexPosition/PositionColor/PositionTexture/
+    PositionColorTexture/PositionNormalTexture)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,

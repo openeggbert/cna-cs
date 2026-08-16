@@ -2,8 +2,9 @@
 
 **Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
 math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
-`RenderTarget2D`, `SpriteFont`, and `SoundEffect`/`SoundEffectInstance` done;
-`Effect`, 3D, and `Song`/`MediaPlayer` not started)
+`RenderTarget2D`, `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, and the
+zero-ABI vertex-format layer done; `Effect`, `VertexBuffer`/`IndexBuffer`/
+`Model`, and `Song`/`MediaPlayer` not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -271,13 +272,40 @@ Split by whether the type needs the (still nonexistent) native ABI:
       lower confidence in the exact bounds). `ContentManager.Load<SoundEffect>`
       is also supported, same split-and-wrap pattern as `Texture2D`/
       `SpriteFont`.
+- [x] **`VertexDeclaration`/`VertexElement`/`VertexElementFormat`/
+      `VertexElementUsage`/`BufferUsage`/`IVertexType` and the five standard
+      vertex structs (`VertexPosition`, `VertexPositionColor`,
+      `VertexPositionTexture`, `VertexPositionColorTexture`,
+      `VertexPositionNormalTexture`) — done, 2026-08-16 (session 6
+      continued), and real (no native dependency).** First slice of the
+      3D pipeline, deliberately scoped down from the full
+      `Effect`/`VertexBuffer`/`Model` surface: confirmed the real
+      `openeggbert/cna` C++ engine's own `VertexDeclaration` "auto-computes
+      stride from element offsets/formats" exactly like real XNA's own
+      elements-only constructor does — pure data/arithmetic, the same
+      "escape hatch" pattern `SpriteFont` found for its own construction.
+      Stride auto-compute uses `max(offset + GetTypeSize(format))` across
+      elements (not element declaration order, not a running sum) —
+      verified against all five standard vertex structs' known real-XNA
+      strides (12/16/20/24/32) in `VertexDeclarationTests`. `BufferUsage`
+      added alongside these since `VertexBuffer`/`IndexBuffer` (native-backed,
+      not started yet) will need it.
 - [ ] **Still not started, still blocked the same way:** `BasicEffect`/
-      `Effect` (parameter-handle caching per §27), 3D (`Model`,
-      `VertexBuffer`, `IndexBuffer`), `Song`/`MediaPlayer` (no public
-      constructor in real XNA for `Song` at all — would need native
-      streaming-audio-format loading, a different and harder problem than
-      `SoundEffect`'s raw-PCM-buffer escape hatch solved). Blocked on the
-      native ABI existing upstream, same as everything in Phase 2/3.
+      `Effect`/`EffectParameter`/`EffectPass`/`EffectTechnique`,
+      `VertexBuffer`/`IndexBuffer`/`Model` (native-backed halves of the 3D
+      pipeline — confirmed the real C++ engine has full, working, tested,
+      renderer-backend-wired implementations of all of these too, same
+      lucky break as `SoundEffect`/audio, but the *combined* surface needed
+      for even a minimal "draw a textured triangle" demo — buffer creation,
+      effect parameter application, and the actual
+      `GraphicsDevice.DrawIndexedPrimitives`-style draw call — is large and
+      tightly interdependent, so it was deliberately not attempted in the
+      same pass as the zero-ABI vertex-format layer above), `Song`/
+      `MediaPlayer` (no public constructor in real XNA for `Song` at all —
+      would need native streaming-audio-format loading, a different and
+      harder problem than `SoundEffect`'s raw-PCM-buffer escape hatch
+      solved). Blocked on the native ABI existing upstream, same as
+      everything in Phase 2/3.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

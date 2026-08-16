@@ -11,6 +11,81 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Zero-ABI vertex-format layer: `VertexDeclaration`/`VertexElement`/standard vertex structs (2026-08-16, session 6 continued yet further)
+
+> After the `SoundEffect` review-and-fix round, checked whether `Effect`/
+> `BasicEffect`/`VertexBuffer`/`IndexBuffer`/`Model` had the same "real
+> working C++ implementation, just not C-ABI-exposed" lucky break audio
+> did, before assuming they needed pure invention (per this file's own
+> "where to pick up next" pointer from the previous entry). They do —
+> `modules/graphics/` has full, tested, renderer-backend-wired C++
+> implementations of all of them. But the *combined* native surface needed
+> for even a minimal "draw a textured triangle with `BasicEffect`" demo —
+> buffer creation, effect parameter application, and the actual draw call
+> — is large and every piece depends on the others being present to be
+> minimally useful (unlike `RenderTarget2D`/`SoundEffect`, which were each
+> reasonably self-contained). Rather than swallow that whole thing in one
+> pass, split off the part that turned out to need **no native ABI at
+> all**: `VertexDeclaration` and the standard vertex structs.
+
+**The escape hatch, one more time:** real XNA's `VertexDeclaration`
+computes its byte stride from the given `VertexElement`s' offsets/formats
+in its constructor — pure arithmetic, not a GPU query. Confirmed the real
+C++ engine's own `VertexDeclaration` does the identical thing ("auto-computes
+stride from element offsets/formats" — same research pass that found the
+real `BasicEffect`/`VertexBuffer` implementations). This is the third time
+this exact shape of escape hatch has shown up this session (after
+`SpriteFont`'s public raw-glyph-array constructor and
+`SoundEffect.GetSampleDuration`'s pure arithmetic) — worth actively
+looking for on any future native-backed type: does XNA's own public API
+already expose a pure-data or pure-arithmetic path that doesn't strictly
+need the native device?
+
+**Stride computation, precisely:** `max(offset + GetTypeSize(format))`
+across all elements — not a running sum in declaration order, and not
+dependent on elements being given in offset order (elements aren't
+required to be contiguous or sorted; `VertexDeclarationTests` has a
+dedicated case with elements deliberately given out of offset order to
+catch a naive "sum in declared order" implementation). `GetTypeSize`'s
+per-format byte sizes (`Vector3`→12, `Color`→4, `HalfVector4`→8, etc.) are
+well-known, standard XNA constants — verified against all five standard
+vertex structs' well-known real-XNA strides (`VertexPosition`=12,
+`VertexPositionColor`=16, `VertexPositionTexture`=20,
+`VertexPositionColorTexture`=24, `VertexPositionNormalTexture`=32), which
+all came out correct on the first run — a reasonably strong cross-check
+that both the per-format sizes and the stride formula are right together
+even though there's no live system to verify against directly.
+
+**XnaCompat pattern used, worth noting for the next struct-with-nested-enum
+type:** `VertexElement` is a *struct* containing two *enum* fields
+(`VertexElementFormat`/`VertexElementUsage`). Gave the struct itself
+implicit conversion operators (matching the `Vector3`/`Color` pattern —
+structs can define these), while the two enum fields still need the
+`Buttons`/`Keys`/`SpriteEffects`-style separate-numerically-identical-enum
+treatment inside that conversion (enums can't define conversion operators
+at all) — i.e. the struct-level conversion operator is exactly where the
+enum-level numeric casts live. `VertexDeclaration` itself is a *class*
+wrapped by composition in `CNA.XnaCompat` rather than subclassed (no
+construction-seam reason to subclass here — it's never native-backed, so
+there's no "wrap an already-created native handle" case the way
+`Texture2D`'s inheritance exists to serve).
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects. `dotnet test CNA.sln`: 161/161 passing (up from 136 — 16 new
+`VertexDeclarationTests` plus 2 new `CompatibilityTests` entries).
+`samples/HelloGame` re-verified unaffected.
+
+**Where to pick up next:** the native-backed half of the 3D pipeline
+(`VertexBuffer`/`IndexBuffer`/`BasicEffect`/`Effect`, in roughly that
+dependency order — buffers first since `BasicEffect.Apply()` needs
+something to apply to for a demo to make sense) — well-grounded (real C++
+implementations exist, same as audio), but meaningfully larger in scope
+than any single native-backed addition this session has made so far.
+Budget accordingly; consider whether it's better split across multiple
+passes (e.g. `VertexBuffer`/`IndexBuffer` alone first, `BasicEffect`
+after) rather than attempted as one commit, given how large `SoundEffect`
+alone already was.
+
 ## Third `/code-review high` pass, over the `SoundEffect`/`SoundEffectInstance` commit (2026-08-16, session 6 continued)
 
 Ran the same review discipline a third time. Found three real, fixed bugs
