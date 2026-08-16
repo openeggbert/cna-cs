@@ -300,14 +300,18 @@ Carried over from `analysis_binding.md` §68 and
 `dotnet` was not installed by default in the sandbox this scaffold was
 authored in, but a .NET 8/9 SDK happened to be present locally and was used
 to verify it: `dotnet build CNA.sln` succeeds with 0 warnings/0 errors across
-all 6 projects, all 44 unit tests pass (`dotnet test`), and
-`dotnet run --project samples/HelloGame` fails at exactly the documented
-point — a `DllNotFoundException` for `cna-native` raised from inside
-`Game`'s constructor — rather than from any code defect. That confirms the
-managed callback bridge, the covariant-return `CreateGraphicsDevice`/
-`CreateContentManager` factories, the `Matrix.Invert`/`BoundingFrustum` math,
-and the value-type implicit conversions are all wired correctly end to end,
-ahead of the native ABI existing. Re-run both commands after cloning if you
+all 6 projects, and all unit tests pass (`dotnet test`) — 44 as of the
+initial scaffold, 112 as of 2026-08-16 (session 5); the count only grows,
+see `NEXT.md`'s per-session entries for the history and `README.md` for the
+current number, since this note isn't kept in sync with every session. Also
+verified each time: `dotnet run --project samples/HelloGame` fails at
+exactly the documented point — a `DllNotFoundException` for `cna-native`
+raised from inside `Game`'s constructor — rather than from any code defect.
+That confirms the managed callback bridge, the covariant-return
+`CreateGraphicsDevice`/`CreateContentManager` factories, the
+`Matrix.Invert`/`BoundingFrustum` math, and the value-type implicit
+conversions are all wired correctly end to end, ahead of the native ABI
+existing. Re-run both commands after cloning if you
 want to reconfirm.
 
 ## Native build reuse
