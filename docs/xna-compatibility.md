@@ -54,16 +54,24 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     the full 139-color Color table, ~150-member Keys
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
-    Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear only),
-    SpriteBatch (single Draw overload only), Texture2D,
-    Keyboard/KeyboardState, Mouse/MouseState, GamePad/GamePadState,
-    ContentManager (RootDirectory, Load<Texture2D> only)
+    Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
+    SetRenderTarget), SpriteBatch (full Draw overload family), Texture2D,
+    RenderTarget2D, Keyboard/KeyboardState, Mouse/MouseState,
+    GamePad/GamePadState, ContentManager (RootDirectory, Load<Texture2D> only)
 
 Not started at all:
-    SpriteFont, RenderTarget2D, BasicEffect/Effect, Model, VertexBuffer,
-    IndexBuffer, SoundEffect, SoundEffectInstance, Song, MediaPlayer,
-    additional SpriteBatch.Draw overloads, GamePad.GetCapabilities
+    SpriteFont, BasicEffect/Effect, Model, VertexBuffer, IndexBuffer,
+    SoundEffect, SoundEffectInstance, Song, MediaPlayer,
+    GamePad.GetCapabilities
 ```
+
+Note on trust level: the `SpriteBatch.Draw` overloads and `RenderTarget2D`
+above are *not* equally well-grounded. The extended `Draw` primitive matches
+a concrete struct shape given in `analysis_binding.md` §22.
+`RenderTarget2D`'s two native functions have **no doc backing at all** —
+they were designed from scratch this session, following this project's
+general ABI conventions but with nothing upstream to check them against.
+See `plan.md` Phase 4 and `NEXT.md`'s 2026-08-16 session-4 entry for detail.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and

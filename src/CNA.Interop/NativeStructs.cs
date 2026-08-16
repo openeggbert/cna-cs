@@ -120,3 +120,71 @@ internal readonly struct CnaGamePadState
 
     public bool HasButton(uint mask) => (Buttons & mask) != 0;
 }
+
+/// <summary>ABI-shaped integer rectangle (pixel-space source/destination rects). Not named in the
+/// analysis docs as its own struct, but implied by the <c>source</c> field of the
+/// <c>CNA_SpriteDrawCommand</c> example in analysis_binding.md §22.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaRect
+{
+    public readonly int X;
+    public readonly int Y;
+    public readonly int Width;
+    public readonly int Height;
+
+    public CnaRect(int x, int y, int width, int height)
+    {
+        X = x;
+        Y = y;
+        Width = width;
+        Height = height;
+    }
+}
+
+/// <summary>
+/// ABI-shaped single sprite draw command -- field-for-field the same as the batched
+/// <c>CNA_SpriteDrawCommand</c> example struct in ../../cnabinding/analysis_binding.md §22
+/// (texture, position, source, color, rotation, origin, scale, effects, layer_depth). Used here
+/// for the *single*-draw extended form (<c>cna_sprite_batch_draw_ex</c>), not the Phase 5 batched
+/// call the doc example was actually illustrating -- see plan.md Phase 4/5. There is no dedicated
+/// "no source rectangle" flag: the "draw the whole texture" case is resolved to a concrete
+/// <see cref="Source"/> covering the full texture bounds at the CNA.Framework call site, before
+/// this struct is built, so the ABI shape needs nothing beyond what §22 already shows. This
+/// struct's shape is otherwise unvalidated against any real upstream ABI (none exists yet for
+/// this call); expect a signature audit once Track A ships, same as everything else in Phase 4.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaSpriteDrawCommand
+{
+    public readonly CnaHandle Texture;
+    public readonly CnaVector2 Position;
+    public readonly CnaRect Source;
+    public readonly CnaColor Color;
+    public readonly float Rotation;
+    public readonly CnaVector2 Origin;
+    public readonly CnaVector2 Scale;
+    public readonly int Effects;
+    public readonly float LayerDepth;
+
+    public CnaSpriteDrawCommand(
+        CnaHandle texture,
+        CnaVector2 position,
+        CnaRect source,
+        CnaColor color,
+        float rotation,
+        CnaVector2 origin,
+        CnaVector2 scale,
+        int effects,
+        float layerDepth)
+    {
+        Texture = texture;
+        Position = position;
+        Source = source;
+        Color = color;
+        Rotation = rotation;
+        Origin = origin;
+        Scale = scale;
+        Effects = effects;
+        LayerDepth = layerDepth;
+    }
+}

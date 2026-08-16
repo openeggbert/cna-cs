@@ -41,6 +41,119 @@ public class SpriteBatch : IDisposable
         CnaException.ThrowIfFailed(result, nameof(Draw));
     }
 
+    public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color) =>
+        DrawEx(texture, position, sourceRectangle, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f);
+
+    public void Draw(Texture2D texture, Rectangle destinationRectangle, Color color) =>
+        Draw(texture, destinationRectangle, null, color);
+
+    public void Draw(Texture2D texture, Rectangle destinationRectangle, Rectangle? sourceRectangle, Color color) =>
+        DrawEx(texture, destinationRectangle, sourceRectangle, color, 0f, Vector2.Zero, SpriteEffects.None, 0f);
+
+    public void Draw(
+        Texture2D texture,
+        Vector2 position,
+        Rectangle? sourceRectangle,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        float scale,
+        SpriteEffects effects,
+        float layerDepth) =>
+        DrawEx(texture, position, sourceRectangle, color, rotation, origin, new Vector2(scale, scale), effects, layerDepth);
+
+    public void Draw(
+        Texture2D texture,
+        Vector2 position,
+        Rectangle? sourceRectangle,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        Vector2 scale,
+        SpriteEffects effects,
+        float layerDepth) =>
+        DrawEx(texture, position, sourceRectangle, color, rotation, origin, scale, effects, layerDepth);
+
+    public void Draw(
+        Texture2D texture,
+        Rectangle destinationRectangle,
+        Rectangle? sourceRectangle,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        SpriteEffects effects,
+        float layerDepth) =>
+        DrawEx(texture, destinationRectangle, sourceRectangle, color, rotation, origin, effects, layerDepth);
+
+    /// <summary>The position/rotation/scale primitive every extended <c>Draw</c> overload above
+    /// funnels through -- one native call (<see cref="Native.cna_sprite_batch_draw_ex"/>) backing
+    /// the whole overload family, per this project's usual "minimal native surface, C# handles
+    /// convenience overloads" approach.</summary>
+    private void DrawEx(
+        Texture2D texture,
+        Vector2 position,
+        Rectangle? sourceRectangle,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        Vector2 scale,
+        SpriteEffects effects,
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+
+        Rectangle source = sourceRectangle ?? new Rectangle(0, 0, texture.Width, texture.Height);
+
+        var command = new CnaSpriteDrawCommand(
+            new CnaHandle(texture.NativeHandleValue),
+            position.ToNative(),
+            source.ToNative(),
+            color.ToNative(),
+            rotation,
+            origin.ToNative(),
+            scale.ToNative(),
+            (int)effects,
+            layerDepth);
+
+        CnaResult result = Native.cna_sprite_batch_draw_ex(new CnaHandle(NativeHandleValue), in command);
+        CnaException.ThrowIfFailed(result, nameof(Draw));
+    }
+
+    /// <summary>The destination-rectangle overloads' primitive: XNA specifies these by the
+    /// screen-space rectangle the sprite should fill rather than by position+scale, so this
+    /// resolves that rectangle (and the source-vs-whole-texture size it is scaled against) down
+    /// to the position+scale form <see cref="DrawEx(Texture2D,Vector2,Rectangle?,Color,float,Vector2,Vector2,SpriteEffects,float)"/>
+    /// expects, then delegates to it -- the actual native call happens there, not here.</summary>
+    private void DrawEx(
+        Texture2D texture,
+        Rectangle destinationRectangle,
+        Rectangle? sourceRectangle,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        SpriteEffects effects,
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+
+        int sourceWidth = sourceRectangle?.Width ?? texture.Width;
+        int sourceHeight = sourceRectangle?.Height ?? texture.Height;
+        var scale = new Vector2(
+            sourceWidth == 0 ? 0f : destinationRectangle.Width / (float)sourceWidth,
+            sourceHeight == 0 ? 0f : destinationRectangle.Height / (float)sourceHeight);
+
+        DrawEx(
+            texture,
+            new Vector2(destinationRectangle.X, destinationRectangle.Y),
+            sourceRectangle,
+            color,
+            rotation,
+            origin,
+            scale,
+            effects,
+            layerDepth);
+    }
+
     public void End()
     {
         CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));

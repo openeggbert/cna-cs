@@ -11,6 +11,170 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Extended `SpriteBatch.Draw` overloads; `RenderTarget2D` (2026-08-16, session 4)
+
+> Continuation of Phase 4 per the user's "keep working through the plan"
+> instruction. Picked the two items NEXT.md's previous "Where to pick up"
+> section flagged as lower-risk (natural extensions of the already-proven
+> `Texture2D`/`SpriteBatch` pattern), in that order, after a research pass
+> confirmed exactly what doc backing each one actually has — see below,
+> because it turned out to be less than plan.md previously implied.
+
+**Toolchain fix, worth keeping for future sessions:** the machine had two
+independent local .NET installs — `/tmp/platformer-dotnet/sdk` (SDK, .NET
+9.0.316 runtime only) and `/tmp/racinggame-dotnet` (.NET 8.0.29 runtime
+only, no SDK). `dotnet build` worked fine with just the SDK one on `PATH`
+(it can compile against a referenced net8.0 target without a matching
+runtime installed), but `dotnet test` failed — `vstest`'s testhost launch
+resolves the runtime relative to wherever the SDK's own `dotnet` muxer
+lives, ignoring `DOTNET_ROOT`/`DOTNET_HOST_PATH` overrides entirely (tested
+directly: setting both had no effect). Fix:
+`ln -s /tmp/racinggame-dotnet/shared/Microsoft.NETCore.App/8.0.29 /tmp/platformer-dotnet/sdk/shared/Microsoft.NETCore.App/8.0.29`
+— one symlink, dropped straight into the found SDK's own `shared/` folder
+so its own muxer sees both runtimes via `dotnet --list-runtimes`. After
+that, `dotnet test CNA.sln` ran both test projects normally. Neither
+`/tmp/...` path was created by this session and neither should be assumed
+present in a future one — re-locate a working SDK+runtime pair the same way
+the 2026-08-16 (session 2) entry below did, and re-apply this symlink trick
+if `dotnet test` fails the same way.
+
+**Research finding that changed the plan:** plan.md's Phase 4 list grouped
+`SpriteFont`/`RenderTarget2D`/extra `SpriteBatch.Draw` overloads together as
+"natural extensions... reasonable to build against the ABI shape." A
+full-text grep of both `analysis_binding.md` and
+`analysis_binding_sharp_runtime.md` (not a skim) found this is only true for
+one of the three: **§22's `CNA_SpriteDrawCommand` example struct** gives a
+concrete, usable field shape for the extended `Draw` primitive. `SpriteFont`
+and `RenderTarget2D` have **zero** ABI detail anywhere in either doc — not
+even a rough sketch — they're status-table/checklist entries only. This
+matters for how much to trust what got built this session: the `Draw`
+overloads are shape-verified against a real doc citation; `RenderTarget2D`'s
+two native functions are this session's own invention, no better-grounded
+than a guess at the conventions, and should get extra scrutiny once Track A
+ships — flagged accordingly in `plan.md` and in code comments on
+`RenderTarget2D.cs`/`Native.cs`.
+
+**Extended `SpriteBatch.Draw`:** added `CnaRect` and `CnaSpriteDrawCommand`
+(`CNA.Interop/NativeStructs.cs`, the latter matching §22's struct
+field-for-field) and one new native primitive,
+`cna_sprite_batch_draw_ex(CnaHandle spriteBatch, in CnaSpriteDrawCommand)`.
+Every new `Draw` overload in `CNA.Graphics.SpriteBatch` funnels through this
+one native call via two private `DrawEx` helpers — one taking
+position+scale (the primitive), one taking a destination rectangle (resolves
+to position+scale in C#, no native call of its own) — rather than adding a
+native function per overload, continuing the "minimal native surface, C#
+handles convenience overloads" approach already used for the math value
+types. Deliberately **no "has source rectangle" flag** in the struct (the
+doc's §22 example doesn't have one either): "no source rectangle given"
+resolves to a concrete `Rectangle(0, 0, texture.Width, texture.Height)` at
+the C# call site before the struct is built, so the ABI shape needed nothing
+beyond what the doc already showed.
+
+Added `CNA.Graphics.SpriteEffects` (`[Flags] { None, FlipHorizontally,
+FlipVertically }`) — the docs (§52) name only `FlipHorizontally`, in a
+naming-parity example, no bit values anywhere, so real XNA 4.0's actual
+values were used from memory, not derived from this project's own source
+material. Mirrored into `CNA.XnaCompat` as a numerically-identical but
+*distinct* enum type (C# forbids user-defined conversion operators on
+enums), same pattern as `Keys`/`Buttons` — parity now tested in
+`CompatibilityTests.SpriteEffects_NumericValuesMatchFrameworkSpriteEffects`,
+mirroring the existing `Keys` parity test.
+
+**XnaCompat inheritance detail worth remembering:** most of the new `Draw`
+overloads needed **zero** code in `CNA.XnaCompat.SpriteBatch` — they're
+inherited unchanged from `CNA.Graphics.SpriteBatch` because `Rectangle?`
+(nullable) converts through the *lifted* form of `Rectangle`'s existing
+implicit conversion operator automatically; C# does this for any
+`Nullable<T>` where `T` has a user-defined conversion, no extra code needed.
+Only the three overloads with a `SpriteEffects` parameter needed an explicit
+override (cast `(CNA.Graphics.SpriteEffects)(int)effects` before calling
+`base.Draw(...)`), because that parameter is a same-shaped-but-distinct enum
+type, not something with a conversion operator. Worth remembering next time
+a new `Draw`-shaped overload is added: check whether every parameter type
+already has a conversion path before assuming an override is needed.
+
+**`RenderTarget2D`:** two new native functions, `cna_render_target2d_create`
+and `cna_graphics_device_set_render_target` — both **invented for this
+repository**, see the research finding above. Deliberately does *not* get
+its own release/width/height native functions: the handle it wraps is
+texture-shaped (created through a render-target-specific factory, but
+otherwise an ordinary texture on the native side), so `CNA.Graphics.
+RenderTarget2D` subclasses `Texture2D` and reuses its existing
+`cna_texture2d_release`/`get_width`/`get_height` calls unchanged.
+
+Hit a real design fork on the `CNA.XnaCompat` side, worth recording because
+it'll recur for any future type where a *derived* native-backed type needs
+an XnaCompat mirror: real XNA has `RenderTarget2D : Texture2D`, and C#
+single inheritance means `Microsoft.Xna.Framework.Graphics.RenderTarget2D`
+can extend `CNA.Graphics.RenderTarget2D` (preserving the *native-creation*
+lineage) **or** `Microsoft.Xna.Framework.Graphics.Texture2D` (preserving the
+*compat-layer* lineage so `Texture2D t = someRenderTarget;` compiles in game
+code, which is the whole point of `CNA.XnaCompat` existing) — not both,
+because `CNA.Graphics.RenderTarget2D` and `CNA.XnaCompat`'s `Texture2D` are
+siblings, not ancestor/descendant. Chose the compat-layer lineage (extends
+XnaCompat's own `Texture2D`) as the more important XNA-compatibility
+guarantee to preserve, and moved the native-handle-creation logic into an
+`internal static CreateNativeHandle(...)` method on `CNA.Graphics.
+RenderTarget2D` that both sides call — reusable across the assembly boundary
+without violating invariant #5 (it returns a raw `nint`, not any
+`CNA.Interop` type) because `CNA.Framework`'s `AssemblyInfo.cs` already
+grants `CNA.XnaCompat` an `InternalsVisibleTo` (confirmed by reading it, not
+assumed — this is *not* the same grant chain as
+`CNA.Interop`→`CNA.Framework`, and doesn't violate "XnaCompat never
+references CNA.Interop directly," since no CNA.Interop type crosses that
+call). Same fork forced `GraphicsDevice.SetRenderTarget` to accept
+`CNA.Graphics.Texture2D?` instead of the stricter `CNA.Graphics.
+RenderTarget2D?` real XNA's signature would suggest — documented as a
+deliberate, narrow compatibility looseness in that method's doc comment,
+traded for zero extra code needed in `CNA.XnaCompat.GraphicsDevice` (the
+compat `RenderTarget2D` upcasts straight into the looser parameter, same
+"inherited unchanged, converts through the type hierarchy" pattern as every
+other compat method).
+
+**Verified, not just written:** every change built and tested with the
+locally-found SDK before committing — `dotnet build CNA.sln` (0
+warnings/errors across all 6 projects), `dotnet test CNA.sln` (47/47 passing,
+up from 44 — added the `SpriteEffects` parity test, no other new tests: the
+native-backed `Draw`/`RenderTarget2D` code paths can't be exercised without
+an actual `cna-native` library, same limitation `Texture2D`/`SpriteBatch`/
+`Mouse`/`GamePad` already had, so no test coverage was invented for logic
+that can't actually run yet), and `dotnet run --project samples/HelloGame`
+still fails at exactly the same documented point
+(`DllNotFoundException` for `cna-native` inside `Game`'s constructor) as
+every prior session — confirms nothing in this session's changes altered
+that code path, since none of it touches `Game`/`GraphicsDeviceManager`.
+
+**Where to pick up next: `SpriteFont`, a design sketch, not a translation.**
+Unlike everything else done in Phase 4 so far, there is no doc shape to
+build against at all (confirmed by grep, see above) — this needs an actual
+small ABI design, in the spirit of §8/§9's conventions (opaque handles,
+`CnaResult`, fixed-width primitives, generation-checked handles) but
+genuinely new. Worth considering before starting:
+- Real XNA/MonoGame's `SpriteFont` does *not* need its own native draw
+  call — `DrawString`/`MeasureString` are pure managed-code loops over a
+  per-character glyph table (source rect into a font atlas texture +
+  advance width + per-character-pair kerning), calling the *existing*
+  `SpriteBatch.Draw(texture, sourceRect, ...)` primitive once per character.
+  That primitive already exists as of this session, which is exactly why
+  this was sequenced after it, not before.
+- So the only new native surface needed is probably: however font *data*
+  crosses the ABI (an atlas `Texture2D` handle, likely reusable as-is, plus
+  a glyph table — could ride through `ContentManager.Load<SpriteFont>`
+  exactly like `cna_content_load_texture2d` already works, or need its own
+  `cna_content_load_spritefont` if the glyph table doesn't fit that call's
+  shape) and however the glyph table itself is retrieved (a single call
+  returning a fixed-format buffer of per-glyph structs — character code,
+  source rect, advance width — is the shape to reach for first; kerning
+  pairs are the one part of real XNA's `SpriteFont` that's genuinely
+  optional/lower-value to implement first).
+- This is real ABI design work, not doc-shape-following — say so plainly if
+  picking this up, the same way this file has said so plainly about
+  `RenderTarget2D` above, rather than presenting an invented shape as if it
+  had more grounding than it does.
+- After `SpriteFont`: `plan.md` Phase 4's remaining items (`Effect`/`Model`/
+  3D/audio) are explicitly flagged riskier than everything done so far —
+  the analysis docs specify even less for those than for `SpriteFont`.
+
 ## Namespace correction: `CNA.Framework` → `CNA`; `PlayerIndex` moved to root (2026-08-16)
 
 > Prompted by the user directly comparing this repo's namespaces against the

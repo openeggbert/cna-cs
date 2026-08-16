@@ -1,6 +1,7 @@
 using Xunit;
 using XnaColor = Microsoft.Xna.Framework.Color;
 using XnaKeys = Microsoft.Xna.Framework.Input.Keys;
+using XnaSpriteEffects = Microsoft.Xna.Framework.Graphics.SpriteEffects;
 using XnaVector2 = Microsoft.Xna.Framework.Vector2;
 
 namespace CNA.XnaCompat.Tests;
@@ -115,6 +116,16 @@ public class CompatibilityTests
 
         Assert.True(outer.Contains(inner));
         Assert.True(outer.Intersects(overlapping));
+    }
+
+    [Theory]
+    [InlineData(XnaSpriteEffects.None, CNA.Graphics.SpriteEffects.None)]
+    [InlineData(XnaSpriteEffects.FlipHorizontally, CNA.Graphics.SpriteEffects.FlipHorizontally)]
+    [InlineData(XnaSpriteEffects.FlipVertically, CNA.Graphics.SpriteEffects.FlipVertically)]
+    public void SpriteEffects_NumericValuesMatchFrameworkSpriteEffects(
+        XnaSpriteEffects xnaEffects, CNA.Graphics.SpriteEffects frameworkEffects)
+    {
+        Assert.Equal((int)frameworkEffects, (int)xnaEffects);
     }
 
     [Fact]

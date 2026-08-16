@@ -70,6 +70,16 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_clear(CnaHandle device, CnaColor color);
 
+    /// <summary>
+    /// Sets the active render target, or restores the back buffer when <paramref name="renderTarget"/>
+    /// is <see cref="CnaHandle.Zero"/>. No ABI shape exists upstream for this call (or for
+    /// render targets at all) -- self-designed for this repository, following the general §8/§9
+    /// conventions (opaque handle, <see cref="CnaResult"/> return, zero-handle-as-null sentinel
+    /// already used elsewhere in this file). See <c>CNA.Graphics.RenderTarget2D</c>.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_render_target(CnaHandle device, CnaHandle renderTarget);
+
     // -- Texture2D (§9, §24 SafeHandle-backed resource) --------------------------------------
 
     [LibraryImport(LibraryName)]
@@ -94,6 +104,23 @@ internal static partial class Native
         byte* data,
         nuint byteLength);
 
+    // -- RenderTarget2D (no upstream ABI shape exists yet; self-designed, see NEXT.md) -------
+
+    /// <summary>
+    /// Creates a render-target-usage texture. The resulting handle is released through the
+    /// ordinary <see cref="cna_texture2d_release"/> and read back through
+    /// <see cref="cna_texture2d_get_width"/>/<see cref="cna_texture2d_get_height"/> -- deliberately
+    /// *not* given its own release/getter functions, since <c>CNA.Graphics.RenderTarget2D</c>
+    /// subclasses <c>Texture2D</c> and the native handle is texture-shaped either way; only
+    /// creation needs render-target-specific usage flags on the native side.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target2d_create(
+        CnaHandle device,
+        int width,
+        int height,
+        out CnaHandle renderTarget);
+
     // -- SpriteBatch (§22 -- DrawMany batching is a Phase 5 addition, not here) --------------
 
     [LibraryImport(LibraryName)]
@@ -111,6 +138,18 @@ internal static partial class Native
         CnaHandle texture,
         CnaVector2 position,
         CnaColor color);
+
+    /// <summary>
+    /// The full XNA <c>Draw</c> overload family's primitive: source rectangle, rotation, origin,
+    /// scale, <c>SpriteEffects</c>, and layer depth, matching the <c>CNA_SpriteDrawCommand</c>
+    /// example struct in ../../cnabinding/analysis_binding.md §22 field-for-field. See
+    /// <see cref="CnaSpriteDrawCommand"/> for why this is a single-draw call, not the batched
+    /// <c>cna_sprite_batch_draw_many</c> the doc example illustrates.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sprite_batch_draw_ex(
+        CnaHandle spriteBatch,
+        in CnaSpriteDrawCommand command);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_end(CnaHandle spriteBatch);

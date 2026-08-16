@@ -89,4 +89,6 @@ public struct Rectangle : IEquatable<Rectangle>
     public override readonly bool Equals(object? obj) => obj is Rectangle other && Equals(other);
     public override readonly int GetHashCode() => HashCode.Combine(X, Y, Width, Height);
     public override readonly string ToString() => $"{{X:{X} Y:{Y} Width:{Width} Height:{Height}}}";
+
+    internal readonly CNA.Interop.CnaRect ToNative() => new(X, Y, Width, Height);
 }

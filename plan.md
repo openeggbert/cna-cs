@@ -1,7 +1,8 @@
 # CNA.NET (`cna-dotnet`) — Implementation Plan
 
 **Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
-math/value types and `Mouse`/`GamePad` done, native-backed types not started)
+math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads, and
+`RenderTarget2D` done; `SpriteFont`, `Effect`, 3D, and audio not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -158,13 +159,52 @@ Split by whether the type needs the (still nonexistent) native ABI:
       `.Input` — matches real XNA, where it's shared by `GamePad` and the
       GamerServices/Storage APIs. When adding a new type, don't assume its
       real XNA namespace from where it "feels" like it belongs; check.
-- [ ] **Native-backed, not started:** `SpriteFont`, `RenderTarget2D`,
-      `BasicEffect`/`Effect` (parameter-handle caching per §27), 3D
-      (`Model`, `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,
-      `SoundEffectInstance`, `Song`, `MediaPlayer`), extra `SpriteBatch.Draw`
-      overloads (source rect, rotation, scale, `SpriteEffects`, layer
-      depth). Blocked on the native ABI existing upstream, same as
-      everything in Phase 2/3.
+- [x] **Extra `SpriteBatch.Draw` overloads — done** (source rectangle,
+      rotation, origin, scale, `SpriteEffects`, layer depth; both the
+      position-based and destination-rectangle-based XNA overload families).
+      Backed by one new native primitive, `cna_sprite_batch_draw_ex`, taking
+      a `CnaSpriteDrawCommand` struct that matches the `CNA_SpriteDrawCommand`
+      example in `analysis_binding.md` §22 field-for-field (that example was
+      illustrating Phase 5 batching, not this single-draw call, but the
+      field shape carries over exactly). `SpriteEffects` added as a new
+      enum (`CNA.Graphics.SpriteEffects` / XnaCompat's own, numerically
+      identical, parity-tested) — no bit values exist in the analysis docs,
+      so real XNA 4.0's values were used from memory. Destination-rectangle
+      overloads resolve to position+scale in C# (no native call of their
+      own); everything else funnels through the one native primitive.
+- [x] **`RenderTarget2D` — done, self-designed ABI, no doc backing.**
+      Unlike the `Draw` overloads above, **no ABI shape for render targets
+      exists anywhere in `analysis_binding.md` or
+      `analysis_binding_sharp_runtime.md`** — confirmed by a full-text grep
+      of both files, not an assumption. `cna_render_target2d_create` and
+      `cna_graphics_device_set_render_target` are invented for this
+      repository, following the general handle/`CnaResult` conventions used
+      everywhere else, but with **no upstream reference to validate
+      against** — treat these two functions as the least-trustworthy
+      signatures in the whole `CNA.Interop` surface once Track A ships, more
+      so than anything else in Phase 4. `RenderTarget2D` reuses
+      `Texture2D`'s release/width/height native calls rather than getting
+      its own (see `RenderTarget2D.cs` doc comment for why). XnaCompat's
+      `RenderTarget2D` inherits from XnaCompat's own `Texture2D` (not this
+      project's `RenderTarget2D`) so `Texture2D t = someRenderTarget;`
+      compiles in game code — see that file and
+      `GraphicsDevice.SetRenderTarget`'s doc comment for the
+      accepts-`Texture2D`-not-`RenderTarget2D` looseness this required.
+- [ ] **`SpriteFont` — not started, and expect it to need actual ABI
+      design, not just doc-shape-following.** A full-text grep of both
+      analysis docs found *zero* mentions of glyph metrics, kerning, a
+      font atlas, `MeasureString`, or `DrawString` ABI shape — `SpriteFont`
+      is listed only as a name in status tables. Whoever picks this up next
+      should budget for genuinely designing the glyph-data-crossing-the-FFI
+      problem (character→glyph-rect/kerning/advance-width table format,
+      whether it rides through `ContentManager.Load` like `Texture2D` does
+      or needs its own load call), not just translating a doc section — see
+      `NEXT.md` for a design sketch.
+- [ ] **Still not started, still blocked the same way:** `BasicEffect`/
+      `Effect` (parameter-handle caching per §27), 3D (`Model`,
+      `VertexBuffer`, `IndexBuffer`), audio (`SoundEffect`,
+      `SoundEffectInstance`, `Song`, `MediaPlayer`). Blocked on the native
+      ABI existing upstream, same as everything in Phase 2/3.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 
