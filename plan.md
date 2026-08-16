@@ -2,9 +2,9 @@
 
 **Status:** Active — Phases 0-3 complete; Phase 4 partially complete (pure
 math/value types, `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads,
-`RenderTarget2D`, `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, and the
-zero-ABI vertex-format layer done; `Effect`, `VertexBuffer`/`IndexBuffer`/
-`Model`, and `Song`/`MediaPlayer` not started)
+`RenderTarget2D`, `SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the
+zero-ABI vertex-format layer, and `VertexBuffer`/`IndexBuffer` done;
+`Effect`/`BasicEffect`, `Model`, and `Song`/`MediaPlayer` not started)
 **Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -289,19 +289,42 @@ Split by whether the type needs the (still nonexistent) native ABI:
       verified against all five standard vertex structs' known real-XNA
       strides (12/16/20/24/32) in `VertexDeclarationTests`. `BufferUsage`
       added alongside these since `VertexBuffer`/`IndexBuffer` (native-backed,
-      not started yet) will need it.
+      done next, see below) needed it.
+- [x] **`VertexBuffer`/`IndexBuffer`/`IndexElementSize` — done, 2026-08-16
+      (session 6 continued yet further).** Second slice of the 3D
+      pipeline. No ABI shape for either exists in the analysis docs
+      (confirmed by grep — not even a naming-convention bullet, unlike
+      audio's `cna_audio_*` mention), but shaped to match the real
+      `openeggbert/cna` C++ engine's own working, tested,
+      renderer-backend-wired `VertexBuffer`/`IndexBuffer` implementations
+      (a renderer-owned GPU handle plus a CPU-side shadow buffer enabling
+      `GetData` readback) — same grounding `SoundEffect` had against
+      `modules/audio`. `SetData<T>`/`GetData<T>` use `where T : unmanaged`
+      (real XNA uses the broader `where T : struct`) — a deliberate
+      tightening, since `unmanaged` is what makes the `sizeof(T)`/`fixed`
+      pointer marshalling actually valid, and every realistic vertex/index
+      type is unmanaged anyway. Only the `VertexDeclaration`-taking (not
+      `Type`-taking) `VertexBuffer` constructor and the
+      `IndexElementSize`-taking (not `Type`-taking) `IndexBuffer`
+      constructor are implemented — the `Type`-taking overloads are
+      reflection-based convenience sugar over these, left for a follow-up.
+      **Real testability limitation, not just an untested corner:** unlike
+      `SoundEffect`, whose constructor validates every argument before
+      ever touching native code, `VertexBuffer`/`IndexBuffer`'s
+      constructors call native immediately after minimal validation, so
+      only their argument-validation failure paths (null/non-positive
+      argument checks) are testable here at all — `SetData`/`GetData`
+      cannot be exercised without a real `cna-native`, because there is no
+      way to reach a successfully-constructed instance to call them on.
 - [ ] **Still not started, still blocked the same way:** `BasicEffect`/
-      `Effect`/`EffectParameter`/`EffectPass`/`EffectTechnique`,
-      `VertexBuffer`/`IndexBuffer`/`Model` (native-backed halves of the 3D
-      pipeline — confirmed the real C++ engine has full, working, tested,
-      renderer-backend-wired implementations of all of these too, same
-      lucky break as `SoundEffect`/audio, but the *combined* surface needed
-      for even a minimal "draw a textured triangle" demo — buffer creation,
-      effect parameter application, and the actual
-      `GraphicsDevice.DrawIndexedPrimitives`-style draw call — is large and
-      tightly interdependent, so it was deliberately not attempted in the
-      same pass as the zero-ABI vertex-format layer above), `Song`/
-      `MediaPlayer` (no public constructor in real XNA for `Song` at all —
+      `Effect`/`EffectParameter`/`EffectPass`/`EffectTechnique`, `Model`
+      (native-backed; the real C++ engine has full, working, tested,
+      renderer-backend-wired implementations of these too, same lucky
+      break `SoundEffect`/`VertexBuffer` had, but `BasicEffect` alone needs
+      a large property surface — World/View/Projection, lighting,
+      texturing, fog — and `GraphicsDevice.DrawIndexedPrimitives`-style
+      draw calls are needed before any of it produces a visible result),
+      `Song`/`MediaPlayer` (no public constructor in real XNA for `Song` at all —
       would need native streaming-audio-format loading, a different and
       harder problem than `SoundEffect`'s raw-PCM-buffer escape hatch
       solved). Blocked on the native ABI existing upstream, same as

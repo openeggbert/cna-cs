@@ -26,6 +26,12 @@ public class VertexDeclaration
 
     public int VertexStride => _framework.VertexStride;
 
+    /// <summary>The wrapped <c>CNA.Graphics.VertexDeclaration</c> -- <c>internal</c> (same
+    /// assembly, no cross-assembly grant needed) so <c>VertexBuffer</c>'s constructor can forward
+    /// it to <c>CNA.Graphics.VertexBuffer</c>'s base constructor without re-converting the
+    /// element array a second time.</summary>
+    internal CNA.Graphics.VertexDeclaration Framework => _framework;
+
     public VertexElement[] GetVertexElements()
     {
         CNA.Graphics.VertexElement[] source = _framework.GetVertexElements();

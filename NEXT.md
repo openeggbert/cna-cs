@@ -11,6 +11,86 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `VertexBuffer`/`IndexBuffer` (2026-08-16, session 6 continued still further)
+
+> Continuation of the vertex-format work, per its own "where to pick up
+> next" pointer: the native-backed half of the buffer layer, ahead of
+> `BasicEffect` (needs a buffer to apply to for a demo to make sense) and
+> `Model` (needs both).
+
+Same ABI-grounding situation as `SoundEffect`: no doc-backed shape (not
+even a naming-convention bullet, unlike audio's `cna_audio_*`), but the
+real `openeggbert/cna` C++ engine's `modules/graphics/` already has full,
+tested, renderer-backend-wired `VertexBuffer`/`IndexBuffer`
+implementations — a renderer-owned GPU handle plus a CPU-side shadow byte
+buffer enabling `GetData()` readback. Every native function added here is
+shaped to match that.
+
+**Deliberate typing tightening, worth remembering for `Model`/`Effect`
+too:** `SetData<T>`/`GetData<T>` use `where T : unmanaged`, not real XNA's
+broader `where T : struct`. `unmanaged` is what makes `sizeof(T)` and
+`fixed (T* p = data)` legal in the marshalling code; every realistic
+vertex/index type (the five standard vertex structs from the previous
+entry, `short`/`int` for indices) already satisfies it, so this loses
+nothing in practice while making the implementation actually valid C#.
+Documented as an intentional deviation, not silently narrower than
+advertised.
+
+**Real testability limitation, different in kind from `SoundEffect`'s:**
+`SoundEffect`'s constructor validates every argument in managed code
+*before* ever calling native, so its validation-failure paths are fully
+testable without a real `cna-native`. `VertexBuffer`/`IndexBuffer`'s
+constructors call native immediately after only minimal validation
+(non-null, positive count) — there is no way to reach a
+successfully-constructed instance to call `SetData`/`GetData` on without
+real native code, so *only* the constructors' own argument checks are
+testable here, not the data-transfer methods at all. Said so explicitly in
+both the test file's own doc comment and `plan.md`, rather than let the
+existing test count imply more coverage than there is.
+
+**Only the `VertexDeclaration`/`IndexElementSize`-taking constructors are
+implemented**, not real XNA's additional `Type`-taking overloads
+(`VertexBuffer(GraphicsDevice, Type, int, BufferUsage)` /
+`IndexBuffer(GraphicsDevice, Type, int, BufferUsage)`), which derive the
+declaration/element-size from a `Type` via reflection (an
+`IVertexType.VertexDeclaration` static-property lookup, or `typeof(short)`/
+`typeof(int)` size inference) — convenience sugar over the constructors
+that are implemented, left for a follow-up rather than adding reflection
+based type discovery to this pass.
+
+**XnaCompat pattern note:** `VertexDeclaration` (from the previous entry)
+is a *wrapped* (composition), not subclassed, compat type — so
+`CNA.XnaCompat.VertexBuffer`'s constructor needed a way to reach the
+wrapped `CNA.Graphics.VertexDeclaration` to forward to
+`CNA.Graphics.VertexBuffer`'s base constructor. Added a plain `internal
+CNA.Graphics.VertexDeclaration Framework => _framework;` accessor on
+`CNA.XnaCompat.VertexDeclaration` — ordinary same-assembly `internal` is
+enough here (both types live in the `CNA.XnaCompat` project), no
+`InternalsVisibleTo` grant needed the way crossing from `CNA.Framework`
+into `CNA.XnaCompat` needs one.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects. `dotnet test CNA.sln`: 173/173 passing (up from 166 -- 7 new
+constructor-validation tests; no `SetData`/`GetData` tests are possible,
+see above). `samples/HelloGame` re-verified unaffected.
+
+**Where to pick up next:** `BasicEffect`/`Effect` — well-grounded (real
+C++ implementation confirmed), but meaningfully larger than `VertexBuffer`/
+`IndexBuffer` alone: `BasicEffect` has a large property surface
+(World/View/Projection, `VertexColorEnabled`, `TextureEnabled`/`Texture`,
+`Alpha`, lighting via `AmbientLightColor`/`DirectionalLight0-2`/
+`EnableDefaultLighting`/material colors, fog via `FogEnabled`/`FogColor`/
+`FogStart`/`FogEnd`), and — per this session's own research notes — real
+`.fx` shader bytecode is explicitly **not** supported even by the real
+C++ engine yet (`Effect(GraphicsDevice, byte[])` always throws
+`NotImplementedException` there, tracked as their own "Phase 74"), so
+whatever gets built here should target hand-authored/stock effects
+(`BasicEffect` itself, not custom compiled shaders) to stay within what
+the real engine can actually do. `GraphicsDevice.DrawIndexedPrimitives`
+(or equivalent) is also still needed before any of this produces a
+visible result — worth deciding whether that belongs in the same pass as
+`BasicEffect` or its own.
+
 ## Fourth `/code-review high` pass, over the vertex-format commit (2026-08-16, session 6 continued once more)
 
 Ran the same review discipline a fourth time, including for this

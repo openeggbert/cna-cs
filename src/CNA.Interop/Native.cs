@@ -282,4 +282,66 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_soundeffectinstance_set_is_looped(CnaHandle instance, byte looped);
+
+    // -- VertexBuffer / IndexBuffer ------------------------------------------------------------
+    //
+    // Same situation as audio: no ABI shape for either exists in the analysis docs (confirmed by
+    // grep -- neither struct nor a naming-convention bullet, unlike audio's "cna_audio_*"
+    // mention), but the real openeggbert/cna C++ engine's modules/graphics/ already has full,
+    // tested, renderer-backend-wired VertexBuffer/IndexBuffer implementations (a std::unique_ptr
+    // to a renderer-owned GPU handle plus a CPU-side "shadow" byte buffer enabling GetData()
+    // readback) -- every function here is shaped to match that real implementation, not invented
+    // from nothing. See CNA.Framework's VertexBuffer.cs/IndexBuffer.cs for the object-model side.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_vertexbuffer_create(
+        CnaHandle device,
+        int vertexStride,
+        int vertexCount,
+        int bufferUsage,
+        out CnaHandle vertexBuffer);
+
+    [LibraryImport(LibraryName)]
+    internal static partial void cna_vertexbuffer_release(CnaHandle vertexBuffer);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertexbuffer_set_data(
+        CnaHandle vertexBuffer,
+        int offsetInBytes,
+        byte* data,
+        nuint byteLength,
+        int vertexStride);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertexbuffer_get_data(
+        CnaHandle vertexBuffer,
+        int offsetInBytes,
+        byte* data,
+        nuint byteLength,
+        int vertexStride);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_indexbuffer_create(
+        CnaHandle device,
+        int indexElementSize,
+        int indexCount,
+        int bufferUsage,
+        out CnaHandle indexBuffer);
+
+    [LibraryImport(LibraryName)]
+    internal static partial void cna_indexbuffer_release(CnaHandle indexBuffer);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_indexbuffer_set_data(
+        CnaHandle indexBuffer,
+        int offsetInBytes,
+        byte* data,
+        nuint byteLength);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_indexbuffer_get_data(
+        CnaHandle indexBuffer,
+        int offsetInBytes,
+        byte* data,
+        nuint byteLength);
 }
