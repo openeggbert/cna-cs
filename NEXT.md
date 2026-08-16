@@ -11,6 +11,41 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Tenth `/code-review high` pass, over the `SpriteBatch` batching commit (2026-08-16, session 6 continued yet further still again once more still further again once more still further)
+
+Ran the review a tenth time. Two real findings, both fixed:
+
+- **Fixed, real, and a genuine "permanently bricked instance" bug:**
+  `End()` only reset `_hasBegun = false` on its last line, after both the
+  flush (`cna_sprite_batch_draw_many`) and the native end call
+  (`cna_sprite_batch_end`) had already succeeded. If either failed and
+  threw `CnaException`, `_hasBegun` stayed `true` forever -- there's no
+  public API to reset it directly, so every subsequent `Begin()` call
+  would throw "cannot be called again until End has been successfully
+  called," with no recovery short of disposing the instance and
+  constructing a brand-new one. Wrapped the flush + native-end call in
+  `try`/`finally`, unconditionally resetting `_hasBegun = false` -- a
+  caller can now retry `Begin()` after a failed `End()` instead of losing
+  the `SpriteBatch` permanently. Worth remembering as a general shape:
+  any state flag that's only reset on a method's success path, with no
+  other way to reset it, is a latent "one native failure away from
+  permanently wedging this object" bug -- worth checking for on any
+  future stateful wrapper this session or a later one adds.
+- **Fixed, real, a message-quality bug:** the shared private `DrawEx`
+  hardcoded `EnsureHasBegun(nameof(Draw))`, but it's the funnel-through
+  point for *both* the `Draw` overload family *and* `DrawString`'s
+  per-glyph loop -- so calling `DrawString` without `Begin()` threw
+  "Begin must be called before Draw," naming the wrong method. Threaded a
+  `caller` parameter through both private `DrawEx` overloads instead of
+  hardcoding one name, with every call site passing its own actual
+  top-level method name (`nameof(Draw)` from all six `Draw` overloads,
+  `nameof(DrawString)` from the glyph loop).
+
+No new tests possible -- same limitation as the commit these fixes apply
+to (`SpriteBatch` still has no way to construct a test instance without a
+real `cna-native`). 242/242 tests passing, unchanged; `dotnet build`
+clean; `samples/HelloGame` re-verified unaffected.
+
 ## `SpriteBatch` command buffering (Phase 5) (2026-08-16, session 6 continued yet further still again once more still further again once more still)
 
 > Every explicitly-flagged Phase 4 item is now done (see the previous

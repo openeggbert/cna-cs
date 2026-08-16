@@ -61,16 +61,16 @@ public class SpriteBatch : IDisposable
     }
 
     public void Draw(Texture2D texture, Vector2 position, Color color) =>
-        DrawEx(texture, position, null, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f);
+        DrawEx(texture, position, null, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f, nameof(Draw));
 
     public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color) =>
-        DrawEx(texture, position, sourceRectangle, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f);
+        DrawEx(texture, position, sourceRectangle, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f, nameof(Draw));
 
     public void Draw(Texture2D texture, Rectangle destinationRectangle, Color color) =>
         Draw(texture, destinationRectangle, null, color);
 
     public void Draw(Texture2D texture, Rectangle destinationRectangle, Rectangle? sourceRectangle, Color color) =>
-        DrawEx(texture, destinationRectangle, sourceRectangle, color, 0f, Vector2.Zero, SpriteEffects.None, 0f);
+        DrawEx(texture, destinationRectangle, sourceRectangle, color, 0f, Vector2.Zero, SpriteEffects.None, 0f, nameof(Draw));
 
     public void Draw(
         Texture2D texture,
@@ -82,7 +82,7 @@ public class SpriteBatch : IDisposable
         float scale,
         SpriteEffects effects,
         float layerDepth) =>
-        DrawEx(texture, position, sourceRectangle, color, rotation, origin, new Vector2(scale, scale), effects, layerDepth);
+        DrawEx(texture, position, sourceRectangle, color, rotation, origin, new Vector2(scale, scale), effects, layerDepth, nameof(Draw));
 
     public void Draw(
         Texture2D texture,
@@ -94,7 +94,7 @@ public class SpriteBatch : IDisposable
         Vector2 scale,
         SpriteEffects effects,
         float layerDepth) =>
-        DrawEx(texture, position, sourceRectangle, color, rotation, origin, scale, effects, layerDepth);
+        DrawEx(texture, position, sourceRectangle, color, rotation, origin, scale, effects, layerDepth, nameof(Draw));
 
     public void Draw(
         Texture2D texture,
@@ -105,11 +105,15 @@ public class SpriteBatch : IDisposable
         Vector2 origin,
         SpriteEffects effects,
         float layerDepth) =>
-        DrawEx(texture, destinationRectangle, sourceRectangle, color, rotation, origin, effects, layerDepth);
+        DrawEx(texture, destinationRectangle, sourceRectangle, color, rotation, origin, effects, layerDepth, nameof(Draw));
 
-    /// <summary>The position/rotation/scale primitive every <c>Draw</c> overload above funnels
-    /// through -- appends one <see cref="CnaSpriteDrawCommand"/> to <see cref="_commandBuffer"/>;
-    /// no native call happens here at all anymore, see this type's own doc comment.</summary>
+    /// <summary>The position/rotation/scale primitive every <c>Draw</c>/<c>DrawString</c> call
+    /// above funnels through -- appends one <see cref="CnaSpriteDrawCommand"/> to
+    /// <see cref="_commandBuffer"/>; no native call happens here at all anymore, see this type's
+    /// own doc comment. Takes <paramref name="caller"/> rather than hardcoding a name in
+    /// <see cref="EnsureHasBegun"/>'s call, since both <c>Draw</c> and <c>DrawString</c> funnel
+    /// through this same private method -- hardcoding one name here would misattribute a
+    /// no-<c>Begin</c> failure from the other caller.</summary>
     private void DrawEx(
         Texture2D texture,
         Vector2 position,
@@ -119,10 +123,11 @@ public class SpriteBatch : IDisposable
         Vector2 origin,
         Vector2 scale,
         SpriteEffects effects,
-        float layerDepth)
+        float layerDepth,
+        string caller)
     {
         ArgumentNullException.ThrowIfNull(texture);
-        EnsureHasBegun(nameof(Draw));
+        EnsureHasBegun(caller);
 
         Rectangle source = sourceRectangle ?? new Rectangle(0, 0, texture.Width, texture.Height);
 
@@ -141,7 +146,7 @@ public class SpriteBatch : IDisposable
     /// <summary>The destination-rectangle overloads' primitive: XNA specifies these by the
     /// screen-space rectangle the sprite should fill rather than by position+scale, so this
     /// resolves that rectangle (and the source-vs-whole-texture size it is scaled against) down
-    /// to the position+scale form <see cref="DrawEx(Texture2D,Vector2,Rectangle?,Color,float,Vector2,Vector2,SpriteEffects,float)"/>
+    /// to the position+scale form <see cref="DrawEx(Texture2D,Vector2,Rectangle?,Color,float,Vector2,Vector2,SpriteEffects,float,string)"/>
     /// expects, then delegates to it -- the actual native call happens there, not here.</summary>
     private void DrawEx(
         Texture2D texture,
@@ -151,7 +156,8 @@ public class SpriteBatch : IDisposable
         float rotation,
         Vector2 origin,
         SpriteEffects effects,
-        float layerDepth)
+        float layerDepth,
+        string caller)
     {
         ArgumentNullException.ThrowIfNull(texture);
 
@@ -170,7 +176,8 @@ public class SpriteBatch : IDisposable
             origin,
             scale,
             effects,
-            layerDepth);
+            layerDepth,
+            caller);
     }
 
     public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color) =>
@@ -226,20 +233,35 @@ public class SpriteBatch : IDisposable
                 origin - placement.Anchor,
                 scale,
                 effects,
-                layerDepth);
+                layerDepth,
+                nameof(DrawString));
         }
     }
 
+    /// <summary>
+    /// Wraps the flush + native end call in <c>try</c>/<c>finally</c> specifically so a native
+    /// failure can't permanently strand this instance: without it, a thrown <see cref="CnaException"/>
+    /// would leave <see cref="_hasBegun"/> stuck <c>true</c> forever, since nothing else ever
+    /// resets it and there is no public API to do so directly -- every future <see cref="Begin"/>
+    /// call would then throw "cannot be called again until End has been successfully called"
+    /// with no way to recover short of disposing this instance and constructing a new one. Resetting
+    /// unconditionally lets a caller retry <see cref="Begin"/> after a failure instead.
+    /// </summary>
     public void End()
     {
         EnsureHasBegun(nameof(End));
 
-        FlushCommandBuffer();
+        try
+        {
+            FlushCommandBuffer();
 
-        CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));
-        CnaException.ThrowIfFailed(result, nameof(End));
-
-        _hasBegun = false;
+            CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));
+            CnaException.ThrowIfFailed(result, nameof(End));
+        }
+        finally
+        {
+            _hasBegun = false;
+        }
     }
 
     /// <summary>The one native call the whole buffered batch flushes through -- a no-op if
