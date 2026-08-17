@@ -33,6 +33,19 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// </summary>
 public sealed class Model : CNA.Graphics.Model
 {
+    // Code-review findings: a per-call `new CNA.Matrix[destinationBoneTransforms.Length]` buffer
+    // (1) allocated on every call -- these three methods are a standard per-frame skeletal-
+    // animation idiom, so that's avoidable GC pressure the base class's own Draw() already avoids
+    // via its own cached _sharedDrawBoneMatrices -- and (2), worse, sized to the *caller's* array
+    // length rather than Bones.Count: base.Copy*() only ever writes indices [0, Bones.Count), so a
+    // caller-supplied array longer than Bones.Count (a real, reasonable shape -- e.g. a reused
+    // scratch buffer sized for the largest model in a batch) had its untouched, zeroed-out tail
+    // copied back over whatever the caller's array already held there, silently clobbering data
+    // real XNA (and the base method called directly) leaves alone. A single Bones.Count-sized,
+    // lazily-grown shared buffer fixes both: it can never hold more than Bones.Count meaningful
+    // entries to begin with, and it's only (re)allocated once per instance.
+    private CNA.Matrix[] _sharedConversionBuffer = [];
+
     public Model(GraphicsDevice graphicsDevice, IReadOnlyList<ModelBone> bones, IReadOnlyList<ModelMesh> meshes)
         : this(graphicsDevice, bones, meshes, [], 0)
     {
@@ -59,10 +72,14 @@ public sealed class Model : CNA.Graphics.Model
     public void CopyAbsoluteBoneTransformsTo(Matrix[] destinationBoneTransforms)
     {
         ArgumentNullException.ThrowIfNull(destinationBoneTransforms);
+        if (destinationBoneTransforms.Length < Bones.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(destinationBoneTransforms));
+        }
 
-        var buffer = new CNA.Matrix[destinationBoneTransforms.Length];
+        CNA.Matrix[] buffer = GetSharedConversionBuffer();
         base.CopyAbsoluteBoneTransformsTo(buffer);
-        for (int i = 0; i < buffer.Length; i++)
+        for (int i = 0; i < Bones.Count; i++)
         {
             destinationBoneTransforms[i] = buffer[i];
         }
@@ -71,9 +88,13 @@ public sealed class Model : CNA.Graphics.Model
     public void CopyBoneTransformsFrom(Matrix[] sourceBoneTransforms)
     {
         ArgumentNullException.ThrowIfNull(sourceBoneTransforms);
+        if (sourceBoneTransforms.Length < Bones.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sourceBoneTransforms));
+        }
 
-        var buffer = new CNA.Matrix[sourceBoneTransforms.Length];
-        for (int i = 0; i < sourceBoneTransforms.Length; i++)
+        CNA.Matrix[] buffer = GetSharedConversionBuffer();
+        for (int i = 0; i < Bones.Count; i++)
         {
             buffer[i] = sourceBoneTransforms[i];
         }
@@ -84,12 +105,26 @@ public sealed class Model : CNA.Graphics.Model
     public void CopyBoneTransformsTo(Matrix[] destinationBoneTransforms)
     {
         ArgumentNullException.ThrowIfNull(destinationBoneTransforms);
+        if (destinationBoneTransforms.Length < Bones.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(destinationBoneTransforms));
+        }
 
-        var buffer = new CNA.Matrix[destinationBoneTransforms.Length];
+        CNA.Matrix[] buffer = GetSharedConversionBuffer();
         base.CopyBoneTransformsTo(buffer);
-        for (int i = 0; i < buffer.Length; i++)
+        for (int i = 0; i < Bones.Count; i++)
         {
             destinationBoneTransforms[i] = buffer[i];
         }
+    }
+
+    private CNA.Matrix[] GetSharedConversionBuffer()
+    {
+        if (_sharedConversionBuffer.Length < Bones.Count)
+        {
+            _sharedConversionBuffer = new CNA.Matrix[Bones.Count];
+        }
+
+        return _sharedConversionBuffer;
     }
 }

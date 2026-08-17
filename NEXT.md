@@ -30,6 +30,71 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## Twenty-second `/code-review high` pass, over the `Model` compat mirror commit -- a real, confirmed data-clobbering bug, plus a GC-pressure fix and a duplication cleanup (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again)
+
+Ran the review over the `Model` compat mirror commit (`f19f6c6`). Five
+findings, three worth fixing as one cohesive change, one documented
+rather than fixed, one already covered by existing precedent-matching
+reasoning that didn't need repeating:
+
+- **Real, confirmed bug, the most serious finding of this whole
+  feature:** `CopyAbsoluteBoneTransformsTo`/`CopyBoneTransformsTo` each
+  allocated a temp `CNA.Matrix[]` buffer *sized to the caller's array
+  length*, called the base method (which only ever writes indices
+  `[0, Bones.Count)`), then copied the *entire* buffer back into the
+  caller's array -- including the untouched, zeroed-out tail whenever the
+  caller passed an array longer than `Bones.Count` (a real, reasonable
+  shape: a reused scratch buffer sized for the largest model in a batch,
+  for instance). This silently clobbered whatever the caller's array
+  already held past `Bones.Count`, a real behavior divergence from both
+  real XNA and the base method called directly (neither ever touches
+  past `Bones.Count`). Fixed by switching to a single, `Bones.Count`-sized,
+  lazily-allocated shared buffer (matching the base class's own
+  `Draw()`/`_sharedDrawBoneMatrices` pattern) and only ever copying back
+  exactly `Bones.Count` entries -- this also directly addresses a second,
+  lower-severity finding in the same three methods (a fresh buffer
+  allocated on every call, avoidable GC pressure for what's a standard
+  per-frame skeletal-animation idiom in real XNA games) as a side effect
+  of the same fix, since the shared buffer only needs allocating once per
+  instance. Not independently testable here -- `Model` needs a
+  `GraphicsDevice` to construct, unreachable from `CNA.XnaCompat.Tests`
+  for the same pre-existing reason documented on compat `VertexBuffer`/
+  `IndexBuffer`/`BasicEffect` -- confirmed correct by re-tracing the fix
+  against the base method's own documented write range instead.
+- **Real duplication, fixed the same way this codebase already fixed the
+  identical shape of problem once before:** `ModelBoneCollection`/
+  `ModelMeshCollection` were near-verbatim copy-paste duplicates of each
+  other (int/string indexers, `TryGetValue`, `Contains`, three
+  `GetEnumerator` overloads), the reviewer noting this codebase already
+  has a shared generic base for *this exact class of duplication*
+  (`CNA.Media.ReadOnlyMediaCollection<T>`) that these two didn't reuse --
+  though that specific type's own shape doesn't fit (no by-name lookup at
+  all, unlike these two). Extracted a new, this-namespace-local
+  `NamedModelCollection<T>` (parameterized by a name-selector delegate and
+  an element-kind string, so the original "A bone/mesh named 'X' was not
+  found" message wording is preserved exactly, not genericized away) --
+  both collections now derive from it directly, matching
+  `ReadOnlyMediaCollection<T>`'s own "one shared base per namespace, not
+  shared across the base/compat assembly boundary" precedent.
+- **Documented, not fixed, the same judgment already applied to
+  `MediaLibrary.SavePicture`'s own upcast caveat:** `ModelBone.Children`'s
+  parallel bookkeeping only stays in sync if every caller reaches
+  `AddChild` through a compat-typed reference -- an explicit, deliberate
+  upcast to `CNA.Graphics.ModelBone` bypassing this override entirely
+  would desync it. Not fixable without either making the base `AddChild`
+  virtual (a base-layer change with its own ripple effects) or abandoning
+  the extend-directly design for a full independent reimplementation
+  (unjustified for something that requires deliberate upcast misuse to
+  trigger -- ported XNA game code only ever knows this namespace's own
+  `ModelBone`). Strengthened the doc comment to state this plainly rather
+  than leave it implicit.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 391/391 passing, unchanged (the collection refactor is behavior-
+preserving, confirmed by the existing `ModelBone`/`ModelBoneCollection`
+tests still passing against it; the `Model.cs` fix itself isn't testable
+here for the reason above). `samples/HelloGame` re-verified unaffected.
+
 ## `Model`'s `CNA.XnaCompat` mirror -- done, applying (and extending) the `BasicEffect` narrow-gap precedent rather than the picture-library's full-independent-reimplementation one (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Build Model's CNA.XnaCompat mirror")
 
 Picked this up once the `.xnb` loading feature's own review cycle closed
