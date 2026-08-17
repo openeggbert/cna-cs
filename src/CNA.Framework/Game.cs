@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using CNA.Content;
 using CNA.Graphics;
 using CNA.Interop;
@@ -10,41 +11,92 @@ namespace CNA;
 /// <summary>
 /// Base class for a CNA game. Native CNA owns window creation, platform event pumping, timing,
 /// and the frame lifecycle; it calls back into this class at coarse per-frame boundaries through
-/// <see cref="CnaManagedGameCallbacks"/>. See the "Game inheritance requires a callback bridge"
-/// design in ../../cnabinding/analysis_binding.md §20-§21.
+/// <see cref="CnaManagedGameCallbacks"/> (the main lifecycle table) and
+/// <see cref="CnaGameFrameHooks"/> (a second, optional table this class uses only for
+/// <see cref="Initialize"/> today) -- see <c>NEXT.md</c>'s native-ABI-migration entry for why this
+/// class now builds two native tables and makes two native calls during construction instead of
+/// one.
+///
+/// Every real lifecycle callback returns <c>CNA_Result</c> and can report a diagnostic through an
+/// <c>out_error</c> parameter -- a managed exception must never unwind across the
+/// <c>UnmanagedCallersOnly</c> boundary that is undefined behavior, so every callback wrapper below
+/// catches, converts to <c>CNA_RESULT_CALLBACK</c>, and reports the exception's message through
+/// <see cref="ReportCallbackFailure"/>, which encodes it into <see cref="_callbackErrorBuffer"/>: a
+/// buffer allocated once, pinned for this <see cref="Game"/> instance's whole lifetime via
+/// <see cref="GC.AllocateArray{T}(int, bool)"/>. That pinning choice is deliberate, not incidental
+/// -- <c>CNA_CallbackError.message</c> is only guaranteed valid until the *callback* returns, but a
+/// `fixed`-pinned pointer built inside a *callee* method (rather than the
+/// <c>UnmanagedCallersOnly</c> wrapper itself) stops being reachable the instant that callee
+/// returns, since nothing keeps the byte array rooted after its only reference (a local variable)
+/// goes out of scope -- the array could be collected before native ever reads the pointer. A
+/// buffer pinned for the whole <see cref="Game"/> instance's lifetime sidesteps that lifetime
+/// question entirely instead of relying on a `fixed` block's lexical scope lining up exactly right.
 /// </summary>
 public abstract class Game : IDisposable
 {
+    /// <summary>Matches real XNA's own default <c>TargetElapsedTime</c> (1/60 second, expressed in
+    /// 100ns ticks) -- also the exact value the real C API's own lifecycle smoke test uses for the
+    /// same field, confirmed by reading it directly.</summary>
+    private const long DefaultTargetElapsedTimeTicks = 166_667;
+
+    private const int CallbackErrorBufferSize = 512;
+
     private readonly CnaHandle _nativeHandle;
+    private readonly byte[] _callbackErrorBuffer = GC.AllocateArray<byte>(CallbackErrorBufferSize, pinned: true);
     private GCHandle _selfHandle;
     private bool _graphicsDeviceInitialized;
     private bool _disposed;
 
-    protected Game()
+    protected unsafe Game()
     {
         _selfHandle = GCHandle.Alloc(this);
+        nint context = GCHandle.ToIntPtr(_selfHandle);
 
-        CnaResult result;
-        unsafe
+        var callbacks = new CnaManagedGameCallbacks
         {
-            var callbacks = new CnaManagedGameCallbacks
-            {
-                Initialize = &OnInitialize,
-                LoadContent = &OnLoadContent,
-                Update = &OnUpdate,
-                Draw = &OnDraw,
-                UnloadContent = &OnUnloadContent,
-            };
+            StructSize = (uint)sizeof(CnaManagedGameCallbacks),
+            StructVersion = 1,
+            LoadContent = &OnLoadContent,
+            Update = &OnUpdate,
+            Draw = &OnDraw,
+            UnloadContent = &OnUnloadContent,
+            Context = context,
+        };
 
-            result = Native.cna_managed_game_create(in callbacks, GCHandle.ToIntPtr(_selfHandle), out _nativeHandle);
-        }
+        var createInfo = new CnaGameCreateInfo
+        {
+            StructSize = (uint)sizeof(CnaGameCreateInfo),
+            StructVersion = 1,
+            IsFixedTimeStep = 1,
+            TargetElapsedTimeTicks = DefaultTargetElapsedTimeTicks,
+            WindowTitle = default,
+            Callbacks = &callbacks,
+        };
 
+        CnaResult result = Native.cna_game_create(in createInfo, out _nativeHandle);
         if (result.IsFailure())
         {
             _selfHandle.Free();
-            CnaException.ThrowIfFailed(result, "cna_managed_game_create");
+            CnaException.ThrowIfFailed(result, "cna_game_create");
         }
 
+        var hooks = new CnaGameFrameHooks
+        {
+            StructSize = (uint)sizeof(CnaGameFrameHooks),
+            StructVersion = 1,
+            Initialize = &OnInitialize,
+            Context = context,
+        };
+
+        result = Native.cna_game_set_frame_hooks_ext(_nativeHandle, in hooks);
+        if (result.IsFailure())
+        {
+            Native.cna_game_destroy(_nativeHandle);
+            _selfHandle.Free();
+            CnaException.ThrowIfFailed(result, "cna_game_set_frame_hooks_ext");
+        }
+
+        CnaAmbientGame.Current = _nativeHandle;
         Content = CreateContentManager();
     }
 
@@ -53,9 +105,12 @@ public abstract class Game : IDisposable
     /// outside this file) that need it. Deliberately typed as <see cref="nint"/>, not
     /// <see cref="CnaHandle"/>, so it can appear in <c>protected</c> members that CNA.XnaCompat's
     /// subclass overrides touch -- see <see cref="GetNativeGraphicsDeviceHandle"/> and
-    /// <see cref="GetNativeContentHandle"/> below, and docs/architecture.md.
+    /// <see cref="GetNativeContentHandle"/> below, and docs/architecture.md. <see cref="CnaHandle"/>'s
+    /// own backing field is a fixed-width <see cref="ulong"/> (matching the real ABI's
+    /// <c>CNA_Handle</c> exactly), so this narrows with an explicit, checked-at-the-boundary cast
+    /// rather than an implicit one -- see <see cref="CnaHandle"/>'s own doc comment.
     /// </summary>
-    internal nint NativeHandle => _nativeHandle.Value;
+    internal nint NativeHandle => checked((nint)_nativeHandle.Value);
 
     public ContentManager Content { get; }
 
@@ -64,11 +119,15 @@ public abstract class Game : IDisposable
     /// <summary>Hands control to native CNA. Blocks until the game exits.</summary>
     public void Run()
     {
-        CnaResult result = Native.cna_managed_game_run(_nativeHandle);
-        CnaException.ThrowIfFailed(result, "cna_managed_game_run");
+        CnaResult result = Native.cna_game_run(_nativeHandle);
+        CnaException.ThrowIfFailed(result, "cna_game_run");
     }
 
-    public void Exit() => Native.cna_managed_game_exit(_nativeHandle);
+    public void Exit()
+    {
+        CnaResult result = Native.cna_game_request_exit(_nativeHandle);
+        CnaException.ThrowIfFailed(result, "cna_game_request_exit");
+    }
 
     protected virtual void Initialize()
     {
@@ -103,11 +162,40 @@ public abstract class Game : IDisposable
     /// <see cref="nint"/>, not a <see cref="CnaHandle"/>, specifically so CNA.XnaCompat's
     /// <c>Game.CreateGraphicsDevice()</c> override can call it without ever naming a
     /// CNA.Interop type (see plan.md invariant #5).
+    ///
+    /// Real <c>cna_game_get_graphics_device</c> only succeeds from inside an active lifecycle
+    /// callback, and the handle it returns is documented as valid only until that callback
+    /// returns -- confirmed directly against <c>LifecycleSmoke.c</c>, not just inferred from the
+    /// header doc comment: calling it outside a callback returns <c>CNA_RESULT_INVALID_STATE</c>,
+    /// and a handle captured during one callback becomes <c>CNA_RESULT_INVALID_HANDLE</c> once a
+    /// later, separate callback invocation begins. This method is still safe to call here, since
+    /// <see cref="EnsureGraphicsDevice"/> only ever calls it from inside <see cref="OnInitialize"/>,
+    /// itself a real, active lifecycle callback -- but the <see cref="GraphicsDevice"/> wrapper it
+    /// builds from the result then caches that one-callback-scoped handle for the rest of the
+    /// game's life, which the real ABI does not actually guarantee stays valid. That is a known,
+    /// deliberate gap this step of the native-ABI migration does not yet close -- fixing it needs
+    /// <see cref="GraphicsDevice"/>'s own methods to re-fetch a fresh device handle on every call
+    /// instead, which touches that whole class's native surface together with the rest of its own
+    /// signature corrections (see <c>NEXT.md</c>'s native-ABI-migration entry, step 3).
     /// </summary>
-    protected nint GetNativeGraphicsDeviceHandle() => Native.cna_game_get_graphics_device(_nativeHandle).Value;
+    protected nint GetNativeGraphicsDeviceHandle()
+    {
+        CnaResult result = Native.cna_game_get_graphics_device(_nativeHandle, out CnaHandle device);
+        CnaException.ThrowIfFailed(result, "cna_game_get_graphics_device");
+        return checked((nint)device.Value);
+    }
 
-    /// <summary>Same rationale as <see cref="GetNativeGraphicsDeviceHandle"/>, for content.</summary>
-    protected nint GetNativeContentHandle() => Native.cna_game_get_content(_nativeHandle).Value;
+    /// <summary>Same rationale as <see cref="GetNativeGraphicsDeviceHandle"/>'s first paragraph, for
+    /// content -- but unlike the graphics device handle, the real content-manager handle is safe to
+    /// resolve once and keep: <c>content.h</c>'s own doc comment says a borrowed manager "answers
+    /// the same handle every time it is asked" with no per-callback validity caveat, confirmed by
+    /// reading <c>RuntimeGameSmoke.c</c>'s <c>validate_content_manager</c> directly.</summary>
+    protected nint GetNativeContentHandle()
+    {
+        CnaResult result = Native.cna_game_get_content_manager_ext(_nativeHandle, out CnaHandle contentManager);
+        CnaException.ThrowIfFailed(result, "cna_game_get_content_manager_ext");
+        return checked((nint)contentManager.Value);
+    }
 
     /// <summary>
     /// Covariant-return factory hook: CNA.XnaCompat's <c>Game</c> overrides this to return a
@@ -137,6 +225,14 @@ public abstract class Game : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Deliberately does not check <c>cna_game_destroy</c>'s <see cref="CnaResult"/> the way every
+    /// other native call in this file does -- <see cref="Dispose(bool)"/> must not throw (the usual
+    /// .NET guideline, doubly true here since disposal can run during exception unwinding in a
+    /// <see langword="using"/> block), so a destroy failure is deliberately swallowed rather than
+    /// surfaced, matching this method's behavior before this migration (which ignored the native
+    /// call's return value entirely, since the prior guessed shape had none to check).
+    /// </summary>
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
@@ -145,7 +241,12 @@ public abstract class Game : IDisposable
         }
 
         _disposed = true;
-        Native.cna_managed_game_release(_nativeHandle);
+        Native.cna_game_destroy(_nativeHandle);
+
+        if (CnaAmbientGame.Current == _nativeHandle)
+        {
+            CnaAmbientGame.Current = CnaHandle.Zero;
+        }
 
         if (_selfHandle.IsAllocated)
         {
@@ -166,49 +267,138 @@ public abstract class Game : IDisposable
         return game is not null;
     }
 
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnInitialize(nint context)
+    /// <summary>
+    /// Encodes <paramref name="exception"/>'s message into <see cref="_callbackErrorBuffer"/> and
+    /// points <paramref name="outError"/> at it, truncating if the message doesn't fit -- see this
+    /// class's own doc comment for why that buffer must be pinned for the whole
+    /// <see cref="Game"/> instance's lifetime rather than built fresh per call. Always returns
+    /// <see cref="CnaResult.Callback"/>, so every wrapper below can simply
+    /// <c>return ReportCallbackFailure(...)</c> from its <see langword="catch"/> block.
+    /// </summary>
+    private unsafe CnaResult ReportCallbackFailure(CnaCallbackError* outError, Exception exception)
     {
-        if (TryResolve(context, out Game game))
+        if (outError is not null)
+        {
+            string message = exception.Message;
+            int byteCount = Encoding.UTF8.GetByteCount(message);
+            int written;
+            if (byteCount <= _callbackErrorBuffer.Length)
+            {
+                written = Encoding.UTF8.GetBytes(message, _callbackErrorBuffer);
+            }
+            else
+            {
+                int charsToTry = Math.Min(message.Length, _callbackErrorBuffer.Length);
+                while (charsToTry > 0 && Encoding.UTF8.GetByteCount(message.AsSpan(0, charsToTry)) > _callbackErrorBuffer.Length)
+                {
+                    charsToTry--;
+                }
+
+                written = Encoding.UTF8.GetBytes(message.AsSpan(0, charsToTry), _callbackErrorBuffer);
+            }
+
+            fixed (byte* bufferPtr = _callbackErrorBuffer)
+            {
+                outError->Message = new CnaStringView(written == 0 ? null : bufferPtr, (ulong)written);
+            }
+        }
+
+        return CnaResult.Callback;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe CnaResult OnInitialize(CnaHandle nativeGame, CnaGameTime* gameTime, nint context, CnaCallbackError* outError)
+    {
+        if (!TryResolve(context, out Game game))
+        {
+            return CnaResult.Success;
+        }
+
+        try
         {
             game.EnsureGraphicsDevice();
             game.Initialize();
+            return CnaResult.Success;
+        }
+        catch (Exception ex)
+        {
+            return game.ReportCallbackFailure(outError, ex);
         }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnLoadContent(nint context)
+    private static unsafe CnaResult OnLoadContent(CnaHandle nativeGame, CnaGameTime* gameTime, nint context, CnaCallbackError* outError)
     {
-        if (TryResolve(context, out Game game))
+        if (!TryResolve(context, out Game game))
+        {
+            return CnaResult.Success;
+        }
+
+        try
         {
             game.LoadContent();
+            return CnaResult.Success;
         }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnUpdate(nint context, CnaGameTime nativeGameTime)
-    {
-        if (TryResolve(context, out Game game))
+        catch (Exception ex)
         {
-            game.Update(GameTime.FromNative(nativeGameTime));
+            return game.ReportCallbackFailure(outError, ex);
         }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnDraw(nint context, CnaGameTime nativeGameTime)
+    private static unsafe CnaResult OnUpdate(CnaHandle nativeGame, CnaGameTime* gameTime, nint context, CnaCallbackError* outError)
     {
-        if (TryResolve(context, out Game game))
+        if (!TryResolve(context, out Game game) || gameTime is null)
         {
-            game.Draw(GameTime.FromNative(nativeGameTime));
+            return CnaResult.Success;
+        }
+
+        try
+        {
+            game.Update(GameTime.FromNative(*gameTime));
+            return CnaResult.Success;
+        }
+        catch (Exception ex)
+        {
+            return game.ReportCallbackFailure(outError, ex);
         }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnUnloadContent(nint context)
+    private static unsafe CnaResult OnDraw(CnaHandle nativeGame, CnaGameTime* gameTime, nint context, CnaCallbackError* outError)
     {
-        if (TryResolve(context, out Game game))
+        if (!TryResolve(context, out Game game) || gameTime is null)
+        {
+            return CnaResult.Success;
+        }
+
+        try
+        {
+            game.Draw(GameTime.FromNative(*gameTime));
+            return CnaResult.Success;
+        }
+        catch (Exception ex)
+        {
+            return game.ReportCallbackFailure(outError, ex);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static unsafe CnaResult OnUnloadContent(CnaHandle nativeGame, CnaGameTime* gameTime, nint context, CnaCallbackError* outError)
+    {
+        if (!TryResolve(context, out Game game))
+        {
+            return CnaResult.Success;
+        }
+
+        try
         {
             game.UnloadContent();
+            return CnaResult.Success;
+        }
+        catch (Exception ex)
+        {
+            return game.ReportCallbackFailure(outError, ex);
         }
     }
 }

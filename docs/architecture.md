@@ -155,8 +155,13 @@ assume they are otherwise in sync (`analysis_binding_sharp_runtime.md` §61).
 
 Callbacks from native CNA into managed code (`Update`, `Draw`, etc.) arrive
 through `[UnmanagedCallersOnly]` static methods that resolve a `GCHandle`
-back to the managed `Game` instance. Until `openeggbert/cna` documents its
-actual thread-safety contract, treat every native call in this repository as
-main-thread-only, and every callback as arriving on the thread that called
-`cna_managed_game_run` — do not assume otherwise without checking the
-upstream ABI docs first (`analysis_binding_sharp_runtime.md` §22, §72).
+back to the managed `Game` instance, on the thread that called `cna_game_run`
+(or `cna_game_run_one_frame`/`cna_game_tick`). The real, shipped
+`openeggbert/cna` C API does document a thread-affinity contract now (unlike
+when this note was first written): most `cna_game_*` routes are refused with
+`CNA_RESULT_THREAD` when called from any thread other than the one that
+created the game — confirmed directly against a real test
+(`LifecycleSmoke.c`'s `set_title_on_wrong_thread`), not just inferred. Treat
+every native call in this repository as main-thread-only until each
+individual function's own real doc comment is actually read, rather than
+assuming the general rule covers every case.

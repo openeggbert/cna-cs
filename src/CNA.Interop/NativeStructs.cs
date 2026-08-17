@@ -36,9 +36,13 @@ internal readonly struct CnaColor
 }
 
 /// <summary>
-/// ABI-shaped frame time value. Ticks use the same resolution as
-/// <see cref="System.TimeSpan.Ticks"/> (100ns), converted at the CNA boundary.
-/// See ../../cnabinding/analysis_binding_sharp_runtime.md §42.
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_GameTime</c> exactly
+/// (<c>runtime.h:15-27</c>) -- ticks use the same resolution as <see cref="System.TimeSpan.Ticks"/>
+/// (100ns), matching the real struct's own documented units. <see cref="Reserved"/> exists only so
+/// this struct's size/layout matches the real one byte-for-byte; it carries no meaning of its own.
+/// Passed as a nullable *pointer* by every real lifecycle callback (null for load/unload/exit
+/// notifications, non-null for update/draw) rather than by value -- see
+/// <see cref="CnaManagedGameCallbacks"/>.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaGameTime
@@ -46,12 +50,14 @@ internal readonly struct CnaGameTime
     public readonly long TotalGameTimeTicks;
     public readonly long ElapsedGameTimeTicks;
     public readonly byte IsRunningSlowly;
+    public readonly CnaReservedBytes7 Reserved;
 
     public CnaGameTime(long totalGameTimeTicks, long elapsedGameTimeTicks, bool isRunningSlowly)
     {
         TotalGameTimeTicks = totalGameTimeTicks;
         ElapsedGameTimeTicks = elapsedGameTimeTicks;
         IsRunningSlowly = isRunningSlowly ? (byte)1 : (byte)0;
+        Reserved = default;
     }
 }
 

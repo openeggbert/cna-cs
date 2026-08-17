@@ -51,28 +51,51 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_error_copy_last_message(byte* destination, ulong capacity, out ulong outBytes);
 
-    // -- Managed game lifecycle and callback bridge (§20) ------------------------------------
+    // -- Game lifecycle (real ABI, runtime.h) -------------------------------------------------
+    //
+    // Replaces the old, guessed cna_managed_game_* names/shapes entirely -- none of them exist
+    // upstream by those names. The real API splits lifecycle callbacks across two tables:
+    // CnaManagedGameCallbacks (load_content/update/draw/unload_content/exiting, passed inside
+    // CnaGameCreateInfo at creation) and CnaGameFrameHooks (initialize/begin_run/end_run/
+    // begin_draw/end_draw, installed separately via cna_game_set_frame_hooks_ext after creation)
+    // -- see Game.cs's constructor and NEXT.md's native-ABI-migration entry.
 
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_managed_game_create(
-        in CnaManagedGameCallbacks callbacks,
-        nint context,
-        out CnaHandle game);
+    internal static unsafe partial CnaResult cna_game_create(in CnaGameCreateInfo createInfo, out CnaHandle game);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_managed_game_run(CnaHandle game);
+    internal static unsafe partial CnaResult cna_game_set_frame_hooks_ext(CnaHandle game, in CnaGameFrameHooks hooks);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_managed_game_exit(CnaHandle game);
+    internal static partial CnaResult cna_game_run(CnaHandle game);
+
+    /// <summary>Steps exactly one native frame instead of blocking until exit -- a distinct real
+    /// function <see cref="cna_game_run"/> wraps, with no equivalent in the old guessed API.
+    /// Unused today (<c>Game.Run()</c> only calls <see cref="cna_game_run"/>); declared here since
+    /// it is part of the real, confirmed ABI surface, matching this file's existing practice of
+    /// declaring functions ahead of a managed caller that uses them (see the audio/media sections
+    /// below).</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_run_one_frame(CnaHandle game);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_managed_game_release(CnaHandle game);
+    internal static partial CnaResult cna_game_request_exit(CnaHandle game);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaHandle cna_game_get_graphics_device(CnaHandle game);
+    internal static partial CnaResult cna_game_destroy(CnaHandle game);
 
+    /// <summary>Only succeeds from inside an active lifecycle callback for <paramref name="game"/>;
+    /// the resulting handle is documented as valid only until that callback returns -- see
+    /// <c>Game.GetNativeGraphicsDeviceHandle</c>'s own doc comment for how this project currently
+    /// (and only partially correctly) handles that constraint.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaHandle cna_game_get_content(CnaHandle game);
+    internal static partial CnaResult cna_game_get_graphics_device(CnaHandle game, out CnaHandle graphicsDevice);
+
+    /// <summary>Unlike <see cref="cna_game_get_graphics_device"/>, safe to call at any time with an
+    /// owned or callback-borrowed <paramref name="game"/> handle -- a game's content manager is a
+    /// stable value member, not a per-callback borrow (see <c>content.h</c>).</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_get_content_manager_ext(CnaHandle game, out CnaHandle contentManager);
 
     // -- GraphicsDevice -----------------------------------------------------------------------
 

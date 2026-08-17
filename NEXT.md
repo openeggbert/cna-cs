@@ -11,6 +11,121 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 2: `Game` lifecycle callback bridge rewritten against the real ABI, plus a real, load-bearing discovery about the graphics-device handle's lifetime (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entry directly below)
+
+Continues directly from the entry below (foundational types + error retrieval). This step
+rewrites `Game.cs`'s whole native callback bridge -- the highest-risk, most-different area
+flagged by the synthesis doc, and it turned out to be more different than even that doc expected.
+
+### The real `Game` lifecycle, as actually read from `runtime.h`
+
+- Lifecycle callbacks split across **two** native tables, not one: `CNA_GameCallbacks`
+  (`load_content`/`update`/`draw`/`unload_content`/`exiting`, passed inside `CNA_GameCreateInfo`
+  at creation time) and a separate `CNA_GameFrameHooks`
+  (`initialize`/`begin_run`/`end_run`/`begin_draw`/`end_draw`, installed *after* creation via
+  `cna_game_set_frame_hooks_ext`). `Initialize` moved from the first table (where the old guessed
+  API put it) to the second -- `Game`'s constructor now makes two native calls, not one, and rolls
+  the game back (`cna_game_destroy`) if the second one fails.
+- Every callback returns `CNA_Result` (a failing callback stops the game, reported as
+  `CNA_RESULT_CALLBACK`) and takes an `out_error` parameter it can populate with a diagnostic
+  message on failure -- `CNA_CallbackError`, a `CNA_StringView` wrapped in the usual
+  `struct_size`/`struct_version` header. Since a managed exception must never unwind across an
+  `UnmanagedCallersOnly` boundary, every callback wrapper now catches, converts to
+  `CnaResult.Callback`, and reports the exception's message through a new
+  `Game.ReportCallbackFailure` helper.
+- That helper encodes the message into a `byte[512]` allocated **once**, pinned for the whole
+  `Game` instance's lifetime via `GC.AllocateArray<byte>(512, pinned: true)`, truncating if the
+  message doesn't fit. This was a real design trap, not a formality: an earlier draft built the
+  pointer inside a `fixed` block in a *callee* helper method and returned it to the caller -- which
+  is unsafe, because nothing keeps a heap `byte[]` reachable once its only reference (a local
+  variable in that callee) goes out of scope, so the GC is free to collect it before native ever
+  reads `out_error->message.data`. A `fixed` block only pins for its own lexical scope; it does not
+  make an object safe to hand a pointer to *past* that scope. The real C API's own test fixtures
+  sidestep this entirely by using a `static const char[]` buffer for exactly this reason -- worth
+  noticing, not just working around blind.
+- Real `cna_game_create`/`cna_game_run`/`cna_game_run_one_frame`/`cna_game_request_exit`/
+  `cna_game_destroy` have no relation to the old guessed `cna_managed_game_create/run/exit/release`
+  names at all (confirmed: grepping the real headers for `cna_managed_game` finds nothing).
+  `cna_game_run_one_frame` is declared in `Native.cs` (part of the real, confirmed surface) but not
+  yet called from anywhere -- `Game.Run()` still only offers the blocking `cna_game_run` form,
+  matching this project's current scope exactly (no `GameRunBehavior.Asynchronous` equivalent
+  exists in `cna-cs` today, so nothing needs the stepped form yet).
+- `docs/architecture.md`'s threading note said to wait for `openeggbert/cna` to document its
+  thread-safety contract before trusting anything beyond "assume main-thread-only" -- it now does,
+  confirmed directly (not just read) against `LifecycleSmoke.c`'s `set_title_on_wrong_thread`,
+  which calls `cna_game_set_window_title`/`cna_keyboard_get_state` from a background thread and
+  gets `CNA_RESULT_THREAD` back from both. Updated that doc's note accordingly.
+- Found, and did **not** fix in this step: `Native.cs` still declares `cna_runtime_initialize`/
+  `cna_runtime_shutdown`, and neither exists anywhere in the real headers (grepped the whole
+  `include/CNA/C/` tree). Both are unused elsewhere in this codebase already (dead declarations),
+  so nothing regresses by leaving them as-is for now -- flagged here rather than fixed blind, since
+  fixing it correctly needs its own investigation into whatever the real runtime-bootstrap
+  equivalent actually is (if one is even needed -- `cna_game_create`/`cna_game_destroy` may already
+  own that entirely). Pick this up whenever a step touches runtime bootstrap directly.
+
+### The graphics-device handle is callback-scoped, not game-scoped -- confirmed, not just suspected
+
+The synthesis doc (previous entry, and the three research forks behind it) flagged this as an open
+question: is the `graphics_device` handle safe to fetch once and hold for a `GraphicsDevice`
+wrapper's whole life, or only within the callback that fetched it? This step answers it with direct
+evidence, not inference: `graphics.h`'s own doc comment for `cna_game_get_graphics_device` already
+said "valid only until the current callback returns," but `LifecycleSmoke.c` proves it concretely --
+calling it from outside any lifecycle callback (from the test's own top-level `main()`) returns
+`CNA_RESULT_INVALID_STATE`, and a handle captured during `on_load` becomes `CNA_RESULT_INVALID_HANDLE`
+the moment `cna_graphics_device_get_renderer_info` is called with it again after the frame that
+produced it has ended.
+
+`cna_game_get_content_manager_ext`, by contrast, is **not** similarly restricted -- its own doc
+comment says a game's content manager "answers the same handle every time it is asked," with no
+per-callback caveat, and `RuntimeGameSmoke.c`'s `validate_content_manager` corroborates it. So this
+step fixes `Game`'s content-handle retrieval fully (now safe to cache, same as before), but only
+*partially* fixes the graphics-device side: `Game.GetNativeGraphicsDeviceHandle()` now calls the
+real, corrected `cna_game_get_graphics_device(game, out device)` shape and checks its `CnaResult`
+(the old code could not, since the guessed shape returned the handle directly with nothing to
+check) -- but it is still only called **once**, from inside `OnInitialize`, and the resulting
+handle is still cached for the `GraphicsDevice` wrapper's entire life in `NativeHandleValue`, which
+the real ABI does not actually guarantee stays valid past that one callback. Flagged explicitly in
+both `Game.cs` and `GraphicsDevice.cs`'s own doc comments as a known, deliberate gap for step 3
+(`GraphicsDevice` itself) to close properly -- that fix needs every method on `GraphicsDevice` to
+re-fetch a fresh device handle per call instead of trusting a cached one, which belongs together
+with that class's other real signature corrections (the `Clear` variant question, `SetRenderTarget`
+becoming type-specific, `DrawIndexedPrimitives`'s real 7-parameter arity), not bolted on here in
+isolation.
+
+### Ambient game handle
+
+Implements the design the user selected via `AskUserQuestion` earlier this session: a plain static
+holder, `CnaAmbientGame.Current`, set by `Game`'s constructor once its native handle exists and
+cleared in `Dispose`. Not yet consumed by anything -- `Keyboard`/`Mouse`/`GamePad`/`MediaPlayer`'s
+own native calls are still the old, parameterless, guessed shapes (steps 10/11). Building the
+holder now, ahead of its first consumer, is deliberate: every later step in this migration that
+needs a `game` handle for a static class depends on this existing, and it is a small, self-contained
+piece of infrastructure, not speculative feature work.
+
+### Also fixed in this step
+
+`CnaGameTime` gained the real struct's `reserved[7]` trailing bytes (`runtime.h:26`) -- previously
+absent; likely produced identical wire bytes anyway via the CLR's own implicit trailing padding for
+a struct whose largest field is 8-byte-aligned, but left implicit rather than relying on that
+coincidence, matching this migration's general practice everywhere else. `Game.NativeHandle`
+(`nint`, unused outside this file today) now compiles against `CnaHandle.Value`'s new `ulong` type
+via an explicit `checked` narrowing cast at this one boundary point, the same "convert once, at the
+boundary" pattern `CnaHandle`'s own `nint` constructor overload already established in the entry
+below -- `checked` (not `unchecked`, unlike that overload's own widening direction) because this
+direction only stays lossless on the 64-bit-only platforms this project targets, and a violated
+assumption should be caught, not silently truncated.
+
+### Not done in this step, deliberately
+
+`Exiting`/`OnExiting` (real XNA has this; `cna-cs` never did, and `CNA_GameCallbacks.exiting` is
+left null here rather than adding a new virtual method speculatively). `BeginRun`/`EndRun`/
+`BeginDraw`/`EndDraw` (same reasoning -- real hooks exist in `CNA_GameFrameHooks`, left null, no
+matching `cna-cs` virtual methods exist to wire them to). The real `CNA_GameEvent` subscription
+system (`Activated`/`Deactivated`/`Disposed`/`Exiting`, `cna_game_subscribe`/`unsubscribe`) --
+genuinely new capability, not a shape fix, out of scope here. `Window.Title` -- `Game` passes an
+empty `CNA_StringView` for `CNA_GameCreateInfo.window_title` (explicitly valid per the real header)
+rather than inventing a title-setting feature this project doesn't have yet.
+
 ## Native ABI migration -- underway; foundational types + error retrieval rewritten to match the real, merged `openeggbert/cna` C API (2026-08-17, session 7, user directive: monitor the `cnabinding` peer session, and once its `next`-into-`feature/binding` merge lands, rewrite `cna-cs`'s interop layer to match; compilation explicitly withheld -- "nic zatim nekompiluj... az kompilaci povolim" -- until the user re-authorizes it)
 
 ### Why this exists

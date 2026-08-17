@@ -2,6 +2,17 @@ using CNA.Interop;
 
 namespace CNA.Graphics;
 
+/// <summary>
+/// <see cref="NativeHandleValue"/> is resolved once, in <c>Game.CreateGraphicsDevice</c>, and
+/// cached here for this object's whole life -- but the real, shipped openeggbert/cna C API
+/// documents the device handle <c>cna_game_get_graphics_device</c> returns as valid only until the
+/// lifecycle callback that fetched it returns (confirmed directly against the real test suite, not
+/// just the header doc comment -- see <c>Game.GetNativeGraphicsDeviceHandle</c>'s own doc comment).
+/// This class does not yet account for that: every method below still trusts the handle it was
+/// constructed with, unchanged since before the real ABI existed. A known, deliberate gap left by
+/// the native-ABI migration's Game-lifecycle step (2) for its own GraphicsDevice step (3) to close
+/// -- see <c>NEXT.md</c>'s native-ABI-migration entry.
+/// </summary>
 public class GraphicsDevice
 {
     /// <summary>
