@@ -11,6 +11,64 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## The `.cnj` path's own `CNA.XnaCompat` mirror (`CnjCompatModelBuilder`) -- done, closing the last deferred follow-up from the `.cnj` reader feature (2026-08-17, session 6 continued autonomously past the `.cnj` reader's own review-cycle checkpoint, per explicit user selection of "Mirror .cnj in CNA.XnaCompat")
+
+Small, well-scoped, and low-risk compared to everything else this
+session did with `.cnj` -- exactly the shape the checkpoint question
+itself described it as. Read `XnbCompatModelBuilder`
+(`.xnb`'s own existing compat mirror) first as the template, then
+`CnjModelBuilder` again for the exact "no bone hierarchy, synthesize a
+root bone plus one child bone per mesh" control flow to reproduce with
+compat types.
+
+**What got built**, in `src/CNA.XnaCompat/Microsoft/Xna/Framework/Graphics/CnjCompatModelBuilder.cs`:
+
+- `CnjCompatModelBuilder.Build` -- the same shape as `XnbCompatModelBuilder.Build`:
+  reuses `ContentManager.LoadCnjModelData` (the shared, native-free
+  parsing step) directly rather than re-parsing anything, builds
+  compat-typed `Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart`/
+  `VertexBuffer`/`IndexBuffer`/`BasicEffect` throughout (unlike
+  `CnjModelData`'s own vertex/index buffer data, which is reused
+  verbatim from `CNA.Content.Xnb` since it's format-agnostic --
+  `CNA.Content.Cnj` has no knowledge of `CNA.XnaCompat` at all, so a
+  `VertexDeclaration` converter is still needed here, the identical
+  reason `XnbCompatModelBuilder` has one). Near-duplicates
+  `CnjModelBuilder.Build`'s own bone-synthesis control flow rather than
+  sharing it -- the same trade-off `XnbCompatModelBuilder`'s own doc
+  comment already accepts and explains for its relationship to
+  `XnbModelBuilder`, now extended to the `.cnj` side for an identical
+  reason (independent-reimplementation collections rule out a shared,
+  generic assembler without real added complexity).
+- Extracted `CnjModelBuilder.ApplyBasicEffectData` (`internal`, mirroring
+  `XnbModelBuilder.ApplyBasicEffectData`'s own extraction from this
+  session's earlier `.xnb` compat-mirror work) out of the private
+  `BuildBasicEffect` it used to be inlined into -- since `.cnj`'s
+  `BasicEffect` field set is just `VertexColorEnabled` (see the `.cnj`
+  reader feature's own entry above for why: no material-color fields at
+  all), this is a one-line method, but extracting it keeps the pattern
+  consistent with the `.xnb` side rather than leaving an asymmetry a
+  future reader would have to notice and question.
+- `ContentManager.LoadCompatModel` now has the identical `.xnb`-then-`.cnj`
+  dispatch order the base class's own `LoadModel` already has (a real
+  `.xnb` file always shadows a `.cnj` of the same asset name).
+
+No new testable surface -- constructing a working compat `ContentManager`/
+`GraphicsDevice` at all needs a real `cna-native`, the same pre-existing
+limitation `XnbCompatModelBuilder`'s own compat wiring already documented
+when it landed.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 459/459 passing, unchanged. `samples/HelloGame` re-verified
+unaffected.
+
+This closes the entire `.cnj` Model-loading arc this session pursued
+across five checkpoints in a row (the initial "attempt .cnj/glTF," the
+vertex-layout investigation, "attempt a minimal reader," its review
+cycle, and now this compat mirror) -- what remains genuinely open for
+`Model` content loading is the `.cnj` document's own bone-hierarchy/
+skinning/PBR/morph-target surface, LZX/LZ4-compressed `.xnb`, and runtime
+glTF, all explicitly out of scope, each its own separable feature.
+
 ## Third `/code-review high` pass, over the second pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again)
 
 Ran the review over the second fix commit (`656a834`). Clean -- zero

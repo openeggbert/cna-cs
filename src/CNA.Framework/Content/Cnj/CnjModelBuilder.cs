@@ -79,6 +79,13 @@ internal static class CnjModelBuilder
         return buffer;
     }
 
+    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, CnjBasicEffectData data)
+    {
+        var effect = new BasicEffect(graphicsDevice);
+        ApplyBasicEffectData(effect, data);
+        return effect;
+    }
+
     /// <summary>Applies only the fields <see cref="CnjBasicEffectData"/> actually carries --
     /// <b>deliberately does not call <see cref="XnbModelBuilder.ApplyBasicEffectData"/></b>, since
     /// <c>.cnj</c>'s <c>BasicEffect</c> JSON has no material-color fields at all (see
@@ -87,14 +94,13 @@ internal static class CnjModelBuilder
     /// <see cref="CnjBasicEffectData.TextureReference"/> is non-null -- see that property's own doc
     /// comment for why actually resolving/loading it is deferred, the same "honest, not a full
     /// reproduction" choice <see cref="XnbModelBuilder.ApplyBasicEffectData"/> already made for the
-    /// <c>.xnb</c> path's own unresolved texture reference.</summary>
-    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, CnjBasicEffectData data)
+    /// <c>.xnb</c> path's own unresolved texture reference. <c>internal</c>, matching
+    /// <see cref="XnbModelBuilder.ApplyBasicEffectData"/>'s own reasoning exactly, so
+    /// <c>CNA.XnaCompat</c>'s own <c>CnjCompatModelBuilder</c> can apply the same (trivial) field set
+    /// to a compat-typed <see cref="BasicEffect"/> too (compat <c>BasicEffect</c> subclasses this one
+    /// directly, so it upcasts fine as this method's parameter).</summary>
+    internal static void ApplyBasicEffectData(BasicEffect effect, CnjBasicEffectData data)
     {
-        var effect = new BasicEffect(graphicsDevice)
-        {
-            VertexColorEnabled = data.VertexColorEnabled,
-        };
-
-        return effect;
+        effect.VertexColorEnabled = data.VertexColorEnabled;
     }
 }

@@ -142,9 +142,7 @@ Phase 4's own follow-up bullet):
     Model's own .cnj bone-hierarchy/skinning/PBR/morph-target surface,
     runtime glTF content paths, and LZX/LZ4-compressed .xnb files (see
     above/below for why only a minimal-scope .cnj subset and real,
-    uncompressed .xnb were in scope), the .cnj path's own CNA.XnaCompat
-    mirror (CnjCompatModelBuilder -- deferred the same way the .xnb
-    path's own compat mirror was its own separate follow-up),
+    uncompressed .xnb were in scope),
     ModelMeshPart's own ModelEffectCollection/ModelMesh.Effects compat gap
     (a real, permanent structural limitation, not a temporary scope cut --
     see plan.md Phase 4 for why) -- none of these are blocked on the
@@ -183,10 +181,12 @@ documented non-mirror than to anything else in this feature -- ordinary
 `BasicEffect` instances added to it upcast correctly), so only an
 explicit `Microsoft.Xna.Framework.Graphics.ModelEffectCollection` type
 declaration is affected. `ContentManager.Load<Model>()` on the compat
-`ContentManager` also returns a real, compat-typed `Model`
-(`XnbCompatModelBuilder`, reusing the base class's own `.xnb`-parsing
-directly rather than duplicating it -- see `NEXT.md` for the full design
-reasoning on all of this). `Song`/`MediaPlayer` are grounded
+`ContentManager` also returns a real, compat-typed `Model` for both
+content formats -- `XnbCompatModelBuilder`/`CnjCompatModelBuilder`,
+each reusing the base class's own `.xnb`/`.cnj`-parsing directly rather
+than duplicating it, with the identical `.xnb`-then-`.cnj` dispatch
+order the base class's own `LoadModel` uses -- see `NEXT.md` for the
+full design reasoning on all of this. `Song`/`MediaPlayer` are grounded
 against `modules/media/`'s own working implementation the same way
 `SoundEffect`/`BasicEffect` were, deliberately scoped down from that
 implementation's much larger surface (see the "Not started at all" list
@@ -275,7 +275,12 @@ bone hierarchy/skinning/morph targets) and `BasicEffect` only (no
 `PbrEffect`/`SkinnedEffect`/`DualTextureEffect`) -- each excluded surface
 is rejected with a clear, documented exception, never silently
 mis-loaded, the same discipline `.xnb`'s own LZX/LZ4 rejection already
-established.
+established. `CnjCompatModelBuilder` is this path's own `CNA.XnaCompat`
+mirror, exactly `XnbCompatModelBuilder`'s shape: reuses the shared
+native-free `.cnj` parsing step, builds compat-typed `Model`/`ModelBone`/
+`ModelMesh`/`ModelMeshPart`/buffers/`BasicEffect` throughout, and reuses
+`CnjModelBuilder.ApplyBasicEffectData` directly for its (trivial,
+one-line) effect field-assignment logic rather than duplicating it.
 See `plan.md` Phase 4 and `NEXT.md`'s per-session entries for the full
 detail on each.
 

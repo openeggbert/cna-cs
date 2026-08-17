@@ -57,11 +57,15 @@ only -- on the base `CNA.Framework.Content.ContentManager` (`.xnb` still
 always wins first if both exist for the same asset name, matching the
 real engine's own dispatch order); the `.cnj` document's own bone
 hierarchy/skinning/PBR/morph-target surface and runtime glTF both remain
-explicitly out of scope, and the `CNA.XnaCompat` mirror of this path is
-its own deferred follow-up (see `NEXT.md` for the detail, including the
-load-bearing finding that `.cnj`'s `BasicEffect` JSON has no
-material-color fields at all, unlike `.xnb`'s). What remains: Phase 6
-packaging/cross-platform validation, tracked below.
+explicitly out of scope. The `.cnj` path's own `CNA.XnaCompat` mirror
+(`CnjCompatModelBuilder`) is also now done, closing that deferred
+follow-up -- same "reuse the shared native-free parsing step, reimplement
+only the thin native-backed compat-typed assembly around it" pattern
+`XnbCompatModelBuilder` already established for the `.xnb` side (see
+`NEXT.md` for the detail, including the load-bearing finding that
+`.cnj`'s `BasicEffect` JSON has no material-color fields at all, unlike
+`.xnb`'s). What remains: Phase 6 packaging/cross-platform validation,
+tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -910,10 +914,11 @@ Split by whether the type needs the (still nonexistent) native ABI:
       (same rare "fully real, testable today" status `XnbModelReader`
       already has); `CnjModelBuilder` is native-ABI-blocked like every
       other final-assembly step in this project. The `CNA.XnaCompat`
-      mirror of this path (`CnjCompatModelBuilder`) is a deliberate,
-      separate follow-up, not attempted in this pass -- matching the
-      `.xnb` path's own "narrow reader/builder split first, compat
-      mirror as a distinct, separately-reviewed follow-up" cadence.
+      mirror of this path (`CnjCompatModelBuilder`) was deliberately
+      deferred as its own, separate follow-up in this pass -- matching
+      the `.xnb` path's own "narrow reader/builder split first, compat
+      mirror as a distinct, separately-reviewed follow-up" cadence; see
+      the entry below for that follow-up's own completion.
       Verified: `dotnet build` clean across all 6 projects, 0 warnings;
       `dotnet test`: 459/459 passing (up from 413 — 46 new tests, all
       for `CnjModelReader`/`CnjPathContainment`, reachable without a
@@ -929,18 +934,48 @@ Split by whether the type needs the (still nonexistent) native ABI:
       false-rejection bug, a malformed-`"bones"`-field gap, and an
       over-rejection of `"bones": null` the first fix introduced — see
       `NEXT.md`). `samples/HelloGame` re-verified unaffected.
+- [x] **The `.cnj` path's own `CNA.XnaCompat` mirror
+      (`CnjCompatModelBuilder`) — done, 2026-08-17 (session 6 continued
+      autonomously past the `.cnj` reader's own review-cycle checkpoint,
+      per explicit user selection of "Mirror .cnj in CNA.XnaCompat").**
+      Closes the one deferral flagged in the entry above. Exactly
+      `XnbCompatModelBuilder`'s own shape: reuses
+      `ContentManager.LoadCnjModelData` (the shared, native-free parsing
+      step) directly rather than re-parsing anything, builds
+      compat-typed `Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart`/
+      `VertexBuffer`/`IndexBuffer`/`BasicEffect` throughout (so it has
+      its own `VertexDeclaration` converter, the same reason
+      `XnbCompatModelBuilder` has one), and reproduces
+      `CnjModelBuilder`'s own "no bone hierarchy, synthesize one root
+      bone plus one child bone per mesh" control flow rather than
+      sharing it (the same near-duplication trade-off
+      `XnbCompatModelBuilder`'s own doc comment already accepts for its
+      relationship to `XnbModelBuilder`). Extracted
+      `CnjModelBuilder.ApplyBasicEffectData` (mirroring
+      `XnbModelBuilder.ApplyBasicEffectData`'s own extraction) so the
+      compat builder reuses the base one's (trivial, one-line) effect
+      field-assignment logic rather than duplicating it -- nothing about
+      applying `VertexColorEnabled` is compat-specific, since compat
+      `BasicEffect` subclasses the base one directly. `ContentManager.LoadCompatModel`
+      now has the identical `.xnb`-then-`.cnj` dispatch order the base
+      class's own `LoadModel` already has. Verified: `dotnet build`
+      clean across all 6 projects, 0 warnings; `dotnet test`: 459/459
+      passing, unchanged — no new testable surface (constructing a
+      working compat `ContentManager`/`GraphicsDevice` at all needs a
+      real `cna-native`, the same pre-existing limitation
+      `XnbCompatModelBuilder`'s own compat wiring already has).
+      `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own bone-hierarchy/skinning/PBR/morph-target `.cnj`
       surface, runtime glTF, and LZX/LZ4-compressed `.xnb` content paths
-      (see the `.xnb`/`.cnj` loading entries above), the `.cnj` path's
-      own `CNA.XnaCompat` mirror (`CnjCompatModelBuilder`, see the `.cnj`
-      entry above), and `ModelMeshPart`'s own `ModelEffectCollection`/
-      `ModelMesh.Effects` gap (see that entry above, a real permanent
-      gap, not deferred pending further work). None of these are blocked
-      on the native C ABI the way everything else in this phase is —
-      they're scoped out because each is its own substantial, separable
-      feature (or, for `ModelEffectCollection`, structurally unfixable),
-      not because anything is missing upstream to ground them against.
+      (see the `.xnb`/`.cnj` loading entries above), and `ModelMeshPart`'s
+      own `ModelEffectCollection`/`ModelMesh.Effects` gap (see that entry
+      above, a real permanent gap, not deferred pending further work).
+      None of these are blocked on the native C ABI the way everything
+      else in this phase is — they're scoped out because each is its own
+      substantial, separable feature (or, for `ModelEffectCollection`,
+      structurally unfixable), not because anything is missing upstream
+      to ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

@@ -7,10 +7,11 @@ namespace Microsoft.Xna.Framework.Content;
 /// ../../../../../docs/architecture.md and ../../../../../docs/xna-compatibility.md.
 ///
 /// <see cref="Graphics.Model"/> is different from the rest: it reuses the base class's own
-/// <c>LoadXnbModelData</c> (real <c>.xnb</c> parsing, no native call at all) directly, then hands
-/// the result to <see cref="Graphics.XnbCompatModelBuilder"/> -- this compat layer's own
-/// counterpart to <c>CNA.Content.Xnb.XnbModelBuilder</c> -- rather than re-parsing anything. See
-/// that type's own doc comment for the full reasoning.
+/// <c>LoadXnbModelData</c>/<c>LoadCnjModelData</c> (real <c>.xnb</c>/<c>.cnj</c> parsing, no native
+/// call at all) directly, then hands the result to <see cref="Graphics.XnbCompatModelBuilder"/>/
+/// <see cref="Graphics.CnjCompatModelBuilder"/> -- this compat layer's own counterparts to
+/// <c>CNA.Content.Xnb.XnbModelBuilder</c>/<c>CNA.Content.Cnj.CnjModelBuilder</c> -- rather than
+/// re-parsing anything. See those types' own doc comments for the full reasoning.
 /// </summary>
 public class ContentManager : CNA.Content.ContentManager
 {
@@ -73,7 +74,19 @@ public class ContentManager : CNA.Content.ContentManager
                 $"Cannot load Model '{assetName}': ContentManager.GraphicsDevice is null or not a compat-typed GraphicsDevice.");
         }
 
-        return Graphics.XnbCompatModelBuilder.Build(graphicsDevice, LoadXnbModelData(assetName));
+        // Same .xnb-then-.cnj dispatch order as the base class's own LoadModel -- a real .xnb file
+        // always shadows a .cnj of the same asset name.
+        if (File.Exists(Path.Combine(RootDirectory, assetName + ".xnb")))
+        {
+            return Graphics.XnbCompatModelBuilder.Build(graphicsDevice, LoadXnbModelData(assetName));
+        }
+
+        if (File.Exists(Path.Combine(RootDirectory, assetName + ".cnj")))
+        {
+            return Graphics.CnjCompatModelBuilder.Build(graphicsDevice, LoadCnjModelData(assetName));
+        }
+
+        throw new CNA.Content.ContentLoadException($"Content file '{assetName}' was not found (tried '{assetName}.xnb' and '{assetName}.cnj').");
     }
 
     /// <summary>Element-wise conversion, not a collection-level one -- see the identical pattern
