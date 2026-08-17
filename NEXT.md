@@ -11,6 +11,117 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration -- underway; foundational types + error retrieval rewritten to match the real, merged `openeggbert/cna` C API (2026-08-17, session 7, user directive: monitor the `cnabinding` peer session, and once its `next`-into-`feature/binding` merge lands, rewrite `cna-cs`'s interop layer to match; compilation explicitly withheld -- "nic zatim nekompiluj... az kompilaci povolim" -- until the user re-authorizes it)
+
+### Why this exists
+
+Every native surface in this project (`CNA.Interop`) was written before any real
+`openeggbert/cna` C API existed, guessed from `analysis_binding.md`/
+`analysis_binding_sharp_runtime.md` design notes and this project's own reading of the
+C++ engine's *internal* (non-ABI) implementation. That C API is now real: `cnabinding`
+(a peer Claude Code session working directly in `openeggbert/cna`) drove the
+`CBIND-0xx` ticket series to a "closed" coverage campaign (2,838 exported symbols, all
+5 C API gates green, verified across 4 build trees) and then, on explicit instruction,
+carefully merged `next` into `feature/binding` (HEAD `fb882a7a2` as of this entry, not
+yet pushed to origin -- read directly from the local
+`/rv/data/development/github.com/openeggbert/cnabinding` worktree).
+
+Three parallel research forks (`native-abi-migration-game-graphics.md`,
+`-content-textures.md`, `-audio-input.md` in this session's scratchpad, synthesized
+into `-synthesis.md`) audited every one of this project's 71 P/Invoke declarations
+against the real headers, function by function -- not a symbol-name diff. Headline
+finding: **essentially none survive as a pure rename**. Even declarations whose *name*
+matches exactly (`cna_graphics_device_draw_indexed_primitives`,
+`cna_render_target2d_create`) turn out to have incompatible shapes once the real
+signature is read (7 params vs. this project's assumed 5; a versioned config struct vs.
+raw `width`/`height`). A plain `nm -D` symbol-name match is not evidence of a shape
+match -- confirmed concretely enough times in this audit that it is now treated as a
+standing rule for the rest of this migration, not a one-off surprise.
+
+This is therefore a full, deliberate, header-grounded rewrite of `CNA.Interop`, done in
+the 11-step order recorded in the synthesis doc (foundational types and error handling
+first, since nearly everything downstream depends on `CnaHandle`/`CnaResult`; `Game`
+lifecycle second, since it is both the highest-risk area and the one the static
+Input/Media classes depend on for their game handle; resource types and subsystems
+after that). Each step is committed once it is internally coherent, per the user's
+explicit "prubezne commituj a pushuj" (commit and push continuously) instruction --
+**not** batched until the whole migration finishes.
+
+### The one blocking design decision, resolved
+
+Nearly every real route in `audio.h`/`media_player.h`/`input.h` requires an explicit
+`CNA_Handle game` as its first parameter -- no parameterless alternative exists
+anywhere -- but `MediaPlayer`/`Keyboard`/`Mouse`/`GamePad` are deliberately static,
+parameterless classes, matching real XNA's own static API shape exactly (a real
+compatibility requirement, not an implementation detail). Presented to the user with a
+recommendation and alternatives; the user selected the recommendation: an **ambient
+"current game" handle**, set by `Game`'s own lifecycle and read silently by the static
+classes, preserving the public API shape with zero visible change. Implemented as part
+of the `Game`-lifecycle step (step 2), not yet done as of this entry.
+
+### Compilation is on hold
+
+Per explicit user instruction, no `dotnet build`/`test`/`run` runs during this
+migration until the user re-authorizes it -- "right now compilation doesn't make
+sense," since the merge has not yet been pushed to origin and the migration itself is
+mid-flight across many interdependent files. Every commit in this migration is
+therefore build-*unverified* at commit time; this entry (and each subsequent one) says
+so explicitly rather than silently implying the usual build/test-before-commit
+discipline held. Once compilation is re-authorized, go back to that discipline
+immediately, including the usual `/code-review high` review-until-clean cycle, before
+treating any part of this migration as actually done.
+
+### Step 1, part 1: `CnaHandle`/`CnaResult`/error retrieval
+
+- `CnaHandle`: backing field changed from `nint` to `ulong`, matching the real
+  `CNA_Handle` (`typedef uint64_t CNA_Handle;`, `abi.h:104`) exactly -- always
+  fixed-width 64-bit, not pointer-width (the old assumption happened to coincide on
+  every platform this project targets, but no longer needs to rely on that
+  coincidence now that a real ABI exists to confirm against). Kept a second, `nint`
+  -accepting constructor overload so every existing call site building a `CnaHandle`
+  from a `NativeResourceHandle`'s own `nint`-typed `DangerousGetHandle()` storage
+  keeps compiling unchanged -- converting once, at this boundary, rather than at every
+  call site individually (a deliberate scope-limiting choice: rippling the type change
+  through every resource wrapper is real future work, not something to do blind with
+  compilation unavailable to catch mistakes).
+- `CnaResult`: replaced the old, guessed 8-value `int` enum (including a nonexistent
+  `ErrorAbiMismatch`) with the real, 15-value `uint` enum matching `core.h:47-92`
+  exactly, member names and numeric values both confirmed against header text.
+  Verified via `grep -rln "CnaResult\."` that no other file references a specific
+  member name, so this rename is self-contained.
+- Error retrieval (`core.h:154-178`): the old `CnaError.GetLastErrorMessage()` called a
+  guessed single-call shape (`cna_get_last_error_message_length` /
+  `cna_copy_last_error_message`, both returning a byte count directly) that has no real
+  equivalent. Rewritten against the real two-call size-then-copy pair
+  (`cna_error_get_last_message_size` / `cna_error_copy_last_message`), both of which
+  return `CnaResult` instead of a direct count -- treated as best-effort inside
+  `GetLastErrorMessage` (returns `""` on either call failing) since this method itself
+  runs while `CnaException.ThrowIfFailed` is already reporting a different, primary
+  failure and must never throw in its place. Did **not** add a P/Invoke declaration or
+  managed wrapper for the third real error function, `cna_error_get_last_info`
+  (`CNA_ErrorInfo`, richer result/category/length snapshot) -- nothing in this project
+  consumes error-category information today, so adding it now would be unused surface,
+  not a fix to something broken; revisit if/when something needs it.
+- Read `docs/c-api/ABI_VERSIONING.md` (from the `cnabinding` checkout) to confirm the
+  general versioned-struct convention this migration will need repeatedly, not just
+  here: a caller of any extensible input/output struct must set `struct_size` to
+  `sizeof(the exact known struct)` and `struct_version` to the documented version
+  before calling; `CnaCApi.cpp`'s own `IsSupportedErrorInfo` was read directly to
+  confirm this is enforced, not just documented (rejects `struct_size < sizeof(...)`
+  or `struct_version != 1` with `CNA_RESULT_INVALID_ARGUMENT`). This convention will
+  apply to most of the remaining `NativeStructs.cs` structs in the rest of step 1.
+
+Not yet done, still part of step 1: `struct_size`/`struct_version` headers on
+`CnaKeyboardState`/`CnaMouseState`/`CnaGamePadState`/`CnaGamePadCapabilities`/
+`CnaGameTime`; a `CnaStringView` marshaling helper to replace `StringMarshalling.Utf8`
++ `string` params everywhere a string crosses the ABI; the `CnaMouseState.Buttons`
+byte-to-4-byte widening; the `CnaGamePadState` analog-substruct restructuring; the
+`CnaGamePadCapabilities` full redesign (real: ~37 individual bool fields, not two
+packed bitmasks); retiring `CnaBasicEffectParams` once `BasicEffect`'s real
+native-object architecture (step 8) is designed. See
+`native-abi-migration-synthesis.md` in this session's scratchpad for the full 11-step
+plan and every open question still needing a direct header re-read.
+
 ## First `/code-review high` pass, over the `CnjCompatModelBuilder` bone-hierarchy commit -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again yet again once more again)
 
 Ran the review over the compat bone-hierarchy commit (`2b4a176`). Clean

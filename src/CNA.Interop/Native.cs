@@ -34,13 +34,22 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial void cna_runtime_shutdown();
 
-    // -- Error retrieval (§13, caller-owned buffer pattern) ----------------------------------
+    // -- Error retrieval (real ABI, core.h:154-178, caller-owned two-call size-then-copy) ----
 
+    /// <summary>Matches <c>cna_error_get_last_message_size</c> exactly (<c>core.h:163</c>) --
+    /// the earlier <c>cna_get_last_error_message_length</c> guess returned the byte count
+    /// directly instead of through a <see cref="CnaResult"/> out-param; the real function has no
+    /// equivalent by that name. See <c>CnaError.GetLastErrorMessage</c>.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial nuint cna_get_last_error_message_length();
+    internal static partial CnaResult cna_error_get_last_message_size(out ulong outBytes);
 
+    /// <summary>Matches <c>cna_error_copy_last_message</c> exactly (<c>core.h:175</c>) -- same
+    /// correction as <see cref="cna_error_get_last_message_size"/>: returns <see cref="CnaResult"/>
+    /// (<c>BufferTooSmall</c> when <paramref name="capacity"/> is insufficient) rather than a
+    /// directly-returned byte count, and always reports the required size through
+    /// <paramref name="outBytes"/> regardless of outcome.</summary>
     [LibraryImport(LibraryName)]
-    internal static unsafe partial nuint cna_copy_last_error_message(byte* buffer, nuint capacity);
+    internal static unsafe partial CnaResult cna_error_copy_last_message(byte* destination, ulong capacity, out ulong outBytes);
 
     // -- Managed game lifecycle and callback bridge (§20) ------------------------------------
 

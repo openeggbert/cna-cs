@@ -3,20 +3,33 @@ using System.Runtime.InteropServices;
 namespace CNA.Interop;
 
 /// <summary>
-/// An opaque, generation-checked native resource handle. See
-/// ../../cnabinding/analysis_binding.md §9. Sized as <see cref="nint"/> so it interoperates
-/// directly with <see cref="System.Runtime.InteropServices.SafeHandle"/> on the CNA
-/// side, rather than as the wire-format <c>uint64_t</c> shown in the design docs -- CNA only
-/// targets pointer-width (32/64-bit) platforms, so this is a lossless simplification.
+/// An opaque, generation-checked native resource handle -- matches the real, shipped
+/// openeggbert/cna C API's own <c>CNA_Handle</c> exactly (<c>typedef uint64_t CNA_Handle;</c>,
+/// <c>abi.h:104</c>): always a fixed-width 64-bit value, not pointer-width. A prior version of
+/// this type used <see cref="nint"/> as its backing field, on the (correct, for every platform
+/// this project targets) assumption that pointer-width and 64-bit coincide -- the backing field
+/// is now the real wire type exactly, rather than relying on that coincidence, now that a real
+/// ABI exists to confirm against (see <c>NEXT.md</c>'s native-ABI-migration entry). The
+/// <see cref="nint"/> constructor overload is kept so every existing call site building a
+/// <see cref="CnaHandle"/> from a <see cref="NativeResourceHandle"/>'s own <see cref="nint"/>
+/// storage (<c>DangerousGetHandle()</c>) keeps compiling unchanged -- converting at this one
+/// boundary point, rather than at every call site individually.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaHandle : IEquatable<CnaHandle>
 {
-    public readonly nint Value;
+    public readonly ulong Value;
 
-    public CnaHandle(nint value) => Value = value;
+    public CnaHandle(ulong value) => Value = value;
 
-    public static readonly CnaHandle Zero = new(0);
+    /// <summary>Converts from the pointer-width handle storage <see cref="NativeResourceHandle"/>
+    /// (and every native-backed managed wrapper's own <c>NativeHandleValue</c>) still uses --
+    /// always exact and lossless on every platform this project targets (CNA is 64-bit-only), the
+    /// same reasoning this type's own constructor used to rely on for its whole representation.</summary>
+    public CnaHandle(nint value) => Value = unchecked((ulong)value);
+
+    /// <summary>Matches the real ABI's own <c>CNA_INVALID_HANDLE</c> (<c>abi.h:107</c>, value 0).</summary>
+    public static readonly CnaHandle Zero = new(0UL);
 
     public bool IsNull => Value == 0;
 
