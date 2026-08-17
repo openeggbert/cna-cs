@@ -62,21 +62,27 @@ further still: genuinely real, not always-empty, since saving a picture
 needs only plain file I/O — no native dependency, real, growing data,
 fully testable (against a throwaway temp directory, never the real
 Pictures folder — see [`NEXT.md`](NEXT.md)). `Model` file-*loading* joins
-the "fully real today" group too, for real, uncompressed `.xnb` binary
-assets specifically (`CNA.Content.Xnb`): parsing a `.xnb` file's bytes
-into bones/meshes/vertex-and-index-buffer data is pure C#/BCL logic with
-**zero** native ABI dependency, confirmed byte-for-byte against a real
-MonoGame-compiled `Model` fixture, not just self-consistency — only the
-final step (constructing the real, GPU-backed `VertexBuffer`/`IndexBuffer`
-objects from that data, via `ContentManager.Load<Model>()`) needs the
-native ABI, same as everything else below. `Model` file-loading also now
-covers a real, minimal-scope subset of the real C++ engine's own `.cnj`
-JSON format (`CNA.Content.Cnj`) -- JSON envelope plus flat mesh list,
-`BasicEffect` only, vertex sidecar strides 16/20/24/32 only, tried only
-when no `.xnb` file of the same asset name exists. LZX/LZ4-compressed
-`.xnb` files, `.cnj`'s own bone-hierarchy/skinning/PBR/morph-target
-surface, and runtime glTF are all explicitly out of scope (see
-[`NEXT.md`](NEXT.md)).
+the "fully real today" group too, for both real, uncompressed **and**
+real, LZX-compressed `.xnb` binary assets (`CNA.Content.Xnb`): parsing a
+`.xnb` file's bytes into bones/meshes/vertex-and-index-buffer data is
+pure C#/BCL logic with **zero** native ABI dependency, confirmed
+byte-for-byte against a real MonoGame-compiled `Model` fixture, not just
+self-consistency — LZX decompression itself (`LzxDecoder`/
+`XnbLzxDecompression`, a direct C# port of the real openeggbert/cna C++
+engine's own `LzxDecoder`) is the same story, confirmed byte-for-byte
+against two real, LZX-compressed MonoGame fixtures and an independently
+FNA-produced reference decompressed output, not just "parses without
+throwing." Only the final step (constructing the real, GPU-backed
+`VertexBuffer`/`IndexBuffer` objects from that data, via
+`ContentManager.Load<Model>()`) needs the native ABI, same as everything
+else below. `Model` file-loading also now covers a real, minimal-scope
+subset of the real C++ engine's own `.cnj` JSON format (`CNA.Content.Cnj`)
+-- JSON envelope plus flat mesh list, `BasicEffect` only, vertex sidecar
+strides 16/20/24/32 only, tried only when no `.xnb` file of the same
+asset name exists. MonoGame's own Lz4 `.xnb` extension (no local format
+grounding exists to implement it correctly), `.cnj`'s own
+bone-hierarchy/skinning/PBR/morph-target surface, and runtime glTF are
+all explicitly out of scope (see [`NEXT.md`](NEXT.md)).
 Everything else native-backed (`Game`, `GraphicsDevice`, `Texture2D`,
 `SpriteBatch` including the full extended `Draw`/`DrawString` overload
 families, `RenderTarget2D`, `SoundEffect`/`SoundEffectInstance`,
@@ -103,7 +109,7 @@ engine, not a stub. See
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 459 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 464 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

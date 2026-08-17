@@ -64,8 +64,14 @@ only the thin native-backed compat-typed assembly around it" pattern
 `XnbCompatModelBuilder` already established for the `.xnb` side (see
 `NEXT.md` for the detail, including the load-bearing finding that
 `.cnj`'s `BasicEffect` JSON has no material-color fields at all, unlike
-`.xnb`'s). What remains: Phase 6 packaging/cross-platform validation,
-tracked below.
+`.xnb`'s). Real, LZX-compressed `.xnb` `Model` loading (`LzxDecoder`/
+`XnbLzxDecompression`) is also now done -- a direct, line-by-line C#
+port of the real openeggbert/cna C++ engine's own `LzxDecoder`, confirmed
+byte-for-byte against two real MonoGame fixtures and an independently
+FNA-produced reference decompressed output, closing most of the `.xnb`
+loading feature's own original LZX/LZ4 deferral (`Lz4` -- a MonoGame-only
+extension with no local format grounding -- stays out of scope). What
+remains: Phase 6 packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -970,17 +976,68 @@ Split by whether the type needs the (still nonexistent) native ABI:
       data reuses the exact same format-agnostic types) into shared,
       `internal` members on `XnbCompatModelBuilder` — see `NEXT.md`.
       `samples/HelloGame` re-verified unaffected.
+- [x] **Real, LZX-compressed `.xnb` `Model` loading (`LzxDecoder`/
+      `XnbLzxDecompression`) — done, 2026-08-17 (session 6 continued
+      autonomously past the `CnjCompatModelBuilder` checkpoint, per
+      explicit user selection of "Attempt LZX/LZ4-compressed .xnb
+      decompression").** Research first (this session's own standing
+      discipline) found the best-grounded outcome of any deferred
+      feature this session tackled: the real openeggbert/cna C++ engine
+      has its own complete, working, already-tested `LzxDecoder`
+      (`modules/content/src/Xnb/LzxDecoder.cpp`, 680 lines) -- itself a
+      from-scratch C++ port of FNA's `LzxDecoder.cs` (a C# port of
+      libmspack's `lzxd.c`), preserving FNA's own variable names and
+      control flow specifically so it stays verifiable against the
+      original. That C++ port is cross-verified against two real,
+      vendored, Ms-PL-licensed MonoGame fixtures
+      (`Explosion.xnb`/`FontCalibri14.xnb`) **and** an independently
+      FNA-produced reference decompressed output (the exact bytes FNA's
+      own unmodified decoder produces, run under Mono) -- confirmed
+      SHA-256-identical. This C# port ported the C++ port back to C#
+      (its natural home, since the C++ was itself ported from C#),
+      preserving the same field names/control flow, and passed the
+      identical byte-exact differential test against both real fixtures
+      on the very first clean build -- no port bugs needed fixing.
+      MonoGame's own `Lz4` `.xnb` extension (confirmed, by contrast, to
+      be something original XNA/FNA never produced or read, with **zero**
+      byte-level framing details grounded anywhere reachable) stays
+      exactly as before: detected, rejected with a clear
+      `ContentLoadException` -- the real C++ engine's own maintainers
+      independently reached the identical "not now, no reference to
+      ground it against" conclusion first. "Intel E8" call-address
+      translation (a general LZX/CAB feature, essentially irrelevant to
+      game asset payloads) is reproduced exactly as FNA's own original
+      left it -- genuinely unfinished upstream (its own loop never
+      advances the output position) -- rather than "completed," since
+      that would diverge from, not match, the reference this port is
+      grounded against; in practice this option is essentially never set
+      for ordinary game-asset `.xnb` files. `XnbHeader` now accepts
+      `Lzx` as a real, supported compression value (previously it
+      rejected any non-`None` compression outright); `ContentManager.LoadXnbModelData`
+      branches on it, decompressing before constructing the
+      `XnbContentReader` the uncompressed path already used unchanged.
+      `LzxDecoder`/`XnbLzxDecompression` have zero native dependency,
+      fully unit-testable (same rare "fully real, testable today" status
+      every other `.xnb`/`.cnj` reader in this project already has).
+      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
+      `dotnet test`: 464/464 passing (up from 459 — 5 new tests,
+      including the byte-exact differential check against both real
+      fixtures' independently-produced reference output, and an
+      integration check that a real compressed non-`Model` fixture
+      decompresses correctly then fails cleanly on its unsupported root
+      type reader, not a crash or a hang). `samples/HelloGame`
+      re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own bone-hierarchy/skinning/PBR/morph-target `.cnj`
-      surface, runtime glTF, and LZX/LZ4-compressed `.xnb` content paths
-      (see the `.xnb`/`.cnj` loading entries above), and `ModelMeshPart`'s
-      own `ModelEffectCollection`/`ModelMesh.Effects` gap (see that entry
-      above, a real permanent gap, not deferred pending further work).
-      None of these are blocked on the native C ABI the way everything
-      else in this phase is — they're scoped out because each is its own
-      substantial, separable feature (or, for `ModelEffectCollection`,
-      structurally unfixable), not because anything is missing upstream
-      to ground them against.
+      surface, runtime glTF content paths, and MonoGame's own `Lz4`
+      `.xnb` extension (see the `.xnb`/`.cnj` loading entries above), and
+      `ModelMeshPart`'s own `ModelEffectCollection`/`ModelMesh.Effects`
+      gap (see that entry above, a real permanent gap, not deferred
+      pending further work). None of these are blocked on the native C
+      ABI the way everything else in this phase is — they're scoped out
+      because each is its own substantial, separable feature (or, for
+      `ModelEffectCollection`, structurally unfixable, and for `Lz4`, not
+      grounded against any reachable format reference).
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

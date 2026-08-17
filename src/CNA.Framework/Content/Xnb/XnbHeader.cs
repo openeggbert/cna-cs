@@ -2,12 +2,15 @@ namespace CNA.Content.Xnb;
 
 /// <summary>The compression scheme signaled by a real <c>.xnb</c> header's flags byte -- matches
 /// the real openeggbert/cna C++ engine's own <c>XnbCompression</c> exactly (confirmed against FNA's
-/// real <c>ContentManager.cs</c>: <c>0x80</c> = LZX, <c>0x40</c> = LZ4). This project reads only
-/// <see cref="None"/>; <see cref="Lzx"/>/<see cref="Lz4"/> are real, valid, and detected, but
-/// rejected with a clear <see cref="ContentLoadException"/> rather than decompressed -- a
-/// deliberately deferred gap (LZX alone is a genuinely large, separable sub-feature), not an
-/// oversight, matching this project's established "faithful subset, document the gap" style
-/// (<c>SpriteFont</c>'s 256-glyph cap, <c>GamePad</c>'s partial <c>Buttons</c> flags).</summary>
+/// real <c>ContentManager.cs</c>: <c>0x80</c> = LZX, <c>0x40</c> = LZ4). <see cref="None"/> and
+/// <see cref="Lzx"/> are both real, supported values (see <see cref="XnbLzxDecompression"/> for the
+/// latter, a direct port of the real C++ engine's own <c>LzxDecoder</c>). <see cref="Lz4"/> is real,
+/// valid, and detected, but rejected with a clear <see cref="ContentLoadException"/> rather than
+/// decompressed -- confirmed (against the real C++ engine's own source, which independently reached
+/// the same conclusion) to be a MonoGame-only extension original XNA/FNA never produced or read, with
+/// no byte-level framing details grounded anywhere reachable to implement it correctly, unlike LZX --
+/// matching this project's established "faithful subset, document the gap" style (<c>SpriteFont</c>'s
+/// 256-glyph cap, <c>GamePad</c>'s partial <c>Buttons</c> flags).</summary>
 internal enum XnbCompression
 {
     None,
@@ -52,10 +55,11 @@ internal readonly record struct XnbHeader(char Platform, int Version, XnbCompres
                 $"Corrupt or truncated .xnb file: header declares {totalLength} bytes, but the file is {streamLength} bytes.");
         }
 
-        if (compression != XnbCompression.None)
+        if (compression == XnbCompression.Lz4)
         {
             throw new ContentLoadException(
-                $"This .xnb file is {compression}-compressed -- only uncompressed .xnb files are supported so far.");
+                "This .xnb file uses MonoGame's Lz4 compression, which is not supported (a MonoGame-only " +
+                "extension original XNA/FNA never produced or read, with no local format grounding to implement it correctly).");
         }
 
         return new XnbHeader(platform, version, compression, totalLength);

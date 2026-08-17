@@ -19,9 +19,12 @@ namespace CNA.Content;
 /// <see cref="Texture2D"/>/<see cref="SoundEffect"/>/<see cref="SpriteFont"/> (which this project's
 /// native CNA engine loads on their behalf). See <c>CNA.Content.Xnb</c>'s own types for the actual
 /// <c>.xnb</c> reader (confirmed byte-for-byte against the real openeggbert/cna C++ engine's own
-/// reference implementation and a real MonoGame-compiled fixture -- see <c>NEXT.md</c>) -- only
-/// real, *uncompressed* <c>.xnb</c> files are supported; LZX/LZ4-compressed files are deliberately
-/// out of scope. <see cref="LoadModel"/> also recognizes a real, minimal-scope subset of the real
+/// reference implementation and a real MonoGame-compiled fixture -- see <c>NEXT.md</c>) -- real,
+/// uncompressed <c>.xnb</c> files and real, LZX-compressed <c>.xnb</c> files (<see cref="XnbLzxDecompression"/>/
+/// <see cref="LzxDecoder"/>, a direct port of the real C++ engine's own <c>LzxDecoder</c>) are both
+/// supported; MonoGame's own Lz4 extension remains out of scope (no local format grounding exists
+/// to implement it correctly -- see <see cref="XnbCompression"/>'s own doc comment).
+/// <see cref="LoadModel"/> also recognizes a real, minimal-scope subset of the real
 /// engine's own <c>.cnj</c> format (<c>CNA.Content.Cnj</c> -- JSON envelope + flat mesh list,
 /// <c>BasicEffect</c> only, vertex strides 16/20/24/32 only; see that namespace's own types for the
 /// full scope-cut list), tried only when no <c>.xnb</c> file of the same asset name exists, matching
@@ -100,9 +103,9 @@ public class ContentManager
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
     }
 
-    /// <summary>Parses a real, uncompressed <c>.xnb</c> <see cref="Model"/> asset's bytes from
-    /// <see cref="RootDirectory"/> into an intermediate, native-free <see cref="XnbModelData"/> --
-    /// deliberately split out from <see cref="LoadModel"/> (which needs a real
+    /// <summary>Parses a real <c>.xnb</c> <see cref="Model"/> asset's bytes (uncompressed or
+    /// LZX-compressed) from <see cref="RootDirectory"/> into an intermediate, native-free
+    /// <see cref="XnbModelData"/> -- deliberately split out from <see cref="LoadModel"/> (which needs a real
     /// <see cref="Graphics.GraphicsDevice"/> to finish the job) so <c>CNA.XnaCompat</c>'s own
     /// <c>ContentManager</c> can reuse this exact parsing step to build its own compat-typed
     /// <see cref="Model"/>, without duplicating any <c>.xnb</c> format logic -- the same "reuse the
@@ -123,8 +126,28 @@ public class ContentManager
         using FileStream stream = File.OpenRead(path);
         using var reader = new BinaryReader(stream);
 
-        _ = XnbHeader.Read(reader, stream.Length);
-        XnbContentReader contentReader = XnbContentReader.Create(reader);
+        XnbHeader header = XnbHeader.Read(reader, stream.Length);
+
+        XnbContentReader contentReader;
+        if (header.Compression == XnbCompression.Lzx)
+        {
+            int decompressedSize = reader.ReadInt32();
+            int compressedSize = header.TotalLength - 14;
+            if (compressedSize < 0)
+            {
+                throw new ContentLoadException(
+                    $"'{assetName}' is not a valid LZX-compressed .xnb file (its declared total length is too short to hold a compressed payload).");
+            }
+
+            byte[] compressed = reader.ReadBytes(compressedSize);
+            byte[] decompressed = XnbLzxDecompression.Decompress(compressed, decompressedSize, assetName);
+            contentReader = XnbContentReader.Create(new BinaryReader(new MemoryStream(decompressed)));
+        }
+        else
+        {
+            contentReader = XnbContentReader.Create(reader);
+        }
+
         object? root = contentReader.ReadRootObjectAndResolveSharedResources();
 
         if (root is not XnbModelData modelData)

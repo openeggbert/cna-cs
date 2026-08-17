@@ -98,11 +98,16 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     SavePicture) -- genuinely real, not always-empty: saving a picture
     needs only plain file I/O (SavedPictureStore), no native call at all
     (see below for the image-dimension/thumbnail fallback reasoning).
-    Reading a real, uncompressed .xnb Model asset's bytes into bones/
-    meshes/vertex-and-index-buffer data (CNA.Content.Xnb) -- zero native
-    ABI, pure C#/BCL logic, confirmed byte-for-byte against a real
-    MonoGame-compiled fixture (see below for why only the final
-    VertexBuffer/IndexBuffer construction step is blocked). Reading a
+    Reading a real, uncompressed OR real, LZX-compressed .xnb Model
+    asset's bytes into bones/meshes/vertex-and-index-buffer data
+    (CNA.Content.Xnb) -- zero native ABI, pure C#/BCL logic, confirmed
+    byte-for-byte against real MonoGame-compiled fixtures (LZX
+    decompression itself -- LzxDecoder/XnbLzxDecompression, a direct
+    port of the real C++ engine's own LzxDecoder -- confirmed
+    byte-for-byte against an independently FNA-produced reference
+    decompressed output too, not just self-consistency; see below for
+    why only the final VertexBuffer/IndexBuffer construction step is
+    blocked). Reading a
     real, minimal-scope subset of the real engine's own .cnj JSON Model
     format (CNA.Content.Cnj: JSON envelope + flat mesh list, BasicEffect
     only, vertex sidecar strides 16/20/24/32 only) -- also zero native
@@ -140,9 +145,9 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
     Model's own .cnj bone-hierarchy/skinning/PBR/morph-target surface,
-    runtime glTF content paths, and LZX/LZ4-compressed .xnb files (see
-    above/below for why only a minimal-scope .cnj subset and real,
-    uncompressed .xnb were in scope),
+    runtime glTF content paths, and MonoGame's own Lz4 .xnb extension
+    (see above/below for why only a minimal-scope .cnj subset and LZX,
+    not Lz4, were in scope for their respective formats),
     ModelMeshPart's own ModelEffectCollection/ModelMesh.Effects compat gap
     (a real, permanent structural limitation, not a temporary scope cut --
     see plan.md Phase 4 for why) -- none of these are blocked on the
@@ -247,15 +252,32 @@ implementation, not invented), but confirmed to an unusual depth for this
 project: not just read, but hand-traced byte-by-byte against a real,
 independently-produced MonoGame-compiled fixture, catching exactly the
 kind of subtle format misunderstanding reading source alone can miss.
-Deliberately scoped to real, uncompressed `.xnb` files only -- LZX/LZ4
-decompression and the real engine's own `.cnj`/glTF content paths were
-all out of scope for that pass (each is its own large, separable
-feature; see `plan.md` Phase 4). `XnbBasicEffectReader` reads every field
-a real `BasicEffect` `.xnb` entry serializes (so the stream position
-stays correct for whatever follows) but doesn't apply them to a real
-`BasicEffect` instance -- doing so needs its external texture reference
-resolved via `ContentManager.Load<Texture2D>()`, itself native-ABI-blocked,
-so this is recorded as a known gap rather than half-wired.
+Deliberately scoped to real, uncompressed `.xnb` files only for that
+first pass -- LZX/LZ4 decompression and the real engine's own
+`.cnj`/glTF content paths were all out of scope then (each is its own
+large, separable feature; see `plan.md` Phase 4). `XnbBasicEffectReader`
+reads every field a real `BasicEffect` `.xnb` entry serializes (so the
+stream position stays correct for whatever follows) but doesn't apply
+them to a real `BasicEffect` instance -- doing so needs its external
+texture reference resolved via `ContentManager.Load<Texture2D>()`,
+itself native-ABI-blocked, so this is recorded as a known gap rather
+than half-wired.
+
+Real, LZX-compressed `.xnb` support (`LzxDecoder`/`XnbLzxDecompression`)
+closed most of that first deferral -- grounded at least as strongly as
+anything else in this project: a direct, line-by-line C# port of the
+real C++ engine's own `LzxDecoder` (itself a from-scratch C++ port of
+FNA's `LzxDecoder.cs`, preserving FNA's own variable names/control flow
+specifically to stay verifiable against the original), confirmed
+byte-for-byte against two real, LZX-compressed MonoGame fixtures
+(`Explosion.xnb`/`FontCalibri14.xnb`) *and* an independently-produced
+reference decompressed output (the exact bytes FNA's own unmodified
+decoder produces, run under Mono) -- not a self-consistency check, and
+not just "parses without throwing." `Lz4` (a MonoGame-only `.xnb`
+extension original XNA/FNA never produced or read) stays rejected with a
+clear exception -- confirmed no byte-level framing details for it exist
+anywhere reachable to implement it correctly, the same conclusion the
+real C++ engine's own maintainers independently reached first.
 
 `CNA.Content.Cnj` (a minimal-scope subset of `.cnj` `Model` loading) is
 grounded the same way, against the real engine's own `ModelTypeReader::Read`
@@ -274,7 +296,7 @@ own bare-filename check. Deliberately scoped to a flat mesh list (no
 bone hierarchy/skinning/morph targets) and `BasicEffect` only (no
 `PbrEffect`/`SkinnedEffect`/`DualTextureEffect`) -- each excluded surface
 is rejected with a clear, documented exception, never silently
-mis-loaded, the same discipline `.xnb`'s own LZX/LZ4 rejection already
+mis-loaded, the same discipline `.xnb`'s own Lz4 rejection already
 established. `CnjCompatModelBuilder` is this path's own `CNA.XnaCompat`
 mirror, exactly `XnbCompatModelBuilder`'s shape: reuses the shared
 native-free `.cnj` parsing step, builds compat-typed `Model`/`ModelBone`/

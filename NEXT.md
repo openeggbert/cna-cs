@@ -11,6 +11,125 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Real, LZX-compressed `.xnb` `Model` loading (`LzxDecoder`/`XnbLzxDecompression`) -- done, the best-grounded feature of this whole session (2026-08-17, session 6 continued autonomously past the `CnjCompatModelBuilder` checkpoint, per explicit user selection of "Attempt LZX/LZ4-compressed .xnb decompression")
+
+This was explicitly framed at its own checkpoint as "a real algorithmic
+undertaking" -- LZX is a genuinely non-trivial sliding-window LZ77 +
+Huffman-coded compression scheme, the kind of thing where a subtle bug
+can produce silently-wrong-but-plausible output rather than a clean
+crash, a materially worse failure mode than almost everything else this
+project has built. Research first (this session's own standing
+discipline, dispatched to a dedicated fork before writing any code)
+found the opposite of that risk profile, though: **the real
+openeggbert/cna C++ engine already has a complete, working, already
+byte-exact-tested `LzxDecoder`** to port from -- not an inferred format,
+not a from-scratch implementation against a hostile unknown.
+
+**What the research established** (full spec at
+`/tmp/.../scratchpad/xnb-compression-spec.md`, matching this session's
+own `xnb-model-spec.md`/`cnj-model-spec.md` rigor):
+
+- **LZX** (`.xnb` flags-byte bit `0x80`) is real XNA's own custom LZX
+  variant. The real C++ engine's `LzxDecoder`
+  (`modules/content/src/Xnb/LzxDecoder.cpp`, 680 lines) is a from-scratch
+  C++ port of FNA's own `LzxDecoder.cs` (itself a C# port of libmspack's
+  `lzxd.c`) -- a **line-by-line** port, not a reimplementation from the
+  algorithm's description, preserving FNA's own variable names and
+  control flow specifically so it stays verifiable against the original.
+  It's wired end-to-end into the C++ engine's own `ContentManager`, and
+  cross-verified against two real, vendored, Ms-PL-licensed MonoGame
+  fixtures (`Explosion.xnb`, `FontCalibri14.xnb`) **and** a companion
+  `reference-decompressed/` directory holding the exact decompressed
+  bytes FNA's own unmodified `LzxDecoder.cs` produces for those same two
+  fixtures, run under Mono -- a genuinely independent cross-implementation
+  check, confirmed SHA-256-identical against the C++ port's own output.
+- **LZ4** (flags-byte bit `0x40`) is a MonoGame-only `.xnb` extension --
+  confirmed real XNA/FNA never produced or read it (the LZ4 algorithm
+  itself wasn't even published until 2011, after XNA 4.0 shipped). **No
+  byte-level framing details for it exist anywhere reachable** -- not in
+  the local `cna` checkout's source, not in its own planning docs, not in
+  any vendored fixture. The real C++ engine's own maintainers
+  independently reached the same "not now" conclusion (`plan_xnb.md`
+  XNB-30C, marked deferred, "not required by any milestone").
+- **Failure-mode risk, re-assessed once the reference was found**: not
+  "silently wrong output" after all, for the same reason the rest of
+  this project's content-parsing code isn't -- every real decode path is
+  driven by explicit Huffman-symbol lookups against explicit tables and
+  explicit offset/length arithmetic checked against the window size and
+  the input buffer's own declared bounds, so a bit-desync overwhelmingly
+  likely produces an out-of-range lookup (caught) long before plausible
+  garbage output is produced. The real biggest risk was always just the
+  ordinary risk of any line-by-line port: a transcription slip, which
+  byte-exact differential tests against real fixtures would very likely
+  catch immediately -- and did not need to, in the end (see below).
+
+**What got built**, in `src/CNA.Framework/Content/Xnb/`:
+
+- `LzxDecoder.cs` -- a direct, line-by-line C# port of the C++ port
+  (itself ported from C# originally, so this is closer to "restoring the
+  original shape" than "porting across languages"). Field names map 1:1
+  onto the C++ port's own `LzxState` members, renamed to this project's
+  own `_camelCase` private-field convention but otherwise preserving
+  exact control flow, including `MakeDecodeTable`'s own two-pass
+  canonical-Huffman-table construction (the one place the C++ port's own
+  history records a real, fuzzing-found heap-buffer-overflow being fixed
+  -- the fix is already reflected in the source this was ported from,
+  and C#'s own bounds-checked array access would have caught the
+  underlying bug automatically regardless, unlike raw
+  `std::vector::operator[]`). "Intel E8" call-address translation is
+  reproduced exactly as FNA's own original left it -- genuinely
+  unfinished upstream, not "completed" here, since completing it would
+  diverge from the reference this port is grounded against; in practice
+  this option is essentially never set for ordinary game-asset `.xnb`
+  files.
+- `XnbLzxDecompression.cs` -- a direct port of the block-framing loop
+  (`DecompressXnbPayload`/FNA's own `ContentManager.GetContentReaderFromXnb`):
+  splits the compressed payload into (normally 32KB) blocks, feeding each
+  to one persistent `LzxDecoder` instance in turn.
+- `XnbHeader.cs`: `Lzx` is now a real, accepted compression value
+  (previously *any* non-`None` compression was rejected outright at the
+  header level) -- only `Lz4` still throws.
+- `ContentManager.LoadXnbModelData`: branches on `header.Compression`,
+  decompressing via `XnbLzxDecompression` before constructing the
+  `XnbContentReader` the uncompressed path already used unchanged --
+  same "parse pure data, block only on final native assembly" split
+  every other reader in this namespace already has.
+
+**Real fixtures**: `Explosion.xnb`/`FontCalibri14.xnb` plus their two
+`reference-decompressed/*.bin` files, copied unmodified from
+`openeggbert/cna`'s own vendored copies, into
+`tests/CNA.Framework.Tests/assets/xnb/lzx/` (same provenance-README
+precedent as `assets/xnb/README.md`/`assets/cnj/README.md`).
+`FontCalibri14.xnb` was deliberately picked upstream because its
+44032-byte decompressed size spans more than one 32KB LZX block,
+genuinely exercising the block-framing loop's multi-block state
+persistence (the same `LzxDecoder` instance's sliding window and
+repeated-offset LRU queue must carry over correctly across
+`Decompress()` calls).
+
+**The port passed its byte-exact differential test against both real
+fixtures on the very first clean build** -- no port bugs needed finding
+or fixing, a genuine first for a feature of this size and delicacy this
+session. (Two small, non-decoder gaps were still added proactively while
+writing the integration code: a `compressedSize < 0` guard in
+`LoadXnbModelData` for a header claiming a `TotalLength` too short to
+hold a compressed payload, matching this project's own "reject
+implausible counts before use" discipline elsewhere.)
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings;
+`dotnet test`: 464/464 passing (up from 459 -- 5 new tests: the
+byte-exact differential check against both real fixtures' reference
+output, a multi-block sanity check on `FontCalibri14.xnb`'s own shape,
+and an end-to-end integration check that both real compressed fixtures
+-- neither of which is a `Model` asset -- decompress correctly then fail
+cleanly on their unsupported root type reader, confirming decompression
+produces well-formed content bytes rather than a crash or the genuine
+FNA-inherited Intel-E8 hang risk). Two existing header tests were split
+(`Lzx` no longer throws at the header level; only `Lz4` still does) and
+one new one added confirming `XnbHeader.Read` returns `Compression ==
+Lzx` for a real Lzx-flagged header. `samples/HelloGame` re-verified
+unaffected.
+
 ## Second `/code-review high` pass, over the first pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more)
 
 Ran the review over the dedup fix commit (`655b92a`). Clean -- zero

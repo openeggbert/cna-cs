@@ -99,16 +99,27 @@ public class XnbModelReaderTests
         Assert.Throws<ContentLoadException>(() => XnbHeader.Read(reader, bytes.Length));
     }
 
-    [Theory]
-    [InlineData((byte)0x80, "Lzx")]
-    [InlineData((byte)0x40, "Lz4")]
-    public void XnbHeader_Read_CompressedFile_ThrowsContentLoadException(byte flags, string expectedSchemeName)
+    [Fact]
+    public void XnbHeader_Read_Lz4CompressedFile_ThrowsContentLoadException()
     {
-        byte[] bytes = [(byte)'X', (byte)'N', (byte)'B', (byte)'w', 5, flags, 10, 0, 0, 0];
+        byte[] bytes = [(byte)'X', (byte)'N', (byte)'B', (byte)'w', 5, 0x40, 10, 0, 0, 0];
         using var reader = new BinaryReader(new MemoryStream(bytes));
 
         ContentLoadException exception = Assert.Throws<ContentLoadException>(() => XnbHeader.Read(reader, bytes.Length));
-        Assert.Contains(expectedSchemeName, exception.Message);
+        Assert.Contains("Lz4", exception.Message);
+    }
+
+    [Fact]
+    public void XnbHeader_Read_LzxCompressedFile_ReturnsLzxCompression()
+    {
+        // Lzx is a real, supported value -- unlike Lz4, XnbHeader.Read no longer rejects it (real
+        // decompression happens downstream, in XnbLzxDecompression/LzxDecoder).
+        byte[] bytes = [(byte)'X', (byte)'N', (byte)'B', (byte)'w', 5, 0x80, 10, 0, 0, 0];
+        using var reader = new BinaryReader(new MemoryStream(bytes));
+
+        XnbHeader header = XnbHeader.Read(reader, bytes.Length);
+
+        Assert.Equal(XnbCompression.Lzx, header.Compression);
     }
 
     [Fact]
