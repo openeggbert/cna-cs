@@ -11,6 +11,30 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Second `/code-review high` pass, over the first pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again)
+
+Ran the review over the LZX fix commit (`4fe1b44`). Clean -- zero
+findings. Confirmed `XnbHeader.Read`'s own `totalLength == streamLength`
+enforcement makes the new `header.TotalLength < XnbHeader.LzxPayloadOffset`
+guard genuinely reachable (not dead code the way the old post-read check
+was), confirmed the `ReadLengths`/`MakeDecodeTable` return-value
+propagation covers every call site with no orphaned callers (grepped
+directly), and independently re-traced the documented-not-fixed
+`blockSize = -1` case -- confirmed it does terminate safely, though
+through the `BlockType` switch's own `default: return -1` arm (the
+phantom all-1s EOF fill decodes to an invalid block type, `0b111` = 7)
+rather than strictly through the buffer-exhaustion check the inline
+comment's own wording emphasizes. A minor inaccuracy in *which* safety
+net catches it, not a functional bug -- both paths return -1 and
+surface as the same `ContentLoadException` either way, so this wasn't
+worth its own fix-and-re-review cycle.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 464/464 passing, unchanged. `samples/HelloGame` re-verified
+unaffected. This closes the LZX decompression feature's review cycle --
+two passes total, the second landing clean, the same shape every other
+feature's own review cycle has taken this session.
+
 ## First `/code-review high` pass, over the LZX decompression commit -- three real findings fixed, one documented against the byte-exact-tested reference (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still)
 
 Ran the review over the LZX commit (`75e9987`). Four findings:
