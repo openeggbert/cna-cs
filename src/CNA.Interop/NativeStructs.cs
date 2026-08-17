@@ -169,22 +169,51 @@ internal readonly struct CnaRect
 }
 
 /// <summary>
-/// ABI-shaped sprite draw command -- field-for-field the same as the
-/// <c>CNA_SpriteDrawCommand</c> example struct in ../../cnabinding/analysis_binding.md §22
-/// (texture, position, source, color, rotation, origin, scale, effects, layer_depth). One of
-/// these is buffered per <c>SpriteBatch.Draw</c>/<c>DrawString</c> call and the whole batch is
-/// flushed through one <c>cna_sprite_batch_draw_many</c> call at <c>End()</c> -- exactly the
-/// batched shape §22's own example illustrates, not a single-draw primitive anymore (see
-/// plan.md Phase 5). There is no dedicated "no source rectangle" flag: the "draw the whole
-/// texture" case is resolved to a concrete <see cref="Source"/> covering the full texture bounds
-/// at the CNA.Framework call site, before this struct is built, so the ABI shape needs nothing
-/// beyond what §22 already shows. This struct's shape is otherwise unvalidated against any real
-/// upstream ABI (none exists yet for this call); expect a signature audit once Track A ships,
-/// same as everything else in Phase 4/5.
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_SpriteBatchBeginInfo</c> exactly
+/// (<c>graphics.h:416-428</c>) -- the old guessed <c>cna_sprite_batch_begin</c> took no parameters
+/// beyond the handle at all; the real one needs this versioned struct, currently only carrying a
+/// sort mode. <c>CNA.Graphics.SpriteBatch.Begin()</c> only ever needs
+/// <c>CNA_SPRITE_SORT_MODE_DEFERRED</c> (0, matching real XNA's own default and the only mode this
+/// project's batching model supports), so <see cref="SortMode"/> is always left at its default.
+/// See <see cref="CnaGameFrameHooks"/>'s own constructor doc comment for the self-populating
+/// -constructor rationale.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaSpriteBatchBeginInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint SortMode;
+    public uint Reserved;
+
+    public unsafe CnaSpriteBatchBeginInfo()
+    {
+        StructSize = (uint)sizeof(CnaSpriteBatchBeginInfo);
+        StructVersion = 1;
+    }
+}
+
+/// <summary>
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_SpriteScaledCommand</c> exactly
+/// (<c>graphics.h:478-516</c>) -- confirmed field-for-field identical (texture, position, source,
+/// color, rotation, origin, scale, effects, layer_depth) to the shape this struct already had
+/// before the native-ABI migration reached it, needing only the <see cref="StructSize"/>/
+/// <see cref="StructVersion"/> header this migration adds everywhere. One of these is buffered per
+/// <c>SpriteBatch.Draw</c>/<c>DrawString</c> call and the whole batch is flushed through one
+/// <c>cna_sprite_batch_submit_scaled_many</c> call at <c>End()</c> -- see
+/// <c>CNA.Interop.Native</c>'s SpriteBatch section for why this project only ever needs the
+/// position+scale route, not the real ABI's other one
+/// (<c>CNA_SpriteCommand</c>/<c>cna_sprite_batch_submit_many</c>, destination-rectangle-based).
+/// There is no dedicated "no source rectangle" flag: the "draw the whole texture" case is resolved
+/// to a concrete <see cref="Source"/> covering the full texture bounds at the CNA.Framework call
+/// site, before this struct is built, matching what an empty/zero-size <see cref="Source"/> means
+/// to the real ABI's own optional-source convention.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaSpriteDrawCommand
 {
+    public readonly uint StructSize;
+    public readonly uint StructVersion;
     public readonly CnaHandle Texture;
     public readonly CnaVector2 Position;
     public readonly CnaRect Source;
@@ -195,7 +224,7 @@ internal readonly struct CnaSpriteDrawCommand
     public readonly int Effects;
     public readonly float LayerDepth;
 
-    public CnaSpriteDrawCommand(
+    public unsafe CnaSpriteDrawCommand(
         CnaHandle texture,
         CnaVector2 position,
         CnaRect source,
@@ -206,6 +235,8 @@ internal readonly struct CnaSpriteDrawCommand
         int effects,
         float layerDepth)
     {
+        StructSize = (uint)sizeof(CnaSpriteDrawCommand);
+        StructVersion = 1;
         Texture = texture;
         Position = position;
         Source = source;

@@ -11,6 +11,31 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 7: `SpriteBatch` rewritten -- the best-preserved subsystem in the whole migration, confirming a pre-migration design choice rather than replacing it (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+The real ABI has *two* batched-submission routes -- `cna_sprite_batch_submit_many`
+(`CNA_SpriteCommand`, destination-rectangle-based) and `cna_sprite_batch_submit_scaled_many`
+(`CNA_SpriteScaledCommand`, position+scale-based) -- and this project's own pre-migration
+`SpriteBatch.cs` design turns out to already need only the second one: every `Draw` overload,
+including the destination-rectangle ones, was already being resolved down to one canonical
+position+scale form (`DrawEx`) before ever touching the command buffer, specifically so a single
+buffered command shape could serve every overload. That shape -- `CnaSpriteDrawCommand` -- already
+matched `CNA_SpriteScaledCommand` field-for-field (texture, position, source, color, rotation,
+origin, scale, effects, layer_depth) before this migration touched it; it only needed the
+`struct_size`/`struct_version` header this migration adds everywhere else. No dual-buffer
+restructuring was needed, unlike `VertexBuffer`/`IndexBuffer`'s own step.
+
+`cna_sprite_batch_create`/`_end` were also already an exact name-and-shape match, confirming this
+subsystem's original design (built by reading the real C++ engine's own SpriteBatch implementation,
+per its own doc comment) was unusually well-grounded even before any C ABI existed to check it
+against.
+
+What did need fixing: `cna_sprite_batch_begin` took no parameters beyond the handle in the old
+guess; the real one needs a `CNA_SpriteBatchBeginInfo` (currently just a sort mode, always
+`CNA_SPRITE_SORT_MODE_DEFERRED`/0 here, matching real XNA's own default and the only mode this
+project's batching model supports). `cna_sprite_batch_release`/`_draw_many` don't exist upstream;
+renamed to the real `cna_sprite_batch_destroy`/`_submit_scaled_many`.
+
 ## Native ABI migration, step 6: `ContentManager` rewritten, and a real, reusable `CnaStringView` marshaling helper built for the first time (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 `content.h` confirms `ContentManager`'s real shape closely matches what this project already

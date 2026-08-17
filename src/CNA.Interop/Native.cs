@@ -219,34 +219,40 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_render_target_destroy(CnaHandle renderTarget);
 
-    // -- SpriteBatch (§22) ---------------------------------------------------------------------
+    // -- SpriteBatch (real ABI, graphics.h -- step 7 of the native-ABI migration) -------------
     //
-    // Phase 5 (plan.md): every Draw/DrawString call buffers a CnaSpriteDrawCommand in managed code
-    // instead of calling native immediately; End() flushes the whole batch through one
-    // cna_sprite_batch_draw_many call, matching §22's own "managed draw-command buffer, one or a
-    // few native calls" example exactly. This replaced the original per-draw
-    // cna_sprite_batch_draw/cna_sprite_batch_draw_ex calls entirely (removed here, not kept
-    // alongside the batched form) -- once every draw funnels through the same buffer, a
-    // single-draw native primitive has no remaining caller.
+    // The best-preserved subsystem in this whole migration: this project's own pre-migration
+    // design already funneled every Draw overload (position-based AND destination-rectangle-based)
+    // down to one canonical position+scale form before ever touching the command buffer (see
+    // SpriteBatch.cs's own DrawEx overloads) -- which turns out to be exactly
+    // CNA_SpriteScaledCommand's own shape, one of the *two* real batched-submission routes
+    // (cna_sprite_batch_submit_many takes a destination-rectangle CNA_SpriteCommand instead; this
+    // project never needs it, since it already resolves rectangles to position+scale in managed
+    // code). CnaSpriteDrawCommand's field order already matched CNA_SpriteScaledCommand's exactly
+    // before this migration touched it -- only the struct_size/struct_version header was missing.
+    // cna_sprite_batch_create/_end were also already an exact name+shape match. Only
+    // cna_sprite_batch_begin (needs a real CNA_SpriteBatchBeginInfo now) and the draw/release names
+    // needed fixing.
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_create(CnaHandle device, out CnaHandle spriteBatch);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_sprite_batch_release(CnaHandle spriteBatch);
+    internal static partial CnaResult cna_sprite_batch_destroy(CnaHandle spriteBatch);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_sprite_batch_begin(CnaHandle spriteBatch);
+    internal static partial CnaResult cna_sprite_batch_begin(CnaHandle spriteBatch, in CnaSpriteBatchBeginInfo beginInfo);
 
-    /// <summary>Matches the <c>CNA_SpriteDrawCommand</c>/<c>cna_sprite_batch_draw_many</c>
-    /// example in ../../cnabinding/analysis_binding.md §22 exactly -- the one place in this
-    /// project's ABI surface where the analysis docs already specified the batched shape directly,
-    /// not just a naming convention to extrapolate from.</summary>
+    /// <summary>Matches <c>cna_sprite_batch_submit_scaled_many</c> exactly
+    /// (<c>graphics.h:533</c>) -- the old guessed name, <c>cna_sprite_batch_draw_many</c>, has no
+    /// real equivalent, but <see cref="CnaSpriteDrawCommand"/>'s own field shape needed only a
+    /// <c>struct_size</c>/<c>struct_version</c> header added, not restructuring -- see this file's
+    /// own section comment above.</summary>
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_sprite_batch_draw_many(
+    internal static unsafe partial CnaResult cna_sprite_batch_submit_scaled_many(
         CnaHandle spriteBatch,
         CnaSpriteDrawCommand* commands,
-        nuint commandCount);
+        ulong commandCount);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_end(CnaHandle spriteBatch);

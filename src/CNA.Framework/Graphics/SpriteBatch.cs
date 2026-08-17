@@ -6,9 +6,11 @@ namespace CNA.Graphics;
 /// <summary>
 /// Every <c>Draw</c>/<c>DrawString</c> call buffers a <see cref="CnaSpriteDrawCommand"/> in
 /// managed code instead of calling native immediately; <see cref="End"/> flushes the whole batch
-/// through one <c>cna_sprite_batch_draw_many</c> call, per ../../cnabinding/analysis_binding.md
-/// §22's own "managed draw-command buffer, one or a few native calls" example (plan.md Phase 5).
-/// This also introduced real <c>Begin</c>/<c>End</c> pairing validation this type never had before
+/// through one <c>cna_sprite_batch_submit_scaled_many</c> call -- the real, confirmed ABI's own
+/// batched-submission route for position+scale draws (<c>CNA.Interop.Native</c>'s SpriteBatch
+/// section explains why this is the one this project needs, not the destination-rectangle-based
+/// <c>cna_sprite_batch_submit_many</c>). This also introduced real <c>Begin</c>/<c>End</c> pairing
+/// validation this type never had before
 /// (there was nothing to validate when every <c>Draw</c> call went straight to native) --
 /// <c>Draw</c>-before-<see cref="Begin"/>, <see cref="End"/>-before-<see cref="Begin"/>, and
 /// calling <see cref="Begin"/> twice without an intervening <see cref="End"/> all now throw
@@ -40,7 +42,7 @@ public class SpriteBatch : IDisposable
         CnaResult result = Native.cna_sprite_batch_create(graphicsDevice.ResolveNativeDeviceHandle(), out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(SpriteBatch));
 
-        _handle = new NativeResourceHandle(handle.Value, h => Native.cna_sprite_batch_release(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.Value, h => Native.cna_sprite_batch_destroy(new CnaHandle(h)));
     }
 
     private nint NativeHandleValue => _handle.DangerousGetHandle();
@@ -53,7 +55,8 @@ public class SpriteBatch : IDisposable
                 "Begin cannot be called again until End has been successfully called.");
         }
 
-        CnaResult result = Native.cna_sprite_batch_begin(new CnaHandle(NativeHandleValue));
+        var beginInfo = new CnaSpriteBatchBeginInfo();
+        CnaResult result = Native.cna_sprite_batch_begin(new CnaHandle(NativeHandleValue), in beginInfo);
         CnaException.ThrowIfFailed(result, nameof(Begin));
 
         _commandBuffer.Clear();
@@ -277,8 +280,8 @@ public class SpriteBatch : IDisposable
 
         fixed (CnaSpriteDrawCommand* commands = CollectionsMarshal.AsSpan(_commandBuffer))
         {
-            CnaResult result = Native.cna_sprite_batch_draw_many(
-                new CnaHandle(NativeHandleValue), commands, (nuint)_commandBuffer.Count);
+            CnaResult result = Native.cna_sprite_batch_submit_scaled_many(
+                new CnaHandle(NativeHandleValue), commands, (ulong)_commandBuffer.Count);
             CnaException.ThrowIfFailed(result, nameof(End));
         }
 
