@@ -1098,13 +1098,18 @@ Split by whether the type needs the (still nonexistent) native ABI:
       the second caught that first fix's own overreach, where making the
       shared `GetInt` helper universally null-tolerant silently changed
       `"vertexStride": null` from a clean rejection into a silent
-      default of 16 -- a materially worse outcome (real vertex bytes
-      authored at a different stride reinterpreted with a completely
-      wrong field layout, since any multiple of 32/48/52/56/68 is also a
-      multiple of 16), fixed by splitting `GetInt` (kept strict) from a
-      new `GetOptionalInt` (null-tolerant, used only where that's safe)
-      and extracting one shared `IsAbsentOrNull` check instead of three
-      independently-reimplemented ones — see `NEXT.md`). `samples/HelloGame`
+      default of 16 -- a materially worse outcome (real stride-32 vertex
+      bytes, since 32 is itself an exact multiple of 16, would be
+      reinterpreted as twice as many stride-16 vertices with a
+      completely wrong field layout), fixed by splitting `GetInt` (kept
+      strict) from a new `GetOptionalInt` (null-tolerant, used only
+      where that's safe) and extracting one shared `IsAbsentOrNull`
+      check instead of three independently-reimplemented ones; a third
+      pass then deduplicated `GetOptionalInt` itself (it delegates to
+      `GetInt` now) and corrected a mathematically overstated doc-comment
+      claim ("any multiple of 32/48/52/56/68 is also a multiple of 16" --
+      only 32 and 48 actually do; the severity conclusion didn't change,
+      32 alone already justifies it) — see `NEXT.md`). `samples/HelloGame`
       re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own `.cnj` skinning surface (vertex strides 48/52/56/68,

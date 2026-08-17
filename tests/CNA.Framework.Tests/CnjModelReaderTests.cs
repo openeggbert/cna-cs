@@ -373,11 +373,12 @@ public class CnjModelReaderTests
         // "vertexStride") treat null the same as "absent" for every caller, including this one --
         // but silently defaulting a null/wrong stride to 16 is actively dangerous, not just
         // permissive: RequireWholeNumberOfElements's own "whole number of elements" check can't
-        // catch it (any multiple of 32/48/52/56/68 is also a multiple of 16), so real vertex bytes
-        // authored at a different stride would be silently reinterpreted with a completely wrong
-        // field layout -- silent geometry corruption, not a clean rejection. "vertexStride" must
-        // keep throwing on null, unlike "parentBone" (GetOptionalInt), where defaulting to the root
-        // bone is always a safe, meaningful choice.
+        // reliably catch it -- 32 (this reader's own most commonly-used supported stride) is itself
+        // an exact multiple of 16, so real stride-32 vertex bytes with a null stride would silently
+        // pass that check and be misread as twice as many stride-16 vertices with a completely wrong
+        // field layout, not merely rejected -- silent geometry corruption, not a clean rejection.
+        // "vertexStride" must keep throwing on null, unlike "parentBone" (GetOptionalInt), where
+        // defaulting to the root bone is always a safe, meaningful choice.
         const string json = """
             {"cnjVersion":1,"type":"Model","meshes":[
                 {"name":"M","vertices":"quad_verts.bin","indices":"quad_idx.bin","vertexStride":null}

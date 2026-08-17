@@ -405,12 +405,17 @@ internal static class CnjModelReader
     /// <c>"vertexStride"</c>, where silently guessing a value on <c>null</c> would be actively
     /// dangerous rather than merely permissive: a code-review finding caught an earlier version of
     /// this method treating <c>null</c> the same as "absent" here too, which would have let
-    /// <c>"vertexStride": null</c> silently default to 16 -- <see cref="RequireWholeNumberOfElements"/>'s
-    /// own whole-number check can't catch this (any multiple of 32/48/52/56/68 is also a multiple of
-    /// 16), so real vertex bytes authored at a different stride would be silently reinterpreted with
-    /// a completely wrong field layout and double-or-more the real vertex count -- silent geometry
-    /// corruption with no diagnostic, exactly what this reader's own doc comment promises never
-    /// happens. See <see cref="GetOptionalInt"/> for the *other* shape (null genuinely means
+    /// <c>"vertexStride": null</c> silently default to 16 -- and <see cref="RequireWholeNumberOfElements"/>'s
+    /// own whole-number check can't reliably catch this: 32 (this reader's own most commonly-used
+    /// supported stride -- the real fixture <c>quad.cnj</c> uses it) is itself an exact multiple of
+    /// 16, so real stride-32 vertex bytes with a <c>null</c> stride would silently pass that check
+    /// and be misread as twice as many stride-16 vertices with a completely wrong field layout, not
+    /// merely rejected (a second code-review finding caught this doc comment's own earlier,
+    /// overstated claim that "any" supported/unsupported stride divides evenly by 16 -- only 32 and
+    /// 48 actually do; 20/24/52/56/68 don't, though specific vertex counts at those strides can still
+    /// coincidentally produce a byte total divisible by 16, e.g. 4 vertices &#215; 20 = 80 bytes -- the
+    /// point stands without needing every stride to divide evenly, so the claim was narrowed rather
+    /// than dropped). See <see cref="GetOptionalInt"/> for the *other* shape (null genuinely means
     /// "absent," used for <c>"parentBone"</c>, where defaulting to the root bone on a missing/null
     /// value is always a safe, meaningful choice).</summary>
     private static int GetInt(JsonElement element, string propertyName, int defaultValue, string assetName, string meshName, string field)
@@ -431,20 +436,16 @@ internal static class CnjModelReader
     /// <summary>Same shape as <see cref="GetInt"/>, but JSON <c>null</c> is treated the same as
     /// "absent" too (falls back to <paramref name="defaultValue"/>) -- see that method's own doc
     /// comment for why the two are kept deliberately separate rather than merged into one
-    /// null-tolerant helper.</summary>
+    /// null-tolerant helper. Delegates to <see cref="GetInt"/> for the actual number-parsing/throw
+    /// logic once the null-vs-absent question is settled -- two independent code-review passes
+    /// converged on this: an earlier version duplicated that logic instead, the exact
+    /// near-duplicate-logic drift risk <see cref="IsAbsentOrNull"/> was extracted to prevent, just
+    /// one level up.</summary>
     private static int GetOptionalInt(JsonElement element, string propertyName, int defaultValue, string assetName, string meshName, string field)
     {
-        if (IsAbsentOrNull(element, propertyName, out JsonElement value))
-        {
-            return defaultValue;
-        }
-
-        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out int result))
-        {
-            throw new ContentLoadException($"'{assetName}.cnj' mesh '{meshName}' field '{field}' must be an integer.");
-        }
-
-        return result;
+        return IsAbsentOrNull(element, propertyName, out _)
+            ? defaultValue
+            : GetInt(element, propertyName, defaultValue, assetName, meshName, field);
     }
 
     /// <summary>Shared by every field where JSON <c>null</c> is deliberately treated the same as

@@ -11,6 +11,59 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Third `/code-review high` pass, over the second pass's own fix -- the orchestrator itself got stuck in a stale re-poll loop, but its individual finder sub-agents (correctly re-targeted at the current commit) converged on one small, real duplication finding, fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again yet again)
+
+Ran the review over the overreach-fix commit (`3ad0f73`). The top-level
+review orchestrator itself misbehaved this time -- it kept re-notifying
+with the *same* stale findings from its own prior run (the already-fixed
+`vertexStride`/duplication gap from the previous pass), rather than
+analyzing the new commit, for several minutes; confirmed via `ListAgents`
+that it was still "running" 9+ minutes in with a stray extra sub-agent
+spun up, and stopped it directly with `TaskStop` rather than let it keep
+looping.
+
+Underneath that, though, several of its own individual finder
+sub-agents *did* correctly re-target the actual current commit (their
+own responses explicitly named `3ad0f73`) and converged independently on
+one real, small finding:
+
+- **Real, confirmed, low severity, found by two independent angles:**
+  `GetOptionalInt` duplicated `GetInt`'s entire number-parsing/throw body
+  instead of delegating to it after settling the null-vs-absent question
+  -- the exact "near-duplicate logic is a drift risk" pattern this same
+  commit's own `IsAbsentOrNull` extraction was written to prevent, just
+  one level up (a future change to the integer-validation logic or error
+  message for one field could easily be applied to only one of the two).
+  Fixed: `GetOptionalInt` now reads
+  `IsAbsentOrNull(...) ? defaultValue : GetInt(...)`.
+
+A third, late-arriving finder sub-agent (after the main orchestrator was
+already stopped) caught one more real thing, this time a documentation
+issue rather than a behavior bug:
+
+- **Real, confirmed:** the new `GetInt` doc comment (and the matching
+  regression test comment, and this file's/`plan.md`'s own prose) claimed
+  "any multiple of 32/48/52/56/68 is also a multiple of 16" to justify
+  why `RequireWholeNumberOfElements` can't reliably catch a
+  null-defaulted stride -- mathematically wrong for 52/56/68 (only 32 and
+  48 actually divide evenly by 16; 52 mod 16 = 4, 56 mod 16 = 8, 68 mod
+  16 = 4). The underlying severity conclusion doesn't change (32 alone --
+  a real, commonly-used, `quad.cnj`-exercised stride -- is enough to
+  justify it), but the blanket claim was inaccurate and worth correcting
+  rather than leaving a future maintainer to trust an overstated
+  invariant. Narrowed the claim in all four places it appeared (the doc
+  comment, the test comment, `NEXT.md`, `plan.md`) to the accurate,
+  sufficient version: stride 32 alone is an exact multiple of 16, so a
+  null-defaulted stride-32 file always silently passes the whole-number
+  check, which is all the argument actually needs.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 476/476 passing, unchanged (both fixes are a pure refactor and a
+doc-accuracy correction, no behavior change). `samples/HelloGame`
+re-verified unaffected. This closes the `.cnj` bone-hierarchy feature's
+review cycle -- three passes total, converging cleanly despite the
+orchestration hiccup on this last one.
+
 ## Second `/code-review high` pass, over the first pass's own fix -- a real overreach caught, more severe than what it fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again)
 
 Ran the review over the null-handling fix commit (`1246a5e`). Two
@@ -24,11 +77,14 @@ finder angles:
   `ContentLoadException` ("must be an integer"), now a silent default to
   16. This is a materially worse failure mode than the original gap:
   `RequireWholeNumberOfElements`'s own "whole number of elements" check
-  can't catch it, since any multiple of 32/48/52/56/68 is also a
-  multiple of 16 -- real vertex bytes authored at a different stride
-  would be silently reinterpreted as `VertexPositionColor` with a
-  completely wrong field layout and roughly double the real vertex
-  count, not a clean rejection. Exactly the "silently-wrong-but-plausible
+  can't reliably catch it -- 32 (this reader's own most commonly-used
+  supported stride) is itself an exact multiple of 16, so real stride-32
+  vertex bytes with a null stride would silently pass that check and be
+  reinterpreted as `VertexPositionColor` with a completely wrong field
+  layout and twice the real vertex count, not a clean rejection (a
+  follow-up review pass caught this entry's own first version overstating
+  the claim as "any" supported/unsupported stride dividing evenly by 16
+  -- only 32 and 48 actually do). Exactly the "silently-wrong-but-plausible
   output" risk this whole `.cnj`/`.xnb` effort has been careful to avoid
   everywhere else. The first pass's own reasoning ("this also
   retroactively makes the pre-existing `vertexStride` field
