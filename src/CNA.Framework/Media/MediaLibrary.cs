@@ -155,9 +155,18 @@ public class MediaLibrary : IDisposable
     /// this type's own doc comment for why that's a real fallback, not an invented one), and
     /// register it in every collection it's genuinely a member of
     /// (<see cref="Pictures"/>/<see cref="SavedPictures"/>/the "Saved Pictures"
-    /// <see cref="PictureAlbum"/>'s own <see cref="PictureAlbum.Pictures"/>).</summary>
+    /// <see cref="PictureAlbum"/>'s own <see cref="PictureAlbum.Pictures"/>). Guards
+    /// <see cref="IsDisposed"/> first -- unlike every other <c>Dispose()</c> in this feature (which
+    /// only flips a flag on an always-empty or no-longer-reachable collection), this method has a
+    /// real, irreversible side effect (a real file write) and mutates collections
+    /// <see cref="Dispose"/> already cleared, so allowing it to run after disposal would silently
+    /// resurrect state a caller just tore down -- a code-review finding, not something the always-
+    /// empty music-side collections ever needed (see <c>MediaPlayer.Play</c>'s own
+    /// <c>ObjectDisposedException.ThrowIf(song.IsDisposed, song)</c> for this codebase's existing
+    /// precedent, there guarding an argument's disposal rather than <see langword="this"/>'s own).</summary>
     public Picture SavePicture(string name, byte[] imageBuffer)
     {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(imageBuffer);
 
@@ -178,8 +187,16 @@ public class MediaLibrary : IDisposable
         return picture;
     }
 
+    /// <summary>Validates <see cref="IsDisposed"/>/<paramref name="name"/> itself, before ever
+    /// draining <paramref name="source"/> -- a code-review finding: the previous version left both
+    /// checks to the <c>byte[]</c> overload it delegates to, so a disposed instance or a null
+    /// <paramref name="name"/> only failed *after* fully copying <paramref name="source"/> into
+    /// memory, wastefully (and destructively, for a non-seekable/network stream) consuming it for a
+    /// call that was always going to fail.</summary>
     public Picture SavePicture(string name, Stream source)
     {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(source);
 
         using var buffer = new MemoryStream();

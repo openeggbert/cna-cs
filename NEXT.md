@@ -11,6 +11,96 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Sixteenth `/code-review high` pass, over the picture-library commit -- two real bugs fixed, two judged pre-existing-pattern and documented (2026-08-17, session 6 continued autonomously still further again yet again)
+
+Ran the review over the picture-library commit (`1937ba4`). Four findings;
+verified each against the actual code and this session's own established
+precedent before deciding fix-or-document:
+
+- **Fixed, real:** `SavePicture(string, Stream)` validated `source` for
+  null but left `name`'s null check to the `byte[]` overload it delegates
+  to -- meaning a null `name` only failed *after* the entire stream had
+  already been drained into memory (wasteful, and destructive for a
+  non-seekable/network stream, since the caller's stream is left fully
+  consumed by a call that was always going to throw). Fixed by validating
+  `name` (and, see below, `IsDisposed`) directly in the `Stream` overload,
+  before ever touching `source`. Regression test
+  (`SavePicture_NullName_StreamOverload_DoesNotDrainStreamFirst`) uses a
+  real `MemoryStream` and asserts `stream.Position == 0` after the throw,
+  proving `CopyTo` never ran, not just that the exception type was right.
+- **Fixed, real, and a genuinely new situation for this codebase:**
+  neither `SavePicture` overload checked `IsDisposed`, and
+  `ReadOnlyMediaCollection<T>.Add` has no disposed guard either, so a
+  disposed `MediaLibrary` could still write a real file to disk and
+  silently repopulate its already-`Dispose()`-cleared `Pictures`/
+  `SavedPictures` collections. Checked whether this is actually a
+  departure from an established convention first (`grep`'d every
+  `IsDisposed`/`ObjectDisposedException` use in `src/CNA.Framework`): the
+  only existing `ObjectDisposedException` guard in the whole codebase
+  (`MediaPlayer.Play`, `ObjectDisposedException.ThrowIf(song.IsDisposed,
+  song)`) guards an *argument's* disposal, not `this`'s own -- no type
+  anywhere in this project currently guards a mutating method against its
+  own post-`Dispose()` state. Decided this genuinely differs from every
+  prior "should we guard this" case, rather than just applying the
+  now-established "document, don't fix" pattern by default: every other
+  `Dispose()` in this feature (and this whole codebase) only flips a flag
+  on state that's either always-empty or has no real external effect once
+  torn down, but `SavePicture` is the first method in this project where
+  calling it after `Dispose()` has a *real, observable, irreversible*
+  consequence (an actual file write, plus resurrecting a collection its
+  own `IsDisposed` flag says is gone) -- worth a guard specifically here,
+  not worth retrofitting onto every `Dispose()`-able type in the project
+  as a new blanket convention. `ObjectDisposedException.ThrowIf(IsDisposed,
+  this)` added to both `SavePicture` overloads in both `CNA.Framework` and
+  `CNA.XnaCompat`. Regression tests
+  (`SavePicture_AfterDispose_ThrowsObjectDisposedException`, both
+  projects) dispose first and assert both overloads throw -- safe to run,
+  since the guard fires before ever reaching `SavedPictureStore`/the real
+  filesystem.
+- **Documented, not fixed, matching an already-established precedent
+  exactly:** `PictureAlbum.Dispose()` doesn't cascade into its own
+  `Albums`/`Pictures` collections or child albums, so after
+  `MediaLibrary.Dispose()`, `RootPictureAlbum.Albums`/`.Pictures` (and any
+  lazily-created "Saved Pictures" child album's own collections) stay
+  populated with `IsDisposed` still false. This is the *exact same shape*
+  as the finding the fifteenth review pass below already investigated and
+  explicitly chose not to fix for `MediaLibrary`'s own music-side
+  collections: every `Dispose()` in this whole picture/collection stack
+  only flips a flag and clears an already-in-memory list -- `Picture`
+  doesn't hold an open file handle either (`GetImage()` opens a fresh
+  `FileStream` per call, nothing cached), so there is no real resource
+  leaked by not cascading, only an `IsDisposed` consistency quirk. Applied
+  the same judgment the fifteenth pass already made, for the same reason,
+  rather than re-deciding it from scratch.
+- **Documented, not fixed, a knowing trade-off already reasoned through
+  once during implementation, reaffirmed here rather than silently
+  accepted:** `SavePicture`/`EnsureSavedPicturesAlbum`/
+  `GetPictureFromToken` are duplicated almost verbatim (~80 lines) between
+  `CNA.Framework`'s `MediaLibrary` and `CNA.XnaCompat`'s own -- and the
+  review pass made a fair point sharpening why this matters: both of the
+  real bugs fixed above were duplicated into *both* copies, concretely
+  demonstrating the "fix one copy, miss the other" risk duplication
+  creates. Did not extract a shared helper anyway: unlike
+  `MediaCollectionConversion` (pure data conversion, safely shared because
+  it never needs to *construct* a compat-typed object), this duplication
+  exists specifically because there is no covariance-safe way to share
+  code that constructs compat-typed `Picture`/`PictureAlbum` instances
+  (the exact wall documented in the previous entry below) -- a shared
+  helper would need either generic type parameters with delegate
+  factories (real added complexity for ~80 lines) or to reintroduce the
+  covariant-hook design already proven not to work. This is the same
+  "independent reimplementation accepts some duplication as the cost of a
+  real structural constraint" trade-off `SongCollection`/`AlbumCollection`
+  already made and this session already accepted; the risk the review
+  pass flagged is real, but the mitigation is "review passes keep
+  checking both copies," which this pass just did.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings (fixed
+one more doc-comment `CS1574` along the way -- an unresolvable
+`<see cref="IsDisposed"/>` on the compat `MediaLibrary`, corrected to
+`<c>IsDisposed</c>`); `dotnet test`: 359/359 passing (up from 355 -- 4 new
+regression tests). `samples/HelloGame` re-verified unaffected.
+
 ## Picture-library subsystem (`Picture`/`PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`, `GetPictureFromToken`/`SavePicture`) -- done, including a real mid-implementation design pivot (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Start the picture-library subsystem")
 
 Picked this up as the next well-scoped feature once the `MediaLibrary`

@@ -616,8 +616,11 @@ Split by whether the type needs the (still nonexistent) native ABI:
       `SavePicture` with real data; `SavedPictureStore` (the actual
       file-writing logic) is tested directly against a throwaway temp
       directory instead. Verified: `dotnet build` clean across all 6
-      projects, 0 warnings; `dotnet test`: 355/355 passing (up from 315 —
-      40 new tests). `samples/HelloGame` re-verified unaffected.
+      projects, 0 warnings; `dotnet test`: 359/359 passing (up from 315 —
+      44 new tests, including a follow-up `/code-review high` pass that
+      fixed a stream-draining-order bug and added a missing `IsDisposed`
+      guard to `SavePicture` — see `NEXT.md`). `samples/HelloGame`
+      re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model` has no file-format loader (parsing a real model format is a
       separate, much larger problem — see `Model`'s own doc comment);

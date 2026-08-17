@@ -112,9 +112,11 @@ public sealed class MediaLibrary : CNA.Media.MediaLibrary
     /// <summary>Independent of the base class's own <c>SavePicture</c> -- see this type's own doc
     /// comment. Uses <c>CNA.Media.SavedPictureStore</c> directly for the actual file write (the
     /// same security-sensitive sanitization logic the base class's own <c>SavePicture</c> uses),
-    /// then builds and registers a compat-typed <see cref="Picture"/>.</summary>
+    /// then builds and registers a compat-typed <see cref="Picture"/>. Guards <c>IsDisposed</c>
+    /// first -- same reasoning as <c>CNA.Media.MediaLibrary.SavePicture</c>'s own doc comment.</summary>
     public new Picture SavePicture(string name, byte[] imageBuffer)
     {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(imageBuffer);
 
@@ -135,8 +137,12 @@ public sealed class MediaLibrary : CNA.Media.MediaLibrary
         return picture;
     }
 
+    /// <summary>Same reasoning as <c>CNA.Media.MediaLibrary.SavePicture(string,Stream)</c>'s own
+    /// doc comment: validates before ever draining <paramref name="source"/>.</summary>
     public new Picture SavePicture(string name, Stream source)
     {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(source);
 
         using var buffer = new MemoryStream();

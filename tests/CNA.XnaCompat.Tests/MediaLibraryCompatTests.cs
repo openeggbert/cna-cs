@@ -162,4 +162,29 @@ public class MediaLibraryCompatTests
 
         Assert.Throws<ArgumentNullException>(() => library.SavePicture("name", (Stream)null!));
     }
+
+    [Fact]
+    public void SavePicture_NullName_StreamOverload_DoesNotDrainStreamFirst()
+    {
+        // Regression test (code review finding), same reasoning as CNA.Framework.Tests's
+        // MediaLibraryTests.
+        using var library = new XnaMediaLibrary();
+        using var stream = new MemoryStream([1, 2, 3]);
+
+        Assert.Throws<ArgumentNullException>(() => library.SavePicture(null!, stream));
+        Assert.Equal(0, stream.Position);
+    }
+
+    [Fact]
+    public void SavePicture_AfterDispose_ThrowsObjectDisposedException()
+    {
+        // Regression test (code review finding), same reasoning as CNA.Framework.Tests's
+        // MediaLibraryTests -- safe to run against the real Pictures root since it fails before
+        // ever reaching CNA.Media.SavedPictureStore.
+        var library = new XnaMediaLibrary();
+        library.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => library.SavePicture("name", []));
+        Assert.Throws<ObjectDisposedException>(() => library.SavePicture("name", Stream.Null));
+    }
 }

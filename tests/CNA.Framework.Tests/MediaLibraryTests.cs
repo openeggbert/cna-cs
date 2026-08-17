@@ -156,4 +156,31 @@ public class MediaLibraryTests
 
         Assert.Throws<ArgumentNullException>(() => library.SavePicture("name", (Stream)null!));
     }
+
+    [Fact]
+    public void SavePicture_NullName_StreamOverload_DoesNotDrainStreamFirst()
+    {
+        // Regression test (code review finding): a previous version validated the byte[] overload's
+        // own name-null check only after the Stream overload had already fully copied source into
+        // memory. Asserting stream.Position is still 0 proves CopyTo never ran.
+        using var library = new MediaLibrary();
+        using var stream = new MemoryStream([1, 2, 3]);
+
+        Assert.Throws<ArgumentNullException>(() => library.SavePicture(null!, stream));
+        Assert.Equal(0, stream.Position);
+    }
+
+    [Fact]
+    public void SavePicture_AfterDispose_ThrowsObjectDisposedException()
+    {
+        // Regression test (code review finding): SavePicture has a real, irreversible side effect
+        // (a file write) unlike every other Dispose()'d thing in this feature, so it must not
+        // silently keep working -- and must fail before ever reaching the real filesystem, so this
+        // is safe to run against the real Pictures root.
+        var library = new MediaLibrary();
+        library.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => library.SavePicture("name", []));
+        Assert.Throws<ObjectDisposedException>(() => library.SavePicture("name", Stream.Null));
+    }
 }
