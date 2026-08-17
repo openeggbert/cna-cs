@@ -29,4 +29,12 @@ internal unsafe struct CnaManagedGameCallbacks
     public delegate* unmanaged[Cdecl]<CnaHandle, CnaGameTime*, nint, CnaCallbackError*, CnaResult> UnloadContent;
     public delegate* unmanaged[Cdecl]<CnaHandle, CnaGameTime*, nint, CnaCallbackError*, CnaResult> Exiting;
     public nint Context;
+
+    /// <summary>See <see cref="CnaGameFrameHooks"/>'s own constructor doc comment for why this
+    /// self-populates rather than relying on every call site to remember to.</summary>
+    public CnaManagedGameCallbacks()
+    {
+        StructSize = (uint)sizeof(CnaManagedGameCallbacks);
+        StructVersion = 1;
+    }
 }

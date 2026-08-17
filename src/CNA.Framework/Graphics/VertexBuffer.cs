@@ -3,16 +3,24 @@ using CNA.Interop;
 namespace CNA.Graphics;
 
 /// <summary>
-/// A native-backed GPU vertex buffer. No ABI shape for this exists anywhere in the analysis docs
-/// -- self-designed for this repository, but shaped to match the real openeggbert/cna C++
-/// engine's own (not yet C-ABI-exposed) <c>VertexBuffer</c> implementation (a renderer-owned GPU
-/// handle plus a CPU-side shadow buffer enabling <see cref="GetData{T}(T[])"/> readback) -- see
-/// <see cref="CNA.Interop.Native"/>'s vertex/index buffer section.
+/// A native-backed GPU vertex buffer, now matching the real, shipped openeggbert/cna C API
+/// (<c>vertex_resources.h</c>) rather than a self-designed guess -- see <c>NEXT.md</c>'s
+/// native-ABI-migration entry, step 4.
 ///
 /// Both the <see cref="VertexDeclaration"/>-taking and real XNA's <c>Type</c>-taking constructors
 /// are implemented -- the latter (<see cref="VertexBuffer(GraphicsDevice,Type,int,BufferUsage)"/>)
 /// is convenience sugar over the former via <see cref="VertexDeclaration.FromType"/>'s reflection,
 /// not a second native call.
+///
+/// <see cref="GetData{T}(T[])"/> always throws -- confirmed directly with <c>cnabinding</c> rather
+/// than assumed: the real ABI has no raw-bytes vertex readback route at all (only a typed transfer
+/// for the 7 built-in <c>CNA_VertexType</c> values), and CNA's own C++ <c>VertexBuffer</c> has no
+/// generic <c>GetData&lt;T&gt;()</c> either -- 14 concrete typed overloads and nothing else. This
+/// is not a gap the C binding introduced; a fix would need to start in CNA's C++
+/// <c>VertexBuffer</c>, not here. <see cref="SetData{T}(int,T[],int,int,int)"/> is more fortunate --
+/// <c>cna_vertex_buffer_set_data_raw</c> is a real, confirmed raw-upload route -- but it has no
+/// offset parameter at all (always writes starting at native vertex zero), so a nonzero
+/// <paramref name="offsetInBytes"/>-equivalent throws too.
 /// </summary>
 public class VertexBuffer : IDisposable
 {
@@ -33,11 +41,56 @@ public class VertexBuffer : IDisposable
         VertexCount = vertexCount;
         BufferUsage = bufferUsage;
 
-        CnaResult result = Native.cna_vertexbuffer_create(
-            graphicsDevice.ResolveNativeDeviceHandle(), vertexDeclaration.VertexStride, vertexCount, (int)bufferUsage, out CnaHandle handle);
-        CnaException.ThrowIfFailed(result, nameof(VertexBuffer));
+        CnaHandle declarationHandle = CreateNativeDeclaration(vertexDeclaration);
+        try
+        {
+            var createInfo = new CnaVertexBufferCreateInfo
+            {
+                VertexDeclaration = declarationHandle,
+                VertexCount = vertexCount,
+                BufferUsage = (uint)bufferUsage,
+                Dynamic = 0,
+            };
 
-        _handle = new NativeResourceHandle(handle.Value, h => Native.cna_vertexbuffer_release(new CnaHandle(h)));
+            CnaResult result = Native.cna_vertex_buffer_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);
+            CnaException.ThrowIfFailed(result, nameof(VertexBuffer));
+
+            _handle = new NativeResourceHandle(handle.Value, h => Native.cna_vertex_buffer_destroy(new CnaHandle(h)));
+        }
+        finally
+        {
+            // "Declaration copied into the buffer" (vertex_resources.h:42) -- the native vertex
+            // buffer keeps its own copy, so this declaration is never needed again after the call
+            // above, whether it succeeded or failed.
+            Native.cna_vertex_declaration_destroy(declarationHandle);
+        }
+    }
+
+    /// <summary>Builds a native vertex-declaration handle from <paramref name="vertexDeclaration"/>'s
+    /// own client-side elements/stride -- <see cref="Graphics.VertexDeclaration"/> itself stays a
+    /// pure C# data type (matching real XNA's own object model, which the earlier design already
+    /// got right); only this one call site needs a real native handle, and only momentarily.
+    /// <see cref="VertexElement"/>'s field order and <see cref="VertexElementFormat"/>/
+    /// <see cref="VertexElementUsage"/>'s numeric values were confirmed to already match
+    /// <c>CNA_VertexElement</c>/<c>CNA_VERTEX_ELEMENT_FORMAT_*</c>/<c>CNA_VERTEX_ELEMENT_USAGE_*</c>
+    /// exactly before relying on the direct field-for-field conversion below.</summary>
+    private static unsafe CnaHandle CreateNativeDeclaration(VertexDeclaration vertexDeclaration)
+    {
+        VertexElement[] elements = vertexDeclaration.GetVertexElements();
+        var nativeElements = new CnaVertexElement[elements.Length];
+        for (int i = 0; i < elements.Length; i++)
+        {
+            nativeElements[i] = new CnaVertexElement(
+                elements[i].Offset, (uint)elements[i].VertexElementFormat, (uint)elements[i].VertexElementUsage, elements[i].UsageIndex);
+        }
+
+        fixed (CnaVertexElement* elementsPtr = nativeElements)
+        {
+            CnaResult result = Native.cna_vertex_declaration_create_with_stride(
+                vertexDeclaration.VertexStride, elementsPtr, (ulong)nativeElements.Length, out CnaHandle declaration);
+            CnaException.ThrowIfFailed(result, nameof(VertexDeclaration));
+            return declaration;
+        }
     }
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
@@ -64,11 +117,19 @@ public class VertexBuffer : IDisposable
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
 
+        if (offsetInBytes != 0)
+        {
+            throw new NotSupportedException(
+                $"{nameof(VertexBuffer)}.{nameof(SetData)} with a nonzero {nameof(offsetInBytes)} is not supported by the real " +
+                "cna C API -- cna_vertex_buffer_set_data_raw has no offset parameter at all and always uploads starting at " +
+                "native vertex zero.");
+        }
+
         fixed (T* basePtr = data)
         {
             byte* bytePtr = (byte*)(basePtr + startIndex);
-            CnaResult result = Native.cna_vertexbuffer_set_data(
-                new CnaHandle(NativeHandleValue), offsetInBytes, bytePtr, (nuint)((long)elementCount * sizeof(T)), vertexStride);
+            CnaResult result = Native.cna_vertex_buffer_set_data_raw(
+                new CnaHandle(NativeHandleValue), bytePtr, (ulong)((long)elementCount * sizeof(T)), (ulong)elementCount, (uint)vertexStride);
             CnaException.ThrowIfFailed(result, nameof(SetData));
         }
     }
@@ -82,20 +143,16 @@ public class VertexBuffer : IDisposable
     public void GetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
         GetData(0, data, startIndex, elementCount, VertexDeclaration.VertexStride);
 
-    public unsafe void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride) where T : unmanaged
+    /// <summary>Always throws <see cref="NotSupportedException"/> -- see this class's own doc
+    /// comment for why (confirmed with <c>cnabinding</c>, not assumed: CNA's own C++
+    /// <c>VertexBuffer</c> has no generic readback for this migration to expose).</summary>
+    public void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride) where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(data);
-        ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
-        BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
-
-        fixed (T* basePtr = data)
-        {
-            byte* bytePtr = (byte*)(basePtr + startIndex);
-            CnaResult result = Native.cna_vertexbuffer_get_data(
-                new CnaHandle(NativeHandleValue), offsetInBytes, bytePtr, (nuint)((long)elementCount * sizeof(T)), vertexStride);
-            CnaException.ThrowIfFailed(result, nameof(GetData));
-        }
+        throw new NotSupportedException(
+            $"{nameof(VertexBuffer)}.{nameof(GetData)} is not supported by the real cna C API -- no raw-bytes vertex " +
+            "readback route exists (CNA's own C++ VertexBuffer has no generic GetData<T>() either, only 14 concrete " +
+            "typed overloads for its 7 built-in vertex types).");
     }
 
     public void Dispose()

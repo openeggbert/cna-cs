@@ -54,8 +54,6 @@ public abstract class Game : IDisposable
 
         var callbacks = new CnaManagedGameCallbacks
         {
-            StructSize = (uint)sizeof(CnaManagedGameCallbacks),
-            StructVersion = 1,
             LoadContent = &OnLoadContent,
             Update = &OnUpdate,
             Draw = &OnDraw,
@@ -65,8 +63,6 @@ public abstract class Game : IDisposable
 
         var createInfo = new CnaGameCreateInfo
         {
-            StructSize = (uint)sizeof(CnaGameCreateInfo),
-            StructVersion = 1,
             IsFixedTimeStep = 1,
             TargetElapsedTimeTicks = DefaultTargetElapsedTimeTicks,
             WindowTitle = default,
@@ -82,8 +78,6 @@ public abstract class Game : IDisposable
 
         var hooks = new CnaGameFrameHooks
         {
-            StructSize = (uint)sizeof(CnaGameFrameHooks),
-            StructVersion = 1,
             Initialize = &OnInitialize,
             Context = context,
         };

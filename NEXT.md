@@ -11,6 +11,67 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 4: `VertexBuffer`/`IndexBuffer`/`VertexDeclaration` rewritten -- a real, confirmed capability gap (no generic vertex readback) found and documented, not guessed (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+`VertexDeclaration` is now a real native resource in the ABI (`cna_vertex_declaration_create_with_stride`/
+`_destroy`/etc., `vertex_resources.h`) -- `CNA.Graphics.VertexDeclaration` itself stays exactly what
+it was (a pure client-side data type, matching real XNA's own object model, which this project
+already had right), but `VertexBuffer`'s constructor now builds a native declaration handle from it,
+passes it to `cna_vertex_buffer_create`'s `CNA_VertexBufferCreateInfo`, and destroys it again
+immediately afterward (success or failure, via `try`/`finally`) -- the real doc comment says the
+declaration is "copied into the buffer," so nothing needs it to outlive that one call.
+`VertexElement`'s field order and `VertexElementFormat`/`VertexElementUsage`'s numeric values were
+checked and already matched `CNA_VertexElement`/`CNA_VERTEX_ELEMENT_FORMAT_*`/
+`CNA_VERTEX_ELEMENT_USAGE_*` exactly -- one of the rare areas this migration found already correct
+by construction, not by luck (the original design was written reading the real C++ engine's own
+matching internal types).
+
+`cna_vertexbuffer_*`/`cna_indexbuffer_*` (the old guessed names) don't exist upstream at all;
+renamed throughout to `cna_vertex_buffer_*`/`cna_index_buffer_*`/`cna_vertex_declaration_*`, all now
+taking versioned `CreateInfo`/`Transfer` structs instead of flat positional parameters.
+
+### A real, confirmed capability gap -- not a binding-layer shortcoming
+
+Before guessing, asked `cnabinding` directly whether a raw-bytes vertex readback route existed
+anywhere in the 2,838-symbol ABI that a plain header read might have missed. Confirmed: it doesn't.
+`cna_vertex_buffer_get_data` only accepts a typed transfer selecting one of 7 built-in
+`CNA_VertexType` values (the stock XNA vertex structs); there is no `cna_vertex_buffer_get_data_raw`
+beside the real, confirmed `cna_vertex_buffer_set_data_raw` (upload). The reason is one level deeper
+than "the C binding didn't expose it": CNA's own C++ `VertexBuffer` has no generic `GetData<T>()`
+at all -- 14 concrete typed overloads (`GetData(VertexPositionColor*, ...)` and so on for all 7
+types) and nothing else. The C API is a faithful mirror of that, not a narrower reflection of it. So
+`VertexBuffer.GetData<T>()` now always throws `NotSupportedException`, documented with the real
+reason and the real fix chain if the project owner ever wants one (CNA's C++ `VertexBuffer` first,
+then a hypothetical `cna_vertex_buffer_get_data_raw`, then here) -- not framed as something this
+migration failed to find.
+
+`VertexBuffer.SetData`/`GetData` and `IndexBuffer.SetData`/`GetData` also lose their
+`offsetInBytes`-into-the-*native*-buffer support: none of the real raw/typed transfer routes take a
+native-side offset at all (only a window into the *caller's own* array via `start_index`/
+`element_count`) -- every real upload/readback always operates starting at native element zero. A
+nonzero `offsetInBytes` now throws `NotSupportedException` too, on both types.
+
+`IndexBuffer` fared better on the generic-readback question specifically: confirmed with
+`cnabinding` that `cna_index_buffer_set_data`/`_get_data` select only a 16-/32-bit width (no
+built-in-type enumeration the way vertex transfer has), because CNA's own C++ `IndexBuffer` only
+ever stores `uint16_t`/`uint32_t` -- a width selector really is the whole story for an index type.
+So `IndexBuffer.SetData<T>`/`GetData<T>` stay fully generic for any 2- or 4-byte unmanaged `T`,
+mapping the width from `sizeof(T)` (rejecting other sizes with `ArgumentException`, per `cnabinding`'s
+own explicit recommendation -- not `NotSupportedException`, since this is caller error, not a real
+ABI limitation).
+
+### Cross-cutting fix, credited to `cnabinding`'s own real-world account
+
+Every versioned struct built in this migration so far (`CnaGameCreateInfo`, `CnaGameFrameHooks`,
+`CnaManagedGameCallbacks`, and the three new ones this step -- `CnaVertexBufferCreateInfo`,
+`CnaIndexBufferCreateInfo`, `CnaIndexBufferTransfer`) now gets an explicit parameterless constructor
+(C# 10+ struct constructors) that self-populates `StructSize`/`StructVersion`, so
+`new CnaXxx { ... }` can never accidentally build one uninitialized. Not just tidiness --
+`cnabinding` described a real bug this exact mistake caused in a sibling project (a route silently
+refused an uninitialized versioned struct, and the caller's own missing result check turned that
+into a sprite drawn several million pixels off-screen while every visible signal said success).
+Retrofitted onto the step-2 structs too, not just the new step-4 ones.
+
 ## Native ABI migration, step 3: `GraphicsDevice`'s confirmed-shape methods fixed, and the callback-scoped device handle problem closed project-wide (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 Closes the gap step 2 deliberately left open: every `GraphicsDevice` method now resolves a fresh

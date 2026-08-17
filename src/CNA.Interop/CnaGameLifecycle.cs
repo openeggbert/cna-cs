@@ -34,6 +34,13 @@ internal readonly struct CnaCallbackError
 /// simply never called, matching the component-callback table's own rule) since <c>CNA.Game</c> has
 /// no matching virtual methods to invoke yet -- real feature surface for a future session, not
 /// added speculatively here.
+///
+/// The explicit parameterless constructor self-populates <see cref="StructSize"/>/
+/// <see cref="StructVersion"/> so <c>new CnaGameFrameHooks { ... }</c> can never accidentally skip
+/// them -- confirmed worth doing defensively (not just for tidiness) by <c>cnabinding</c>'s own
+/// account of a real bug this exact mistake caused elsewhere: an uninitialized versioned struct
+/// isn't silently accepted, but the caller can still trip over reading the *response* as if the
+/// call had succeeded when it didn't check the result.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct CnaGameFrameHooks
@@ -46,6 +53,12 @@ internal unsafe struct CnaGameFrameHooks
     public delegate* unmanaged[Cdecl]<CnaHandle, CnaGameTime*, nint, byte*, CnaCallbackError*, CnaResult> BeginDraw;
     public delegate* unmanaged[Cdecl]<CnaHandle, CnaGameTime*, nint, CnaCallbackError*, CnaResult> EndDraw;
     public nint Context;
+
+    public CnaGameFrameHooks()
+    {
+        StructSize = (uint)sizeof(CnaGameFrameHooks);
+        StructVersion = 1;
+    }
 }
 
 /// <summary>
@@ -69,6 +82,14 @@ internal unsafe struct CnaGameCreateInfo
     public long TargetElapsedTimeTicks;
     public CnaStringView WindowTitle;
     public CnaManagedGameCallbacks* Callbacks;
+
+    /// <summary>See <see cref="CnaGameFrameHooks"/>'s own constructor doc comment for why this
+    /// self-populates rather than relying on every call site to remember to.</summary>
+    public CnaGameCreateInfo()
+    {
+        StructSize = (uint)sizeof(CnaGameCreateInfo);
+        StructVersion = 1;
+    }
 }
 
 /// <summary>Seven reserved padding bytes, matching <c>CNA_GameCreateInfo::reserved</c>

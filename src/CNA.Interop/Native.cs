@@ -371,67 +371,79 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_soundeffectinstance_set_is_looped(CnaHandle instance, byte looped);
 
-    // -- VertexBuffer / IndexBuffer ------------------------------------------------------------
+    // -- VertexBuffer / IndexBuffer / VertexDeclaration (real ABI, step 4 of the native-ABI ------
+    // migration -- vertex_resources.h/index_resources.h). Replaces the old cna_vertexbuffer_*/
+    // cna_indexbuffer_* names entirely -- neither exists upstream by those names. VertexDeclaration
+    // is now a real native resource of its own (create/destroy/get_stride/copy_elements); a vertex
+    // buffer's create call takes a *handle* to one, "copied into the buffer" -- so
+    // VertexBuffer.cs builds a declaration, passes it to cna_vertex_buffer_create, and destroys it
+    // again immediately, rather than keeping it alive for the vertex buffer's own lifetime.
     //
-    // Same situation as audio: no ABI shape for either exists in the analysis docs (confirmed by
-    // grep -- neither struct nor a naming-convention bullet, unlike audio's "cna_audio_*"
-    // mention), but the real openeggbert/cna C++ engine's modules/graphics/ already has full,
-    // tested, renderer-backend-wired VertexBuffer/IndexBuffer implementations (a std::unique_ptr
-    // to a renderer-owned GPU handle plus a CPU-side "shadow" byte buffer enabling GetData()
-    // readback) -- every function here is shaped to match that real implementation, not invented
-    // from nothing. See CNA.Framework's VertexBuffer.cs/IndexBuffer.cs for the object-model side.
+    // Confirmed directly with cnabinding (openeggbert/cna's own binding author) rather than
+    // inferred: no raw-bytes vertex readback route exists anywhere in the ABI (only typed transfer
+    // for the 7 built-in CNA_VertexType values) because CNA's own C++ VertexBuffer has no generic
+    // GetData<T> either -- 14 concrete typed overloads and nothing else -- so this is not a gap
+    // this C binding introduced. IndexBuffer has no such restriction: cna_index_buffer_get_data
+    // only selects a 16-/32-bit width, so any 2- or 4-byte unmanaged T maps onto it directly, same
+    // as CNA's own C++ IndexBuffer (uint16_t/uint32_t overloads only, which is the whole story for
+    // an index type anyway). See CnaVertexIndexResources.cs for the struct shapes and
+    // CNA.Framework's VertexBuffer.cs/IndexBuffer.cs for how each is actually used.
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_vertexbuffer_create(
-        CnaHandle device,
+    internal static unsafe partial CnaResult cna_vertex_declaration_create_with_stride(
         int vertexStride,
-        int vertexCount,
-        int bufferUsage,
+        CnaVertexElement* elements,
+        ulong elementCount,
+        out CnaHandle declaration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_vertex_declaration_destroy(CnaHandle declaration);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertex_buffer_create(
+        CnaHandle graphicsDevice,
+        in CnaVertexBufferCreateInfo createInfo,
         out CnaHandle vertexBuffer);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_vertexbuffer_release(CnaHandle vertexBuffer);
+    internal static partial CnaResult cna_vertex_buffer_destroy(CnaHandle vertexBuffer);
 
+    /// <summary>Matches <c>cna_vertex_buffer_set_data_raw</c> exactly
+    /// (<c>vertex_resources.h:346</c>) -- always uploads starting at native buffer vertex zero (no
+    /// offset parameter exists in the real function at all); see
+    /// <c>CNA.Graphics.VertexBuffer.SetData</c>'s own doc comment for why a nonzero
+    /// <c>offsetInBytes</c> can't be honored.</summary>
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_vertexbuffer_set_data(
+    internal static unsafe partial CnaResult cna_vertex_buffer_set_data_raw(
         CnaHandle vertexBuffer,
-        int offsetInBytes,
         byte* data,
-        nuint byteLength,
-        int vertexStride);
+        ulong dataByteCount,
+        ulong vertexCount,
+        uint vertexStride);
 
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_vertexbuffer_get_data(
-        CnaHandle vertexBuffer,
-        int offsetInBytes,
-        byte* data,
-        nuint byteLength,
-        int vertexStride);
-
-    [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_indexbuffer_create(
-        CnaHandle device,
-        int indexElementSize,
-        int indexCount,
-        int bufferUsage,
+    internal static unsafe partial CnaResult cna_index_buffer_create(
+        CnaHandle graphicsDevice,
+        in CnaIndexBufferCreateInfo createInfo,
         out CnaHandle indexBuffer);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_indexbuffer_release(CnaHandle indexBuffer);
+    internal static partial CnaResult cna_index_buffer_destroy(CnaHandle indexBuffer);
 
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_indexbuffer_set_data(
+    internal static unsafe partial CnaResult cna_index_buffer_set_data(
         CnaHandle indexBuffer,
-        int offsetInBytes,
+        in CnaIndexBufferTransfer transfer,
         byte* data,
-        nuint byteLength);
+        ulong capacity);
 
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_indexbuffer_get_data(
+    internal static unsafe partial CnaResult cna_index_buffer_get_data(
         CnaHandle indexBuffer,
-        int offsetInBytes,
-        byte* data,
-        nuint byteLength);
+        in CnaIndexBufferTransfer transfer,
+        byte* destination,
+        ulong capacity,
+        out ulong outElementCount);
 
     // -- MediaPlayer (Microsoft.Xna.Framework.Media) --------------------------------------------
     //
@@ -483,13 +495,14 @@ internal static partial class Native
     /// <summary>
     /// <paramref name="frequencies"/>/<paramref name="samples"/> are both exactly
     /// <c>CNA.Media.VisualizationData.Size</c> (256) elements -- explicit raw pointers, not a
-    /// bundled snapshot struct, matching <c>cna_vertexbuffer_set_data</c>/<c>get_data</c>'s own
+    /// bundled snapshot struct, matching the old (pre-migration) vertex/index buffer natives' own
     /// "explicit buffer, not a collection" convention for bulk binary data
     /// (<c>analysis_binding_sharp_runtime.md</c> §40) rather than inventing a new pattern for
-    /// exactly two fixed-size arrays. <paramref name="count"/> is <see cref="nuint"/>, matching
-    /// <c>cna_vertexbuffer_get_data</c>/<c>cna_indexbuffer_get_data</c>'s own length-parameter type
-    /// exactly (a code-review finding: an earlier version used <see langword="int"/> here despite
-    /// this doc comment's own claim to match that convention -- a real mismatch, not just cosmetic,
+    /// exactly two fixed-size arrays -- this function itself is not yet part of the native-ABI
+    /// migration (see NEXT.md, step 10), so its own shape is still self-designed/unconfirmed.
+    /// <paramref name="count"/> is <see cref="nuint"/> (a code-review finding: an earlier version
+    /// used <see langword="int"/> here despite this doc comment's own claim to match that convention
+    /// -- a real mismatch, not just cosmetic,
     /// since a native side declaring the equivalent parameter as <c>size_t</c> would read
     /// undefined upper bytes from a 4-byte argument under the platform calling convention).
     /// </summary>
