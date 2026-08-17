@@ -11,6 +11,25 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Twenty-first `/code-review high` pass, over the twentieth pass's own cleanup -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again)
+
+Ran the review a fourth time over this feature, over the twentieth
+pass's doc-comment fix and `RequireType<T>` unification. Clean -- zero
+findings. Confirmed the reworded `XnbBasicEffectReader` doc comment is
+now actually accurate against `XnbModelBuilder.BuildBasicEffect`,
+confirmed the merged `RequireType<T>` doesn't change
+`ReadObject<T>`/`ReadObject()` overload resolution or introduce
+recursion, confirmed no test asserts the old exact error-message text
+(so the wording change is safe), confirmed the "shared resource is never
+actually null at this call site" reasoning from the twentieth pass's own
+finding still holds.
+
+380/380 tests passing, unchanged; `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected. This closes out the `Model` `.xnb` loading
+feature's review cycle entirely -- four review passes total across the
+original commit and its two follow-up fixes, the last one landing clean,
+the same shape the picture-library feature's own four-pass cycle took.
+
 ## Twentieth `/code-review high` pass, over the nineteenth pass's own fix -- no correctness bugs, two minor cleanups (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more)
 
 Ran the review over the nineteenth pass's own five fixes (commit
