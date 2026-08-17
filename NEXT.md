@@ -30,6 +30,46 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## Twenty-ninth `/code-review high` pass, over the `MediaPlayer` visualization-data commit -- a real P/Invoke type mismatch fixed, a real-but-unresolvable drift concern documented (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again)
+
+Ran the review over the visualization-data commit (`d768663`). Two
+findings:
+
+- **Real, confirmed:** `cna_mediaplayer_get_visualization_data`'s `count`
+  parameter was declared `int`, while its own doc comment claimed to
+  match `cna_vertexbuffer_get_data`/`cna_indexbuffer_get_data`'s
+  established length-parameter convention -- which is actually `nuint`,
+  not `int`. A real mismatch, not cosmetic: if native code declares the
+  equivalent parameter as `size_t` (the natural native counterpart), a
+  4-byte `int` argument leaves the upper bytes of the register undefined
+  under the platform calling convention, which could inflate the count
+  the native side reads far past the real 256-element buffers. Fixed by
+  changing the parameter (and its one call site) to `nuint`, matching the
+  sibling functions exactly this time -- `VisualizationData.Size`
+  (a `const int`) converts to it implicitly since it's a small, always-
+  non-negative compile-time constant.
+- **Documented, not fixed, because there is genuinely nothing more
+  authoritative to resync against, not because the concern is
+  overblown:** `IsVisualizationEnabled`'s C# cache could in principle
+  desync from the real, native, audio-device-level state it mirrors (a
+  device unplug/format change silently dropping the installed SDL3_mixer
+  callback) -- a real, narrower caveat than `Volume`/`IsMuted` have,
+  since those mirror pure C++ static state that can never change except
+  through their own setters. Checked whether the real engine's own
+  `GetVisualizationData` has *any* signal that could detect this drift
+  before deciding not to fix it: it doesn't -- "visualization disabled"
+  and "enabled but the device silently failed" both produce the exact
+  same all-zero result there, by design, so a C# resync mechanism would
+  have nothing more authoritative to check against than what the flag
+  already believes. Documented directly in the property's own doc
+  comment.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 413/413 passing, unchanged (the P/Invoke signature fix isn't
+independently testable -- same native-ABI-blocked situation as the rest
+of `MediaPlayer`; the doc-only addition needed no new test).
+`samples/HelloGame` re-verified unaffected.
+
 ## `MediaPlayer.GetVisualizationData`/`IsVisualizationEnabled`/`VisualizationData` -- done, the most pleasant scoping surprise of the whole session (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Start MediaPlayer visualization data")
 
 Picked this up as the last item on this session's own Phase 4 follow-up

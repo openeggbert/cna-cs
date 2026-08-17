@@ -429,8 +429,13 @@ internal static partial class Native
     /// bundled snapshot struct, matching <c>cna_vertexbuffer_set_data</c>/<c>get_data</c>'s own
     /// "explicit buffer, not a collection" convention for bulk binary data
     /// (<c>analysis_binding_sharp_runtime.md</c> §40) rather than inventing a new pattern for
-    /// exactly two fixed-size arrays.
+    /// exactly two fixed-size arrays. <paramref name="count"/> is <see cref="nuint"/>, matching
+    /// <c>cna_vertexbuffer_get_data</c>/<c>cna_indexbuffer_get_data</c>'s own length-parameter type
+    /// exactly (a code-review finding: an earlier version used <see langword="int"/> here despite
+    /// this doc comment's own claim to match that convention -- a real mismatch, not just cosmetic,
+    /// since a native side declaring the equivalent parameter as <c>size_t</c> would read
+    /// undefined upper bytes from a 4-byte argument under the platform calling convention).
     /// </summary>
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_mediaplayer_get_visualization_data(float* frequencies, float* samples, int count);
+    internal static unsafe partial CnaResult cna_mediaplayer_get_visualization_data(float* frequencies, float* samples, nuint count);
 }

@@ -95,7 +95,18 @@ public static class MediaPlayer
     /// disabled. The flag itself is still cached in C# afterward, matching <see cref="Volume"/>/
     /// <see cref="IsMuted"/>'s own "call native on write, read the cache on read" shape -- there's
     /// no need to round-trip to native just to read back a value this call already told this
-    /// project what it set it to.</summary>
+    /// project what it set it to.
+    ///
+    /// A code-review finding raised a real, if narrow, caveat unique to this flag, worth recording
+    /// rather than dismissing: unlike <see cref="Volume"/>/<see cref="IsMuted"/> (pure C++ static
+    /// state that can never change except through their own setters), this mirrors whether a real
+    /// audio-device-level callback is actually installed -- a device failure/unplug/format change
+    /// could in principle silently drop it without this flag ever being told. Not fixed here: the
+    /// real C++ engine's own <c>GetVisualizationData</c> has no signal to resync *from* even in
+    /// principle -- disabled and "enabled but the device silently failed" both produce the exact
+    /// same all-zero result there, by design (see <see cref="GetVisualizationData"/>'s own doc
+    /// comment), so a C# resync mechanism would have nothing more authoritative to check against
+    /// than what this flag already believes.</summary>
     public static bool IsVisualizationEnabled
     {
         get => _isVisualizationEnabled;
