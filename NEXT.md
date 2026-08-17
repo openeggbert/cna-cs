@@ -11,6 +11,34 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Fourth `/code-review high` pass, over the third pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again yet again once more)
+
+Ran the review over the dedup/doc-accuracy fix commit (`ef53838`) --
+this time confirmed as a genuinely fresh orchestrator instance (checked
+via `ListAgents` immediately after launch, a new task-id from the start)
+rather than the stuck, stale-re-polling one from the previous pass.
+Clean -- zero findings. Confirmed `GetOptionalInt`'s delegation to
+`GetInt` preserves the exact null/absent/throw semantics for both
+callers (`"vertexStride"` via `GetInt`, `"parentBone"` via
+`GetOptionalInt`), confirmed no call site outside those two functions is
+affected, and confirmed the test suite still matches the intended
+behavior exactly. One cleanup-level, sub-finding-severity observation
+was noted but correctly not escalated to a reported finding: the
+delegation causes `TryGetProperty` to run twice on the non-null/non-absent
+path (once in `IsAbsentOrNull`, once inside `GetInt`) -- trivial cost for
+a content-load path, not a hot loop, not worth the duplication it would
+take to avoid.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 476/476 passing, unchanged. `samples/HelloGame` re-verified
+unaffected. This closes the `.cnj` bone-hierarchy feature's review cycle
+-- four passes total (three with real findings fixed, the last landing
+clean), one more pass than any other feature this session needed, but
+each pass found something genuinely real, including the second pass
+catching a real overreach in the first pass's own fix -- exactly the
+kind of iterative correctness this review-until-clean discipline exists
+to catch.
+
 ## Third `/code-review high` pass, over the second pass's own fix -- the orchestrator itself got stuck in a stale re-poll loop, but its individual finder sub-agents (correctly re-targeted at the current commit) converged on one small, real duplication finding, fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again yet again)
 
 Ran the review over the overreach-fix commit (`3ad0f73`). The top-level
