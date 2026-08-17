@@ -11,6 +11,26 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Second `/code-review high` pass, over the first pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more)
+
+Ran the review over the dedup fix commit (`655b92a`). Clean -- zero
+findings. Confirmed `CnjMeshData.VertexBuffer`/`IndexBuffer`'s declared
+types exactly match what the now-`internal`
+`XnbCompatModelBuilder.BuildVertexBuffer`/`BuildIndexBuffer` expect,
+confirmed both classes share the same assembly so `private` → `internal`
+needed no `InternalsVisibleTo` change, confirmed no other call site
+anywhere in the repo is affected by the accessibility widening, and
+confirmed the removed duplicate bodies were byte-for-byte identical to
+what's now being called instead (no behavior lost).
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 459/459 passing, unchanged. `samples/HelloGame` re-verified
+unaffected. This closes the `CnjCompatModelBuilder` feature's review
+cycle -- two passes total, the second landing clean, the same shape
+every other feature's own review cycle has taken this session. With
+this, the entire `.cnj` Model-loading arc (base reader, its review
+cycle, the compat mirror, and its own review cycle) is fully closed out.
+
 ## First `/code-review high` pass, over the `CnjCompatModelBuilder` commit -- one real duplication fixed, one minor finding documented against an already-accepted precedent (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again)
 
 Ran the review over the compat-mirror commit (`45f700b`). Two findings:
