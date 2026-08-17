@@ -1087,10 +1087,16 @@ Split by whether the type needs the (still nonexistent) native ABI:
       hand-authored fixtures verified against manually-derived expected
       structure from the confirmed source logic, not an independent
       reference. Verified: `dotnet build` clean across all 6 projects,
-      0 warnings; `dotnet test`: 473/473 passing (up from 464 — 9 new
+      0 warnings; `dotnet test`: 475/475 passing (up from 464 — 11 new
       tests covering real multi-bone parsing, field defaults, malformed/
       out-of-range bone and mesh-parent-bone rejection, and the
-      no-hierarchy fallback's continued correctness). `samples/HelloGame`
+      no-hierarchy fallback's continued correctness; includes a follow-up
+      `/code-review high` pass that fixed a real null-vs-absent
+      inconsistency — a bone's own `"parent"`/`"transform"` fields and a
+      mesh's own `"parentBone"` field all originally rejected JSON `null`
+      instead of falling back to their defaults, inconsistent with this
+      same diff's own established "null means absent" convention for the
+      top-level `"bones"` field — see `NEXT.md`). `samples/HelloGame`
       re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own `.cnj` skinning surface (vertex strides 48/52/56/68,

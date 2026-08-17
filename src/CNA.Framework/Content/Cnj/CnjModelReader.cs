@@ -169,9 +169,14 @@ internal static class CnjModelReader
                 name = index == 0 ? "Root" : $"Node{index}";
             }
 
+            // A code-review finding caught this diff being inconsistent with itself: JSON null is
+            // deliberately treated as "absent" for the top-level "bones" field (see
+            // ValidateEnvelope's own comment on why -- some authoring conventions emit null for
+            // every unset optional field rather than omitting the key), but this per-bone "parent"
+            // field originally rejected null instead of falling back to defaultParent the same way.
             int defaultParent = index == 0 ? -1 : 0;
             int parent = defaultParent;
-            if (boneElement.TryGetProperty("parent", out JsonElement parentElement))
+            if (boneElement.TryGetProperty("parent", out JsonElement parentElement) && parentElement.ValueKind != JsonValueKind.Null)
             {
                 if (parentElement.ValueKind != JsonValueKind.Number || !parentElement.TryGetInt32(out parent))
                 {
@@ -199,7 +204,8 @@ internal static class CnjModelReader
 
     private static Matrix GetTransform(JsonElement boneElement, string assetName, int index, string name)
     {
-        if (!boneElement.TryGetProperty("transform", out JsonElement transformElement))
+        // Same null-treated-as-absent fix as "parent" above.
+        if (!boneElement.TryGetProperty("transform", out JsonElement transformElement) || transformElement.ValueKind == JsonValueKind.Null)
         {
             return Matrix.Identity;
         }
@@ -396,7 +402,11 @@ internal static class CnjModelReader
 
     private static int GetInt(JsonElement element, string propertyName, int defaultValue, string assetName, string meshName, string field)
     {
-        if (!element.TryGetProperty(propertyName, out JsonElement value))
+        // A code-review finding caught this null-vs-absent gap too (this method's own "parentBone"
+        // caller, new in the same diff that added it, was the case that surfaced it) -- null is
+        // treated as "absent" the same way GetBool already does, matching ValidateEnvelope's own
+        // established convention for the top-level "bones" field.
+        if (!element.TryGetProperty(propertyName, out JsonElement value) || value.ValueKind == JsonValueKind.Null)
         {
             return defaultValue;
         }

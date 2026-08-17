@@ -11,6 +11,40 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## First `/code-review high` pass, over the `.cnj` bone-hierarchy commit -- three real findings, all the same root cause, all fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more)
+
+Ran the review over the bone-hierarchy commit (`3d32797`). Three
+findings, all real, all the same underlying inconsistency:
+
+- A bone's own `"parent"` field rejected JSON `null` (throwing
+  `ContentLoadException`) instead of falling back to `defaultParent`.
+- A bone's own `"transform"` field rejected `null` instead of falling
+  back to `Matrix.Identity`.
+- A mesh's own `"parentBone"` field (read via the pre-existing, shared
+  `GetInt` helper) rejected `null` instead of defaulting to bone 0.
+
+All three directly contradict a convention this exact file already
+established two review passes ago, for the exact same reason: JSON
+`null` must be treated the same as "absent" for an optional field,
+since some authoring/generator tools emit `null` for every unset
+optional key rather than omitting it, and this reader's own sibling
+fields (the top-level `"bones"` field itself, and `vertexColorEnabled`
+via `GetBool`) already handle this correctly. This diff introduced three
+new optional fields and got the null-handling wrong on all three,
+missing its own established pattern. Fixed by adding the identical
+`ValueKind != JsonValueKind.Null` guard at each of the two custom
+bone-field reads, and by fixing it once, centrally, in the shared
+`GetInt` helper itself (which also retroactively makes the pre-existing
+`"vertexStride"` field null-tolerant too, a reasonable side benefit of
+fixing the shared helper rather than only the one new caller that
+happened to surface the gap).
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 475/475 passing (up from 473 -- 2 new regression tests, one per
+distinct code path fixed: bone `"parent"`/`"transform"` together, and
+mesh `"parentBone"` separately since it goes through the shared `GetInt`
+helper). `samples/HelloGame` re-verified unaffected.
+
 ## `.cnj`'s own real `"bones"` rigid scene-graph hierarchy (cnjVersion 2) -- done, after research confirmed skinning is architecturally separate and has no real payoff without a `SkinnedEffect` this project doesn't have (2026-08-17, session 6 continued autonomously past the LZX decompression review-cycle checkpoint, per explicit user selection of "Attempt .cnj's bone-hierarchy/skinning surface")
 
 The checkpoint that led here explicitly named the risk: "a substantial

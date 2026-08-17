@@ -273,6 +273,47 @@ public class CnjModelReaderTests
     }
 
     [Fact]
+    public void Read_BoneWithNullParentAndTransform_TreatsNullAsAbsent()
+    {
+        // Regression test (code review finding): a bone's own "parent"/"transform" fields
+        // originally rejected JSON null instead of falling back to their defaults, inconsistent
+        // with the top-level "bones" field's own established "null means absent" convention (see
+        // ValidateEnvelope's own comment on why -- some authoring conventions emit null for every
+        // unset optional field rather than omitting the key).
+        const string json = """
+            {"cnjVersion":2,"type":"Model","bones":[
+                {"name":"Root"},
+                {"name":"Body","parent":null,"transform":null}
+            ],"meshes":[]}
+            """;
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Equal(0, data.Bones[1].Parent);
+        Assert.Equal(Matrix.Identity, data.Bones[1].Transform);
+    }
+
+    [Fact]
+    public void Read_MeshWithNullParentBone_DefaultsToRoot()
+    {
+        // Regression test (code review finding): a mesh's own "parentBone" field (read via the
+        // shared GetInt helper) originally rejected JSON null too, inconsistent with the sibling
+        // "vertexColorEnabled" field's own null-tolerant GetBool handling.
+        const string json = """
+            {"cnjVersion":2,"type":"Model","bones":[
+                {"name":"Root"},
+                {"name":"Body","parent":0}
+            ],"meshes":[
+                {"name":"M","vertices":"quad_verts.bin","indices":"quad_idx.bin","vertexStride":32,"parentBone":null}
+            ]}
+            """;
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Equal(0, Assert.Single(data.Meshes).ParentBoneIndex);
+    }
+
+    [Fact]
     public void Read_MeshWithMorphTargets_ThrowsContentLoadException()
     {
         const string json = """
