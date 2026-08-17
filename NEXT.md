@@ -11,6 +11,28 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Third `/code-review high` pass, over the second pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again)
+
+Ran the review over the second fix commit (`656a834`). Clean -- zero
+findings. Confirmed the new `XnbVertexBufferData`/`XnbIndexBufferData`
+constructor invariant checks are pure no-ops for both existing `.xnb`
+call sites (`XnbVertexBufferReader`/`XnbIndexBufferReader` already read
+exactly the right byte count off the stream), confirmed the new
+`[Theory]` truncation-regression test exercises both the vertex- and
+index-sidecar throw paths correctly, confirmed the `"bones": null`
+short-circuit can't accidentally skip a genuinely-present non-null
+malformed value, and confirmed the `ContentLoadException`-vs-`ArgumentException`
+split between the `.cnj` reader's own content-level validation and the
+shared buffer types' constructor-level safety net is deliberate and
+correctly documented, not an inconsistency.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 459/459 passing, unchanged. `samples/HelloGame` re-verified
+unaffected. This closes out the `.cnj` Model reader feature's review
+cycle -- three passes total across the original commit and its two
+follow-up fixes, the last one landing clean, the same shape every other
+feature's own review cycle has taken this session.
+
 ## Second `/code-review high` pass, over the first pass's own fix -- four more findings, all real, all fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more)
 
 Ran the review over the first fix commit (`f3015ef`). Four findings, all
