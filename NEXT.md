@@ -11,6 +11,40 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Fifteenth `/code-review high` pass, over the `MediaLibrary` regression fix -- clean (2026-08-17, session 6 continued autonomously still further again once more still)
+
+Ran the review a fifteenth time, over the previous pass's own fix (the
+`IsDisposed`-sharing revert plus the `MediaCollectionConversion`
+extraction). Clean -- no findings. Confirmed the regression test actually
+exercises the previously-broken path, confirmed no leftover references to
+the removed shared-singleton fields anywhere, confirmed no overload
+ambiguity or behavior change from the `MediaCollectionConversion`
+extraction.
+
+One informational observation, explicitly scoped out of that review as
+pre-existing (not introduced by the reviewed diff, not a regression):
+`CNA.Media.MediaLibrary.Dispose()` isn't `virtual`, so the compat
+`MediaLibrary`'s own `new`-shadowed collections (`Albums`, `Songs`, etc.)
+never get disposed when a compat `MediaLibrary` is disposed -- only the
+*base* class's own (different, always-empty) copies do. Considered
+whether to fix this and decided not to: every one of these collections'
+`Dispose()` implementations only clears an already-empty list and flips
+`IsDisposed` -- there's no real resource being leaked either way, so the
+only actual consequence is a `library.IsDisposed == true` /
+`library.Albums.IsDisposed == false` inconsistency with zero functional
+effect. Fixing it properly would need a `new`-hiding `Dispose()`
+override, which has the same "doesn't dispatch through a base-typed
+reference" limitation this session already found and fixed once for a
+*mutable, functionally consequential* case (`GraphicsDevice.Indices`) --
+not worth reproducing that complexity for a flag nothing actually reads.
+Noted here so it isn't rediscovered as a surprise later, not chased as a
+fix.
+
+315/315 tests passing, unchanged; `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected. This closes out the `MediaLibrary` feature's
+review cycle entirely -- five review passes total across the original
+commit and its two follow-up fixes, the last two landing clean.
+
 ## Fourteenth `/code-review high` pass, over the `MediaLibrary` fix commit -- caught a fix that introduced a worse bug than it solved (2026-08-17, session 6 continued autonomously still further again once more)
 
 Ran the review a fourteenth time, over the previous pass's own four
