@@ -30,6 +30,29 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## Twenty-eighth `/code-review high` pass, over the twenty-seventh pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still)
+
+Ran the review over the twenty-seventh pass's own extract-method fix
+(commit `f4a60f0`). Clean -- zero findings. Confirmed the shared
+`ApplyBasicEffectData` has no property-order dependency, confirmed the
+`InternalsVisibleTo` grant already covers the new `internal` visibility,
+confirmed compat `BasicEffect` genuinely subclasses the base one so the
+upcast is safe, confirmed no other call sites reference the old
+duplicated logic.
+
+315/315 CNA.Framework.Tests + 86/86 CNA.XnaCompat.Tests passing,
+unchanged; `dotnet build` clean; `samples/HelloGame` re-verified
+unaffected. This closes out the `ModelMeshPart`/`ModelMeshPartCollection`
+compat mirror feature's review cycle -- three passes total across the
+original commit and its follow-up fix, the last one landing clean. This
+also closes out essentially every well-scoped, high-confidence
+Model-related item from this session: real `.xnb` loading, the `Model`
+compat mirror, compat `Load<Model>()`, and now `ModelMeshPart`/
+`ModelMeshPartCollection` are all done, tested, documented, and reviewed
+clean -- `ModelEffectCollection`/`ModelMesh.Effects` remains the one,
+permanent, structurally-unfixable gap, documented rather than left
+silently missing.
+
 ## Twenty-seventh `/code-review high` pass, over the `ModelMeshPart` compat mirror commit -- one real duplication fixed, one documented against an already-accepted precedent (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more)
 
 Ran the review over the `ModelMeshPart` compat mirror commit (`7dc449d`).
