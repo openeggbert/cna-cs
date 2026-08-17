@@ -8,8 +8,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// </summary>
 public class GraphicsDevice : CNA.Graphics.GraphicsDevice
 {
-    protected internal GraphicsDevice(nint nativeHandleValue)
-        : base(nativeHandleValue)
+    protected internal GraphicsDevice(nint nativeGameHandleValue)
+        : base(nativeGameHandleValue)
     {
     }
 

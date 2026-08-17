@@ -29,7 +29,7 @@ public class IndexBuffer : IDisposable
         BufferUsage = bufferUsage;
 
         CnaResult result = Native.cna_indexbuffer_create(
-            new CnaHandle(graphicsDevice.NativeHandleValue), (int)indexElementSize, indexCount, (int)bufferUsage, out CnaHandle handle);
+            graphicsDevice.ResolveNativeDeviceHandle(), (int)indexElementSize, indexCount, (int)bufferUsage, out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(IndexBuffer));
 
         _handle = new NativeResourceHandle(handle.Value, h => Native.cna_indexbuffer_release(new CnaHandle(h)));

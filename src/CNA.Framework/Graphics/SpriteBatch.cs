@@ -37,7 +37,7 @@ public class SpriteBatch : IDisposable
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
 
-        CnaResult result = Native.cna_sprite_batch_create(new CnaHandle(graphicsDevice.NativeHandleValue), out CnaHandle handle);
+        CnaResult result = Native.cna_sprite_batch_create(graphicsDevice.ResolveNativeDeviceHandle(), out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(SpriteBatch));
 
         _handle = new NativeResourceHandle(handle.Value, h => Native.cna_sprite_batch_release(new CnaHandle(h)));

@@ -34,7 +34,7 @@ public class RenderTarget2D : Texture2D
         ArgumentNullException.ThrowIfNull(graphicsDevice);
 
         CnaResult result = Native.cna_render_target2d_create(
-            new CnaHandle(graphicsDevice.NativeHandleValue), width, height, out CnaHandle handle);
+            graphicsDevice.ResolveNativeDeviceHandle(), width, height, out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(RenderTarget2D));
 
         return handle.Value;

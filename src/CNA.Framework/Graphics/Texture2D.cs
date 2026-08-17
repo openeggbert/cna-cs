@@ -15,7 +15,7 @@ public class Texture2D : IDisposable
         ArgumentNullException.ThrowIfNull(graphicsDevice);
 
         CnaResult result = Native.cna_texture2d_create(
-            new CnaHandle(graphicsDevice.NativeHandleValue), width, height, out CnaHandle handle);
+            graphicsDevice.ResolveNativeDeviceHandle(), width, height, out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(Texture2D));
 
         _handle = new NativeResourceHandle(handle.Value, ReleaseNative);

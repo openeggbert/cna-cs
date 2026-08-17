@@ -179,7 +179,13 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
         };
         WriteColumnMajor(World, ref nativeParams.WorldColMajor);
 
-        CnaResult result = Native.cna_graphics_device_apply_basic_effect(new CnaHandle(GraphicsDevice.NativeHandleValue), in nativeParams);
+        // Still the old, guessed, self-designed cna_graphics_device_apply_basic_effect call --
+        // deliberately not fixed here. The real ABI has no such device-scoped "apply params" call
+        // at all: BasicEffect is a full native object of its own (cna_basic_effect_create + a
+        // per-property get/set surface, applied via cna_effect_apply(CNA_EffectHandle), not a
+        // GraphicsDevice method) -- see NEXT.md's native-ABI-migration entry, step 8. Only the
+        // device-handle source is fixed here, matching step 3's project-wide mechanical fix.
+        CnaResult result = Native.cna_graphics_device_apply_basic_effect(GraphicsDevice.ResolveNativeDeviceHandle(), in nativeParams);
         CnaException.ThrowIfFailed(result, nameof(Apply));
     }
 

@@ -97,30 +97,47 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_game_get_content_manager_ext(CnaHandle game, out CnaHandle contentManager);
 
-    // -- GraphicsDevice -----------------------------------------------------------------------
+    // -- GraphicsDevice (real ABI, graphics_device.h) -----------------------------------------
+    //
+    // Step 3 of the native-ABI migration (see NEXT.md) -- fixes the confirmed-shape functions
+    // below (Clear, SetVertexBuffer, Indices' rename, DrawIndexedPrimitives' real 7-argument
+    // arity) and the device-handle-sourcing problem project-wide, but deliberately leaves
+    // cna_graphics_device_set_render_target as-is (see CNA.Graphics.GraphicsDevice.SetRenderTarget's
+    // own doc comment for why that one specific function is deferred to step 5).
 
+    /// <summary>Matches <c>cna_graphics_device_clear_options</c> exactly
+    /// (<c>graphics_device.h:731</c>) -- the real ABI's general clear route; no bare
+    /// <c>cna_graphics_device_clear</c> exists at all. See
+    /// <c>CNA.Graphics.GraphicsDevice.Clear</c>'s own doc comment for why this specific real
+    /// function (of the three real clear routes) is the right match for XNA's simple
+    /// <c>Clear(Color)</c> overload.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_clear(CnaHandle device, CnaColor color);
+    internal static partial CnaResult cna_graphics_device_clear_options(
+        CnaHandle device, CnaClearOptions options, CnaColor color, float depth, int stencil);
 
     /// <summary>
     /// Sets the active render target, or restores the back buffer when <paramref name="renderTarget"/>
-    /// is <see cref="CnaHandle.Zero"/>. No ABI shape exists upstream for this call (or for
-    /// render targets at all) -- self-designed for this repository, following the general §8/§9
-    /// conventions (opaque handle, <see cref="CnaResult"/> return, zero-handle-as-null sentinel
-    /// already used elsewhere in this file). See <c>CNA.Graphics.RenderTarget2D</c>.
+    /// is <see cref="CnaHandle.Zero"/>. Still the old, guessed, self-designed shape -- the real ABI
+    /// has no function by this name at all (render-target binding is type-specific:
+    /// <c>cna_graphics_device_set_render_target2d</c>/<c>_cube</c>, each taking that resource's own
+    /// distinct handle type) -- deliberately not fixed by this step; see
+    /// <c>CNA.Graphics.GraphicsDevice.SetRenderTarget</c>'s own doc comment.
     /// </summary>
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_render_target(CnaHandle device, CnaHandle renderTarget);
 
-    /// <summary>Binds the active vertex buffer for subsequent <c>Draw*</c> calls, or unbinds when
-    /// <paramref name="vertexBuffer"/> is <see cref="CnaHandle.Zero"/>. Same grounding as
-    /// <c>VertexBuffer</c> itself -- no doc-backed shape, shaped to match the real
-    /// openeggbert/cna C++ engine's own (not yet C-ABI-exposed) implementation.</summary>
+    /// <summary>Matches <c>cna_graphics_device_set_vertex_buffer</c> exactly
+    /// (<c>graphics_device.h:798</c>, "Binds one vertex buffer at vertex offset zero") -- a real,
+    /// confirmed name-and-shape match, unlike most of this file before this migration.</summary>
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_vertex_buffer(CnaHandle device, CnaHandle vertexBuffer);
 
+    /// <summary>Matches <c>cna_graphics_device_set_index_buffer</c> exactly
+    /// (<c>graphics_device.h:874</c>) -- the old guessed name was
+    /// <c>cna_graphics_device_set_indices</c>; the real function is named for the resource it binds
+    /// (<c>index_buffer</c>), not the device property that exposes it (<c>Indices</c>).</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_set_indices(CnaHandle device, CnaHandle indexBuffer);
+    internal static partial CnaResult cna_graphics_device_set_index_buffer(CnaHandle device, CnaHandle indexBuffer);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_draw_primitives(
@@ -129,11 +146,19 @@ internal static partial class Native
         int startVertex,
         int primitiveCount);
 
+    /// <summary>Matches <c>cna_graphics_device_draw_indexed_primitives</c> exactly
+    /// (<c>graphics_device.h:1013</c>) -- real XNA's own full 7-argument signature, confirmed by
+    /// reading the header directly. The old guessed shape had only 5 parameters (missing
+    /// <paramref name="minVertexIndex"/>/<paramref name="numVertices"/>) despite matching the real
+    /// function's *name* exactly -- the clearest concrete case this migration found of a name match
+    /// being no evidence of a shape match.</summary>
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_draw_indexed_primitives(
         CnaHandle device,
         int primitiveType,
         int baseVertex,
+        int minVertexIndex,
+        int numVertices,
         int startIndex,
         int primitiveCount);
 

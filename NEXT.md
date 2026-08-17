@@ -11,7 +11,54 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
-## Native ABI migration, step 2: `Game` lifecycle callback bridge rewritten against the real ABI, plus a real, load-bearing discovery about the graphics-device handle's lifetime (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entry directly below)
+## Native ABI migration, step 3: `GraphicsDevice`'s confirmed-shape methods fixed, and the callback-scoped device handle problem closed project-wide (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+Closes the gap step 2 deliberately left open: every `GraphicsDevice` method now resolves a fresh
+device handle via a new `ResolveNativeDeviceHandle()` instead of trusting one cached at
+construction time, and every other native-backed resource type that creates itself from a
+`GraphicsDevice` (`VertexBuffer`, `IndexBuffer`, `Texture2D`, `RenderTarget2D`, `SpriteBatch`,
+`BasicEffect`) now goes through that same method rather than reading a device handle field
+directly -- `GraphicsDevice.NativeHandleValue` no longer exists at all; it's
+`NativeGameHandleValue` now (holding the *game* handle, which is what's actually safe to keep),
+and `ResolveNativeDeviceHandle()` is the only way anything gets an actual device handle. Every one
+of those six call-site fixes is purely mechanical (swap where the handle comes from; the shape of
+each type's own native calls is untouched, staying in its own later step) except `BasicEffect.cs`,
+which still calls the old, doomed `cna_graphics_device_apply_basic_effect` -- only its device-handle
+source needed fixing to keep compiling, the call itself waits for step 8's full redesign.
+
+### What actually got a real-shape fix in this step
+
+- `Clear(Color)`: real ABI has three clear routes (`cna_graphics_device_clear_rgba`,
+  `_clear_color_depth`, `_clear_options`); no bare `cna_graphics_device_clear` exists. Picked
+  `cna_graphics_device_clear_options` with only `CNA_CLEAR_OPTION_TARGET` set (a new
+  `CnaClearOptions` flags enum, matching the real `CNA_ClearOptions` bit values exactly) -- matches
+  real XNA's own simple `Clear(Color)` overload, which only ever touches the color buffer.
+- `SetVertexBuffer`: `cna_graphics_device_set_vertex_buffer` is a genuine, confirmed exact name
+  *and* shape match -- one of very few in this whole migration.
+- `Indices`: renamed `cna_graphics_device_set_indices` -> the real
+  `cna_graphics_device_set_index_buffer` (named for the resource, not the device property).
+- `DrawIndexedPrimitives`: the real function takes exactly real XNA's own 7-argument signature
+  (`primitive_type, base_vertex, min_vertex_index, num_vertices, start_index, primitive_count`).
+  The public C# method already accepted `minVertexIndex`/`numVertices` (added to match XNA's
+  surface) but silently dropped them before reaching native, under the old, incorrect assumption
+  that the real function only took 5 arguments -- now forwarded for real. This is the clearest
+  concrete case this migration found of a name match being no evidence of a shape match: the old
+  code had the *right function name* and still called it wrong.
+- `DrawPrimitives`: confirmed unchanged (4-argument shape already matched).
+
+### `SetRenderTarget` deliberately NOT fixed here
+
+The real ABI has no generic render-target setter at all -- binding is type-specific
+(`cna_graphics_device_set_render_target2d`/`_cube`, each taking that resource's own distinct handle
+type from `render_target.h`), and `RenderTarget2D` currently gets its native handle from
+`cna_texture2d_create`'s guessed shape rather than the real, separate `cna_render_target2d_create`
+resource type (its own `create`/`get_info`/`destroy` routes, a `CNA_RenderTarget2DCreateInfo`
+versioned struct, not raw `width`/`height`). Fixing `SetRenderTarget` correctly needs
+`RenderTarget2D`'s own creation path fixed first, together -- not patched here against a handle
+shape that step 5 is about to replace anyway. Flagged in both `GraphicsDevice.SetRenderTarget` and
+`Native.cs`'s own doc comments.
+
+## Native ABI migration, step 2: `Game` lifecycle callback bridge rewritten against the real ABI, plus a real, load-bearing discovery about the graphics-device handle's lifetime (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 Continues directly from the entry below (foundational types + error retrieval). This step
 rewrites `Game.cs`'s whole native callback bridge -- the highest-risk, most-different area

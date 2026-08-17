@@ -34,7 +34,7 @@ public class VertexBuffer : IDisposable
         BufferUsage = bufferUsage;
 
         CnaResult result = Native.cna_vertexbuffer_create(
-            new CnaHandle(graphicsDevice.NativeHandleValue), vertexDeclaration.VertexStride, vertexCount, (int)bufferUsage, out CnaHandle handle);
+            graphicsDevice.ResolveNativeDeviceHandle(), vertexDeclaration.VertexStride, vertexCount, (int)bufferUsage, out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(VertexBuffer));
 
         _handle = new NativeResourceHandle(handle.Value, h => Native.cna_vertexbuffer_release(new CnaHandle(h)));
