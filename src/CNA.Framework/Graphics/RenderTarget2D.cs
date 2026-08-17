@@ -70,7 +70,8 @@ public class RenderTarget2D : Texture2D
     /// see this class's own doc comment.</summary>
     internal static (int Width, int Height) GetDimensions(nint handleValue)
     {
-        CnaResult result = Native.cna_render_target_get_info(new CnaHandle(handleValue), out CnaRenderTargetInfo info);
+        var info = new CnaRenderTargetInfo();
+        CnaResult result = Native.cna_render_target_get_info(new CnaHandle(handleValue), ref info);
         CnaException.ThrowIfFailed(result, "cna_render_target_get_info");
         return ((int)info.Width, (int)info.Height);
     }

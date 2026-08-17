@@ -355,7 +355,7 @@ internal static partial class Native
     internal static partial CnaResult cna_texture2d_destroy(CnaHandle texture);
 
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_texture2d_get_info(CnaHandle texture, out CnaTexture2DInfo outInfo);
+    internal static unsafe partial CnaResult cna_texture2d_get_info(CnaHandle texture, ref CnaTexture2DInfo outInfo);
 
     /// <summary>Matches <c>cna_texture2d_set_data_rgba8</c> exactly (<c>graphics.h:674</c>) --
     /// takes a <c>const CNA_Color*</c> pixel array plus a pixel count, not a raw byte pointer plus
@@ -382,7 +382,7 @@ internal static partial class Native
         out CnaHandle renderTarget);
 
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_render_target_get_info(CnaHandle renderTarget, out CnaRenderTargetInfo outInfo);
+    internal static unsafe partial CnaResult cna_render_target_get_info(CnaHandle renderTarget, ref CnaRenderTargetInfo outInfo);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_render_target_destroy(CnaHandle renderTarget);
@@ -425,25 +425,32 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_end(CnaHandle spriteBatch);
 
-    // -- Keyboard (§25 snapshot pattern) ------------------------------------------------------
+    // -- Keyboard / Mouse / GamePad (real ABI, input.h/input_gamepad.h -- step 11 of the --------
+    // native-ABI migration, the last one). Every one of these now needs a game handle
+    // (CnaAmbientGame.Current) and returns a real CnaResult (the old guessed shapes were void,
+    // silently discarding any failure -- an ABI-independent bug this step also fixes: none of
+    // these three static classes checked a result at all before this migration, unlike every
+    // other native call site in this codebase). Every out-parameter below is `ref`, not `out` --
+    // deliberately, not a style choice: these structs are self-populating (see
+    // CnaGameFrameHooks's own constructor doc comment), and `ref` makes it a compile error to
+    // pass one without constructing it first, unlike `out`, which would silently let a
+    // freshly-declared (zero-initialized, so struct_size/version both zero) struct through to a
+    // native call that then rejects it with CNA_RESULT_INVALID_ARGUMENT -- caught only because
+    // this exact mistake was made and found earlier in this same migration (see NEXT.md's
+    // native-ABI-migration entry for this step; cna_texture2d_get_info/cna_render_target_get_info/
+    // cna_sound_effect_instance_get_info were fixed the same way, retroactively).
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_keyboard_get_state(out CnaKeyboardState state);
-
-    // -- Mouse (§25 snapshot pattern) ---------------------------------------------------------
+    internal static partial CnaResult cna_keyboard_get_state(CnaHandle game, ref CnaKeyboardState state);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_mouse_get_state(out CnaMouseState state);
-
-    // -- GamePad (§25 snapshot pattern) -------------------------------------------------------
+    internal static partial CnaResult cna_mouse_get_state(CnaHandle game, ref CnaMouseState state);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_gamepad_get_state(int playerIndex, out CnaGamePadState state);
+    internal static partial CnaResult cna_gamepad_get_state(CnaHandle game, uint playerIndex, ref CnaGamePadState state);
 
-    /// <summary>No ABI shape exists upstream for this call -- self-designed for this repository,
-    /// see <see cref="CnaGamePadCapabilities"/>.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial void cna_gamepad_get_capabilities(int playerIndex, out CnaGamePadCapabilities capabilities);
+    internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
     // -- ContentManager (real ABI, content.h -- step 6 of the native-ABI migration) -----------
     //
@@ -531,7 +538,7 @@ internal static partial class Native
     /// <summary>The only real way to read state/volume/pitch/pan/is_looped -- see this section's
     /// own comment.</summary>
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_sound_effect_instance_get_info(CnaHandle instance, out CnaSoundEffectInstanceInfo outInfo);
+    internal static unsafe partial CnaResult cna_sound_effect_instance_get_info(CnaHandle instance, ref CnaSoundEffectInstanceInfo outInfo);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sound_effect_instance_set_volume(CnaHandle instance, float volume);

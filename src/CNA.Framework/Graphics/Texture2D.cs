@@ -70,7 +70,8 @@ public class Texture2D : IDisposable
 
     private CnaTexture2DInfo GetInfo()
     {
-        CnaResult result = Native.cna_texture2d_get_info(new CnaHandle(NativeHandleValue), out CnaTexture2DInfo info);
+        var info = new CnaTexture2DInfo();
+        CnaResult result = Native.cna_texture2d_get_info(new CnaHandle(NativeHandleValue), ref info);
         CnaException.ThrowIfFailed(result, "cna_texture2d_get_info");
         return info;
     }

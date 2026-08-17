@@ -62,17 +62,29 @@ internal readonly struct CnaGameTime
 }
 
 /// <summary>
-/// A full-keyboard snapshot, one bit per CNA key ordinal (0-255), packed into four 64-bit
-/// words so callers do not need <c>unsafe</c>/fixed-buffer access. See the "input as snapshots"
-/// guidance in ../../cnabinding/analysis_binding.md §25.
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_KeyboardState</c> exactly
+/// (<c>input.h:598-607</c>) -- one bit per CNA key ordinal (0-255), packed into four 64-bit words
+/// so callers do not need <c>unsafe</c>/fixed-buffer access ("key N is bit N modulo 64 of word N
+/// divided by 64", confirmed against the real header text to match this type's own pre-migration
+/// bit-indexing exactly). Only the <see cref="StructSize"/>/<see cref="StructVersion"/> header
+/// needed adding -- see <see cref="CnaGameFrameHooks"/>'s own constructor doc comment for the
+/// self-populating-constructor rationale.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaKeyboardState
 {
+    public readonly uint StructSize;
+    public readonly uint StructVersion;
     public readonly ulong Bits0;
     public readonly ulong Bits1;
     public readonly ulong Bits2;
     public readonly ulong Bits3;
+
+    public unsafe CnaKeyboardState()
+    {
+        StructSize = (uint)sizeof(CnaKeyboardState);
+        StructVersion = 1;
+    }
 
     public bool IsKeyDown(int keyOrdinal)
     {
@@ -93,59 +105,150 @@ internal readonly struct CnaKeyboardState
     }
 }
 
-/// <summary>ABI-shaped mouse snapshot. See the "input as snapshots" guidance in
-/// ../../cnabinding/analysis_binding.md §25. Buttons are packed as bit 0=left, 1=middle,
-/// 2=right, 3=XButton1, 4=XButton2.</summary>
+/// <summary>
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_MouseState</c> exactly
+/// (<c>input.h:353-377</c>). <see cref="Buttons"/> widened from the old guessed shape's single byte
+/// to the real <c>CNA_MouseButtonFlags</c> width (a full <c>uint32_t</c>) -- a real memory-layout
+/// fix, not just cosmetic, even though every currently-defined button bit still fits in a byte's
+/// range. Bit values (left=1&lt;&lt;0, middle=1&lt;&lt;1, right=1&lt;&lt;2, x1=1&lt;&lt;3,
+/// x2=1&lt;&lt;4) were already correct before this migration reached this file. See
+/// <see cref="CnaGameFrameHooks"/>'s own constructor doc comment for the self-populating
+/// -constructor rationale.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaMouseState
 {
+    public readonly uint StructSize;
+    public readonly uint StructVersion;
     public readonly int X;
     public readonly int Y;
     public readonly int ScrollWheelValue;
     public readonly int HorizontalScrollWheelValue;
-    public readonly byte Buttons;
+    public readonly uint Buttons;
+    public readonly uint Reserved;
 
-    public bool IsButtonDown(int bit) => (Buttons & (1 << bit)) != 0;
+    public unsafe CnaMouseState()
+    {
+        StructSize = (uint)sizeof(CnaMouseState);
+        StructVersion = 1;
+    }
+
+    public bool IsButtonDown(int bit) => (Buttons & (1u << bit)) != 0;
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_GamePadAnalogState</c>
+/// exactly (<c>input.h:479-491</c>) -- a plain, unversioned nested struct (matching
+/// <see cref="CnaVector2"/>'s own no-header convention: a fixed value, not an extensible top-level
+/// input/output).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaGamePadAnalogState
+{
+    public readonly CnaVector2 LeftThumbStick;
+    public readonly CnaVector2 RightThumbStick;
+    public readonly float LeftTrigger;
+    public readonly float RightTrigger;
 }
 
 /// <summary>
-/// ABI-shaped game pad snapshot for one player index. <c>Buttons</c> is a bitmask matching the
-/// core (non-thumbstick, non-trigger) subset of real XNA's <c>Buttons</c> flags enum -- see
-/// CNA.Input.Buttons for the exact bit assignments and what is intentionally omitted.
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_GamePadState</c> exactly
+/// (<c>input.h:494-518</c>) -- the old guessed shape had the right idea (bitmask buttons,
+/// individual thumbstick/trigger floats) but the wrong layout: the real struct nests every analog
+/// value into <see cref="CnaGamePadAnalogState"/> and adds <see cref="IsConnected"/>/
+/// <see cref="PacketNumber"/>, neither of which the old struct had at all. <see cref="Buttons"/>'s
+/// own bit values were already correct before this migration reached this file (confirmed against
+/// <c>CNA_GAMEPAD_BUTTON_*</c> -- dpad folded into the same mask as other buttons, matching
+/// <c>CNA.Input.Buttons</c> exactly).
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaGamePadState
 {
+    public readonly uint StructSize;
+    public readonly uint StructVersion;
     public readonly byte IsConnected;
+    public readonly CnaReservedBytes3 Reserved0;
+    public readonly int PacketNumber;
     public readonly uint Buttons;
-    public readonly float LeftThumbStickX;
-    public readonly float LeftThumbStickY;
-    public readonly float RightThumbStickX;
-    public readonly float RightThumbStickY;
-    public readonly float LeftTrigger;
-    public readonly float RightTrigger;
+    public readonly uint Reserved1;
+    public readonly CnaGamePadAnalogState Analog;
+
+    public unsafe CnaGamePadState()
+    {
+        StructSize = (uint)sizeof(CnaGamePadState);
+        StructVersion = 1;
+    }
 
     public bool HasButton(uint mask) => (Buttons & mask) != 0;
 }
 
 /// <summary>
-/// ABI-shaped game pad capabilities snapshot. No ABI shape has been confirmed upstream for this
-/// call yet -- self-designed for this repository, not yet reached by the native-ABI migration
-/// (see NEXT.md, step 11; a real shape does now exist -- <c>CNA_GamePadCapabilities</c> in
-/// <c>input_gamepad.h</c> -- a stale claim this doc comment made before that was confirmed).
-/// <c>SupportedButtons</c> reuses <see cref="CnaGamePadState.Buttons"/>'s exact bit
-/// layout (see <c>CNA.Input.Buttons</c>) rather than one bool field per button, and
-/// <c>Features</c> packs the remaining thumbstick/trigger/vibration/voice booleans into a second
-/// bitmask -- see <c>CNA.Input.GamePadCapabilities</c> for the bit assignments, which live there
-/// (not here) since they are this project's own invention, not part of any ABI convention.
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_GamePadCapabilities</c> exactly
+/// (<c>input_gamepad.h:45-134</c>) -- a complete redesign from the old guessed shape, which packed
+/// everything into two bitmasks (<c>SupportedButtons</c>/<c>Features</c>, this project's own
+/// invention with no ABI backing). The real struct has one individual <c>CNA_Bool</c> field per
+/// capability instead -- 24 XNA-canonical <c>Has*</c> fields (already matching
+/// <c>CNA.Input.GamePadCapabilities</c>'s own pre-migration property names and count exactly,
+/// confirmed field-for-field before writing this struct) plus 10 CNA-extension <c>_ext</c> fields
+/// this project doesn't expose in its own public <c>GamePadCapabilities</c> type -- kept here only
+/// so this struct's own size/layout matches the real one exactly for correct marshaling, not
+/// because anything reads them (real feature surface for a future session, not added
+/// speculatively). See <see cref="CnaGameFrameHooks"/>'s own constructor doc comment for the
+/// self-populating-constructor rationale.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaGamePadCapabilities
 {
+    public readonly uint StructSize;
+    public readonly uint StructVersion;
+    public readonly uint GamePadType;
     public readonly byte IsConnected;
-    public readonly int GamePadType;
-    public readonly uint SupportedButtons;
-    public readonly uint Features;
+
+    public readonly byte HasAButton;
+    public readonly byte HasBButton;
+    public readonly byte HasXButton;
+    public readonly byte HasYButton;
+    public readonly byte HasBackButton;
+    public readonly byte HasStartButton;
+    public readonly byte HasBigButton;
+
+    public readonly byte HasDPadUpButton;
+    public readonly byte HasDPadDownButton;
+    public readonly byte HasDPadLeftButton;
+    public readonly byte HasDPadRightButton;
+
+    public readonly byte HasLeftShoulderButton;
+    public readonly byte HasRightShoulderButton;
+    public readonly byte HasLeftStickButton;
+    public readonly byte HasRightStickButton;
+
+    public readonly byte HasLeftXThumbStick;
+    public readonly byte HasLeftYThumbStick;
+    public readonly byte HasRightXThumbStick;
+    public readonly byte HasRightYThumbStick;
+
+    public readonly byte HasLeftTrigger;
+    public readonly byte HasRightTrigger;
+    public readonly byte HasLeftVibrationMotor;
+    public readonly byte HasRightVibrationMotor;
+    public readonly byte HasVoiceSupport;
+
+    public readonly byte HasLightBarExt;
+    public readonly byte HasTriggerVibrationMotorsExt;
+    public readonly byte HasMisc1Ext;
+    public readonly byte HasPaddle1Ext;
+    public readonly byte HasPaddle2Ext;
+    public readonly byte HasPaddle3Ext;
+    public readonly byte HasPaddle4Ext;
+    public readonly byte HasTouchpadExt;
+    public readonly byte HasGyroExt;
+    public readonly byte HasAccelerometerExt;
+
+    public readonly byte Reserved;
+
+    public unsafe CnaGamePadCapabilities()
+    {
+        StructSize = (uint)sizeof(CnaGamePadCapabilities);
+        StructVersion = 1;
+    }
 }
 
 /// <summary>ABI-shaped integer rectangle (pixel-space source/destination rects). Not named in the

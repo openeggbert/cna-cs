@@ -4,8 +4,11 @@ namespace CNA.Input;
 
 /// <summary>
 /// A game pad snapshot taken by <see cref="GamePad.GetState(PlayerIndex)"/>. <c>PacketNumber</c>
-/// (real XNA increments this only when state actually changes, to let callers skip redundant
-/// processing) is not implemented and always reads 0 -- see plan.md Phase 4.
+/// is now a real native value (<c>CNA_GamePadState.packet_number</c>) -- previously always read 0
+/// (self-designed, no ABI to source it from) before this migration reached <c>input.h</c>. Thumb
+/// stick/trigger values are read from <see cref="CnaGamePadState.Analog"/>, the real ABI's own
+/// nested sub-struct -- the old guessed shape had them as flat top-level fields on
+/// <see cref="CnaGamePadState"/> itself.
 /// </summary>
 public readonly struct GamePadState
 {
@@ -16,7 +19,7 @@ public readonly struct GamePadState
     public GamePadDPad DPad { get; }
     public GamePadThumbSticks ThumbSticks { get; }
     public GamePadTriggers Triggers { get; }
-    public int PacketNumber => 0;
+    public int PacketNumber { get; }
 
     internal GamePadState(CnaGamePadState native)
     {
@@ -25,9 +28,10 @@ public readonly struct GamePadState
         Buttons = new GamePadButtons(_rawButtons);
         DPad = new GamePadDPad(_rawButtons);
         ThumbSticks = new GamePadThumbSticks(
-            new Vector2(native.LeftThumbStickX, native.LeftThumbStickY),
-            new Vector2(native.RightThumbStickX, native.RightThumbStickY));
-        Triggers = new GamePadTriggers(native.LeftTrigger, native.RightTrigger);
+            Vector2.FromNative(native.Analog.LeftThumbStick),
+            Vector2.FromNative(native.Analog.RightThumbStick));
+        Triggers = new GamePadTriggers(native.Analog.LeftTrigger, native.Analog.RightTrigger);
+        PacketNumber = native.PacketNumber;
     }
 
     public bool IsButtonDown(CNA.Input.Buttons button) => _rawButtons.HasFlag(button);

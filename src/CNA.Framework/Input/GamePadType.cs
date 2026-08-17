@@ -2,11 +2,10 @@ namespace CNA.Input;
 
 /// <summary>
 /// What kind of physical device a game pad slot represents (steering wheel, dance pad, etc.).
-/// Member *names* match real XNA; the numeric *values* are declaration-order guesses (0, 1, 2, ...)
-/// rather than confirmed real XNA ordinals -- lower confidence than the rest of this file. This
-/// only matters if something ever needs to serialize/compare the raw integer value rather than
-/// the named enum member (game code almost always does the latter), which nothing in this
-/// repository does today.
+/// Member names and numeric values both confirmed against the real, shipped openeggbert/cna C
+/// API's own <c>CNA_GAMEPAD_TYPE_*</c> constants (<c>input_gamepad.h</c>) -- this enum's
+/// declaration-order values happened to already match exactly, resolving what was, before this
+/// migration, a lower-confidence guess (see <c>NEXT.md</c>'s native-ABI-migration entry, step 11).
 /// </summary>
 public enum GamePadType
 {

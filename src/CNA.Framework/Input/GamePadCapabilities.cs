@@ -3,28 +3,18 @@ using CNA.Interop;
 namespace CNA.Input;
 
 /// <summary>
-/// What a connected game pad actually supports, from <see cref="GamePad.GetCapabilities"/>. No
-/// ABI shape for this exists anywhere upstream (unlike <see cref="GamePadState"/>'s own ABI,
-/// which at least follows the established snapshot-struct pattern) -- self-designed for this
-/// repository. <c>Has*Button</c> properties read <see cref="CnaGamePadCapabilities.SupportedButtons"/>
-/// using the exact same bit layout as <see cref="CNA.Input.Buttons"/> (so this only supports the
-/// same core button subset <see cref="GamePadState"/> does -- no thumbstick-direction-as-button or
-/// trigger-as-button capability bits, matching that type's own documented omission).
+/// What a connected game pad actually supports, from <see cref="GamePad.GetCapabilities"/>. Now
+/// matches the real, shipped openeggbert/cna C API's own <c>CNA_GamePadCapabilities</c>
+/// (<c>input_gamepad.h</c>) exactly, rather than a self-designed guess -- see <c>NEXT.md</c>'s
+/// native-ABI-migration entry, step 11. The real struct has one individual field per capability
+/// (confirmed, before writing this constructor, to already match this type's own pre-migration
+/// property names and count exactly -- all 24 <c>Has*</c> properties below), not the two packed
+/// bitmasks this project's own <c>CnaGamePadCapabilities</c> used to reuse from
+/// <see cref="Buttons"/>/an invented <c>Features</c> mask -- so this constructor is now a direct
+/// per-field copy instead of bitmask decoding.
 /// </summary>
 public readonly struct GamePadCapabilities
 {
-    // Bit assignments for CnaGamePadCapabilities.Features -- an internal packing convention
-    // invented for this repository's ABI, not derived from any doc.
-    private const uint HasLeftXThumbStickBit = 1 << 0;
-    private const uint HasLeftYThumbStickBit = 1 << 1;
-    private const uint HasRightXThumbStickBit = 1 << 2;
-    private const uint HasRightYThumbStickBit = 1 << 3;
-    private const uint HasLeftTriggerBit = 1 << 4;
-    private const uint HasRightTriggerBit = 1 << 5;
-    private const uint HasLeftVibrationMotorBit = 1 << 6;
-    private const uint HasRightVibrationMotorBit = 1 << 7;
-    private const uint HasVoiceSupportBit = 1 << 8;
-
     public bool IsConnected { get; }
     public GamePadType GamePadType { get; }
 
@@ -59,32 +49,30 @@ public readonly struct GamePadCapabilities
         IsConnected = native.IsConnected != 0;
         GamePadType = (GamePadType)native.GamePadType;
 
-        var buttons = (Buttons)native.SupportedButtons;
-        HasAButton = buttons.HasFlag(Buttons.A);
-        HasBButton = buttons.HasFlag(Buttons.B);
-        HasXButton = buttons.HasFlag(Buttons.X);
-        HasYButton = buttons.HasFlag(Buttons.Y);
-        HasBackButton = buttons.HasFlag(Buttons.Back);
-        HasStartButton = buttons.HasFlag(Buttons.Start);
-        HasBigButton = buttons.HasFlag(Buttons.BigButton);
-        HasDPadUpButton = buttons.HasFlag(Buttons.DPadUp);
-        HasDPadDownButton = buttons.HasFlag(Buttons.DPadDown);
-        HasDPadLeftButton = buttons.HasFlag(Buttons.DPadLeft);
-        HasDPadRightButton = buttons.HasFlag(Buttons.DPadRight);
-        HasLeftShoulderButton = buttons.HasFlag(Buttons.LeftShoulder);
-        HasRightShoulderButton = buttons.HasFlag(Buttons.RightShoulder);
-        HasLeftStickButton = buttons.HasFlag(Buttons.LeftStick);
-        HasRightStickButton = buttons.HasFlag(Buttons.RightStick);
+        HasAButton = native.HasAButton != 0;
+        HasBButton = native.HasBButton != 0;
+        HasXButton = native.HasXButton != 0;
+        HasYButton = native.HasYButton != 0;
+        HasBackButton = native.HasBackButton != 0;
+        HasStartButton = native.HasStartButton != 0;
+        HasBigButton = native.HasBigButton != 0;
+        HasDPadUpButton = native.HasDPadUpButton != 0;
+        HasDPadDownButton = native.HasDPadDownButton != 0;
+        HasDPadLeftButton = native.HasDPadLeftButton != 0;
+        HasDPadRightButton = native.HasDPadRightButton != 0;
+        HasLeftShoulderButton = native.HasLeftShoulderButton != 0;
+        HasRightShoulderButton = native.HasRightShoulderButton != 0;
+        HasLeftStickButton = native.HasLeftStickButton != 0;
+        HasRightStickButton = native.HasRightStickButton != 0;
 
-        uint features = native.Features;
-        HasLeftXThumbStick = (features & HasLeftXThumbStickBit) != 0;
-        HasLeftYThumbStick = (features & HasLeftYThumbStickBit) != 0;
-        HasRightXThumbStick = (features & HasRightXThumbStickBit) != 0;
-        HasRightYThumbStick = (features & HasRightYThumbStickBit) != 0;
-        HasLeftTrigger = (features & HasLeftTriggerBit) != 0;
-        HasRightTrigger = (features & HasRightTriggerBit) != 0;
-        HasLeftVibrationMotor = (features & HasLeftVibrationMotorBit) != 0;
-        HasRightVibrationMotor = (features & HasRightVibrationMotorBit) != 0;
-        HasVoiceSupport = (features & HasVoiceSupportBit) != 0;
+        HasLeftXThumbStick = native.HasLeftXThumbStick != 0;
+        HasLeftYThumbStick = native.HasLeftYThumbStick != 0;
+        HasRightXThumbStick = native.HasRightXThumbStick != 0;
+        HasRightYThumbStick = native.HasRightYThumbStick != 0;
+        HasLeftTrigger = native.HasLeftTrigger != 0;
+        HasRightTrigger = native.HasRightTrigger != 0;
+        HasLeftVibrationMotor = native.HasLeftVibrationMotor != 0;
+        HasRightVibrationMotor = native.HasRightVibrationMotor != 0;
+        HasVoiceSupport = native.HasVoiceSupport != 0;
     }
 }

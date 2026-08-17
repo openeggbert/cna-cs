@@ -63,7 +63,8 @@ public class SoundEffectInstance : IDisposable
 
     private CnaSoundEffectInstanceInfo GetInfo()
     {
-        CnaResult result = Native.cna_sound_effect_instance_get_info(new CnaHandle(NativeHandleValue), out CnaSoundEffectInstanceInfo info);
+        var info = new CnaSoundEffectInstanceInfo();
+        CnaResult result = Native.cna_sound_effect_instance_get_info(new CnaHandle(NativeHandleValue), ref info);
         CnaException.ThrowIfFailed(result, "cna_sound_effect_instance_get_info");
         return info;
     }

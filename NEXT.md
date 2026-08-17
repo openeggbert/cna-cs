@@ -11,6 +11,80 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 11 (the last one): `Keyboard`/`Mouse`/`GamePad` rewritten, and a real, retroactive bug fix to seven earlier steps' `out`-vs-`ref` marshaling (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+`KeyboardState`/`MouseState`/`GamePadState`/`GamePadCapabilities` all needed the same
+`struct_size`/`struct_version` header this migration has added everywhere else, plus real,
+individually confirmed shape fixes: `CnaMouseState.Buttons` widened from a single byte to the real
+`CNA_MouseButtonFlags` width (a full `uint32_t`) -- a real memory-layout fix, not cosmetic, even
+though every currently-defined bit still fits in a byte's range; `CnaGamePadState`'s thumbstick/
+trigger floats moved into a nested `CnaGamePadAnalogState` sub-struct, matching the real
+`CNA_GamePadState.analog` field, and gained `IsConnected`/`PacketNumber` fields this project's own
+guessed shape never had (`GamePadState.PacketNumber` was hardcoded to `0` with a "not implemented"
+note before this migration reached it -- now a real value); `CnaGamePadCapabilities` is a complete
+redesign from two self-invented bitmasks to the real struct's 24 individual XNA-canonical `Has*`
+fields plus 10 CNA-extension `_ext` fields this project doesn't expose -- confirmed, before writing
+the new struct, that the real field set already matched `CNA.Input.GamePadCapabilities`'s own
+pre-migration property names and count exactly (24 for 24), so this class's own constructor became
+a direct per-field copy instead of bitmask decoding. `GamePadType`'s numeric values, previously
+flagged as a "declaration-order guess, lower confidence than the rest of this file," are now
+confirmed to already match `CNA_GAMEPAD_TYPE_*` exactly.
+
+`input_keyboard.h` does have a second keyboard-capture function
+(`cna_keyboard_get_state_for_player`) alongside `input.h`'s plain `cna_keyboard_get_state` -- an
+open question from the earlier research pass, now resolved by reading its own doc comment: "CNA
+has one keyboard, so every slot reports the same snapshot `cna_keyboard_get_state` produces; the
+overload exists because the canonical API has it" (matching real XNA's own redundant
+`Keyboard.GetState(PlayerIndex)` overload). `Keyboard.GetState()` has no player-index overload, so
+only the plain function is needed here.
+
+Every one of these three static classes now needs a game handle (`CnaAmbientGame.Current`) -- the
+last of the input/media/audio subsystems to need it, closing out that design's rollout across every
+step that needed it (audio in step 9, media in step 10, input here). Also fixed an ABI-independent
+bug flagged back when this migration's own synthesis doc was first written: none of
+`Keyboard`/`Mouse`/`GamePad` checked their native call's `CnaResult` at all before this step, unlike
+every other native call site in this codebase -- fixed regardless of the ABI mismatch, since it was
+never correct.
+
+### A real, retroactive bug found and fixed across seven earlier steps
+
+Writing `CnaKeyboardState`/etc.'s own self-populating constructors (the pattern this migration
+adopted from `cnabinding`'s own account of a real bug back in step 4) surfaced a mistake in how that
+pattern was actually being *used*: `out CnaKeyboardState state` declared inline at a call site is
+zero-initialized by the CLR (`out` doesn't run a type's constructor), so `struct_size`/
+`struct_version` would both be `0` when the call reached native -- exactly the failure mode
+`cnabinding` described, reintroduced by this migration's own hand despite building the exact
+defense meant to prevent it. Caught before it shipped in this step, then found and fixed
+retroactively in three earlier steps that had the identical bug:
+`cna_texture2d_get_info`/`cna_render_target_get_info` (step 5) and
+`cna_sound_effect_instance_get_info` (step 9). The fix: every affected `Native.cs` declaration now
+takes `ref`, not `out` -- `ref` requires the variable to be definitely assigned *before* the call
+(a real compile error otherwise), which makes it structurally impossible to pass an unconstructed
+struct, unlike `out`, which silently accepted one. Every call site now explicitly
+`new CnaXxx()`s the struct first. `CnaVisualizationData` (step 10) already used this correct
+`ref`-based pattern from the start, and every `*CreateInfo`/`*Transfer`/`*BeginInfo` input struct
+across the whole migration was never affected in the first place (always built via
+object-initializer syntax and passed by `in`/value, never `out`) -- audited every remaining
+self-populating struct in the codebase (15 total) to confirm no further instances of this mistake
+remain.
+
+### This closes the 11-step native-ABI migration plan from `native-abi-migration-synthesis.md`
+
+Every subsystem originally scoped -- foundational types, error handling, `Game` lifecycle,
+`GraphicsDevice`, `VertexBuffer`/`IndexBuffer`/`VertexDeclaration`, `Texture2D`/`RenderTarget2D`,
+`ContentManager`, `SpriteBatch`, `BasicEffect`, `SoundEffect`/`SoundEffectInstance`,
+`MediaPlayer`/`Song`, `Keyboard`/`Mouse`/`GamePad` -- has now been rewritten against the real,
+shipped `openeggbert/cna` C API, each step committed and pushed individually with its own
+reasoning recorded here. None of this has been compiled or tested yet, per the standing
+instruction that governed this whole migration -- that is the necessary next step once compilation
+is re-authorized, along with this project's own established `/code-review high` review-until-clean
+discipline for everything built this way. Real, deliberately-not-adopted capabilities remain
+recorded above for a future session to pick up on purpose (the native media queue, the native
+`.xnb`/`.cnj` `ContentReader` API, `Song`/`SongCollection` native-handle depth beyond what
+`MediaPlayer` itself needs, and the many `_ext` device-info surfaces GamePad/Mouse expose that this
+project's own public API doesn't reach yet) -- genuine future work, not gaps this migration failed
+to close.
+
 ## Native ABI migration, step 10: `MediaPlayer`/`Song` rewritten -- `Song` becomes a real native object, correcting this session's own earlier stale doc claim about `MediaPlayer.Queue` (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 `Song.Handle` was, before this migration, a raw *file path string* masquerading as a handle --

@@ -94,4 +94,6 @@ public struct Vector2 : IEquatable<Vector2>
     public override readonly string ToString() => $"{{X:{X} Y:{Y}}}";
 
     internal readonly CNA.Interop.CnaVector2 ToNative() => new(X, Y);
+
+    internal static Vector2 FromNative(CNA.Interop.CnaVector2 native) => new(native.X, native.Y);
 }
