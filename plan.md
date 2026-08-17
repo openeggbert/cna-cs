@@ -22,10 +22,16 @@ surface (`Picture`/`PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`,
 `GetPictureFromToken`/`SavePicture`) is also now done, genuinely real (not
 scoped to always-empty) since its write path needs only plain file I/O --
 see `NEXT.md` for the detail, including why its `CNA.XnaCompat` mirror
-ended up an independent reimplementation rather than a subclass. What
-remains: `Model` file-loading (Phase 4 follow-up, deliberately deferred,
-not blocked) and Phase 6 packaging/cross-platform validation, tracked
-below.
+ended up an independent reimplementation rather than a subclass. `Model`
+file-loading is also now done for the well-grounded subset this pass
+scoped it down to: real, uncompressed `.xnb` binary assets (`CNA.Content.Xnb`),
+confirmed byte-for-byte against the real openeggbert/cna C++ engine's own
+reference implementation and a real MonoGame-compiled fixture -- LZX/LZ4
+compression and the real engine's own `.cnj`/glTF content paths are all
+deliberately out of scope (see `NEXT.md` for why -- each is its own large,
+separable feature, and the real engine hasn't even wired its own
+`ModelReader` into `ContentManager::Load<Model>()` yet either). What
+remains: Phase 6 packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -621,14 +627,62 @@ Split by whether the type needs the (still nonexistent) native ABI:
       fixed a stream-draining-order bug and added a missing `IsDisposed`
       guard to `SavePicture` — see `NEXT.md`). `samples/HelloGame`
       re-verified unaffected.
+- [x] **`Model` file-loading via real, uncompressed `.xnb` binary assets
+      (`CNA.Content.Xnb`, `ContentManager.Load<Model>()`) — done, 2026-08-17
+      (session 6 continued autonomously past the picture-library checkpoint,
+      per explicit user selection of "Start Model file-loading," then an
+      explicit scope decision — "attempt full scope anyway" — once research
+      revealed the true dependency shape: three separate content formats,
+      not one).** Research first (this session's own standing discipline)
+      found the real openeggbert/cna C++ engine supports `Model` content
+      three different ways — real XNA's own `.xnb` binary format
+      (`modules/content/src/Xnb/`), a custom `.cnj` JSON format, and a
+      runtime glTF importer (`modules/content/src/GltfImport/`, ~2,500
+      lines, skeletal animation/morph targets/PBR materials, native
+      `cgltf`-dependent) — `ContentManager.cpp` alone is 3,227 lines. Only
+      the real-XNA `.xnb` path is in scope for this pass: it's the one
+      path that's genuinely about *XNA source compatibility* (goal #1),
+      it's pure C#/BCL logic with **zero** native ABI dependency (unlike
+      `Texture2D`/`SoundEffect`/`SpriteFont`, which this project's native
+      engine loads on their behalf), and — confirmed by a dedicated
+      research pass reading the real reference implementation in full and
+      hand-tracing a real, uncompressed, MonoGame-compiled `Model` fixture
+      byte-for-byte — it's genuinely tractable at this scope. LZX/LZ4
+      decompression and the `.cnj`/glTF paths are explicitly deferred (see
+      `NEXT.md` for the full reasoning); real, *uncompressed* `.xnb` files
+      are the only ones this reader accepts, rejecting compressed ones
+      with a clear, documented exception rather than attempting either
+      decompressor. **Split into two layers, mirroring
+      `ContentManager.LoadSpriteFontData`'s existing "return raw pieces,
+      let the caller build the native-backed object" pattern:** parsing
+      the `.xnb` bytes into an intermediate `XnbModelData` tree
+      (`CNA.Content.Xnb`) is pure C#, no native call anywhere, and fully
+      unit-testable — confirmed against a real fixture, not just
+      hand-constructed bytes; building the final, real `Model` from that
+      tree (`XnbModelBuilder`) needs a real, native-backed `GraphicsDevice`
+      to construct `VertexBuffer`/`IndexBuffer` instances, so *that* part
+      is native-ABI-blocked, the same situation as this project's other
+      content types. `System.IO.BinaryReader.Read7BitEncodedInt()`/
+      `.ReadString()` are used directly for the format's own 7-bit-encoded
+      ints/length-prefixed strings — confirmed byte-for-byte identical to
+      the real format, not just "close enough" (design invariant #7).
+      `ContentManager.GraphicsDevice` is a new settable property, wired by
+      `Game.EnsureGraphicsDevice()` once its own device becomes available.
+      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
+      `dotnet test`: 375/375 passing (up from 359 — 16 new tests,
+      including a full end-to-end parse of a real MonoGame-compiled
+      `Model` `.xnb` fixture, vendored into `tests/CNA.Framework.Tests/assets/`
+      from `openeggbert/cna`'s own MIT-licensed MonoGame test fixtures —
+      see that directory's own `README.md`). `samples/HelloGame`
+      re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
-      `Model` has no file-format loader (parsing a real model format is a
-      separate, much larger problem — see `Model`'s own doc comment);
-      visualization data (`GetVisualizationData`, real-time FFT). Neither
-      is blocked on the native C ABI the way everything else in this phase
-      is — they're scoped out because each is its own substantial,
-      separable feature, not because anything is missing upstream to
-      ground them against.
+      `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths (see
+      the entry above); `MediaPlayer`'s visualization data
+      (`GetVisualizationData`, real-time FFT). None of these are blocked
+      on the native C ABI the way everything else in this phase is —
+      they're scoped out because each is its own substantial, separable
+      feature, not because anything is missing upstream to ground them
+      against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

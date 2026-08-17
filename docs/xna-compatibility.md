@@ -97,7 +97,12 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     PictureCollection/PictureAlbumCollection, GetPictureFromToken/
     SavePicture) -- genuinely real, not always-empty: saving a picture
     needs only plain file I/O (SavedPictureStore), no native call at all
-    (see below for the image-dimension/thumbnail fallback reasoning)
+    (see below for the image-dimension/thumbnail fallback reasoning).
+    Reading a real, uncompressed .xnb Model asset's bytes into bones/
+    meshes/vertex-and-index-buffer data (CNA.Content.Xnb) -- zero native
+    ABI, pure C#/BCL logic, confirmed byte-for-byte against a real
+    MonoGame-compiled fixture (see below for why only the final
+    VertexBuffer/IndexBuffer construction step is blocked)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -107,7 +112,9 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Mouse/MouseState, GamePad/GamePadState/GamePadCapabilities,
     SoundEffect/SoundEffectInstance, VertexBuffer/IndexBuffer,
     ContentManager (RootDirectory, Load<Texture2D>, Load<SoundEffect>,
-    Load<SpriteFont> -- capped at 256 glyphs, see plan.md),
+    Load<SpriteFont> -- capped at 256 glyphs, see plan.md; Load<Model>'s
+    own final VertexBuffer/IndexBuffer construction step, see above for
+    the real, unblocked .xnb-parsing step this sits on top of),
     Effect.Apply/BasicEffect.Apply (EffectTechnique/EffectPass/
     DirectionalLight are pure scaffolding around this, no ABI of their own)
     -- and by extension Model.Draw()/ModelMesh.Draw(), since drawing a
@@ -117,9 +124,11 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
 
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
-    Model file-format loading, MediaPlayer's visualization data
-    (GetVisualizationData) -- neither blocked on the native ABI, each its
-    own substantial separable feature
+    Model's own .cnj/glTF content paths and LZX/LZ4-compressed .xnb files
+    (see below for why only real, uncompressed .xnb was in scope),
+    MediaPlayer's visualization data (GetVisualizationData) -- none of
+    these are blocked on the native ABI, each its own substantial
+    separable feature
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -139,12 +148,16 @@ source, not invented. `Model`/`ModelMesh`/`ModelMeshPart`/`ModelBone` are
 grounded the strongest of any Phase 4 item so far: not just "shaped to
 match a real implementation" but built entirely out of already-native-backed
 primitives, needing no new native function at all -- see `plan.md` Phase 4
-for the detail. Note also that `Model`/its collection types have **no
-`CNA.XnaCompat` mirror yet** -- a deliberate scope cut, not an oversight,
-since there is no `ContentManager.Load<Model>` to produce one any other way
-right now; `var`-typed/chained consumption of the `CNA.Graphics`-namespaced
-types works fine in the meantime, same as `EffectTechnique`/
-`DirectionalLight`'s existing compat gap. `Song`/`MediaPlayer` are grounded
+for the detail. Note also that `Model`/its collection types still have
+**no `CNA.XnaCompat` mirror** -- this used to be justified by "there is no
+`ContentManager.Load<Model>` to produce one any other way," which is no
+longer true now that real `.xnb` `Model` loading exists (see below); it's
+now a genuine, standalone follow-up (building the mirror would need its
+own design pass, the same kind of thing `MediaLibrary`'s picture side
+needed for its own collections) rather than a moot point, and is tracked
+as such rather than silently left stale. `var`-typed/chained consumption
+of the `CNA.Graphics`-namespaced types works fine in the meantime, same
+as `EffectTechnique`/`DirectionalLight`'s existing compat gap. `Song`/`MediaPlayer` are grounded
 against `modules/media/`'s own working implementation the same way
 `SoundEffect`/`BasicEffect` were, deliberately scoped down from that
 implementation's much larger surface (see the "Not started at all" list
@@ -189,6 +202,21 @@ built directly on `CNA.Media.SavedPictureStore` (the shared low-level,
 security-sensitive file-I/O helper) rather than on the base class's own
 picture-tracking. See `NEXT.md`'s picture-library entry for the full
 reasoning trail, including the abandoned covariant-hook attempt.
+`CNA.Content.Xnb` (real `.xnb` `Model` loading) is grounded the same way
+`SoundEffect`/`BasicEffect` are (a real, working C++ reference
+implementation, not invented), but confirmed to an unusual depth for this
+project: not just read, but hand-traced byte-by-byte against a real,
+independently-produced MonoGame-compiled fixture, catching exactly the
+kind of subtle format misunderstanding reading source alone can miss.
+Deliberately scoped to real, uncompressed `.xnb` files only -- the real
+engine's own `.cnj`/glTF content paths and LZX/LZ4 decompression are all
+out of scope (each is its own large, separable feature; see `plan.md`
+Phase 4). `XnbBasicEffectReader` reads every field a real `BasicEffect`
+`.xnb` entry serializes (so the stream position stays correct for
+whatever follows) but doesn't apply them to a real `BasicEffect` instance
+-- doing so needs its external texture reference resolved via
+`ContentManager.Load<Texture2D>()`, itself native-ABI-blocked, so this is
+recorded as a known gap rather than half-wired.
 See `plan.md` Phase 4 and `NEXT.md`'s per-session entries for the full
 detail on each.
 

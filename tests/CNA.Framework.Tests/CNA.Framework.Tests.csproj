@@ -15,4 +15,8 @@
     <ProjectReference Include="..\..\src\CNA.Framework\CNA.Framework.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

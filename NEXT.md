@@ -11,6 +11,133 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `Model` file-loading via real, uncompressed `.xnb` binary assets -- done, after research overturned the plan's own scope estimate twice in one pass (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Start Model file-loading")
+
+Picked this up as the next feature once the picture-library's review cycle
+closed clean. `plan.md` described this as "parsing a real model format,
+a separate, much larger problem" but gave no further detail -- reading the
+real openeggbert/cna C++ engine's actual source (this session's standing
+discipline, applied here before writing a single line of C#) showed the
+undersell went the other way: not one format, but **three**, and none of
+them small.
+
+**First research pass: the true scope.** `ContentManager.cpp` alone is
+3,227 lines. `Model` content can arrive via real XNA's own `.xnb` binary
+format (`modules/content/src/Xnb/`, ~4,600 lines across every type
+reader), a custom `.cnj` JSON format (referenced throughout
+`ContentManager.cpp`, its own `plan_cnj.md`), or a runtime glTF importer
+(`modules/content/src/GltfImport/`, ~2,500 lines: skeletal animation,
+morph targets, PBR material extraction, built on the native `cgltf` C
+library). This is an order of magnitude bigger than anything else this
+session has built (for scale: the entire picture-library feature was
+~250 lines of real logic). Stopped before writing any code and surfaced
+this finding to the user with concrete numbers, rather than either
+guessing at a design or unilaterally committing to a multi-week port --
+the user chose "attempt full scope anyway," explicitly accepting this
+would likely be left partially done.
+
+**Scoping the attempt.** Of the three formats, only real XNA's own
+`.xnb` binary format is genuinely in scope for one pass: it's the one
+path that's actually about *XNA source compatibility* (this project's
+stated goal #1 -- a real ported XNA game ships real `.xnb` assets, not
+`.cnj` or glTF, which are CNA's own native-engine extensions), and,
+critically, `.xnb` reading is **pure C#/BCL logic with zero native ABI
+dependency** -- unlike `Texture2D`/`SoundEffect`/`SpriteFont` (which this
+project's `ContentManager` loads by calling into the native CNA engine),
+nothing about parsing a `.xnb` file's bytes needs a native call at all.
+LZX/LZ4 decompression (a real, valid, but separately-large sub-feature --
+~786 lines of dense bit-manipulation C++ in the reference implementation)
+was scoped out too: real, valid *uncompressed* `.xnb` files exist and are
+common enough to be worth supporting alone, so this reader detects and
+rejects LZX/LZ4-compressed files with a clear, documented exception
+rather than attempting either decompressor -- the same "faithful subset,
+document the gap" style as `SpriteFont`'s 256-glyph cap.
+
+**Second research pass, delegated to a fork specifically to keep several
+thousand lines of C++ out of the main context:** read the real `.xnb`
+container format (`XnbHeader.hpp`), the object-graph dispatch protocol
+(`ContentReader.hpp/.cpp`), the type-reader table, every primitive/math
+reader `Model` needs, and `ModelContentTypeReaders.cpp` in full --
+**and cross-checked every claim against a real, uncompressed,
+MonoGame-compiled `Model` fixture by hand-tracing its actual bytes**, not
+just reading the C++ and trusting it. Two findings materially changed the
+implementation:
+
+- **`System.IO.BinaryReader.Read7BitEncodedInt()`/`.ReadString()` are
+  byte-for-byte identical to the `.xnb` format's own 7-bit-encoded
+  ints/length-prefixed strings** -- confirmed by reading the C++ port's
+  own `BinaryReader.cpp`, itself an explicit port of that exact .NET
+  algorithm. Used the real BCL directly rather than hand-rolling either
+  (design invariant #7, more directly applicable here than anywhere else
+  this session has used it -- this isn't "an equivalent exists," it's
+  "the exact same algorithm").
+- **The real C++ engine hasn't even wired its own `ModelReader` into its
+  own `ContentManager::Load<Model>()` dispatch yet** -- only
+  `Texture2D`/`SoundEffect`/`TextureCube` are wired there today. There
+  was no "just copy the real engine's own wiring" shortcut for the
+  `ContentManager.Load<Model>()` integration piece; it had to be designed
+  from the object-graph protocol up.
+
+**Architecture: two layers, split for the same reason
+`ContentManager.LoadSpriteFontData` already returns "raw pieces" instead
+of a finished `SpriteFont`.** `CNA.Content.Xnb` (a new folder in
+`CNA.Framework`) parses the `.xnb` bytes into an intermediate
+`XnbModelData` tree (bones/meshes/mesh-parts, each mesh part's vertex/
+index bytes plus its `VertexDeclaration`, and a deliberately-minimal
+`XnbBasicEffectData`) -- **pure C#, no native call anywhere, and fully
+unit-testable**, a genuine rarity for this project's content-loading
+surface. `XnbModelBuilder` then takes that tree plus a real
+`GraphicsDevice` and constructs the actual, native-backed `VertexBuffer`/
+`IndexBuffer`/`Model` objects -- *this* part is native-ABI-blocked, the
+same situation as every other content type `ContentManager` already
+loads. `ContentManager.GraphicsDevice` is a new settable property
+(previously `ContentManager` had no reference to the device at all, since
+real XNA's `Content`/`GraphicsDevice` become available at different
+points in the `Game` lifecycle) -- wired by `Game.EnsureGraphicsDevice()`
+once its own device is created, matching real XNA's own timing (content
+loading only ever realistically happens from `LoadContent()` onward).
+
+**The object-graph "shared resource" mechanism was the trickiest single
+piece.** A `.xnb` file's `VertexBuffer`/`IndexBuffer`/`Effect` references
+inside a mesh part are not read inline -- reading one only records a
+*slot index* and a deferred fixup callback; the actual bytes for every
+shared resource come later, in a dedicated section after the whole root
+object has been read, and every registered fixup runs only once its
+resource's real bytes are available. Two mesh parts can reference the
+*same* buffer by the same index, which is exactly why this indirection
+exists (real, genuine sharing, not an implementation accident). Modeled
+in C# as `List<List<Action<object>>>` (one fixup list per shared-resource
+slot) plus mutable `XnbMeshPartData` fields the fixup closures write into
+directly -- by the time a caller reads `part.VertexBuffer` after the
+whole two-pass read completes, the closure has already run.
+
+**`XnbBasicEffectReader` is deliberately minimal, not a full port**: every
+field the real `BasicEffectReader` serializes is read (so the stream
+position stays correct for whatever follows -- there is no generic
+"skip an object of unknown length" mechanism in this format, every
+reader has to actually know its own byte layout), but the values are only
+carried as data (`XnbBasicEffectData`), not applied to a real
+`BasicEffect` instance -- doing that properly would mean resolving the
+effect's external texture reference too, which itself needs
+`ContentManager.Load<Texture2D>()`, itself native-ABI-blocked. Recorded
+as a real, documented gap rather than half-implemented.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 375/375 passing (up from 359 -- 16 new tests), including a full
+end-to-end parse of a real MonoGame-compiled `BlenderDefaultCube.xnb`
+fixture (2 bones, root bone `"RootNode"`, one mesh part with all three
+shared resources correctly resolved, vertex/index buffer byte counts
+internally consistent) -- vendored unmodified from `openeggbert/cna`'s own
+test fixtures (themselves MonoGame test-pipeline output, MIT-licensed;
+see `tests/CNA.Framework.Tests/assets/xnb/README.md` for provenance).
+`samples/HelloGame` re-verified unaffected. `XnbModelBuilder`'s own
+native-backed half (the actual `VertexBuffer`/`IndexBuffer` construction)
+is not independently testable without a real `cna-native`, same situation
+as this project's other native-backed content types -- but everything
+upstream of it (the actual hard, error-prone part: getting the binary
+format right) now is, and was checked against real, independently-produced
+bytes, not just internal self-consistency.
+
 ## Eighteenth `/code-review high` pass, over the seventeenth pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still)
 
 Ran the review a fourth time over this feature, over the seventeenth

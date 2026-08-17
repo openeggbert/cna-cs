@@ -2,15 +2,16 @@ namespace CNA.Graphics;
 
 /// <summary>
 /// A 3D model composed of bones and meshes. Real XNA populates this exclusively via
-/// <c>Content.Load&lt;Model&gt;()</c> (the content pipeline's binary format) -- this project has no
-/// model-file loader yet (parsing a real model format is a separate, much larger problem than
-/// anything else built so far this session), so these constructors are the only way to obtain a
-/// <see cref="Model"/> here. They match the real openeggbert/cna C++ engine's own <c>Model</c>
-/// constructors exactly (both marked <c>CNAEXT</c> there for the same reason: real XNA's own
-/// <c>Model</c> constructor is content-pipeline-only). Deliberately does not reproduce the C++
-/// header's parameterless <c>Model() = default;</c> -- an unpopulated model has no realistic use
-/// in this project (there is no loader that would ever construct one and fill it in afterward),
-/// so adding it would be speculative API surface, not a real gap.
+/// <c>Content.Load&lt;Model&gt;()</c> (the content pipeline's binary format) -- this project now has
+/// a real, from-scratch <c>.xnb</c> reader for this (<c>CNA.Content.Xnb</c>, driven by
+/// <c>ContentManager.Load&lt;Model&gt;()</c>; see that type's own doc comment), but these
+/// constructors remain the only way to *hand-build* a <see cref="Model"/> directly -- both are
+/// still real, useful API surface (the C++ engine's own equivalents are marked <c>CNAEXT</c> for
+/// the same reason: real XNA's own <c>Model</c> constructor is content-pipeline-only, but there is
+/// real value in constructing one directly for tests/tools/procedural content, matching the C++
+/// engine's own choice to expose them). Deliberately does not reproduce the C++ header's
+/// parameterless <c>Model() = default;</c> -- an unpopulated model has no realistic use here
+/// either way, so adding it would be speculative API surface, not a real gap.
 /// </summary>
 public class Model
 {

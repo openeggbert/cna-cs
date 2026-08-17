@@ -1,4 +1,5 @@
 using CNA.Audio;
+using CNA.Content.Xnb;
 using CNA.Graphics;
 using CNA.Interop;
 
@@ -10,6 +11,21 @@ namespace CNA.Content;
 /// <c>ContentManager</c> overrides this same method to additionally recognize its own compat
 /// content types, reusing <see cref="LoadNativeTexture2DHandle"/> so it never has to touch
 /// CNA.Interop directly (see docs/architecture.md).
+///
+/// <see cref="Load{T}"/>'s <see cref="Model"/> case is genuinely different from every other case
+/// here: real XNA's own <c>Content.Load&lt;Model&gt;()</c> reads a compiled <c>.xnb</c> binary
+/// asset -- pure C#/BCL logic with no native ABI dependency at all, unlike
+/// <see cref="Texture2D"/>/<see cref="SoundEffect"/>/<see cref="SpriteFont"/> (which this project's
+/// native CNA engine loads on their behalf). See <c>CNA.Content.Xnb</c>'s own types for the actual
+/// <c>.xnb</c> reader (confirmed byte-for-byte against the real openeggbert/cna C++ engine's own
+/// reference implementation and a real MonoGame-compiled fixture -- see <c>NEXT.md</c>) -- only
+/// real, *uncompressed* <c>.xnb</c> files are supported; LZX/LZ4-compressed files and the real
+/// engine's own <c>.cnj</c>/glTF content paths are all deliberately out of scope for this pass (see
+/// <c>plan.md</c>). Building the final, real <see cref="Model"/> still needs a real
+/// <see cref="Graphics.GraphicsDevice"/> (to construct native-backed <see cref="VertexBuffer"/>/
+/// <see cref="IndexBuffer"/> instances), so <see cref="GraphicsDevice"/> below is set by
+/// <see cref="Game"/> once its own device becomes available -- <em>that</em> part is native-ABI-blocked,
+/// same as the rest of this class's content types.
 /// </summary>
 public class ContentManager
 {
@@ -24,6 +40,14 @@ public class ContentManager
     {
         _nativeHandleValue = nativeHandleValue;
     }
+
+    /// <summary>Set by <see cref="Game"/> once its own <see cref="Graphics.GraphicsDevice"/>
+    /// becomes available (real XNA content loading generally only ever happens from
+    /// <c>LoadContent()</c> onward, by which point this is always set) -- <see langword="null"/>
+    /// only before that point, or if this <see cref="ContentManager"/> was hand-built outside the
+    /// normal <see cref="Game"/> lifecycle. Only <see cref="Load{T}"/>'s <see cref="Model"/> case
+    /// needs this today.</summary>
+    public GraphicsDevice? GraphicsDevice { get; set; }
 
     public string RootDirectory
     {
@@ -63,7 +87,56 @@ public class ContentManager
             return (T)(object)new SoundEffect(LoadNativeSoundEffectHandle(assetName));
         }
 
+        if (typeof(T) == typeof(Model))
+        {
+            return (T)(object)LoadModel(assetName);
+        }
+
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
+    }
+
+    /// <summary>Reads a real, uncompressed <c>.xnb</c> <see cref="Model"/> asset from
+    /// <see cref="RootDirectory"/> -- see this type's own doc comment. <c>protected</c>, matching
+    /// <see cref="LoadNativeTexture2DHandle"/>'s own accessibility, for the same reason: a seam for
+    /// a future CNA.XnaCompat <c>ContentManager</c> override to reuse without touching
+    /// <c>CNA.Content.Xnb</c> directly (no such override exists yet -- <see cref="Model"/> still has
+    /// no <c>CNA.XnaCompat</c> mirror at all, a separate, larger follow-up; see <c>plan.md</c>).</summary>
+    protected Model LoadModel(string assetName)
+    {
+        ArgumentNullException.ThrowIfNull(assetName);
+
+        if (GraphicsDevice is null)
+        {
+            throw new ContentLoadException(
+                $"Cannot load Model '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
+        }
+
+        string path = ResolveXnbAssetPath(assetName);
+        using FileStream stream = File.OpenRead(path);
+        using var reader = new BinaryReader(stream);
+
+        _ = XnbHeader.Read(reader, stream.Length);
+        XnbContentReader contentReader = XnbContentReader.Create(reader);
+        object? root = contentReader.ReadRootObjectAndResolveSharedResources();
+
+        if (root is not XnbModelData modelData)
+        {
+            throw new ContentLoadException(
+                $"'{assetName}' is not a Model asset (its .xnb root object's type reader was not ModelReader).");
+        }
+
+        return XnbModelBuilder.Build(GraphicsDevice, modelData);
+    }
+
+    private string ResolveXnbAssetPath(string assetName)
+    {
+        string path = Path.Combine(RootDirectory, assetName + ".xnb");
+        if (!File.Exists(path))
+        {
+            throw new ContentLoadException($"Content file '{path}' was not found.");
+        }
+
+        return path;
     }
 
     protected nint LoadNativeTexture2DHandle(string assetName)

@@ -5,12 +5,13 @@ namespace CNA.Graphics;
 /// itself and any children. Real XNA's own <c>ModelBone</c> has no public constructor and no
 /// public <see cref="AddChild"/> at all -- both are content-pipeline-only (<c>internal</c>),
 /// because real XNA games only ever get an already-populated bone hierarchy back from
-/// <c>Content.Load&lt;Model&gt;</c>. This project has no content pipeline / model-file loader yet
-/// (parsing a real model format is a separate, much larger problem than anything else built so far
-/// this session -- see <see cref="Model"/>'s own doc comment), so the real openeggbert/cna C++
-/// engine deliberately marks this constructor and <see cref="AddChild"/> <c>CNAEXT</c> (a
-/// documented, intentional deviation from real XNA) to give hand-written code the only
-/// construction path that actually exists here -- reproduced verbatim, not invented.
+/// <c>Content.Load&lt;Model&gt;</c>. The real openeggbert/cna C++ engine deliberately marks this
+/// constructor and <see cref="AddChild"/> <c>CNAEXT</c> (a documented, intentional deviation from
+/// real XNA) so hand-written code has a construction path too -- reproduced verbatim, not invented.
+/// <c>CNA.Content.Xnb.XnbModelBuilder</c> (this project's own real <c>.xnb</c> loader, driving
+/// <c>ContentManager.Load&lt;Model&gt;()</c>) uses this exact same public constructor/<c>AddChild</c>
+/// surface to build a loaded model's bone hierarchy -- there is no separate, more-privileged
+/// construction path reserved for it.
 /// </summary>
 public class ModelBone
 {

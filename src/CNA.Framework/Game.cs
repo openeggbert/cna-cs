@@ -127,6 +127,7 @@ public abstract class Game : IDisposable
         }
 
         GraphicsDevice = CreateGraphicsDevice();
+        Content.GraphicsDevice = GraphicsDevice;
         _graphicsDeviceInitialized = true;
     }
 

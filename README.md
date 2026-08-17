@@ -61,7 +61,17 @@ just never has anything real to report. `MediaLibrary`'s *picture* side
 further still: genuinely real, not always-empty, since saving a picture
 needs only plain file I/O — no native dependency, real, growing data,
 fully testable (against a throwaway temp directory, never the real
-Pictures folder — see [`NEXT.md`](NEXT.md)).
+Pictures folder — see [`NEXT.md`](NEXT.md)). `Model` file-*loading* joins
+the "fully real today" group too, for real, uncompressed `.xnb` binary
+assets specifically (`CNA.Content.Xnb`): parsing a `.xnb` file's bytes
+into bones/meshes/vertex-and-index-buffer data is pure C#/BCL logic with
+**zero** native ABI dependency, confirmed byte-for-byte against a real
+MonoGame-compiled `Model` fixture, not just self-consistency — only the
+final step (constructing the real, GPU-backed `VertexBuffer`/`IndexBuffer`
+objects from that data, via `ContentManager.Load<Model>()`) needs the
+native ABI, same as everything else below. LZX/LZ4-compressed `.xnb`
+files and the real C++ engine's own `.cnj`/glTF content paths are
+explicitly out of scope (see [`NEXT.md`](NEXT.md)).
 Everything else native-backed (`Game`, `GraphicsDevice`, `Texture2D`,
 `SpriteBatch` including the full extended `Draw`/`DrawString` overload
 families, `RenderTarget2D`, `SoundEffect`/`SoundEffectInstance`,
@@ -85,7 +95,7 @@ isn't. `MediaPlayer` straddles the same way: `State`/`Volume`/`IsMuted`/
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 359 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 375 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.
