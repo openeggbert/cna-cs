@@ -11,6 +11,44 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Twentieth `/code-review high` pass, over the nineteenth pass's own fix -- no correctness bugs, two minor cleanups (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more)
+
+Ran the review over the nineteenth pass's own five fixes (commit
+`b348a98`). No correctness bugs found this time -- every bounds check,
+the index-buffer divisibility check, the `BasicEffect`-after-`Parent`
+ordering fix, the plausibility caps, and the `RequireType` casts were all
+confirmed sound and covered by matching tests. Two minor findings, both
+fixed:
+
+- A doc comment in `XnbBasicEffectReader.cs` had gone stale: it still
+  said `BasicEffect` values were "not applied to a real effect instance,"
+  which the previous pass's own fix (`XnbModelBuilder.BuildBasicEffect`)
+  made false. Reworded to describe what's actually true now: *this*
+  reader still only parses bytes into data, but that data *is* applied,
+  elsewhere, to a real `BasicEffect` -- pointing at exactly where.
+- The new `RequireType<T>` (added by the previous pass to fix the
+  shared-resource unchecked-cast finding) duplicated
+  `XnbContentReader.ReadObject<T>`'s own existing cast-and-throw pattern,
+  and was slightly less safe than it (no null guard before calling
+  `.GetType()`, whereas `ReadObject<T>`'s version was null-safe) -- a
+  real "two near-identical checks, easy to fix one and forget the other"
+  risk, the reviewer's own words. Unified into a single
+  `XnbContentReader.RequireType<T>` static helper, null-safe, used by
+  both `ReadObject<T>` (a freshly-dispatched object) and
+  `XnbModelReader`'s shared-resource fixups (an already-resolved object
+  handed back later) -- one definition of "wrong type" for the whole
+  feature instead of two.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 380/380 passing, unchanged (pure refactor/doc fix, no behavior
+change, existing tests already cover the unified helper's behavior).
+`samples/HelloGame` re-verified unaffected. This closes out the `Model`
+`.xnb` loading feature's review cycle: three passes total (the original
+commit, its fix, and the fix's own follow-up), the last one landing with
+only cleanup-level findings -- the same shape both the picture-library
+and `MediaLibrary` music-side features' own review cycles took before
+landing clean.
+
 ## Nineteenth `/code-review high` pass, over the `Model` `.xnb` loading commit -- five real findings, one of them the standout bug of this whole feature (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again)
 
 Ran the review over the `.xnb` Model-loading commit (`93a0d1b`) -- a much

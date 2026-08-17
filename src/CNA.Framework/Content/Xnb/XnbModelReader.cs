@@ -109,9 +109,9 @@ internal static class XnbModelReader
                 // slots would otherwise surface as an unhandled InvalidCastException instead of
                 // the clear ContentLoadException every other corrupt-input case in this feature
                 // produces.
-                reader.ReadSharedResource(o => part.VertexBuffer = RequireType<XnbVertexBufferData>(o, "VertexBuffer"));
-                reader.ReadSharedResource(o => part.IndexBuffer = RequireType<XnbIndexBufferData>(o, "IndexBuffer"));
-                reader.ReadSharedResource(o => part.Effect = RequireType<XnbBasicEffectData>(o, "Effect"));
+                reader.ReadSharedResource(o => part.VertexBuffer = XnbContentReader.RequireType<XnbVertexBufferData>(o, "a mesh part's VertexBuffer"));
+                reader.ReadSharedResource(o => part.IndexBuffer = XnbContentReader.RequireType<XnbIndexBufferData>(o, "a mesh part's IndexBuffer"));
+                reader.ReadSharedResource(o => part.Effect = XnbContentReader.RequireType<XnbBasicEffectData>(o, "a mesh part's Effect"));
 
                 parts.Add(part);
             }
@@ -123,16 +123,5 @@ internal static class XnbModelReader
         reader.RejectNonNullTag("Model");
 
         return new XnbModelData(bones, meshes, rootBoneIndex);
-    }
-
-    private static T RequireType<T>(object resource, string fieldName) where T : class
-    {
-        if (resource is not T typed)
-        {
-            throw new ContentLoadException(
-                $"Corrupt .xnb file: mesh part's {fieldName} shared resource was {resource.GetType().Name}, expected {typeof(T).Name}.");
-        }
-
-        return typed;
     }
 }

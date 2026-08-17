@@ -137,13 +137,20 @@ internal sealed class XnbContentReader
         return read(this);
     }
 
-    internal T ReadObject<T>() where T : class
+    internal T ReadObject<T>() where T : class => RequireType<T>(ReadObject(), "an object read from the stream");
+
+    /// <summary>Shared cast-and-throw helper: one place defining what "wrong type" means for a
+    /// <c>.xnb</c> value, used both by <see cref="ReadObject{T}"/> (a freshly-read object) and by
+    /// <c>XnbModelReader</c>'s shared-resource fixups (an already-resolved object handed back
+    /// later, via <see cref="ReadSharedResource"/>'s two-pass mechanism) -- a code-review finding:
+    /// these two call sites previously had their own separate, near-identical cast-and-throw
+    /// copies, one of them not null-safe, with no shared definition to keep them in sync.</summary>
+    internal static T RequireType<T>(object? value, string what) where T : class
     {
-        object? value = ReadObject();
         if (value is not T typed)
         {
             throw new ContentLoadException(
-                $"Corrupt .xnb file: expected an object of type {typeof(T).Name}, but read {value?.GetType().Name ?? "null"}.");
+                $"Corrupt .xnb file: expected {what} to be {typeof(T).Name}, but it was {value?.GetType().Name ?? "null"}.");
         }
 
         return typed;
