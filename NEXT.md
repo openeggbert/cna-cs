@@ -11,6 +11,28 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## First `/code-review high` pass, over the `CnjCompatModelBuilder` bone-hierarchy commit -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again yet again once more again)
+
+Ran the review over the compat bone-hierarchy commit (`2b4a176`). Clean
+-- zero findings on the first pass, a rarity this session (most features
+needed at least one real-finding pass first). Confirmed the new
+bone-linking logic is a structural match of the already-shipped, already
+-reviewed base path (`CnjModelBuilder.Build`) -- only comment wording and
+helper-call targets differ; confirmed the `ParentBoneIndex!.Value`
+null-forgiving assertion and the `bones[boneData.Parent]` indexing are
+both backed by real invariants `CnjModelReader` already enforces at
+parse time (not newly-introduced trust); confirmed the sole caller
+(`ContentManager.LoadCompatModel`) has no logic depending on the removed
+`ContentLoadException`, and no test asserted the old "reject bone
+hierarchy" behavior that would need updating.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 476/476 passing, unchanged. `samples/HelloGame` re-verified
+unaffected. This closes the `CnjCompatModelBuilder` bone-hierarchy
+follow-up's review cycle in a single pass -- landing clean immediately
+likely reflects how directly this ported an already-tested, already
+-reviewed control flow rather than writing new logic from scratch.
+
 ## `CnjCompatModelBuilder`'s own bone-hierarchy follow-up -- done, closing the last deferral from the `.cnj` bone-hierarchy feature (2026-08-17, session 6 continued autonomously past the `.cnj` bone-hierarchy review-cycle checkpoint, per explicit user selection of "Extend CnjCompatModelBuilder for bone hierarchy")
 
 Small, well-precedented, exactly the shape the checkpoint question
