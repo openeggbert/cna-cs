@@ -108,20 +108,35 @@ internal static class XnbModelBuilder
         return buffer;
     }
 
+    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data)
+    {
+        var effect = new BasicEffect(graphicsDevice);
+        ApplyBasicEffectData(effect, data);
+        return effect;
+    }
+
     /// <summary>Applies every field <see cref="XnbBasicEffectData"/> actually carries -- everything
     /// except <see cref="XnbBasicEffectData.TextureReference"/>, which stays unresolved (see that
     /// type's own doc comment for why: resolving it needs <c>ContentManager.Load&lt;Texture2D&gt;()</c>,
     /// itself native-ABI-blocked). <see cref="BasicEffect.TextureEnabled"/> is left at its default
     /// (<see langword="false"/>) rather than set <see langword="true"/> with no actual texture,
     /// which would be a real, misleading divergence from the source asset -- not a full
-    /// reproduction of it, but an honest one.</summary>
-    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data) => new(graphicsDevice)
+    /// reproduction of it, but an honest one. <c>internal</c> (a code-review finding), so
+    /// <c>CNA.XnaCompat</c>'s own model builder can apply the same fields to a compat-typed
+    /// <see cref="BasicEffect"/> too (compat <c>BasicEffect</c> subclasses this one directly, so it
+    /// upcasts fine as this method's parameter) -- unlike <c>BuildVertexBuffer</c>/
+    /// <c>BuildIndexBuffer</c>, whose *constructor* signatures genuinely differ across the compat
+    /// boundary (a different <c>VertexDeclaration</c>/enum type each), this field-assignment logic
+    /// has no such difference, so there was no reason to accept the duplication here the way the
+    /// rest of this class's own doc comment explains for the bigger, genuinely-irreducible
+    /// duplication in <see cref="Build"/> itself.</summary>
+    internal static void ApplyBasicEffectData(BasicEffect effect, XnbBasicEffectData data)
     {
-        DiffuseColor = data.DiffuseColor,
-        EmissiveColor = data.EmissiveColor,
-        SpecularColor = data.SpecularColor,
-        SpecularPower = data.SpecularPower,
-        Alpha = data.Alpha,
-        VertexColorEnabled = data.VertexColorEnabled,
-    };
+        effect.DiffuseColor = data.DiffuseColor;
+        effect.EmissiveColor = data.EmissiveColor;
+        effect.SpecularColor = data.SpecularColor;
+        effect.SpecularPower = data.SpecularPower;
+        effect.Alpha = data.Alpha;
+        effect.VertexColorEnabled = data.VertexColorEnabled;
+    }
 }

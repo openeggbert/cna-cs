@@ -33,6 +33,17 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// `foreach` consumption of <c>Effects</c> still works correctly either way (compat <c>BasicEffect</c>
 /// instances added to it upcast fine), same "only an explicit type declaration fails" shape as
 /// every other narrow gap in this compat layer.
+///
+/// The constructor's own <c>new List&lt;ModelMeshPart&gt;(parts)</c> copy is a second allocation on
+/// top of the base constructor's own internal list (built from the same <c>parts</c> argument via
+/// the <c>base(...)</c> call just above it) -- a code-review finding, deliberately left as is:
+/// this is the exact same shape of cost <see cref="Model"/>'s own constructor already accepts for
+/// <c>Bones</c>/<c>Meshes</c> (an unavoidable consequence of "independently-tracked, compat-typed
+/// collection built from a single construction seam" needing its own storage separate from the
+/// base class's own, unreviewed-as-an-issue there across three separate review passes), and unlike
+/// <see cref="Model"/>'s own <c>CopyAbsoluteBoneTransformsTo</c>/etc. (a real, hot, per-frame-call
+/// allocation this session did fix), this one happens once per mesh, at load time, not once per
+/// frame.
 /// </summary>
 public sealed class ModelMesh : CNA.Graphics.ModelMesh
 {

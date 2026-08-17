@@ -110,20 +110,18 @@ internal static class XnbCompatModelBuilder
         return buffer;
     }
 
-    /// <summary>Same rationale as <c>CNA.Content.Xnb.XnbModelBuilder.BuildBasicEffect</c>'s own doc
-    /// comment (every parsed field applied except the unresolved texture reference) -- constructs a
-    /// compat-typed <see cref="BasicEffect"/> here instead of a base-typed one, since
-    /// <see cref="ModelMeshPart"/>'s constructor (unlike its <c>Effect</c> property) is not the
-    /// documented gap.</summary>
-    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data) => new(graphicsDevice)
+    /// <summary>Constructs a compat-typed <see cref="BasicEffect"/> (since <see cref="ModelMeshPart"/>'s
+    /// constructor, unlike its <c>Effect</c> property, is not the documented gap), but reuses
+    /// <c>CNA.Content.Xnb.XnbModelBuilder.ApplyBasicEffectData</c> directly for the field-assignment
+    /// logic itself (a code-review finding: the two used to duplicate that logic field-by-field,
+    /// with nothing actually compat-specific about it -- compat <see cref="BasicEffect"/> subclasses
+    /// the base one directly, so it upcasts fine as that method's parameter).</summary>
+    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data)
     {
-        DiffuseColor = data.DiffuseColor,
-        EmissiveColor = data.EmissiveColor,
-        SpecularColor = data.SpecularColor,
-        SpecularPower = data.SpecularPower,
-        Alpha = data.Alpha,
-        VertexColorEnabled = data.VertexColorEnabled,
-    };
+        var effect = new BasicEffect(graphicsDevice);
+        XnbModelBuilder.ApplyBasicEffectData(effect, data);
+        return effect;
+    }
 
     /// <summary>Converts a base <see cref="CNA.Graphics.VertexDeclaration"/> (all
     /// <c>CNA.Content.Xnb</c> ever produces, since that namespace has no knowledge of

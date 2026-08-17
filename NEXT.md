@@ -30,6 +30,52 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## Twenty-seventh `/code-review high` pass, over the `ModelMeshPart` compat mirror commit -- one real duplication fixed, one documented against an already-accepted precedent (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more)
+
+Ran the review over the `ModelMeshPart` compat mirror commit (`7dc449d`).
+Two findings, handled differently on purpose:
+
+- **Fixed, because it turned out genuinely eliminable, unlike the bigger
+  duplication this same file's own doc comment already accepts:**
+  `XnbCompatModelBuilder.BuildBasicEffect` duplicated
+  `XnbModelBuilder.BuildBasicEffect`'s field-by-field assignment logic.
+  Checked whether this was the same "irreducible, structurally forced"
+  duplication already accepted for the whole `Build` method and for
+  `BuildVertexBuffer`/`BuildIndexBuffer` (both of which construct a
+  different concrete type *with a different constructor signature* across
+  the compat boundary -- a real `VertexDeclaration`/enum type difference,
+  not just a difference in which subclass gets instantiated) -- it isn't:
+  compat `BasicEffect` subclasses the base one *directly*, so a shared
+  `ApplyBasicEffectData(BasicEffect effect, XnbBasicEffectData data)`
+  method (now `internal` on the base `XnbModelBuilder`) works for both,
+  since a compat-typed effect instance upcasts fine as its parameter.
+  Extracted it; both builders now only duplicate the one line that
+  genuinely has to differ (which concrete type to `new` up).
+- **Documented, not fixed, matching a pattern this session already
+  accepted three review passes ago without it being flagged as an
+  issue:** the compat `ModelMesh` constructor allocates a second
+  `List<ModelMeshPart>`/`ModelMeshPartCollection` on top of the one the
+  base constructor already built from the same `parts` argument. This is
+  the *exact* same shape of cost `Model`'s own constructor already pays
+  for `Bones`/`Meshes` (an unavoidable consequence of "an independently-
+  tracked, compat-typed collection needs its own storage, separate from
+  the base class's own" -- inherent to the whole design, not specific to
+  this commit), and unlike `Model.CopyAbsoluteBoneTransformsTo`'s own
+  real, hot, per-*frame* allocation bug (fixed in an earlier pass), this
+  one happens once per mesh, at load time -- a real but proportionate,
+  structurally-inherent cost, not a bug. Documented directly in the
+  constructor's own doc comment for the same reason every other accepted
+  trade-off this session gets documented: so a future reader (or review
+  pass) doesn't have to re-derive the reasoning from scratch.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings (fixed
+one more class-level-doc-comment `paramref` warning along the way, the
+same recurring "no such parameter at class scope" pattern as earlier
+passes); `dotnet test`: 401/401 passing, unchanged (pure refactor/doc
+change, existing tests already cover the shared `ApplyBasicEffectData`
+method's behavior via both builders' own call sites). `samples/HelloGame`
+re-verified unaffected.
+
 ## `ModelMeshPart`/`ModelMeshPartCollection` compat mirror -- done; `ModelEffectCollection` stays a documented gap after a deeper look showed it isn't safely fixable (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Mirror ModelMeshPart and its collections")
 
 Closed the last item on the `Model` compat mirror's own "deliberately
