@@ -238,26 +238,26 @@ public class CnjModelReaderTests
         Assert.Equal(Path.Combine(AssetsDirectory, "quad_verts.bin"), mesh.Effect.TextureReference);
     }
 
-    [Fact]
-    public void Read_SidecarBytesNotWholeNumberOfElements_TruncatesRatherThanOverrunning()
+    [Theory]
+    [InlineData("truncated_verts.bin", "quad_idx.bin")] // vertex sidecar short by a few bytes
+    [InlineData("quad_verts.bin", "truncated_idx.bin")] // index sidecar short by a few bytes
+    public void Read_SidecarBytesNotWholeNumberOfElements_ThrowsContentLoadException(string verticesFile, string indicesFile)
     {
-        // Regression test (code review finding): XnbVertexBufferData/XnbIndexBufferData's own
-        // documented invariant is Data.Length == count * (stride|indexSize) exactly -- previously,
-        // a sidecar file whose byte length wasn't an exact multiple of that carried its trailing
-        // partial-element remainder straight through, which would later overrun the native buffer
-        // VertexBuffer/IndexBuffer.SetData uploads into (sized for the truncated count).
-        const string json = """
+        // Regression test (code review finding, in two rounds): XnbVertexBufferData/
+        // XnbIndexBufferData's own documented invariant is Data.Length == count * (stride|indexSize)
+        // exactly. A first fix silently truncated a sidecar file whose byte length wasn't an exact
+        // multiple of that to avoid overrunning the native buffer VertexBuffer/IndexBuffer.SetData
+        // uploads into -- but a follow-up review finding pointed out that silently dropping real
+        // geometry with no diagnostic is inconsistent with this reader's own "detect and throw"
+        // discipline and with XnbIndexBufferReader's own identical precedent for the .xnb path,
+        // which throws instead. Rejecting outright, as this test now confirms.
+        string json = $$"""
             {"cnjVersion":1,"type":"Model","meshes":[
-                {"name":"M","vertices":"truncated_verts.bin","indices":"truncated_idx.bin","vertexStride":32}
+                {"name":"M","vertices":"{{verticesFile}}","indices":"{{indicesFile}}","vertexStride":32}
             ]}
             """;
 
-        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
-
-        CnjMeshData mesh = Assert.Single(data.Meshes);
-        Assert.Equal(1, mesh.VertexBuffer.VertexCount);
-        Assert.Equal(32, mesh.VertexBuffer.Data.Length); // 40-byte file truncated to one whole vertex
-        Assert.Equal(6, mesh.IndexBuffer.Data.Length); // 7-byte file truncated to three whole 16-bit indices
+        Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
     }
 
     [Fact]
@@ -269,6 +269,21 @@ public class CnjModelReaderTests
         const string json = """{"cnjVersion":1,"type":"Model","bones":{"name":"Root"},"meshes":[]}""";
 
         Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
+    }
+
+    [Fact]
+    public void Read_NullBonesField_IsTreatedSameAsAbsent()
+    {
+        // Regression test (code review finding): the fix above for a non-array "bones" field
+        // over-rejected the JSON literal null too -- a common "always emit optional keys" authoring
+        // convention some serializers use instead of omitting the key entirely. null must stay
+        // equivalent to "absent" (silently ignored), distinct from a genuinely wrong-typed value
+        // like an object or a number.
+        const string json = """{"cnjVersion":1,"type":"Model","bones":null,"meshes":[]}""";
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Empty(data.Meshes);
     }
 
     [Fact]

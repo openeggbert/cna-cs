@@ -915,12 +915,19 @@ Split by whether the type needs the (still nonexistent) native ABI:
       `.xnb` path's own "narrow reader/builder split first, compat
       mirror as a distinct, separately-reviewed follow-up" cadence.
       Verified: `dotnet build` clean across all 6 projects, 0 warnings;
-      `dotnet test`: 457/457 passing (up from 413 — 44 new tests, all
+      `dotnet test`: 459/459 passing (up from 413 — 46 new tests, all
       for `CnjModelReader`/`CnjPathContainment`, reachable without a
       real `cna-native` the same way `XnbModelReaderTests` already is;
-      includes a follow-up `/code-review high` pass that fixed a real
-      vertex/index sidecar byte-truncation gap, a path-containment
-      false-rejection bug, and a malformed-`"bones"`-field gap — see
+      includes two follow-up `/code-review high` passes that fixed a
+      real vertex/index sidecar byte-overrun gap (a first attempt
+      silently truncated instead of rejecting -- a second pass caught
+      that as inconsistent with this reader's own "detect and throw"
+      discipline, fixed to reject instead, matching `XnbIndexBufferReader`'s
+      own precedent exactly; `XnbVertexBufferData`/`XnbIndexBufferData`'s
+      own invariant is now also enforced structurally in their
+      constructors, not just documented), a path-containment
+      false-rejection bug, a malformed-`"bones"`-field gap, and an
+      over-rejection of `"bones": null` the first fix introduced — see
       `NEXT.md`). `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own bone-hierarchy/skinning/PBR/morph-target `.cnj`

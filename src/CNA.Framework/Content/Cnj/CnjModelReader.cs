@@ -120,8 +120,11 @@ internal static class CnjModelReader
         // a *present* "bones" field that isn't a JSON array at all (an author mistake, e.g. an
         // object or a number) was previously treated as "no bones" instead of being rejected --
         // diverging from every other malformed-field case in this reader, which throws rather than
-        // silently ignoring.
-        if (root.TryGetProperty("bones", out JsonElement bonesElement))
+        // silently ignoring. JSON null is deliberately treated the same as "absent," not as
+        // malformed -- a second code-review finding caught the first fix over-rejecting
+        // "bones": null, which some JSON authoring conventions emit for every unset optional field
+        // rather than omitting the key entirely.
+        if (root.TryGetProperty("bones", out JsonElement bonesElement) && bonesElement.ValueKind != JsonValueKind.Null)
         {
             if (bonesElement.ValueKind != JsonValueKind.Array)
             {
@@ -194,24 +197,16 @@ internal static class CnjModelReader
         byte[] vertexBytes = ReadSidecarBytes(verticesPath, assetName, name, "vertices");
         byte[] indexBytes = ReadSidecarBytes(indicesPath, assetName, name, "indices");
 
-        // Truncate to a whole number of vertices/indices before reuse -- vertexCount/indexCount
-        // below are already computed by integer division (matching the real engine's own "file
-        // byte length is the sole source of truth" convention), but XnbVertexBufferData/
-        // XnbIndexBufferData's own documented invariant (see XnbVertexBufferReader.cs) is
-        // Data.Length == count * stride exactly. A code-review finding caught this: unlike the
-        // .xnb path (which reads exactly that many bytes off the stream to begin with), this
-        // path reads a sidecar file's *entire* raw contents, so a corrupt/careless file whose
-        // length isn't an exact multiple of the stride/index size would otherwise carry a
-        // trailing partial-element remainder straight through to VertexBuffer/IndexBuffer.SetData,
-        // which uploads the array's full length -- overrunning a native buffer sized for the
-        // truncated count.
-        int vertexCount = vertexBytes.Length / stride;
-        int vertexByteLength = vertexCount * stride;
-        if (vertexByteLength != vertexBytes.Length)
-        {
-            vertexBytes = vertexBytes[..vertexByteLength];
-        }
-
+        // Reject (never silently truncate) a sidecar file whose byte length isn't a whole number of
+        // elements -- XnbVertexBufferData/XnbIndexBufferData's own documented invariant (see
+        // XnbVertexBufferReader.cs) is Data.Length == count * elementSize exactly, and this is the
+        // exact same "size not a whole number of elements" corrupt-input case
+        // XnbIndexBufferReader.cs already rejects for the .xnb path, for the identical reason: a
+        // truncating caller here would otherwise silently drop real geometry with no diagnostic
+        // (a first attempt at this fix truncated rather than threw -- a code-review finding caught
+        // that as a quieter, less honest failure mode than every other corrupt-input case in this
+        // reader, which all throw a clear ContentLoadException instead).
+        int vertexCount = RequireWholeNumberOfElements(vertexBytes.Length, stride, assetName, name, "vertices");
         var vertexBufferData = new XnbVertexBufferData(declaration, vertexCount, vertexBytes);
 
         // Matches the same XNA-standard ModelProcessor convention already documented for the .xnb
@@ -219,13 +214,7 @@ internal static class CnjModelReader
         // requires thirty-two-bit ones -- there is no separate flag for this in the file either.
         bool use32BitIndices = vertexCount > 65535;
         int indexSize = use32BitIndices ? 4 : 2;
-        int indexCount = indexBytes.Length / indexSize;
-        int indexByteLength = indexCount * indexSize;
-        if (indexByteLength != indexBytes.Length)
-        {
-            indexBytes = indexBytes[..indexByteLength];
-        }
-
+        int indexCount = RequireWholeNumberOfElements(indexBytes.Length, indexSize, assetName, name, "indices");
         int primitiveCount = indexCount / 3;
         var indexBufferData = new XnbIndexBufferData(!use32BitIndices, indexBytes);
 
@@ -262,6 +251,20 @@ internal static class CnjModelReader
             throw new ContentLoadException(
                 $"'{assetName}.cnj' mesh '{meshName}' field '{field}' references a sidecar file that could not be read: '{path}'.", ex);
         }
+    }
+
+    /// <summary>Shared by both the vertex and index sidecar checks -- a code-review finding flagged
+    /// the two near-duplicate inline checks this replaced as a drift risk (a future edit fixing one
+    /// call site could easily miss the other). Returns the element count on success.</summary>
+    private static int RequireWholeNumberOfElements(int totalBytes, int elementSize, string assetName, string meshName, string field)
+    {
+        if (totalBytes % elementSize != 0)
+        {
+            throw new ContentLoadException(
+                $"'{assetName}.cnj' mesh '{meshName}' field '{field}' has a size ({totalBytes} bytes) that is not a whole number of {elementSize}-byte elements.");
+        }
+
+        return totalBytes / elementSize;
     }
 
     private static string? GetString(JsonElement element, string propertyName)

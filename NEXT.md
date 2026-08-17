@@ -11,6 +11,62 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Second `/code-review high` pass, over the first pass's own fix -- four more findings, all real, all fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more)
+
+Ran the review over the first fix commit (`f3015ef`). Four findings, all
+real:
+
+- **Real, confirmed, the standout of this pass:** the first fix's own
+  truncation approach was itself wrong -- silently truncating a
+  vertex/index sidecar file whose byte length wasn't an exact multiple
+  of the stride/index size (rather than rejecting it) hides real content
+  corruption with no diagnostic, and directly contradicts both this
+  reader's own established "detect and throw a clear exception, never
+  silently mis-load" discipline (every other malformed-field case in
+  this same reader throws) *and* `XnbIndexBufferReader`'s own identical
+  precedent for the .xnb path, which throws
+  (`"Corrupt .xnb file: index buffer size {size} is not a whole number
+  of {elementSize}-byte indices."`) rather than truncating. Fixed by
+  switching both checks to reject with a `ContentLoadException`, and
+  extracted the now-shared "reject if not a whole number of elements"
+  logic into one helper (`RequireWholeNumberOfElements`) used by both
+  the vertex and index sidecar checks -- also directly resolves a third
+  finding this same pass raised about the two near-duplicate truncation
+  blocks being a drift risk.
+- **Real, confirmed:** the "bones" fix from the first pass over-corrected
+  -- `"bones": null` (a JSON authoring convention some serializers use
+  for every unset optional field, instead of omitting the key) now threw
+  `ContentLoadException` as if it were a genuinely malformed value like
+  an object or a number, a real behavior regression from the original
+  code (which silently treated *any* non-array value, including null, as
+  "no bones"). Fixed by special-casing `JsonValueKind.Null` to be
+  treated the same as "absent" -- only a present, non-null, non-array
+  value now throws.
+- **Real, confirmed, a genuine structural improvement, not just a
+  cosmetic one:** `XnbVertexBufferData`/`XnbIndexBufferData`'s own
+  "`Data.Length` is always a whole multiple of the element size"
+  invariant (referenced by this feature's own new doc comments) was only
+  ever informally upheld by each caller -- the shared type's constructor
+  itself performed no validation, so any future caller (a refactor of
+  the existing `.xnb`/`.cnj` call sites, or a third format added later)
+  could silently reintroduce the exact buffer-overrun bug this whole
+  review cycle has been fixing. Fixed by validating the invariant inside
+  both constructors themselves (`XnbBufferData.cs`) -- `XnbVertexBufferData`
+  checks `Data.Length == VertexCount * VertexStride` exactly,
+  `XnbIndexBufferData` checks `Data.Length % elementSize == 0` -- so the
+  class of bug is now structurally impossible regardless of caller
+  discipline, not just documented. Confirmed both existing call sites
+  (`XnbVertexBufferReader`/`XnbIndexBufferReader`) already satisfy this
+  trivially (they read exactly the right number of bytes to begin with),
+  so this is a pure safety net, not a behavior change for the `.xnb`
+  path.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 459/459 passing (up from 457 -- the truncation regression test was
+rewritten to assert the new throw-based behavior instead of the old
+truncate-based one, and one new test covers `"bones": null` explicitly).
+`samples/HelloGame` re-verified unaffected.
+
 ## First `/code-review high` pass, over the `.cnj` Model reader commit -- three real findings, all fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more)
 
 Ran the review over the `.cnj` reader commit (`63f157d`). Three findings,
