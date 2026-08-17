@@ -102,7 +102,11 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     meshes/vertex-and-index-buffer data (CNA.Content.Xnb) -- zero native
     ABI, pure C#/BCL logic, confirmed byte-for-byte against a real
     MonoGame-compiled fixture (see below for why only the final
-    VertexBuffer/IndexBuffer construction step is blocked)
+    VertexBuffer/IndexBuffer construction step is blocked).
+    VisualizationData's own construction (two 256-element float[] arrays,
+    all-zero until MediaPlayer.GetVisualizationData populates them) --
+    zero native ABI, pure managed data (see below for why populating them
+    is still blocked)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -120,15 +124,22 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     -- and by extension Model.Draw()/ModelMesh.Draw(), since drawing a
     mesh part means calling the effect's Apply() partway through,
     MediaPlayer.Play/Pause/Resume/Stop (six new cna_mediaplayer_* natives,
-    shaped to match the real C++ engine's own MediaPlayer over SDL3_mixer)
+    shaped to match the real C++ engine's own MediaPlayer over SDL3_mixer),
+    MediaPlayer.IsVisualizationEnabled/GetVisualizationData (two more new
+    cna_mediaplayer_* natives -- the real FFT/ring-buffer capture work
+    lives entirely in native code, matching a real, working, unusually
+    well-engineered implementation the real C++ engine already has, see
+    below)
 
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
     Model's own .cnj/glTF content paths and LZX/LZ4-compressed .xnb files
     (see below for why only real, uncompressed .xnb was in scope),
-    MediaPlayer's visualization data (GetVisualizationData) -- none of
-    these are blocked on the native ABI, each its own substantial
-    separable feature
+    ModelMeshPart's own ModelEffectCollection/ModelMesh.Effects compat gap
+    (a real, permanent structural limitation, not a temporary scope cut --
+    see plan.md Phase 4 for why) -- neither is blocked on the native ABI,
+    each its own substantial separable feature (or, for
+    ModelEffectCollection, structurally unfixable)
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -171,6 +182,16 @@ against `modules/media/`'s own working implementation the same way
 implementation's much larger surface (see the "Not started at all" list
 above) -- and, unlike `Model`, `Song` *does* have a full `CNA.XnaCompat`
 mirror, since its construction has no equivalent blocker.
+`MediaPlayer`'s own visualization data (`IsVisualizationEnabled`/
+`GetVisualizationData`/`VisualizationData`) is grounded the same way, but
+turned out the best-case outcome of any deferred feature this session
+researched: a real, working, *dependency-free* implementation (a
+from-scratch 512-point FFT over a lock-free ring buffer fed from
+SDL3_mixer's own post-mix callback) rather than something partial or
+infrastructure-blocked -- see `NEXT.md` for the full detail. Has a full
+`CNA.XnaCompat` mirror too, and a trivial one: `VisualizationData`
+references no other `CNA` type at all, so the compat type is an empty
+subclass.
 `MediaPlayer.Queue` is the one part of this whole feature *without* a
 compat mirror, for a different, more structural reason than `Model`'s:
 `LoadSong` always constructs a base `CNA.Media.Song` internally, and

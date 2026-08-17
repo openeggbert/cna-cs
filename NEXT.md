@@ -30,6 +30,87 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## `MediaPlayer.GetVisualizationData`/`IsVisualizationEnabled`/`VisualizationData` -- done, the most pleasant scoping surprise of the whole session (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Start MediaPlayer visualization data")
+
+Picked this up as the last item on this session's own Phase 4 follow-up
+list. This project's own docs had described it, unresearched, multiple
+times this session as "scoped out because it's its own substantial,
+separable feature, not because anything is missing upstream" -- true
+wording, but never actually verified against the real source until a
+dedicated research pass did exactly that before any code was written
+(this session's own standing discipline, applied here too).
+
+**The research finding was the best-case outcome this session has hit
+for any deferred feature: not just "a real implementation exists" (true
+of `Play`/`Pause`/`Resume`/`Stop` too) but "a real, working, and
+unusually well-engineered implementation exists, entirely self-contained,
+needing no external dependency at all."** Confirmed at
+`modules/media/src/Internal/VisualizationCapture.cpp`/`VisualizationFFT.cpp`
+and `modules/media/src/Xna/VisualizationData.cpp`, all tickets
+(`MEDIA-186` through `MEDIA-189`, plus a later race-condition fix from
+external review, `MEDIA-216`) checked complete in the real engine's own
+`plan_media.md`:
+
+- `VisualizationData`: two `std::array<float, 256>` fields
+  (`freq`/`samp`) plus a `Size = 256` constant -- matches real XNA's own
+  `Frequencies`/`Samples` shape exactly.
+- `VisualizationCapture`: a lock-free single-producer/single-consumer
+  ring buffer (2048 capacity, `std::atomic<float>` with
+  `memory_order_relaxed`), fed from SDL3_mixer's own `Mix_SetPostMixCallback`
+  -- installed/removed only while visualization is enabled, so it's
+  genuinely zero-cost when unused, not just disabled-but-still-running.
+- `VisualizationFFT`: a from-scratch, dependency-free 512-point radix-2
+  FFT, Hann-windowed, magnitude-normalized -- the real engine's own
+  authors deliberately decided 256 bins didn't justify pulling in a real
+  DSP library dependency.
+- `GetVisualizationData` reads the most recent 256 captured samples and
+  runs the FFT into `freq`; both arrays stay all-zero when visualization
+  is disabled or nothing's been captured yet -- a real, documented
+  fallback already in the real engine's own code, not invented here.
+
+**Since all of the actual DSP work (ring buffer, FFT) lives entirely in
+native code, this followed the exact same "build against the ABI shape a
+real implementation already has" methodology as `Play`/`Pause`/`Resume`/
+`Stop`** -- two new `cna_mediaplayer_*` native functions:
+`cna_mediaplayer_set_visualization_enabled(byte enabled)` and
+`cna_mediaplayer_get_visualization_data(float* frequencies, float*
+samples, int count)`, the latter using plain raw pointers rather than a
+bundled snapshot struct, matching `cna_vertexbuffer_set_data`/`get_data`'s
+own "explicit buffer, not a collection" convention for bulk binary data
+rather than inventing a new pattern for exactly two fixed-256 arrays.
+
+**`IsVisualizationEnabled` needed a real native call either way it's
+set** -- a genuine difference from `Volume`/`IsMuted` (which the real
+engine tracks in plain C++ state, no native round trip needed at all):
+toggling installs/removes the real post-mix callback, a real, meaningful
+side effect deliberately avoided while disabled. The *value* still gets
+cached in C# after a successful call though, matching `Volume`/`IsMuted`'s
+own "call native on write, read the cache on read" shape -- no reason to
+round-trip to native just to read back what this project's own last
+successful call already told it.
+
+**`VisualizationData`'s own compat mirror turned out completely trivial**
+-- `Frequencies`/`Samples` are plain `float[]`, referencing no other
+`CNA` type at all, so there's no compat-type-crossing concern anywhere in
+it. `Microsoft.Xna.Framework.Media.VisualizationData` is a fully empty
+subclass (the same "trivial subclass" shape `ModelMeshPart`'s own compat
+mirror established this session), and compat
+`MediaPlayer.GetVisualizationData` forwards directly with zero
+conversion -- a compat-typed `VisualizationData` already *is* a
+`CNA.Media.VisualizationData`, so it upcasts as the base method's
+parameter with nothing to diverge.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 413/413 passing (up from 401 -- 12 new tests: `VisualizationData`
+construction/`Size` in both `CNA.Framework.Tests` and
+`CNA.XnaCompat.Tests` -- fully native-free, unlike almost everything else
+`MediaPlayer`-adjacent -- plus `IsVisualizationEnabled`'s default-false
+getter and `GetVisualizationData`'s null-argument validation in both
+projects, the same "validation-failure paths are testable even when the
+type as a whole can't be" pattern the rest of `MediaPlayerTests`/
+`MediaPlayerCompatTests` already establish). `samples/HelloGame`
+re-verified unaffected.
+
 ## Twenty-eighth `/code-review high` pass, over the twenty-seventh pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still)
 
 Ran the review over the twenty-seventh pass's own extract-method fix

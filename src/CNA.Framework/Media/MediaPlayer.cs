@@ -11,10 +11,13 @@ namespace CNA.Media;
 /// <see cref="MovePrevious"/>/<see cref="Update"/>'s logic is reproduced from its actual
 /// <c>Play</c>/<c>PlaySong</c>/<c>NextSong</c>/<c>Update</c>, not invented.
 ///
-/// Still deliberately scoped down from that implementation's full surface: no visualization data
-/// capture, no <c>Album</c>/<c>Artist</c>/<c>Genre</c>/<c>MediaLibrary</c> scanning subsystem (see
-/// <c>Song</c>'s own doc comment) -- both need real infrastructure this project has no equivalent
-/// for and real XNA games overwhelmingly don't touch for simple background-music playback.
+/// Visualization data capture (<see cref="IsVisualizationEnabled"/>/<see cref="GetVisualizationData"/>)
+/// is also now real, not scoped out -- see <see cref="VisualizationData"/>'s own doc comment for
+/// why this turned out to be genuinely portable, unlike the <c>Album</c>/<c>Artist</c>/<c>Genre</c>/
+/// <c>MediaLibrary</c> scanning subsystem (see <c>Song</c>'s own doc comment), which stays
+/// deliberately scoped out: that one needs real infrastructure this project has no equivalent for,
+/// and real XNA games overwhelmingly don't touch it for simple background-music playback either
+/// way.
 ///
 /// <see cref="State"/>/<see cref="Volume"/>/<see cref="IsMuted"/>/<see cref="PlayPosition"/>/
 /// <see cref="Queue"/> are plain C# static state, not native queries -- matches the real C++
@@ -82,6 +85,27 @@ public static class MediaPlayer
     public static bool IsRepeating { get; set; }
 
     public static bool IsShuffled { get; set; }
+
+    private static bool _isVisualizationEnabled;
+
+    /// <summary>Toggling this makes a real native call either way -- unlike
+    /// <see cref="Volume"/>/<see cref="IsMuted"/>, which the real engine tracks in plain state, this
+    /// installs/removes a real SDL3_mixer post-mix callback (see <see cref="VisualizationData"/>'s
+    /// own doc comment), a genuine side effect with a real cost, deliberately avoided entirely while
+    /// disabled. The flag itself is still cached in C# afterward, matching <see cref="Volume"/>/
+    /// <see cref="IsMuted"/>'s own "call native on write, read the cache on read" shape -- there's
+    /// no need to round-trip to native just to read back a value this call already told this
+    /// project what it set it to.</summary>
+    public static bool IsVisualizationEnabled
+    {
+        get => _isVisualizationEnabled;
+        set
+        {
+            CnaResult result = Native.cna_mediaplayer_set_visualization_enabled(value ? (byte)1 : (byte)0);
+            CnaException.ThrowIfFailed(result, nameof(IsVisualizationEnabled));
+            _isVisualizationEnabled = value;
+        }
+    }
 
     public static TimeSpan PlayPosition => Timer.Elapsed;
 
@@ -332,6 +356,26 @@ public static class MediaPlayer
         {
             State = value;
             MediaStateChanged?.Invoke(null, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Populates <paramref name="data"/>'s own <see cref="VisualizationData.Frequencies"/>/
+    /// <see cref="VisualizationData.Samples"/> arrays in place -- unlike everything else in this
+    /// class, this always makes a real native call (the FFT itself runs entirely in native code;
+    /// see <see cref="VisualizationData"/>'s own doc comment), regardless of
+    /// <see cref="IsVisualizationEnabled"/>'s value -- the real engine's own
+    /// <c>GetVisualizationData</c> is safe to call either way, writing all-zero data rather than
+    /// throwing when disabled or when nothing has been captured yet, so this doesn't guard on the
+    /// flag itself either.</summary>
+    public static unsafe void GetVisualizationData(VisualizationData data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        fixed (float* frequencies = data.Frequencies)
+        fixed (float* samples = data.Samples)
+        {
+            CnaResult result = Native.cna_mediaplayer_get_visualization_data(frequencies, samples, VisualizationData.Size);
+            CnaException.ThrowIfFailed(result, nameof(GetVisualizationData));
         }
     }
 }

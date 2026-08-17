@@ -89,13 +89,16 @@ drawing a `Model` end to end is still blocked on the same native ABI as
 everything else, even though the model/mesh/bone bookkeeping around it
 isn't. `MediaPlayer` straddles the same way: `State`/`Volume`/`IsMuted`/
 `PlayPosition` are plain C# static state needing no native call, but
-`Play`/`Pause`/`Resume`/`Stop` are native-backed. See
+`Play`/`Pause`/`Resume`/`Stop`/`IsVisualizationEnabled`/
+`GetVisualizationData` are native-backed — the latter two backed by a
+real, working, dependency-free FFT implementation already in the C++
+engine, not a stub. See
 [`plan.md`](plan.md) for the full phase-by-phase status and
 [`NEXT.md`](NEXT.md) for the session-by-session history of how it got here
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 401 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 413 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

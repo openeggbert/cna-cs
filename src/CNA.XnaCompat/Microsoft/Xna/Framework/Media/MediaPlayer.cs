@@ -93,4 +93,16 @@ public static class MediaPlayer
     public static void MoveNext() => CNA.Media.MediaPlayer.MoveNext();
 
     public static void MovePrevious() => CNA.Media.MediaPlayer.MovePrevious();
+
+    public static bool IsVisualizationEnabled
+    {
+        get => CNA.Media.MediaPlayer.IsVisualizationEnabled;
+        set => CNA.Media.MediaPlayer.IsVisualizationEnabled = value;
+    }
+
+    /// <summary>Forwards directly, no conversion needed: a compat-typed <paramref name="data"/>
+    /// already *is* a <c>CNA.Media.VisualizationData</c> (<see cref="VisualizationData"/> extends it
+    /// directly, with no members of its own -- see that type's own doc comment), so it upcasts as
+    /// this parameter with no seam for anything to diverge.</summary>
+    public static void GetVisualizationData(VisualizationData data) => CNA.Media.MediaPlayer.GetVisualizationData(data);
 }

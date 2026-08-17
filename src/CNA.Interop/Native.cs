@@ -409,4 +409,28 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_mediaplayer_set_muted(byte muted);
+
+    // Visualization capture/FFT (real openeggbert/cna implementation:
+    // modules/media/src/Internal/VisualizationCapture.cpp + VisualizationFFT.cpp) is real work done
+    // entirely in native code -- a lock-free ring buffer fed from SDL3_mixer's post-mix callback,
+    // and a from-scratch 512-point FFT over it -- so, unlike State/Volume/IsMuted above, this needs
+    // a real native round trip every call, no local C# cache possible for the data itself.
+    // IsVisualizationEnabled's own get/set split still matches State/Volume's pattern: the native
+    // call installs/removes the real post-mix callback (a real, meaningful side effect, avoided
+    // entirely when disabled), but the flag value itself is cached in C# afterward, matching
+    // Volume/IsMuted's own "call native on write, read the cache" shape.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mediaplayer_set_visualization_enabled(byte enabled);
+
+    /// <summary>
+    /// <paramref name="frequencies"/>/<paramref name="samples"/> are both exactly
+    /// <c>CNA.Media.VisualizationData.Size</c> (256) elements -- explicit raw pointers, not a
+    /// bundled snapshot struct, matching <c>cna_vertexbuffer_set_data</c>/<c>get_data</c>'s own
+    /// "explicit buffer, not a collection" convention for bulk binary data
+    /// (<c>analysis_binding_sharp_runtime.md</c> §40) rather than inventing a new pattern for
+    /// exactly two fixed-size arrays.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_mediaplayer_get_visualization_data(float* frequencies, float* samples, int count);
 }

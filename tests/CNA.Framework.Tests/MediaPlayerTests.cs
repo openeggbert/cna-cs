@@ -189,4 +189,21 @@ public class MediaPlayerTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void IsVisualizationEnabled_DefaultsFalse()
+    {
+        // The getter is a pure C# field read, no native call -- and since the setter (which does
+        // make a native call) can never succeed without a real cna-native, this can only ever
+        // observe the untouched default across this whole test run.
+        Assert.False(MediaPlayer.IsVisualizationEnabled);
+    }
+
+    [Fact]
+    public void GetVisualizationData_NullData_ThrowsArgumentNullException()
+    {
+        // Validated before the native call, same "validation-failure paths are testable even when
+        // the type as a whole can't be" pattern as the rest of this file.
+        Assert.Throws<ArgumentNullException>(() => MediaPlayer.GetVisualizationData(null!));
+    }
 }

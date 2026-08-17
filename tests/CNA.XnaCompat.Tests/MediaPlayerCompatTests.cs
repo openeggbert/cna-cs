@@ -62,4 +62,18 @@ public class MediaPlayerCompatTests
         XnaMediaPlayer.ActiveSongChanged += Handler;
         XnaMediaPlayer.ActiveSongChanged -= Handler;
     }
+
+    [Fact]
+    public void IsVisualizationEnabled_DefaultsFalse()
+    {
+        // Same reasoning as CNA.Tests.MediaPlayerTests's own copy of this test: the getter is a
+        // pure C# field read forwarded from the base class, no native call.
+        Assert.False(XnaMediaPlayer.IsVisualizationEnabled);
+    }
+
+    [Fact]
+    public void GetVisualizationData_NullData_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => XnaMediaPlayer.GetVisualizationData(null!));
+    }
 }

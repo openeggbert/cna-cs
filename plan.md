@@ -43,8 +43,14 @@ made safe the same way (constructed at field-initializer time inside the
 base `ModelMesh`, with no override seam at all, unlike everything else
 in this feature), so that one specific piece stays a real, documented,
 permanent gap, not a temporary scope cut -- see `NEXT.md` for the full
-design reasoning on all of this. What remains: Phase 6
-packaging/cross-platform validation, tracked below.
+design reasoning on all of this. `MediaPlayer.GetVisualizationData`/
+`IsVisualizationEnabled`/`VisualizationData` are also now done -- this
+one turned out to be the best-case scoping outcome of the whole session:
+the real C++ engine has a genuinely real, working, dependency-free FFT
+implementation for it (a from-scratch 512-point radix-2 FFT over a
+lock-free ring buffer fed from SDL3_mixer), not blocked or partial the
+way most of this session's deferred features turned out to be. What
+remains: Phase 6 packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -794,13 +800,50 @@ Split by whether the type needs the (still nonexistent) native ABI:
       only new type in this pass reachable from `CNA.XnaCompat.Tests`
       without a real `cna-native`). `samples/HelloGame` re-verified
       unaffected.
+- [x] **`MediaPlayer.GetVisualizationData`/`IsVisualizationEnabled`/
+      `VisualizationData` — done, 2026-08-17 (session 6 continued
+      autonomously past the `ModelMeshPart` checkpoint, per explicit user
+      selection of "Start MediaPlayer visualization data").** Research
+      first (this session's own standing discipline) found the best-case
+      outcome of the whole session: a real, working, dependency-free
+      implementation already exists in the real C++ engine
+      (`modules/media/src/Internal/VisualizationCapture.cpp`/
+      `VisualizationFFT.cpp` -- a lock-free ring buffer fed from
+      SDL3_mixer's post-mix callback, and a from-scratch 512-point
+      radix-2 FFT the real engine's own authors deliberately built rather
+      than pulling in a DSP dependency for 256 bins), all corresponding
+      tickets checked complete in the real engine's own `plan_media.md`.
+      Since the DSP work lives entirely in native code, this followed the
+      same "build against the ABI shape a real implementation already
+      has" methodology as `Play`/`Pause`/`Resume`/`Stop`: two new
+      `cna_mediaplayer_*` native functions, one to toggle the real
+      post-mix callback (`set_visualization_enabled`), one to read the
+      FFT result (`get_visualization_data`, plain raw `float*` pointers
+      matching `cna_vertexbuffer_set_data`/`get_data`'s own "explicit
+      buffer" convention). `IsVisualizationEnabled` needed a real native
+      call on write either way (unlike `Volume`/`IsMuted`, it installs/
+      removes a real callback), but still caches the value in C# for
+      reads, matching `Volume`/`IsMuted`'s own shape. `VisualizationData`'s
+      own `CNA.XnaCompat` mirror is fully trivial -- `Frequencies`/
+      `Samples` are plain `float[]` referencing no other `CNA` type at
+      all, so the compat type is an empty subclass and
+      `MediaPlayer.GetVisualizationData` forwards with zero conversion.
+      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
+      `dotnet test`: 413/413 passing (up from 401 — 12 new tests,
+      including full, native-free coverage of `VisualizationData`'s own
+      construction in both projects, a rarity for anything
+      `MediaPlayer`-adjacent). `samples/HelloGame` re-verified
+      unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths (see
-      the entries above); `MediaPlayer`'s visualization data
-      (`GetVisualizationData`, real-time FFT). Neither is blocked on the
-      native C ABI the way everything else in this phase is — they're
-      scoped out because each is its own substantial, separable feature,
-      not because anything is missing upstream to ground them against.
+      the `.xnb` loading entry above) and `ModelMeshPart`'s own
+      `ModelEffectCollection`/`ModelMesh.Effects` gap (see that entry
+      above, a real permanent gap, not deferred pending further work).
+      None of these are blocked on the native C ABI the way everything
+      else in this phase is — they're scoped out because each is its own
+      substantial, separable feature (or, for `ModelEffectCollection`,
+      structurally unfixable), not because anything is missing upstream
+      to ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 
