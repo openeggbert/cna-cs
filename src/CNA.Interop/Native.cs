@@ -160,12 +160,180 @@ internal static partial class Native
         int startIndex,
         int primitiveCount);
 
-    /// <summary>Pushes <see cref="CnaBasicEffectParams"/> as pending per-draw effect state for the
-    /// next <c>Draw*</c> call to use -- see that struct's own doc comment for the full grounding
-    /// (a reduced, faithfully-derived subset of the real C++ engine's internal
-    /// <c>GpuDrawParams</c>, not invented from nothing).</summary>
+    // -- Effect / BasicEffect (real ABI, effects.h -- step 8 of the native-ABI migration) -----
+    //
+    // The old cna_graphics_device_apply_basic_effect (a device-scoped "push these 33 fields as
+    // pending per-draw state" call) has no real equivalent at all. Real BasicEffect is a full
+    // native object: cna_basic_effect_create returns its own CNA_EffectHandle, every property is a
+    // real, immediate get/set round trip (not staged client-side state pushed once at Apply time
+    // the way the old design needed, since there was no native object to push it to before now),
+    // and cna_effect_apply(effect) selects it on its owning device. World/View/Projection route
+    // through the shared IEffectMatrices contract (cna_effect_matrices_*); fog through the shared
+    // IEffectFog contract (cna_effect_fog_*); ambient color and the three DirectionalLight members
+    // through the shared IEffectLights contract (cna_effect_lights_*) -- all three contracts are
+    // shared across every stock effect type, not BasicEffect-specific, matching this project's own
+    // IEffectMatrices/IEffectFog/IEffectLights interfaces exactly (confirmed against the real C++
+    // engine's own interfaces before this migration ever started). Only VertexColorEnabled/
+    // PreferPerPixelLighting/DiffuseColor/EmissiveColor/SpecularColor/SpecularPower/Alpha/
+    // TextureEnabled/Texture are BasicEffect-specific (cna_basic_effect_*).
+    //
+    // Each of the three DirectionalLight members is fetched via cna_effect_lights_get_directional_light
+    // into its own CNA_DirectionalLightHandle -- confirmed directly against BasicEffectSmoke.c that
+    // this handle is independently owned (it stays valid and usable even after the parent effect is
+    // destroyed) and must be released with its own cna_directional_light_destroy call, not freed
+    // implicitly with the effect. CNA.Graphics.BasicEffect fetches all three once, at construction,
+    // and destroys them in its own Dispose -- matching how it now needs to be IDisposable at all
+    // (the old design never allocated anything native until Apply(), so had nothing to dispose).
+
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_apply_basic_effect(CnaHandle device, in CnaBasicEffectParams effectParams);
+    internal static partial CnaResult cna_effect_destroy(CnaHandle effect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_apply(CnaHandle effect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_matrices_get_world(CnaHandle effect, out CnaMatrix outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_matrices_set_world(CnaHandle effect, CnaMatrix value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_matrices_get_view(CnaHandle effect, out CnaMatrix outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_matrices_set_view(CnaHandle effect, CnaMatrix value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_matrices_get_projection(CnaHandle effect, out CnaMatrix outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_matrices_set_projection(CnaHandle effect, CnaMatrix value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_get_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_set_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_get_enabled(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_set_enabled(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_get_start(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_set_start(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_get_end(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_fog_set_end(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_lights_get_ambient_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_lights_set_ambient_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_lights_get_directional_light(CnaHandle effect, uint index, out CnaHandle outLight);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_lights_get_enabled(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_lights_set_enabled(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_lights_enable_default(CnaHandle effect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_create(CnaHandle graphicsDevice, out CnaHandle effect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_vertex_color_enabled(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_vertex_color_enabled(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_prefer_per_pixel_lighting(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_prefer_per_pixel_lighting(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_diffuse_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_diffuse_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_emissive_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_emissive_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_specular_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_specular_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_specular_power(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_specular_power(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_alpha(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_alpha(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_texture_enabled(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_texture_enabled(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_get_texture(CnaHandle effect, out byte outHasTexture, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_basic_effect_set_texture(CnaHandle effect, CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_destroy(CnaHandle light);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_get_diffuse_color(CnaHandle light, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_set_diffuse_color(CnaHandle light, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_get_direction(CnaHandle light, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_set_direction(CnaHandle light, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_get_specular_color(CnaHandle light, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_set_specular_color(CnaHandle light, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_get_enabled(CnaHandle light, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_directional_light_set_enabled(CnaHandle light, byte value);
 
     // -- Texture2D (real ABI, graphics.h -- step 5 of the native-ABI migration) --------------
     //

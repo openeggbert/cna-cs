@@ -4,44 +4,109 @@ namespace CNA.Graphics;
 
 /// <summary>
 /// XNA's built-in general-purpose shader effect (per-vertex lighting, fog, texturing, vertex
-/// color). No ABI shape for any of this exists in the analysis docs, but this is unusually
-/// well-grounded for a self-designed surface: every property here, <see cref="EnableDefaultLighting"/>'s
-/// exact default light values, and <see cref="OnApply"/>'s parameter-computation algorithm are
-/// read directly from the real openeggbert/cna C++ engine's own
-/// <c>Microsoft::Xna::Framework::Graphics::BasicEffect</c> implementation (headers and
-/// <c>BasicEffect.cpp</c>'s <c>FillGpuDrawParams</c> method) -- not invented, not guessed. That
-/// implementation confirmed something important: constructing a <c>BasicEffect</c> and setting
-/// its properties needs **no native call at all** (matching <c>SpriteFont</c>'s own zero-ABI
-/// escape hatch) -- the real C++ constructor chain is pure object state, no renderer/GPU handle
-/// allocation happens until a draw call actually applies the effect. Only <see cref="OnApply"/>
-/// (via <see cref="Effect.Apply"/>) crosses into native code.
-///
-/// Deliberately not implemented, all real, separate follow-ups rather than gaps in this pass:
-/// 3D positional audio has no analog here, but the equivalent omissions are <c>Texture1</c>
-/// (<c>DualTextureEffect</c>-only), environment/cube mapping, skinning (bone transforms),
-/// PBR, and fresnel -- none of which <c>BasicEffect</c> itself uses; see
-/// <c>CnaBasicEffectParams</c>'s own doc comment for the full reduced-field-set reasoning.
+/// color). Now a real native object -- the real, shipped openeggbert/cna C API's own
+/// <c>cna_basic_effect_create</c> (<c>effects.h</c>) -- rather than the self-designed,
+/// zero-ABI-call, all-computed-in-managed-code design this project used before any real ABI
+/// existed (see <c>NEXT.md</c>'s native-ABI-migration entry, step 8, for what changed and why).
+/// Every property below is now a real, immediate native round trip: getting or setting
+/// <see cref="World"/>, <see cref="DiffuseColor"/>, and so on each cross the ABI on their own,
+/// rather than being cached in a plain C# field/property and pushed to native only once, inside
+/// <see cref="OnApply"/> -- matching the real ABI's own shape (every one of these is a real,
+/// separate <c>cna_*_get_*</c>/<c>_set_*</c> function pair), not a design choice this migration
+/// invented. <see cref="OnApply"/> itself is now trivial: <c>cna_effect_apply</c> and nothing else
+/// -- all of the derived-parameter math the old design needed
+/// (diffuse/emissive/specular/eye-position blending, the fog-vector derivation, the
+/// row-to-column-major matrix rewrite) is now native's own job, computed from whatever the
+/// properties below were last set to.
 ///
 /// Implements <see cref="IEffectMatrices"/>/<see cref="IEffectFog"/>/<see cref="IEffectLights"/>,
-/// same as the real C++ engine's own <c>BasicEffect</c> (confirmed against its header, not
-/// invented) -- <see cref="Model.Draw"/> is the reason <see cref="IEffectMatrices"/> exists at
-/// all in this project. <see cref="IEffectFog"/>/<see cref="IEffectLights"/>'s members already
-/// match this class's own property names/types exactly, so they're implicitly satisfied; only
-/// <see cref="IEffectMatrices"/> needs an explicit forwarding implementation, because
-/// <see cref="World"/>/<see cref="View"/>/<see cref="Projection"/> are public fields here (matching
-/// the real C++ engine's own field-not-property choice) and a field cannot satisfy an interface
-/// property directly in C# -- the real C++ engine hits the same shape mismatch against its own
-/// <c>IEffectMatrices</c> and resolves it the identical way, with explicit override methods
-/// wrapping the field.
+/// same as the real C++ engine's own <c>BasicEffect</c> -- <see cref="Model.Draw"/> is the reason
+/// <see cref="IEffectMatrices"/> exists at all in this project. <see cref="IEffectFog"/>/
+/// <see cref="IEffectLights"/>'s members already match this class's own property names/types
+/// exactly, so they're implicitly satisfied; only <see cref="IEffectMatrices"/> needs an explicit
+/// forwarding implementation, because <see cref="World"/>/<see cref="View"/>/<see cref="Projection"/>
+/// are properties here (fields, before this migration, matching the real C++ engine's own
+/// field-not-property choice -- no longer possible once each one needs to trigger a native call on
+/// every write) and the explicit interface members just forward to them.
 /// </summary>
 public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
+    private readonly CnaHandle _handle;
     private Texture2D? _texture;
+    private bool _disposed;
 
-    public Matrix World = Matrix.Identity;
-    public Matrix View = Matrix.Identity;
-    public Matrix Projection = Matrix.Identity;
-    public bool VertexColorEnabled;
+    public BasicEffect(GraphicsDevice graphicsDevice)
+        : base(graphicsDevice)
+    {
+        CnaResult result = Native.cna_basic_effect_create(graphicsDevice.ResolveNativeDeviceHandle(), out _handle);
+        CnaException.ThrowIfFailed(result, nameof(BasicEffect));
+
+        // Confirmed directly against BasicEffectSmoke.c: each of these three fetches an
+        // independently owned handle -- it survives even if the parent effect is destroyed first --
+        // so each needs its own destroy call, done in this class's own Dispose below, not left to
+        // be freed implicitly with the effect.
+        DirectionalLight0 = FetchDirectionalLight(0);
+        DirectionalLight1 = FetchDirectionalLight(1);
+        DirectionalLight2 = FetchDirectionalLight(2);
+    }
+
+    private DirectionalLight FetchDirectionalLight(uint index)
+    {
+        CnaResult result = Native.cna_effect_lights_get_directional_light(_handle, index, out CnaHandle light);
+        CnaException.ThrowIfFailed(result, nameof(BasicEffect));
+        return new DirectionalLight(light);
+    }
+
+    public DirectionalLight DirectionalLight0 { get; }
+
+    public DirectionalLight DirectionalLight1 { get; }
+
+    public DirectionalLight DirectionalLight2 { get; }
+
+    public Matrix World
+    {
+        get
+        {
+            CnaResult result = Native.cna_effect_matrices_get_world(_handle, out CnaMatrix value);
+            CnaException.ThrowIfFailed(result, nameof(World));
+            return Matrix.FromNative(value);
+        }
+        set
+        {
+            CnaResult result = Native.cna_effect_matrices_set_world(_handle, value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(World));
+        }
+    }
+
+    public Matrix View
+    {
+        get
+        {
+            CnaResult result = Native.cna_effect_matrices_get_view(_handle, out CnaMatrix value);
+            CnaException.ThrowIfFailed(result, nameof(View));
+            return Matrix.FromNative(value);
+        }
+        set
+        {
+            CnaResult result = Native.cna_effect_matrices_set_view(_handle, value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(View));
+        }
+    }
+
+    public Matrix Projection
+    {
+        get
+        {
+            CnaResult result = Native.cna_effect_matrices_get_projection(_handle, out CnaMatrix value);
+            CnaException.ThrowIfFailed(result, nameof(Projection));
+            return Matrix.FromNative(value);
+        }
+        set
+        {
+            CnaResult result = Native.cna_effect_matrices_set_projection(_handle, value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(Projection));
+        }
+    }
 
     Matrix IEffectMatrices.World
     {
@@ -61,214 +126,209 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
         set => Projection = value;
     }
 
-    public BasicEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+    public bool VertexColorEnabled
     {
-        // Matches the real C++ engine's own constructor exactly: only DirectionalLight0 starts
-        // enabled; DirectionalLight1/2 start disabled until EnableDefaultLighting() (or manual
-        // configuration) turns them on. Direction/color defaults for the not-yet-configured
-        // lights aren't specified by anything the source research turned up -- Vector3.Down with
-        // zero diffuse/specular is a reasonable inert default (matches the real GpuDrawParams
-        // struct's own default light direction), not a value read from real XNA/the C++ engine.
-        DirectionalLight0 = new DirectionalLight(Vector3.Down, Vector3.Zero, Vector3.Zero, enabled: true);
-        DirectionalLight1 = new DirectionalLight(Vector3.Down, Vector3.Zero, Vector3.Zero, enabled: false);
-        DirectionalLight2 = new DirectionalLight(Vector3.Down, Vector3.Zero, Vector3.Zero, enabled: false);
+        get => GetBool(Native.cna_basic_effect_get_vertex_color_enabled, nameof(VertexColorEnabled));
+        set => SetBool(Native.cna_basic_effect_set_vertex_color_enabled, value, nameof(VertexColorEnabled));
     }
 
-    public DirectionalLight DirectionalLight0 { get; }
+    public bool PreferPerPixelLighting
+    {
+        get => GetBool(Native.cna_basic_effect_get_prefer_per_pixel_lighting, nameof(PreferPerPixelLighting));
+        set => SetBool(Native.cna_basic_effect_set_prefer_per_pixel_lighting, value, nameof(PreferPerPixelLighting));
+    }
 
-    public DirectionalLight DirectionalLight1 { get; }
+    public Vector3 DiffuseColor
+    {
+        get => GetVector3(Native.cna_basic_effect_get_diffuse_color, nameof(DiffuseColor));
+        set => SetVector3(Native.cna_basic_effect_set_diffuse_color, value, nameof(DiffuseColor));
+    }
 
-    public DirectionalLight DirectionalLight2 { get; }
+    public Vector3 EmissiveColor
+    {
+        get => GetVector3(Native.cna_basic_effect_get_emissive_color, nameof(EmissiveColor));
+        set => SetVector3(Native.cna_basic_effect_set_emissive_color, value, nameof(EmissiveColor));
+    }
 
-    public Vector3 DiffuseColor { get; set; } = Vector3.One;
+    public Vector3 SpecularColor
+    {
+        get => GetVector3(Native.cna_basic_effect_get_specular_color, nameof(SpecularColor));
+        set => SetVector3(Native.cna_basic_effect_set_specular_color, value, nameof(SpecularColor));
+    }
 
-    public Vector3 EmissiveColor { get; set; } = Vector3.Zero;
+    public float SpecularPower
+    {
+        get
+        {
+            CnaResult result = Native.cna_basic_effect_get_specular_power(_handle, out float value);
+            CnaException.ThrowIfFailed(result, nameof(SpecularPower));
+            return value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_basic_effect_set_specular_power(_handle, value);
+            CnaException.ThrowIfFailed(result, nameof(SpecularPower));
+        }
+    }
 
-    public Vector3 SpecularColor { get; set; } = Vector3.One;
+    public Vector3 AmbientLightColor
+    {
+        get => GetVector3(Native.cna_effect_lights_get_ambient_color, nameof(AmbientLightColor));
+        set => SetVector3(Native.cna_effect_lights_set_ambient_color, value, nameof(AmbientLightColor));
+    }
 
-    public float SpecularPower { get; set; } = 16f;
+    public float Alpha
+    {
+        get
+        {
+            CnaResult result = Native.cna_basic_effect_get_alpha(_handle, out float value);
+            CnaException.ThrowIfFailed(result, nameof(Alpha));
+            return value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_basic_effect_set_alpha(_handle, value);
+            CnaException.ThrowIfFailed(result, nameof(Alpha));
+        }
+    }
 
-    public Vector3 AmbientLightColor { get; set; } = Vector3.Zero;
+    public bool LightingEnabled
+    {
+        get => GetBool(Native.cna_effect_lights_get_enabled, nameof(LightingEnabled));
+        set => SetBool(Native.cna_effect_lights_set_enabled, value, nameof(LightingEnabled));
+    }
 
-    public float Alpha { get; set; } = 1f;
+    public bool TextureEnabled
+    {
+        get => GetBool(Native.cna_basic_effect_get_texture_enabled, nameof(TextureEnabled));
+        set => SetBool(Native.cna_basic_effect_set_texture_enabled, value, nameof(TextureEnabled));
+    }
 
-    public bool LightingEnabled { get; set; }
-
-    public bool PreferPerPixelLighting { get; set; }
-
-    public bool TextureEnabled { get; set; }
-
+    /// <summary>
+    /// Setting this also calls <c>cna_basic_effect_set_texture</c> immediately, retaining or
+    /// clearing the native effect's own texture reference -- but the getter returns this project's
+    /// own cached <see cref="Texture2D"/> reference rather than round-tripping through
+    /// <c>cna_basic_effect_get_texture</c> (which only ever answers a raw <see cref="CnaHandle"/>,
+    /// not a <see cref="Texture2D"/> wrapper this project could safely reconstruct without risking
+    /// a double-ownership bug over whichever wrapper actually owns that handle's disposal).
+    /// </summary>
     public Texture2D? Texture
     {
         get => _texture;
-        set => _texture = value;
+        set
+        {
+            CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
+            CnaResult result = Native.cna_basic_effect_set_texture(_handle, handle);
+            CnaException.ThrowIfFailed(result, nameof(Texture));
+            _texture = value;
+        }
     }
 
-    public bool FogEnabled { get; set; }
+    public bool FogEnabled
+    {
+        get => GetBool(Native.cna_effect_fog_get_enabled, nameof(FogEnabled));
+        set => SetBool(Native.cna_effect_fog_set_enabled, value, nameof(FogEnabled));
+    }
 
-    public Vector3 FogColor { get; set; } = Vector3.Zero;
+    public Vector3 FogColor
+    {
+        get => GetVector3(Native.cna_effect_fog_get_color, nameof(FogColor));
+        set => SetVector3(Native.cna_effect_fog_set_color, value, nameof(FogColor));
+    }
 
-    public float FogStart { get; set; }
+    public float FogStart
+    {
+        get
+        {
+            CnaResult result = Native.cna_effect_fog_get_start(_handle, out float value);
+            CnaException.ThrowIfFailed(result, nameof(FogStart));
+            return value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_effect_fog_set_start(_handle, value);
+            CnaException.ThrowIfFailed(result, nameof(FogStart));
+        }
+    }
 
-    public float FogEnd { get; set; } = 1f;
+    public float FogEnd
+    {
+        get
+        {
+            CnaResult result = Native.cna_effect_fog_get_end(_handle, out float value);
+            CnaException.ThrowIfFailed(result, nameof(FogEnd));
+            return value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_effect_fog_set_end(_handle, value);
+            CnaException.ThrowIfFailed(result, nameof(FogEnd));
+        }
+    }
 
-    /// <summary>
-    /// The exact real XNA/the real C++ engine's default three-point lighting rig -- every numeric
-    /// literal here is quoted verbatim from <c>BasicEffect.cpp</c>'s own
-    /// <c>EnableDefaultLighting()</c> implementation, not approximated.
-    /// </summary>
+    /// <summary>Matches real XNA's own convenience method exactly -- now a single native call
+    /// (<c>cna_effect_lights_enable_default</c>) instead of the 20-odd hardcoded literals the old,
+    /// self-designed version needed to reproduce the real default three-point lighting rig by
+    /// hand.</summary>
     public void EnableDefaultLighting()
     {
-        LightingEnabled = true;
-        AmbientLightColor = new Vector3(0.05333332f, 0.09882354f, 0.1819608f);
-
-        DirectionalLight0.Direction = new Vector3(-0.5265408f, -0.5735765f, -0.6275069f);
-        DirectionalLight0.DiffuseColor = new Vector3(1f, 0.9607844f, 0.8078432f);
-        DirectionalLight0.SpecularColor = new Vector3(1f, 0.9607844f, 0.8078432f);
-        DirectionalLight0.Enabled = true;
-
-        DirectionalLight1.Direction = new Vector3(0.7198464f, 0.3420201f, 0.6040227f);
-        DirectionalLight1.DiffuseColor = new Vector3(0.9647059f, 0.7607844f, 0.4078432f);
-        DirectionalLight1.SpecularColor = Vector3.Zero;
-        DirectionalLight1.Enabled = true;
-
-        DirectionalLight2.Direction = new Vector3(0.4545195f, -0.7660444f, 0.4545195f);
-        DirectionalLight2.DiffuseColor = new Vector3(0.3231373f, 0.3607844f, 0.3937255f);
-        DirectionalLight2.SpecularColor = new Vector3(0.3231373f, 0.3607844f, 0.3937255f);
-        DirectionalLight2.Enabled = true;
-
-        SpecularColor = Vector3.One;
-        SpecularPower = 16f;
+        CnaResult result = Native.cna_effect_lights_enable_default(_handle);
+        CnaException.ThrowIfFailed(result, nameof(EnableDefaultLighting));
     }
 
-    /// <summary>
-    /// Reproduces the real C++ engine's <c>BasicEffect::FillGpuDrawParams</c> algorithm exactly
-    /// (read from its source, not reinvented), computed here in managed code using this project's
-    /// own already-tested <see cref="Matrix"/>/<see cref="Vector3"/> math rather than crossing the
-    /// ABI with raw <see cref="View"/>/<see cref="Projection"/> for native code to redo the same
-    /// work -- see <see cref="EyePositionWorldForTests"/>/<see cref="FogVectorForTests"/> for the
-    /// two derived values pulled out for direct unit testing.
-    /// </summary>
+    /// <summary>Selects this effect on its owning graphics device -- all of the derived-parameter
+    /// computation the old design needed here (diffuse/emissive/specular/eye-position blending,
+    /// fog-vector derivation, row-to-column-major matrix rewrite) is native's own job now, computed
+    /// from whatever this effect's properties were last set to.</summary>
     protected override void OnApply()
     {
-        (Vector4 diffuse, Vector3 emissive, Vector3 specular, float specularPower, Vector3 eyePositionWorld) = ComputeLightingParams();
-        Vector4 fogVector = ComputeFogVector();
-
-        bool textureEnabled = TextureEnabled && _texture is not null;
-
-        var nativeParams = new CnaBasicEffectParams
-        {
-            Texture = textureEnabled ? new CnaHandle(_texture!.NativeHandleValue) : CnaHandle.Zero,
-            TextureEnabled = textureEnabled ? (byte)1 : (byte)0,
-            VertexColorEnabled = VertexColorEnabled ? (byte)1 : (byte)0,
-            LightingEnabled = LightingEnabled ? (byte)1 : (byte)0,
-            PreferPerPixelLighting = PreferPerPixelLighting ? (byte)1 : (byte)0,
-            DiffuseColor = diffuse.ToNative(),
-            AmbientColor = AmbientLightColor.ToNative(),
-            Light0 = ToNative(DirectionalLight0),
-            Light1 = ToNative(DirectionalLight1),
-            Light2 = ToNative(DirectionalLight2),
-            EmissiveColor = emissive.ToNative(),
-            SpecularColor = specular.ToNative(),
-            SpecularPower = specularPower,
-            EyePositionWorld = eyePositionWorld.ToNative(),
-            FogEnabled = FogEnabled ? (byte)1 : (byte)0,
-            FogColor = FogColor.ToNative(),
-            FogVector = fogVector.ToNative(),
-        };
-        WriteColumnMajor(World, ref nativeParams.WorldColMajor);
-
-        // Still the old, guessed, self-designed cna_graphics_device_apply_basic_effect call --
-        // deliberately not fixed here. The real ABI has no such device-scoped "apply params" call
-        // at all: BasicEffect is a full native object of its own (cna_basic_effect_create + a
-        // per-property get/set surface, applied via cna_effect_apply(CNA_EffectHandle), not a
-        // GraphicsDevice method) -- see NEXT.md's native-ABI-migration entry, step 8. Only the
-        // device-handle source is fixed here, matching step 3's project-wide mechanical fix.
-        CnaResult result = Native.cna_graphics_device_apply_basic_effect(GraphicsDevice.ResolveNativeDeviceHandle(), in nativeParams);
+        CnaResult result = Native.cna_effect_apply(_handle);
         CnaException.ThrowIfFailed(result, nameof(Apply));
     }
 
-    /// <summary>
-    /// Diffuse/emissive/specular/eye-position, matching <c>FillGpuDrawParams</c>'s own logic:
-    /// EmissiveColor is baked into the forwarded diffuse when unlit (the real code's own comment
-    /// explains why -- the lit-path material computation that would otherwise apply EmissiveColor
-    /// never runs when lighting is off, so it would be silently dropped instead of baked in);
-    /// specular/eye-position are only meaningful (and only computed) on the lit path.
-    /// </summary>
-    private (Vector4 Diffuse, Vector3 Emissive, Vector3 Specular, float SpecularPower, Vector3 EyePositionWorld) ComputeLightingParams()
+    public override void Dispose()
     {
-        Vector3 forwardedDiffuse = LightingEnabled ? DiffuseColor : DiffuseColor + EmissiveColor;
-        var diffuse = new Vector4(forwardedDiffuse.X * Alpha, forwardedDiffuse.Y * Alpha, forwardedDiffuse.Z * Alpha, Alpha);
-
-        if (!LightingEnabled)
+        if (_disposed)
         {
-            return (diffuse, Vector3.Zero, Vector3.Zero, 0f, Vector3.Zero);
+            return;
         }
 
-        Vector3 emissive = EmissiveColor * Alpha;
-        Matrix invertedView = Matrix.Invert(View);
-        Vector3 eyePositionWorld = invertedView.Translation;
-        return (diffuse, emissive, SpecularColor, SpecularPower, eyePositionWorld);
+        _disposed = true;
+        Native.cna_directional_light_destroy(DirectionalLight0.NativeHandle);
+        Native.cna_directional_light_destroy(DirectionalLight1.NativeHandle);
+        Native.cna_directional_light_destroy(DirectionalLight2.NativeHandle);
+        Native.cna_effect_destroy(_handle);
+        base.Dispose();
     }
 
-    /// <summary>
-    /// Matches <c>FillGpuDrawParams</c>'s own fog-vector derivation exactly: zero when fog is
-    /// off; <c>(0,0,0,1)</c> (fully fogged) for the degenerate <c>FogStart == FogEnd</c> case
-    /// (avoids a divide-by-zero the real code also guards against); otherwise derived from the
-    /// combined world-view matrix's third row so the fog factor can be computed per-vertex as
-    /// <c>dot(position, fogVector)</c> without a separate distance calculation in the shader.
-    /// </summary>
-    private Vector4 ComputeFogVector()
+    private bool GetBool(GetBoolFunc getter, string propertyName)
     {
-        if (!FogEnabled)
-        {
-            return Vector4.Zero;
-        }
-
-        if (FogStart == FogEnd)
-        {
-            return new Vector4(0f, 0f, 0f, 1f);
-        }
-
-        Matrix fogWorldView = World * View;
-        float s = 1f / (FogStart - FogEnd);
-        return new Vector4(fogWorldView.M13 * s, fogWorldView.M23 * s, fogWorldView.M33 * s, (fogWorldView.M43 + FogStart) * s);
+        CnaResult result = getter(_handle, out byte value);
+        CnaException.ThrowIfFailed(result, propertyName);
+        return value != 0;
     }
 
-    private static CnaDirectionalLight ToNative(DirectionalLight light)
+    private void SetBool(SetBoolFunc setter, bool value, string propertyName)
     {
-        // Matches FillGpuDrawParams exactly: Direction always crosses the ABI regardless of
-        // Enabled, but Diffuse/SpecularColor are zeroed here (not on DirectionalLight's own
-        // Enabled setter, which the real C++ DirectionalLight type doesn't do either) when the
-        // light is off.
-        return new CnaDirectionalLight
-        {
-            Direction = light.Direction.ToNative(),
-            DiffuseColor = (light.Enabled ? light.DiffuseColor : Vector3.Zero).ToNative(),
-            SpecularColor = (light.Enabled ? light.SpecularColor : Vector3.Zero).ToNative(),
-        };
+        CnaResult result = setter(_handle, value ? (byte)1 : (byte)0);
+        CnaException.ThrowIfFailed(result, propertyName);
     }
 
-    /// <summary>Writing <see cref="Matrix.Transpose"/>'s result out in ordinary row order produces
-    /// the same 16 floats as writing the original matrix out in column order -- reuses the
-    /// already-tested <see cref="Matrix.Transpose"/> instead of re-deriving the same element
-    /// mapping by hand a second time.</summary>
-    private static void WriteColumnMajor(Matrix m, ref CnaMatrix16 target)
+    private Vector3 GetVector3(GetVector3Func getter, string propertyName)
     {
-        Matrix t = Matrix.Transpose(m);
-        target[0] = t.M11; target[1] = t.M12; target[2] = t.M13; target[3] = t.M14;
-        target[4] = t.M21; target[5] = t.M22; target[6] = t.M23; target[7] = t.M24;
-        target[8] = t.M31; target[9] = t.M32; target[10] = t.M33; target[11] = t.M34;
-        target[12] = t.M41; target[13] = t.M42; target[14] = t.M43; target[15] = t.M44;
+        CnaResult result = getter(_handle, out CnaVector3 value);
+        CnaException.ThrowIfFailed(result, propertyName);
+        return Vector3.FromNative(value);
     }
 
-    /// <summary>Exposes <see cref="ComputeFogVector"/>'s result for direct unit testing (the
-    /// public path to it, <see cref="Effect.Apply"/>, calls into native code and can't be
-    /// exercised without a real cna-native).</summary>
-    internal Vector4 FogVectorForTests => ComputeFogVector();
+    private void SetVector3(SetVector3Func setter, Vector3 value, string propertyName)
+    {
+        CnaResult result = setter(_handle, value.ToNative());
+        CnaException.ThrowIfFailed(result, propertyName);
+    }
 
-    /// <summary>Exposes <see cref="ComputeLightingParams"/>'s eye-position result for direct unit
-    /// testing, same reasoning as <see cref="FogVectorForTests"/>.</summary>
-    internal Vector3 EyePositionWorldForTests => ComputeLightingParams().EyePositionWorld;
+    private delegate CnaResult GetBoolFunc(CnaHandle effect, out byte outValue);
+    private delegate CnaResult SetBoolFunc(CnaHandle effect, byte value);
+    private delegate CnaResult GetVector3Func(CnaHandle effect, out CnaVector3 outValue);
+    private delegate CnaResult SetVector3Func(CnaHandle effect, CnaVector3 value);
 }

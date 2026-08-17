@@ -644,4 +644,19 @@ public struct Matrix : IEquatable<Matrix>
         $"{{M21:{M21} M22:{M22} M23:{M23} M24:{M24}}} " +
         $"{{M31:{M31} M32:{M32} M33:{M33} M34:{M34}}} " +
         $"{{M41:{M41} M42:{M42} M43:{M43} M44:{M44}}}";
+
+    /// <summary>Matches <see cref="CNA.Interop.CnaMatrix"/>'s own row-major field order exactly --
+    /// a direct field copy, not a transpose (see that type's own doc comment).</summary>
+    internal readonly CNA.Interop.CnaMatrix ToNative() => new(
+        M11, M12, M13, M14,
+        M21, M22, M23, M24,
+        M31, M32, M33, M34,
+        M41, M42, M43, M44);
+
+    /// <summary>Inverse of <see cref="ToNative"/>.</summary>
+    internal static Matrix FromNative(CNA.Interop.CnaMatrix native) => new(
+        native.M11, native.M12, native.M13, native.M14,
+        native.M21, native.M22, native.M23, native.M24,
+        native.M31, native.M32, native.M33, native.M34,
+        native.M41, native.M42, native.M43, native.M44);
 }

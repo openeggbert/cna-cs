@@ -11,6 +11,86 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 8: `BasicEffect` rewritten as a real native object -- the largest structural change in the whole migration, and a genuine simplification once it landed (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+The old `BasicEffect` was deliberately, honestly self-designed against zero ABI: its own doc comment
+said constructing one and setting properties needed *no native call at all*, with every lighting/fog
+computation (`ComputeLightingParams`, `ComputeFogVector`, the row-to-column-major
+`WriteColumnMajor` rewrite) reproduced by hand in managed code from the real C++ engine's own
+`BasicEffect::FillGpuDrawParams` source, pushed once as a single 33-field `CnaBasicEffectParams`
+struct at `Apply()` time. `effects.h` confirms the real ABI has none of that: `BasicEffect` is a
+full native object (`cna_basic_effect_create`), and *every* property is its own real, immediate
+`cna_*_get_*`/`_set_*` round trip -- `World`/`View`/`Projection` through a shared
+`IEffectMatrices` contract (`cna_effect_matrices_*`), fog through a shared `IEffectFog` contract,
+ambient color and the three `DirectionalLight` members through a shared `IEffectLights` contract --
+all three shared across every stock effect type, matching this project's own
+`IEffectMatrices`/`IEffectFog`/`IEffectLights` interfaces exactly (these were already confirmed
+against the real C++ engine's own interfaces, so needed no changes themselves). Only
+`VertexColorEnabled`/`PreferPerPixelLighting`/`DiffuseColor`/`EmissiveColor`/`SpecularColor`/
+`SpecularPower`/`Alpha`/`TextureEnabled`/`Texture` are `BasicEffect`-specific
+(`cna_basic_effect_*`). `OnApply()` is now trivial: `cna_effect_apply(effect)` and nothing else --
+every derived-parameter computation the old design needed is native's own job now, computed from
+whatever the properties were last set to. Read `BasicEffectSmoke.c` in full (418 lines) as the
+authoritative usage reference before writing any of this, rather than inferring call patterns from
+header doc comments alone.
+
+`World`/`View`/`Projection` had to become properties, not the public fields they were before this
+migration (matching the real C++ engine's own field-not-property choice, which is why the old
+design used fields) -- a field can't intercept assignment to trigger a native call, and every set
+now needs one. Confirmed this doesn't break source compatibility anywhere: nothing in this codebase
+passes `ref effect.World` or similar (grepped for it), and simple `effect.World = ...`/`var m =
+effect.World` read/write syntax is identical for a field or an auto-style property in C#.
+`CNA_Matrix` turned out to already be row-major, the same convention `CNA.Matrix` already used --
+`Matrix.ToNative()`/`FromNative()` are a direct field copy, no transpose, unlike the old design's
+own `WriteColumnMajor` (which existed specifically because the *old*, self-designed struct's own
+field was column-major).
+
+### `DirectionalLight` is also a real native object now, with an independent-ownership lifetime confirmed from the test suite, not the docs
+
+`cna_effect_lights_get_directional_light(effect, index, out_light)` returns its own
+`CNA_DirectionalLightHandle`. Confirmed directly against `BasicEffectSmoke.c`'s
+`create_retained_light` (not inferred from a doc comment): a light handle fetched this way survives
+even after the *parent effect* is destroyed, and needs its own explicit
+`cna_directional_light_destroy` call -- it is not released implicitly with the effect. `BasicEffect`
+fetches all three once, at construction, and destroys them in its own `Dispose` -- which is why
+`BasicEffect`/`Effect` needed a real `Dispose` override for the first time (the old design never
+allocated anything native until `Apply()`, so `Effect.Dispose()` was an empty virtual method with
+nothing to do).
+
+### Real capability found and adopted: `cna_effect_lights_enable_default`
+
+The old `EnableDefaultLighting()` hardcoded roughly twenty float literals, transcribed by hand from
+the real C++ engine's own `EnableDefaultLighting()` source, to reproduce its default three-point
+lighting rig. The real ABI has this exact operation as a single native call
+(`cna_effect_lights_enable_default`) -- replaces the whole hand-transcribed block with one line.
+
+### Dead code removed, not just left behind
+
+`CnaBasicEffectParams`, `CnaDirectionalLight`, `CnaMatrix16`, and `CnaVector4` (whose only
+remaining reference, `Vector4.ToNative()`, was itself only ever called from the now-deleted
+`BasicEffect` code) are deleted from `NativeStructs.cs`/`Vector4.cs` entirely, not left as unused
+dead code -- confirmed via `grep` that nothing else in the codebase referenced any of them before
+removing them.
+
+### Test coverage: a real, deliberate loss, not a silent regression
+
+Deleted `tests/CNA.Framework.Tests/BasicEffectTests.cs` entirely. Every test in it exercised the old
+design's pure-managed-code computation (`FogVectorForTests`/`EyePositionWorldForTests`, the
+hardcoded default-lighting literals, constructing a `BasicEffect` with a dummy zero-handle
+`GraphicsDevice` and no real native call) -- none of that logic exists in this project anymore; it
+all now lives in native code this project doesn't control and can't unit-test without a real
+`cna-native` library and device, the same reason `GraphicsDevice`/`SpriteBatch`/`VertexBuffer`/
+`IndexBuffer`/`RenderTarget2D`/`ContentManager` already have no unit tests today. Noted here
+explicitly rather than silently letting the file bit-rot into a compile failure the next time
+compilation is authorized.
+
+### Also noted, not yet acted on
+
+`Model.Draw` now issues three real native calls (`World`/`View`/`Projection` sets) per mesh part
+per frame through `IEffectMatrices`, instead of three plain field writes -- a real behavior change
+(more native round trips in a hot per-frame path), not a bug, but worth knowing if a future profiling
+pass ever looks at `Model.Draw`'s cost.
+
 ## Native ABI migration, step 7: `SpriteBatch` rewritten -- the best-preserved subsystem in the whole migration, confirming a pre-migration design choice rather than replacing it (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 The real ABI has *two* batched-submission routes -- `cna_sprite_batch_submit_many`
