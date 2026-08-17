@@ -1,0 +1,13 @@
+{
+  "cnjVersion": 1,
+  "type": "Model",
+  "meshes": [
+    {
+      "name": "Quad",
+      "vertices": "quad_verts.bin",
+      "indices": "quad_idx.bin",
+      "vertexStride": 32,
+      "effect": "BasicEffect"
+    }
+  ]
+}

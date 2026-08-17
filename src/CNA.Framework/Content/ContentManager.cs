@@ -1,4 +1,5 @@
 using CNA.Audio;
+using CNA.Content.Cnj;
 using CNA.Content.Xnb;
 using CNA.Graphics;
 using CNA.Interop;
@@ -19,9 +20,13 @@ namespace CNA.Content;
 /// native CNA engine loads on their behalf). See <c>CNA.Content.Xnb</c>'s own types for the actual
 /// <c>.xnb</c> reader (confirmed byte-for-byte against the real openeggbert/cna C++ engine's own
 /// reference implementation and a real MonoGame-compiled fixture -- see <c>NEXT.md</c>) -- only
-/// real, *uncompressed* <c>.xnb</c> files are supported; LZX/LZ4-compressed files and the real
-/// engine's own <c>.cnj</c>/glTF content paths are all deliberately out of scope for this pass (see
-/// <c>plan.md</c>). Building the final, real <see cref="Model"/> still needs a real
+/// real, *uncompressed* <c>.xnb</c> files are supported; LZX/LZ4-compressed files are deliberately
+/// out of scope. <see cref="LoadModel"/> also recognizes a real, minimal-scope subset of the real
+/// engine's own <c>.cnj</c> format (<c>CNA.Content.Cnj</c> -- JSON envelope + flat mesh list,
+/// <c>BasicEffect</c> only, vertex strides 16/20/24/32 only; see that namespace's own types for the
+/// full scope-cut list), tried only when no <c>.xnb</c> file of the same asset name exists, matching
+/// the real engine's own dispatch order. Runtime glTF (<c>.gltf</c>/<c>.glb</c>) remains entirely out
+/// of scope (see <c>plan.md</c>/<c>NEXT.md</c>). Building the final, real <see cref="Model"/> still needs a real
 /// <see cref="Graphics.GraphicsDevice"/> (to construct native-backed <see cref="VertexBuffer"/>/
 /// <see cref="IndexBuffer"/> instances), so <see cref="GraphicsDevice"/> below is set by
 /// <see cref="Game"/> once its own device becomes available -- <em>that</em> part is native-ABI-blocked,
@@ -131,18 +136,58 @@ public class ContentManager
         return modelData;
     }
 
-    /// <summary>Builds the final, real, native-backed <see cref="Model"/> from
-    /// <see cref="LoadXnbModelData"/> -- see this type's own doc comment for why only this step
-    /// (not the parsing <see cref="LoadXnbModelData"/> does) is native-ABI-blocked.</summary>
+    /// <summary>Builds the final, real, native-backed <see cref="Model"/> -- see this type's own doc
+    /// comment for why only this assembly step (not the parsing <see cref="LoadXnbModelData"/>/
+    /// <see cref="LoadCnjModelData"/> do) is native-ABI-blocked. Dispatch order matches the real
+    /// engine's own: a real <c>.xnb</c> file always wins first if one exists for
+    /// <paramref name="assetName"/>, only falling back to <c>.cnj</c> when it doesn't -- so a real
+    /// <c>.xnb</c> asset always shadows a <c>.cnj</c> file of the same name sitting next to it.
+    /// Two of the real engine's own further fallbacks are deliberately <b>not</b> ported: resolving
+    /// an <paramref name="assetName"/> that already carries its own extension as-is (a rarely-used
+    /// convenience with no precedent anywhere in this project's own <c>.xnb</c>-loading code, which
+    /// always appends the extension itself), and runtime glTF (<c>.gltf</c>/<c>.glb</c>, hard out of
+    /// scope -- see <c>CNA.Content.Cnj</c>'s own doc comments).</summary>
     protected Model LoadModel(string assetName)
     {
+        ArgumentNullException.ThrowIfNull(assetName);
+
         if (GraphicsDevice is null)
         {
             throw new ContentLoadException(
                 $"Cannot load Model '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
         }
 
-        return XnbModelBuilder.Build(GraphicsDevice, LoadXnbModelData(assetName));
+        if (File.Exists(Path.Combine(RootDirectory, assetName + ".xnb")))
+        {
+            return XnbModelBuilder.Build(GraphicsDevice, LoadXnbModelData(assetName));
+        }
+
+        if (File.Exists(Path.Combine(RootDirectory, assetName + ".cnj")))
+        {
+            return CnjModelBuilder.Build(GraphicsDevice, LoadCnjModelData(assetName));
+        }
+
+        throw new ContentLoadException($"Content file '{assetName}' was not found (tried '{assetName}.xnb' and '{assetName}.cnj').");
+    }
+
+    /// <summary>Parses a real, minimal-scope <c>.cnj</c> <see cref="Model"/> asset's JSON (plus its
+    /// vertex/index sidecar files) from <see cref="RootDirectory"/> into an intermediate,
+    /// native-free <see cref="CnjModelData"/> -- same split, same reuse rationale, and the same
+    /// <c>internal</c>-not-<c>protected</c> accessibility reasoning (a real <c>CS0050</c> compiler
+    /// error, since <see cref="CnjModelData"/> is itself <c>internal</c>) as
+    /// <see cref="LoadXnbModelData"/>'s own doc comment already explains for the <c>.xnb</c> side.</summary>
+    internal CnjModelData LoadCnjModelData(string assetName)
+    {
+        ArgumentNullException.ThrowIfNull(assetName);
+
+        string path = Path.Combine(RootDirectory, assetName + ".cnj");
+        if (!File.Exists(path))
+        {
+            throw new ContentLoadException($"Content file '{path}' was not found.");
+        }
+
+        string json = File.ReadAllText(path);
+        return CnjModelReader.Read(json, assetName, RootDirectory);
     }
 
     private string ResolveXnbAssetPath(string assetName)

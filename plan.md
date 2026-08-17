@@ -49,8 +49,19 @@ one turned out to be the best-case scoping outcome of the whole session:
 the real C++ engine has a genuinely real, working, dependency-free FFT
 implementation for it (a from-scratch 512-point radix-2 FFT over a
 lock-free ring buffer fed from SDL3_mixer), not blocked or partial the
-way most of this session's deferred features turned out to be. What
-remains: Phase 6 packaging/cross-platform validation, tracked below.
+way most of this session's deferred features turned out to be. `Model`
+file-loading now also covers a real, minimal-scope subset of the real
+engine's own `.cnj` JSON format (`CNA.Content.Cnj`) -- JSON envelope plus
+flat mesh list, `BasicEffect` only, vertex sidecar strides 16/20/24/32
+only -- on the base `CNA.Framework.Content.ContentManager` (`.xnb` still
+always wins first if both exist for the same asset name, matching the
+real engine's own dispatch order); the `.cnj` document's own bone
+hierarchy/skinning/PBR/morph-target surface and runtime glTF both remain
+explicitly out of scope, and the `CNA.XnaCompat` mirror of this path is
+its own deferred follow-up (see `NEXT.md` for the detail, including the
+load-bearing finding that `.cnj`'s `BasicEffect` JSON has no
+material-color fields at all, unlike `.xnb`'s). What remains: Phase 6
+packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -834,16 +845,92 @@ Split by whether the type needs the (still nonexistent) native ABI:
       construction in both projects, a rarity for anything
       `MediaPlayer`-adjacent). `samples/HelloGame` re-verified
       unaffected.
+- [x] **`Model` file-loading via a real, minimal-scope subset of the real
+      engine's own `.cnj` JSON format (`CNA.Content.Cnj`,
+      `ContentManager.Load<Model>()`) — done, 2026-08-17 (session 6
+      continued autonomously past the visualization-data checkpoint, per
+      explicit user selection of "Attempt Model's .cnj/glTF content
+      paths," then two further explicit continuations narrowing and then
+      resolving the format's own undocumented vertex-layout convention,
+      then "Attempt a minimal .cnj Model reader").** Research (three
+      sequential, increasingly-targeted passes) ruled runtime glTF out
+      entirely (hard-blocked on the vendored `cgltf` C library, no
+      algorithm-only slice avoids it) and found `.cnj` genuinely
+      tractable at a deliberately narrowed scope: JSON envelope + flat
+      mesh list (no `"bones"` hierarchy, no `"skeleton"`/`"animations"`,
+      no morph targets) + `BasicEffect` only + vertex sidecar strides
+      16/20/24/32 only (48/52/56/68, the PBR/skinned shapes, excluded).
+      The vertex sidecar's byte layout (no header, raw floats, stride
+      JSON-authoritative only) was cross-verified against both the real
+      reader and its writer, and confirmed field-for-field identical to
+      this project's own existing `CNA.Graphics.VertexPosition*` structs
+      -- so, like the `.xnb` path, sidecar bytes pass straight through to
+      `VertexBuffer.SetData(byte[])` with zero marshaling. **A real,
+      load-bearing finding that changed the implementation plan:**
+      `.cnj`'s `BasicEffect` JSON has *no material-color fields at all*
+      (no `diffuseColor`/`specularColor`/`alpha`/`specularPower`, unlike
+      `.xnb`'s own `BasicEffectReader`) -- only `texture`/
+      `vertexColorEnabled` are ever read, so `CnjModelBuilder`
+      deliberately does *not* reuse `XnbModelBuilder.ApplyBasicEffectData`,
+      which applies a field set this format simply doesn't have; it has
+      its own, much smaller effect-application step. Also new,
+      dedicated infrastructure: `CnjPathContainment`, a direct port of
+      the real engine's own `PathContainment.hpp` component-wise (not
+      string-prefix) containment check, since every sidecar path
+      (`"vertices"`/`"indices"`/`"texture"`) a `.cnj` document names is
+      untrusted, file-supplied input that must stay inside
+      `ContentManager.RootDirectory` before it's ever opened -- a
+      different shape from `SavedPictureStore.SanitizePictureName`'s
+      existing bare-filename check, since a sidecar path legitimately
+      contains subdirectories. Every deliberately out-of-scope input is
+      rejected with a clear `ContentLoadException` naming the reason
+      (unsupported `cnjVersion`, `"sourceFile"`/`"skeleton"`/
+      `"morphTargets"` present, a multi-entry `"bones"` array, an
+      unsupported vertex stride, a non-`BasicEffect` effect, a sidecar
+      path escaping the content root) rather than silently mis-loading
+      it, matching the `.xnb` path's own LZX/LZ4 precedent; two cases
+      (an empty `"vertices"`/`"indices"` field, a non-positive
+      `vertexStride`) are silently skipped, matching the real engine's
+      own behavior exactly. `LoadModel` now tries `.xnb` first (matching
+      the real engine's own dispatch order -- a real `.xnb` file always
+      shadows a `.cnj` of the same asset name), falling back to `.cnj`
+      only when no `.xnb` exists; runtime glTF stays fully out of scope.
+      Real fixture: `quad.cnj`/`quad_verts.bin`/`quad_idx.bin`, byte-for-byte
+      reproducing the real engine's own gtest fixture (`CnjModelTests.cpp`'s
+      `WriteQuadModelFixture`), vendored into
+      `tests/CNA.Framework.Tests/assets/cnj/` (regenerated from that
+      test's own field values, not copied binary, since the source is
+      C++ test code, not a binary asset -- see that directory's own
+      `README.md`). This feature does *not* serve this project's own
+      stated "XNA source compatibility" goal #1 the way `.xnb` loading
+      does -- `.cnj` is CNA's own self-rolled format with no XNA
+      equivalent -- the same goal-alignment caveat already surfaced to
+      and accepted by explicit user choice when this work was started.
+      `CnjModelReader` has zero native dependency, fully unit-testable
+      (same rare "fully real, testable today" status `XnbModelReader`
+      already has); `CnjModelBuilder` is native-ABI-blocked like every
+      other final-assembly step in this project. The `CNA.XnaCompat`
+      mirror of this path (`CnjCompatModelBuilder`) is a deliberate,
+      separate follow-up, not attempted in this pass -- matching the
+      `.xnb` path's own "narrow reader/builder split first, compat
+      mirror as a distinct, separately-reviewed follow-up" cadence.
+      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
+      `dotnet test`: 454/454 passing (up from 413 — 41 new tests, all
+      for `CnjModelReader`/`CnjPathContainment`, reachable without a
+      real `cna-native` the same way `XnbModelReaderTests` already is).
+      `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
-      `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths (see
-      the `.xnb` loading entry above) and `ModelMeshPart`'s own
-      `ModelEffectCollection`/`ModelMesh.Effects` gap (see that entry
-      above, a real permanent gap, not deferred pending further work).
-      None of these are blocked on the native C ABI the way everything
-      else in this phase is — they're scoped out because each is its own
-      substantial, separable feature (or, for `ModelEffectCollection`,
-      structurally unfixable), not because anything is missing upstream
-      to ground them against.
+      `Model`'s own bone-hierarchy/skinning/PBR/morph-target `.cnj`
+      surface, runtime glTF, and LZX/LZ4-compressed `.xnb` content paths
+      (see the `.xnb`/`.cnj` loading entries above), the `.cnj` path's
+      own `CNA.XnaCompat` mirror (`CnjCompatModelBuilder`, see the `.cnj`
+      entry above), and `ModelMeshPart`'s own `ModelEffectCollection`/
+      `ModelMesh.Effects` gap (see that entry above, a real permanent
+      gap, not deferred pending further work). None of these are blocked
+      on the native C ABI the way everything else in this phase is —
+      they're scoped out because each is its own substantial, separable
+      feature (or, for `ModelEffectCollection`, structurally unfixable),
+      not because anything is missing upstream to ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

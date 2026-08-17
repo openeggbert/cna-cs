@@ -102,7 +102,12 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     meshes/vertex-and-index-buffer data (CNA.Content.Xnb) -- zero native
     ABI, pure C#/BCL logic, confirmed byte-for-byte against a real
     MonoGame-compiled fixture (see below for why only the final
-    VertexBuffer/IndexBuffer construction step is blocked).
+    VertexBuffer/IndexBuffer construction step is blocked). Reading a
+    real, minimal-scope subset of the real engine's own .cnj JSON Model
+    format (CNA.Content.Cnj: JSON envelope + flat mesh list, BasicEffect
+    only, vertex sidecar strides 16/20/24/32 only) -- also zero native
+    ABI, same "parse pure data, block only on final VertexBuffer/
+    IndexBuffer construction" split as the .xnb path.
     VisualizationData's own construction (two 256-element float[] arrays,
     all-zero until MediaPlayer.GetVisualizationData populates them) --
     zero native ABI, pure managed data (see below for why populating them
@@ -117,8 +122,9 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     SoundEffect/SoundEffectInstance, VertexBuffer/IndexBuffer,
     ContentManager (RootDirectory, Load<Texture2D>, Load<SoundEffect>,
     Load<SpriteFont> -- capped at 256 glyphs, see plan.md; Load<Model>'s
-    own final VertexBuffer/IndexBuffer construction step, see above for
-    the real, unblocked .xnb-parsing step this sits on top of),
+    own final VertexBuffer/IndexBuffer construction step for both the
+    .xnb and .cnj paths, see above for the real, unblocked parsing steps
+    these sit on top of),
     Effect.Apply/BasicEffect.Apply (EffectTechnique/EffectPass/
     DirectionalLight are pure scaffolding around this, no ABI of their own)
     -- and by extension Model.Draw()/ModelMesh.Draw(), since drawing a
@@ -133,12 +139,16 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
 
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
-    Model's own .cnj/glTF content paths and LZX/LZ4-compressed .xnb files
-    (see below for why only real, uncompressed .xnb was in scope),
+    Model's own .cnj bone-hierarchy/skinning/PBR/morph-target surface,
+    runtime glTF content paths, and LZX/LZ4-compressed .xnb files (see
+    above/below for why only a minimal-scope .cnj subset and real,
+    uncompressed .xnb were in scope), the .cnj path's own CNA.XnaCompat
+    mirror (CnjCompatModelBuilder -- deferred the same way the .xnb
+    path's own compat mirror was its own separate follow-up),
     ModelMeshPart's own ModelEffectCollection/ModelMesh.Effects compat gap
     (a real, permanent structural limitation, not a temporary scope cut --
-    see plan.md Phase 4 for why) -- neither is blocked on the native ABI,
-    each its own substantial separable feature (or, for
+    see plan.md Phase 4 for why) -- none of these are blocked on the
+    native ABI, each its own substantial separable feature (or, for
     ModelEffectCollection, structurally unfixable)
 ```
 
@@ -237,15 +247,35 @@ implementation, not invented), but confirmed to an unusual depth for this
 project: not just read, but hand-traced byte-by-byte against a real,
 independently-produced MonoGame-compiled fixture, catching exactly the
 kind of subtle format misunderstanding reading source alone can miss.
-Deliberately scoped to real, uncompressed `.xnb` files only -- the real
-engine's own `.cnj`/glTF content paths and LZX/LZ4 decompression are all
-out of scope (each is its own large, separable feature; see `plan.md`
-Phase 4). `XnbBasicEffectReader` reads every field a real `BasicEffect`
-`.xnb` entry serializes (so the stream position stays correct for
-whatever follows) but doesn't apply them to a real `BasicEffect` instance
--- doing so needs its external texture reference resolved via
-`ContentManager.Load<Texture2D>()`, itself native-ABI-blocked, so this is
-recorded as a known gap rather than half-wired.
+Deliberately scoped to real, uncompressed `.xnb` files only -- LZX/LZ4
+decompression and the real engine's own `.cnj`/glTF content paths were
+all out of scope for that pass (each is its own large, separable
+feature; see `plan.md` Phase 4). `XnbBasicEffectReader` reads every field
+a real `BasicEffect` `.xnb` entry serializes (so the stream position
+stays correct for whatever follows) but doesn't apply them to a real
+`BasicEffect` instance -- doing so needs its external texture reference
+resolved via `ContentManager.Load<Texture2D>()`, itself native-ABI-blocked,
+so this is recorded as a known gap rather than half-wired.
+
+`CNA.Content.Cnj` (a minimal-scope subset of `.cnj` `Model` loading) is
+grounded the same way, against the real engine's own `ModelTypeReader::Read`
+-- confirmed field-by-field, plus a real gtest fixture reproduced
+byte-for-byte as a C# test (see `tests/CNA.Framework.Tests/assets/cnj/README.md`).
+Its own `BasicEffect` field application is a real, load-bearing
+divergence from `XnbBasicEffectReader`'s, not an oversight: `.cnj`'s
+`BasicEffect` JSON has no material-color fields at all, only `texture`/
+`vertexColorEnabled`, so `CnjModelBuilder` doesn't reuse
+`XnbModelBuilder.ApplyBasicEffectData`. Every sidecar path a `.cnj`
+document names is validated by `CnjPathContainment` (a direct port of
+the real engine's own `PathContainment.hpp` component-wise containment
+check) before it is ever opened, since it's untrusted, file-supplied
+input, distinct in shape from `SavedPictureStore.SanitizePictureName`'s
+own bare-filename check. Deliberately scoped to a flat mesh list (no
+bone hierarchy/skinning/morph targets) and `BasicEffect` only (no
+`PbrEffect`/`SkinnedEffect`/`DualTextureEffect`) -- each excluded surface
+is rejected with a clear, documented exception, never silently
+mis-loaded, the same discipline `.xnb`'s own LZX/LZ4 rejection already
+established.
 See `plan.md` Phase 4 and `NEXT.md`'s per-session entries for the full
 detail on each.
 
