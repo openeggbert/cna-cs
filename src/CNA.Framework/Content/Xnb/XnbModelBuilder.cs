@@ -92,21 +92,14 @@ internal static class XnbModelBuilder
         return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex);
     }
 
-    /// <summary>Builds a real, base-typed <see cref="VertexBuffer"/> -- <c>internal</c> rather than
-    /// <c>private</c> specifically so <c>CNA.XnaCompat</c>'s own compat-typed model builder can
-    /// reuse it directly: <see cref="Graphics.ModelMeshPart"/> stays base-typed even for a compat
-    /// <see cref="Model"/> (a documented, narrow compat gap -- see <c>Microsoft.Xna.Framework.Graphics.Model</c>'s
-    /// own doc comment), so there is no compat-typed variant of this method to reuse instead of
-    /// duplicating; this is the exact same object either builder would need to construct.</summary>
-    internal static VertexBuffer BuildVertexBuffer(GraphicsDevice graphicsDevice, XnbVertexBufferData data)
+    private static VertexBuffer BuildVertexBuffer(GraphicsDevice graphicsDevice, XnbVertexBufferData data)
     {
         var buffer = new VertexBuffer(graphicsDevice, data.Declaration, data.VertexCount, BufferUsage.None);
         buffer.SetData(data.Data);
         return buffer;
     }
 
-    /// <summary>Same rationale as <see cref="BuildVertexBuffer"/>.</summary>
-    internal static IndexBuffer BuildIndexBuffer(GraphicsDevice graphicsDevice, XnbIndexBufferData data)
+    private static IndexBuffer BuildIndexBuffer(GraphicsDevice graphicsDevice, XnbIndexBufferData data)
     {
         IndexElementSize size = data.SixteenBits ? IndexElementSize.SixteenBits : IndexElementSize.ThirtyTwoBits;
         int indexCount = data.Data.Length / (data.SixteenBits ? 2 : 4);
@@ -121,9 +114,8 @@ internal static class XnbModelBuilder
     /// itself native-ABI-blocked). <see cref="BasicEffect.TextureEnabled"/> is left at its default
     /// (<see langword="false"/>) rather than set <see langword="true"/> with no actual texture,
     /// which would be a real, misleading divergence from the source asset -- not a full
-    /// reproduction of it, but an honest one. Same "internal, reused by CNA.XnaCompat's own model
-    /// builder" rationale as <see cref="BuildVertexBuffer"/>.</summary>
-    internal static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data) => new(graphicsDevice)
+    /// reproduction of it, but an honest one.</summary>
+    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data) => new(graphicsDevice)
     {
         DiffuseColor = data.DiffuseColor,
         EmissiveColor = data.EmissiveColor,

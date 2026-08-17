@@ -32,14 +32,18 @@ deliberately out of scope (see `NEXT.md` for why -- each is its own large,
 separable feature, and the real engine hasn't even wired its own
 `ModelReader` into `ContentManager::Load<Model>()` yet either). `Model`'s
 `CNA.XnaCompat` mirror (`Model`/`ModelBone`/`ModelBoneCollection`/
-`ModelMesh`/`ModelMeshCollection`) is also now done, hand-buildable-only
-scope -- `ModelMeshPart`/`ModelMeshPartCollection`/`ModelEffectCollection`
-deliberately stay base-typed (a real, narrow, documented gap, same shape
-as `BasicEffect.CurrentTechnique`'s own). `ContentManager.Load<Model>()`
+`ModelMesh`/`ModelMeshCollection`) is also now done. `ContentManager.Load<Model>()`
 on the compat `ContentManager` now also returns a real, compat-typed
 `Model` (`XnbCompatModelBuilder`, reusing the base class's own
-`.xnb`-parsing directly rather than duplicating it) -- see `NEXT.md` for
-the full design reasoning on both. What remains: Phase 6
+`.xnb`-parsing directly rather than duplicating it). `ModelMeshPart`/
+`ModelMeshPartCollection` are now compat-typed too, closing most of the
+mirror's own original "deliberately deferred" gap -- but a closer look
+showed `ModelEffectCollection`/`ModelMesh.Effects` genuinely can't be
+made safe the same way (constructed at field-initializer time inside the
+base `ModelMesh`, with no override seam at all, unlike everything else
+in this feature), so that one specific piece stays a real, documented,
+permanent gap, not a temporary scope cut -- see `NEXT.md` for the full
+design reasoning on all of this. What remains: Phase 6
 packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
@@ -753,15 +757,50 @@ Split by whether the type needs the (still nonexistent) native ABI:
       working `ContentManager` at all needs a real `cna-native`, the
       same pre-existing limitation `XnbModelBuilder` itself already has).
       `samples/HelloGame` re-verified unaffected.
+- [x] **`ModelMeshPart`/`ModelMeshPartCollection` compat mirror — done,
+      2026-08-17 (session 6 continued autonomously past the compat
+      `Load<Model>()` checkpoint, per explicit user selection of "Mirror
+      ModelMeshPart and its collections").** Turned out simpler than
+      expected for `ModelMeshPart` itself (a fully trivial subclass --
+      this compat layer has no separate compat `Effect` hierarchy at
+      all, so `Effect`'s declared type never differs, and compat
+      `VertexBuffer`/`IndexBuffer` already subclass their base
+      counterparts, so `SetVertexBuffer`/`SetIndexBuffer`'s inherited,
+      base-typed parameters already accept a compat-typed argument via
+      ordinary upcasting), but harder than expected for `ModelEffectCollection`:
+      a closer look showed `ModelMesh.Effects` is constructed at
+      *field-initializer* time inside the base `ModelMesh`
+      (`public ModelEffectCollection Effects { get; } = new();`), with no
+      override seam at all -- unlike everything else in this feature,
+      there is no point after construction where a subclass could ever
+      substitute a compat-typed collection. Making it safe would need
+      `ModelMeshPart.Effect`'s setter overridden with its own
+      parallel-tracking logic *and* `ModelMesh` maintaining a second,
+      independent `Effects` collection kept in sync with it -- closer in
+      shape to why `MediaPlayer.Queue` stays a documented non-mirror than
+      to anything else in this feature, and not attempted here.
+      `ModelMesh.MeshParts` is now compat-typed (the same "single
+      construction seam" pattern `Model.Bones`/`.Meshes` already use);
+      `ModelMesh.Effects`/`ModelEffectCollection` remain a real,
+      permanent, documented gap, not a temporary scope cut.
+      `XnbCompatModelBuilder` needed real rework (not just a signature
+      update) since it can no longer reuse `XnbModelBuilder`'s own
+      buffer/effect builders now that a compat `ModelMeshPart` expects
+      compat-typed buffers -- reverted those back to `private` and gave
+      `XnbCompatModelBuilder` its own, including a new base-to-compat
+      `VertexDeclaration` converter. Verified: `dotnet build` clean
+      across all 6 projects, 0 warnings; `dotnet test`: 401/401 passing
+      (up from 391 — 10 new tests, all for compat `ModelMeshPart`, the
+      only new type in this pass reachable from `CNA.XnaCompat.Tests`
+      without a real `cna-native`). `samples/HelloGame` re-verified
+      unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
-      `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths and
-      its compat mirror's `ModelMeshPart`/`ModelMeshPartCollection`/
-      `ModelEffectCollection` gap (see the entries above);
-      `MediaPlayer`'s visualization data (`GetVisualizationData`,
-      real-time FFT). None of these are blocked on the native C ABI the
-      way everything else in this phase is — they're scoped out because
-      each is its own substantial, separable feature, not because
-      anything is missing upstream to ground them against.
+      `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths (see
+      the entries above); `MediaPlayer`'s visualization data
+      (`GetVisualizationData`, real-time FFT). Neither is blocked on the
+      native C ABI the way everything else in this phase is — they're
+      scoped out because each is its own substantial, separable feature,
+      not because anything is missing upstream to ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

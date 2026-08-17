@@ -30,6 +30,87 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## `ModelMeshPart`/`ModelMeshPartCollection` compat mirror -- done; `ModelEffectCollection` stays a documented gap after a deeper look showed it isn't safely fixable (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Mirror ModelMeshPart and its collections")
+
+Closed the last item on the `Model` compat mirror's own "deliberately
+deferred" list from earlier this session -- partially. Read every
+relevant base type again before touching anything (`ModelMeshPart`'s own
+`Effect` setter, `ModelMesh`'s `Effects` field initializer, `ModelEffectCollection`'s
+own shape) and found the original framing ("mirror `ModelMeshPart`/
+`ModelMeshPartCollection`/`ModelEffectCollection`, three roughly
+equal-sized gaps") was wrong: `ModelMeshPart`/`ModelMeshPartCollection`
+turned out cleanly achievable, but `ModelEffectCollection`/
+`ModelMesh.Effects` genuinely is not, for a structural reason distinct
+from (and worse than) the other two.
+
+**`ModelMeshPart` didn't need the `VertexBuffer`/`IndexBuffer`/`Effect`
+property overrides the original scope decision implied it would.**
+Since this compat layer has no separate compat `Effect` hierarchy at all
+(confirmed against `BasicEffect`'s own doc comment -- compat `BasicEffect`
+extends `CNA.Graphics.BasicEffect` directly), `Effect`'s declared type is
+`CNA.Graphics.Effect` regardless of whether the owning `ModelMeshPart` is
+compat-typed, so there was nothing to override there. And since compat
+`VertexBuffer`/`IndexBuffer` already subclass their base counterparts,
+`SetVertexBuffer`/`SetIndexBuffer`'s *inherited*, base-typed parameters
+already accept a compat-typed argument via ordinary upcasting -- no
+override needed to actually *use* a compat buffer through them either.
+Compat `ModelMeshPart` ended up a fully trivial subclass: two
+constructors, forwarding to base, nothing else. `ModelMeshPartCollection`
+still needed the usual independent-reimplementation treatment (same
+"extending directly inherits the wrong element type" reasoning as every
+other collection this session), since its *element* type genuinely
+differs now (compat `ModelMeshPart`, not the base one).
+
+**`ModelMesh.MeshParts` became a real, compat-typed property the same
+way `Model.Bones`/`.Meshes` already are** -- built directly from the
+constructor's own `parts` parameter (now required to be compat-typed,
+the "single construction seam" pattern), with no growth-after-construction
+complication to solve (real XNA has no `AddPart`-equivalent, matching
+`Model.Bones`/`.Meshes`'s own shape, not `ModelBone.Children`'s).
+
+**`ModelEffectCollection`/`ModelMesh.Effects` turned out to be a
+genuinely different, harder problem, not just "the third item on the
+same list."** `ModelMeshPart.Effect`'s setter (inherited unchanged --
+there's no compat `Effect` type for an override to even change) is what
+mutates the owning mesh's `Effects` collection, and that collection is
+constructed at *field-initializer* time inside the base `CNA.Graphics.ModelMesh`
+(`public ModelEffectCollection Effects { get; } = new();`) -- there is no
+point after construction, ever, where a subclass could substitute a
+compat-typed collection the way `Model`'s own constructor substitutes
+compat-typed `Bones`/`Meshes`. Making this safe would need
+`ModelMeshPart.Effect`'s setter overridden with its own parallel-tracking
+logic (the same shape of problem `ModelBone.Children`/`AddChild` already
+solved for bones) *and* `ModelMesh` maintaining a second, independent
+`Effects` collection kept in sync with it via that override -- a
+materially bigger design task than the rest of this pass, closer in
+shape to why `MediaPlayer.Queue` stays a documented non-mirror than to
+anything else in the `Model` feature. Left undone, documented explicitly
+in both `ModelMesh`'s and `ModelMeshPart`'s own doc comments, rather than
+attempted partway or silently skipped.
+
+**`XnbCompatModelBuilder` needed real rework, not just a signature
+update.** Now that a compat `ModelMeshPart`'s own constructor expects
+compat-typed `VertexBuffer`/`IndexBuffer`, it could no longer reuse
+`CNA.Content.Xnb.XnbModelBuilder`'s own `BuildVertexBuffer`/
+`BuildIndexBuffer`/`BuildBasicEffect` (those still correctly build
+*base*-typed instances for the base assembly path) -- reverted those back
+to `private` (their `internal` visibility existed only for this reuse,
+which no longer applies) and gave `XnbCompatModelBuilder` its own
+compat-typed versions, including a new base-to-compat `VertexDeclaration`
+converter (`CNA.Content.Xnb` has no knowledge of `CNA.XnaCompat` at all,
+so it can only ever hand back base-typed declarations) built through
+`VertexElement`'s own existing implicit conversion operators.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings (fixed a
+handful of doc-comment `cref`s that didn't resolve to inherited/renamed
+members via simple name, same recurring pattern as earlier passes);
+`dotnet test`: 401/401 passing (up from 391 -- 10 new tests, all for
+compat `ModelMeshPart`, the only new type in this pass reachable from
+`CNA.XnaCompat.Tests` without a real `cna-native`: neither of its
+constructors needs a `GraphicsDevice` at all, unlike `Model`/`ModelMesh`/
+`VertexBuffer`/`IndexBuffer`/`BasicEffect`). `samples/HelloGame`
+re-verified unaffected.
+
 ## Twenty-sixth `/code-review high` pass, over the twenty-fifth pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more)
 
 Ran the review over the twenty-fifth pass's own fix (commit `51ce883`).

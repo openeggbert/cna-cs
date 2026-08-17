@@ -10,15 +10,21 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// native-backed assembly around it" pattern this compat layer's own <c>MediaLibrary</c> already
 /// established for <c>SavedPictureStore</c>.
 ///
-/// Builds compat-typed <see cref="Model"/>/<see cref="ModelBone"/>/<see cref="ModelMesh"/>, but each
-/// mesh's <c>ModelMeshPart</c>s stay base-typed (<c>CNA.Graphics.ModelMeshPart</c>) -- the
-/// same documented, narrow compat gap <see cref="Model"/>'s own doc comment already establishes for
-/// hand-built compat models, applied identically here. <see cref="CNA.Content.Xnb.XnbModelBuilder.BuildVertexBuffer"/>/
-/// <c>BuildIndexBuffer</c>/<c>BuildBasicEffect</c> are reused directly (made <c>internal</c>
-/// specifically for this reuse) rather than duplicated -- they already build exactly the
-/// base-typed <c>VertexBuffer</c>/<c>IndexBuffer</c>/<c>BasicEffect</c> instances a base-typed
-/// <see cref="CNA.Graphics.ModelMeshPart"/> needs, so there is nothing compat-specific left for a
-/// separate copy of that logic to add.
+/// Builds compat-typed <see cref="Model"/>/<see cref="ModelBone"/>/<see cref="ModelMesh"/>/
+/// <see cref="ModelMeshPart"/> throughout -- a follow-up pass extended this from the original
+/// scope (which left <c>ModelMeshPart</c> base-typed) once <see cref="ModelMeshPart"/>/
+/// <see cref="ModelMeshPartCollection"/> got their own compat mirror. This means the buffer/effect
+/// construction below can no longer reuse <c>CNA.Content.Xnb.XnbModelBuilder</c>'s own
+/// <c>BuildVertexBuffer</c>/<c>BuildIndexBuffer</c>/<c>BuildBasicEffect</c> directly (those build
+/// *base*-typed instances, which is no longer sufficient now that a compat <see cref="ModelMeshPart"/>'s
+/// own constructor expects compat-typed buffers) -- this type has its own versions instead,
+/// including a <see cref="VertexDeclaration"/> converter (base <see cref="CNA.Graphics.VertexDeclaration"/>
+/// has no compat equivalent produced anywhere upstream in <c>CNA.Content.Xnb</c>, which has no
+/// knowledge of this namespace at all).
+///
+/// <c>ModelMesh.Effects</c>/<c>ModelEffectCollection</c> still stay base-typed, unaffected by
+/// this pass -- see <see cref="ModelMesh"/>'s own doc comment for why that one specific gap doesn't
+/// have a safe fix.
 ///
 /// The bone-tree/mesh-part/effect-assignment-ordering/parent-bone-fallback control flow below
 /// *does* near-duplicate <c>CNA.Content.Xnb.XnbModelBuilder.Build</c>'s own -- a code-review
@@ -55,17 +61,13 @@ internal static class XnbCompatModelBuilder
         var meshParentBones = new List<ModelBone>(data.Meshes.Count);
         foreach (XnbMeshData meshData in data.Meshes)
         {
-            var parts = new List<CNA.Graphics.ModelMeshPart>(meshData.Parts.Count);
+            var parts = new List<ModelMeshPart>(meshData.Parts.Count);
             foreach (XnbMeshPartData partData in meshData.Parts)
             {
-                CNA.Graphics.VertexBuffer? vertexBuffer = partData.VertexBuffer is null
-                    ? null
-                    : XnbModelBuilder.BuildVertexBuffer(graphicsDevice, partData.VertexBuffer);
-                CNA.Graphics.IndexBuffer? indexBuffer = partData.IndexBuffer is null
-                    ? null
-                    : XnbModelBuilder.BuildIndexBuffer(graphicsDevice, partData.IndexBuffer);
+                VertexBuffer? vertexBuffer = partData.VertexBuffer is null ? null : BuildVertexBuffer(graphicsDevice, partData.VertexBuffer);
+                IndexBuffer? indexBuffer = partData.IndexBuffer is null ? null : BuildIndexBuffer(graphicsDevice, partData.IndexBuffer);
 
-                parts.Add(new CNA.Graphics.ModelMeshPart(
+                parts.Add(new ModelMeshPart(
                     vertexBuffer, indexBuffer, partData.NumVertices, partData.PrimitiveCount, partData.StartIndex, partData.VertexOffset));
             }
 
@@ -80,7 +82,7 @@ internal static class XnbCompatModelBuilder
                 XnbBasicEffectData? effectData = meshData.Parts[i].Effect;
                 if (effectData is not null)
                 {
-                    parts[i].Effect = XnbModelBuilder.BuildBasicEffect(graphicsDevice, effectData);
+                    parts[i].Effect = BuildBasicEffect(graphicsDevice, effectData);
                 }
             }
 
@@ -90,5 +92,54 @@ internal static class XnbCompatModelBuilder
 
         int rootBoneIndex = data.RootBoneIndex >= 0 ? data.RootBoneIndex : 0;
         return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex);
+    }
+
+    private static VertexBuffer BuildVertexBuffer(GraphicsDevice graphicsDevice, XnbVertexBufferData data)
+    {
+        var buffer = new VertexBuffer(graphicsDevice, ToCompat(data.Declaration), data.VertexCount, BufferUsage.None);
+        buffer.SetData(data.Data);
+        return buffer;
+    }
+
+    private static IndexBuffer BuildIndexBuffer(GraphicsDevice graphicsDevice, XnbIndexBufferData data)
+    {
+        IndexElementSize size = data.SixteenBits ? IndexElementSize.SixteenBits : IndexElementSize.ThirtyTwoBits;
+        int indexCount = data.Data.Length / (data.SixteenBits ? 2 : 4);
+        var buffer = new IndexBuffer(graphicsDevice, size, indexCount, BufferUsage.None);
+        buffer.SetData(data.Data);
+        return buffer;
+    }
+
+    /// <summary>Same rationale as <c>CNA.Content.Xnb.XnbModelBuilder.BuildBasicEffect</c>'s own doc
+    /// comment (every parsed field applied except the unresolved texture reference) -- constructs a
+    /// compat-typed <see cref="BasicEffect"/> here instead of a base-typed one, since
+    /// <see cref="ModelMeshPart"/>'s constructor (unlike its <c>Effect</c> property) is not the
+    /// documented gap.</summary>
+    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data) => new(graphicsDevice)
+    {
+        DiffuseColor = data.DiffuseColor,
+        EmissiveColor = data.EmissiveColor,
+        SpecularColor = data.SpecularColor,
+        SpecularPower = data.SpecularPower,
+        Alpha = data.Alpha,
+        VertexColorEnabled = data.VertexColorEnabled,
+    };
+
+    /// <summary>Converts a base <see cref="CNA.Graphics.VertexDeclaration"/> (all
+    /// <c>CNA.Content.Xnb</c> ever produces, since that namespace has no knowledge of
+    /// <c>CNA.XnaCompat</c>) into this namespace's own -- element-wise, through
+    /// <see cref="VertexElement"/>'s own implicit conversion operators, the same "arrays of a
+    /// type with a user-defined conversion operator do not convert automatically" reason every
+    /// other array conversion in this compat layer needs one.</summary>
+    private static VertexDeclaration ToCompat(CNA.Graphics.VertexDeclaration declaration)
+    {
+        CNA.Graphics.VertexElement[] source = declaration.GetVertexElements();
+        var elements = new VertexElement[source.Length];
+        for (int i = 0; i < source.Length; i++)
+        {
+            elements[i] = source[i];
+        }
+
+        return new VertexDeclaration(declaration.VertexStride, elements);
     }
 }

@@ -7,29 +7,47 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// that struct's own implicit conversion operators (same as every other inherited-unchanged scalar
 /// member across this compat layer), and <c>Draw</c> has no compat-typed parameter at all.
 ///
-/// <c>MeshParts</c>/<c>Effects</c> are also inherited unchanged, staying base-typed
-/// (<c>CNA.Graphics.ModelMeshPartCollection</c>/<c>ModelEffectCollection</c>) -- a real, narrow,
-/// documented compat gap, the same shape and same justification as <c>BasicEffect</c>'s own
-/// <c>CurrentTechnique</c>/<c>Passes</c>/<c>DirectionalLight0-2</c> gap: <c>ModelMeshPart</c>'s own
-/// <c>VertexBuffer</c>/<c>IndexBuffer</c>/<c>Effect</c> properties can already legitimately *hold*
-/// compat-typed instances (compat <c>VertexBuffer</c>/<c>IndexBuffer</c>/<c>BasicEffect</c> all
-/// subclass their base counterparts directly), so ordinary, `var`-typed/`foreach` consumption of
-/// mesh parts works correctly either way -- only an explicit
-/// <c>Microsoft.Xna.Framework.Graphics.ModelMeshPart</c>/<c>ModelMeshPartCollection</c>/
-/// <c>ModelEffectCollection</c> type declaration would fail to compile. Mirroring those three types
-/// too is a real, separate follow-up, not attempted in this pass.
+/// <see cref="MeshParts"/> is now a real, independently-tracked, compat-typed collection (a
+/// follow-up pass closed the gap this doc comment used to describe) -- built directly from this
+/// constructor's own <c>parts</c> parameter, the same "single construction seam,
+/// provably compat-typed" pattern <see cref="Model"/>'s own <c>Bones</c>/<c>Meshes</c> already use:
+/// <c>ModelMeshPartCollection</c> is (like <c>ModelBoneCollection</c>/<c>ModelMeshCollection</c>)
+/// an independent reimplementation, not a subclass, so there is no covariant-return downcast
+/// available for it, and no growth after construction to worry about (real XNA has no
+/// <c>AddPart</c>-style method either).
+///
+/// <c>Effects</c>/<c>ModelEffectCollection</c> stay a real, narrower, documented gap,
+/// deliberately *not* mirrored even in this follow-up pass -- unlike <c>MeshParts</c>, there is no
+/// safe way to make it compat-typed: <c>ModelMeshPart.Effect</c>'s setter (inherited unchanged --
+/// see <see cref="ModelMeshPart"/>'s own doc comment for why it stays that way) mutates the owning
+/// mesh's <c>Effects</c> collection directly, and that collection is constructed at *field-initializer*
+/// time inside the base <c>CNA.Graphics.ModelMesh</c> (<c>public ModelEffectCollection Effects { get; } = new();</c>)
+/// with no override seam at all -- there is no point after construction where a subclass could ever
+/// substitute a compat-typed collection the way <see cref="Model"/>'s own constructor substitutes
+/// compat-typed <c>Bones</c>/<c>Meshes</c>. Making this safe would need <c>ModelMeshPart.Effect</c>'s
+/// setter overridden with its own parallel-tracking logic (the same shape of problem
+/// <c>ModelBone.Children</c>/<c>AddChild</c> solved for bones) *and* this class maintaining a
+/// second, independent <c>Effects</c> collection kept in sync with it -- a materially bigger design
+/// task than the rest of this pass, structurally closer to why <c>MediaPlayer.Queue</c> stays a
+/// documented non-mirror than to anything solved elsewhere in the <c>Model</c> feature. `var`-typed/
+/// `foreach` consumption of <c>Effects</c> still works correctly either way (compat <c>BasicEffect</c>
+/// instances added to it upcast fine), same "only an explicit type declaration fails" shape as
+/// every other narrow gap in this compat layer.
 /// </summary>
 public sealed class ModelMesh : CNA.Graphics.ModelMesh
 {
-    public ModelMesh(GraphicsDevice graphicsDevice, IReadOnlyList<CNA.Graphics.ModelMeshPart> parts)
-        : base(graphicsDevice, parts)
+    public ModelMesh(GraphicsDevice graphicsDevice, IReadOnlyList<ModelMeshPart> parts)
+        : this(graphicsDevice, string.Empty, parts)
     {
     }
 
-    public ModelMesh(GraphicsDevice graphicsDevice, string name, IReadOnlyList<CNA.Graphics.ModelMeshPart> parts)
+    public ModelMesh(GraphicsDevice graphicsDevice, string name, IReadOnlyList<ModelMeshPart> parts)
         : base(graphicsDevice, name, parts)
     {
+        MeshParts = new ModelMeshPartCollection(new List<ModelMeshPart>(parts));
     }
+
+    public new ModelMeshPartCollection MeshParts { get; }
 
     /// <summary>Downcasts <c>base.ParentBone</c> rather than keeping separate storage -- safe
     /// because the only ways this is ever set (this setter, and <c>Model</c>'s own constructor

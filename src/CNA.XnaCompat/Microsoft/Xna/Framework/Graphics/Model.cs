@@ -28,8 +28,9 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// "element-wise conversion, not a collection-level one" pattern <c>ContentManager</c>'s own
 /// <c>SpriteFontData</c> conversion helpers already use in this compat layer.
 ///
-/// <see cref="Meshes"/>'s own <c>MeshParts</c>/<c>Effects</c> stay base-typed -- see
-/// <see cref="ModelMesh"/>'s own doc comment for that documented, narrow gap.
+/// <see cref="Meshes"/>'s own <c>MeshParts</c> is now compat-typed too (a follow-up pass closed
+/// that gap); <c>Effects</c> stays base-typed -- see <see cref="ModelMesh"/>'s own doc comment for
+/// that remaining, documented, narrower gap.
 /// </summary>
 public sealed class Model : CNA.Graphics.Model
 {

@@ -148,21 +148,24 @@ source, not invented. `Model`/`ModelMesh`/`ModelMeshPart`/`ModelBone` are
 grounded the strongest of any Phase 4 item so far: not just "shaped to
 match a real implementation" but built entirely out of already-native-backed
 primitives, needing no new native function at all -- see `plan.md` Phase 4
-for the detail. `Model`/`ModelBone`/`ModelMesh` and their collections now
-have a `CNA.XnaCompat` mirror too, deliberately scoped down the same way
-`BasicEffect`'s own mirror is: `ModelMeshPart`/`ModelMeshPartCollection`/
-`ModelEffectCollection` stay base-typed, matching
-`BasicEffect.CurrentTechnique`/`.Passes`/`DirectionalLight0-2`'s own
-precedent exactly -- ordinary `var`-typed/`foreach` consumption of mesh
-parts already works (compat `VertexBuffer`/`IndexBuffer`/`BasicEffect`
-all subclass their base counterparts, so a base-typed `ModelMeshPart`
-property can already legitimately hold a compat-typed instance), so only
-an explicit `Microsoft.Xna.Framework.Graphics.ModelMeshPart` type
-declaration is the real, narrow, documented gap. `ContentManager.Load<Model>()`
-on the compat `ContentManager` now also returns a real, compat-typed
-`Model` (`XnbCompatModelBuilder`, reusing the base class's own
-`.xnb`-parsing directly rather than duplicating it -- see `NEXT.md` for
-the full design reasoning on both). `Song`/`MediaPlayer` are grounded
+for the detail. `Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart` and their
+collections now all have a `CNA.XnaCompat` mirror -- `ModelMeshPart`
+turned out a fully trivial subclass, since this compat layer has no
+separate compat `Effect` hierarchy at all and compat `VertexBuffer`/
+`IndexBuffer` already subclass their base counterparts, so nothing about
+it actually needed overriding. `ModelEffectCollection`/`ModelMesh.Effects`
+is the one real, permanent exception, not a temporary scope cut: it's
+constructed at field-initializer time inside the base `ModelMesh`, with
+no override seam at all, structurally closer to `MediaPlayer.Queue`'s own
+documented non-mirror than to anything else in this feature -- ordinary
+`var`-typed/`foreach` consumption still works fine either way (compat
+`BasicEffect` instances added to it upcast correctly), so only an
+explicit `Microsoft.Xna.Framework.Graphics.ModelEffectCollection` type
+declaration is affected. `ContentManager.Load<Model>()` on the compat
+`ContentManager` also returns a real, compat-typed `Model`
+(`XnbCompatModelBuilder`, reusing the base class's own `.xnb`-parsing
+directly rather than duplicating it -- see `NEXT.md` for the full design
+reasoning on all of this). `Song`/`MediaPlayer` are grounded
 against `modules/media/`'s own working implementation the same way
 `SoundEffect`/`BasicEffect` were, deliberately scoped down from that
 implementation's much larger surface (see the "Not started at all" list
