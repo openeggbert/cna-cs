@@ -11,6 +11,28 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 9: `SoundEffect`/`SoundEffectInstance` rewritten -- the first real consumer of the ambient game handle from step 2, and confirmation of an asymmetric getter/setter shape flagged as an open question back then (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+Renamed throughout (`cna_soundeffect_*` -> `cna_sound_effect_*`, `cna_soundeffectinstance_*` ->
+`cna_sound_effect_instance_*`). Every creation and instance call now needs a game handle -- the
+real ABI has no parameterless audio route anywhere -- so `SoundEffect`'s constructor is the first
+real consumer of `CnaAmbientGame.Current`, the design the user selected back in step 2 specifically
+for this class of problem and which had sat unused ever since.
+
+`cna_sound_effect_create_pcm16_range_ext` ("the canonical seven-argument constructor," per its own
+doc comment) is a genuine, confirmed match for this project's own `offset`/`count`/`loopStart`/
+`loopLength` constructor -- resolving an open question from the synthesis doc (whether the
+loop-start/length region this project already exposed would survive into the real ABI): it does,
+just as a route parameter on this specific creation function rather than a
+`CNA_SoundEffectCreateInfo` field, which only carries sample rate and channel count.
+
+`SoundEffectInstance`'s five getters (`State`/`Volume`/`Pitch`/`Pan`/`IsLooped`) all now route
+through the single real `cna_sound_effect_instance_get_info` snapshot -- confirmed, not assumed,
+that no individual getters exist at all, while every individual *setter* this project already
+guessed (`set_volume`/`_pitch`/`_pan`/`_is_looped`) does exist. That asymmetry (getters only as one
+combined snapshot, setters individual) was flagged as a real finding in the earlier research pass;
+this step is where it was actually built against.
+
 ## Native ABI migration, step 8: `BasicEffect` rewritten as a real native object -- the largest structural change in the whole migration, and a genuine simplification once it landed (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 The old `BasicEffect` was deliberately, honestly self-designed against zero ABI: its own doc comment

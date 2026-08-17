@@ -480,85 +480,70 @@ internal static partial class Native
         CnaStringView assetName,
         out CnaHandle soundEffect);
 
-    // -- SoundEffect / SoundEffectInstance -----------------------------------------------------
-    //
-    // No ABI shape for audio exists in the analysis docs at all (confirmed by a full-text grep of
-    // both -- unlike SpriteBatch's §22, audio gets no concrete struct anywhere, just class names
-    // to preserve and one "cna_audio_*" naming-convention bullet). This whole surface is
-    // self-designed, but with better grounding than RenderTarget2D/GamePadCapabilities had: the
-    // real openeggbert/cna C++ engine already has a working (if not yet C-ABI-exposed)
-    // Microsoft::Xna::Framework::Audio::SoundEffect/SoundEffectInstance implementation over
-    // SDL3_mixer (modules/audio/include/Microsoft/Xna/Framework/Audio/). Every function/parameter
-    // here is deliberately shaped to match that real C++ class's actual method surface and
-    // documented semantics (Volume/Pitch pass through unclamped; Pan validates to [-1,1] and
-    // IsLooped's "already played" check happen in managed code before reaching native, matching
-    // where the real C++ implementation itself performs them -- see SoundEffectInstance.cs) --
-    // this is this repository's best guess at what a future cna_soundeffect_* C API would need to
-    // expose over that existing implementation, not a guess made from nothing.
+    // -- SoundEffect / SoundEffectInstance (real ABI, audio.h -- step 9 of the native-ABI --------
+    // migration). Renamed throughout (cna_soundeffect_* -> cna_sound_effect_*,
+    // cna_soundeffectinstance_* -> cna_sound_effect_instance_*) and every creation/instance call
+    // now needs the CnaAmbientGame.Current handle from step 2's design -- the real ABI has no
+    // parameterless audio route anywhere. cna_sound_effect_create_pcm16_range_ext ("the canonical
+    // seven-argument constructor") is a genuine, confirmed match for this project's own
+    // offset/count/loopStart/loopLength constructor shape -- see CnaSoundEffectCreateInfo's own
+    // doc comment for why the loop region is a route parameter, not a CreateInfo field.
+    // cna_sound_effect_instance_get_state/_get_volume/_get_pitch/_get_pan/_get_is_looped don't
+    // exist at all -- only one combined cna_sound_effect_instance_get_info snapshot -- but every
+    // individual setter does still exist, an asymmetric shape confirmed directly, not assumed.
 
-    /// <summary>Raw PCM audio must be headerless, little-endian, signed 16-bit samples -- not a
-    /// WAV/RIFF file and not an XNB asset, matching the real C++ SoundEffect(byte[], ...)
-    /// constructor's own documented requirement exactly.</summary>
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_soundeffect_create(
-        byte* data,
-        nuint byteLength,
-        int sampleRate,
-        int channels,
+    internal static unsafe partial CnaResult cna_sound_effect_create_pcm16_range_ext(
+        CnaHandle game,
+        in CnaSoundEffectCreateInfo createInfo,
+        byte* pcmBytes,
+        ulong byteCount,
+        int offset,
+        int count,
         int loopStart,
         int loopLength,
         out CnaHandle soundEffect);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_soundeffect_release(CnaHandle soundEffect);
+    internal static partial CnaResult cna_sound_effect_destroy(CnaHandle soundEffect);
 
     [LibraryImport(LibraryName)]
-    internal static partial long cna_soundeffect_get_duration_ticks(CnaHandle soundEffect);
+    internal static partial CnaResult cna_sound_effect_get_duration_ticks(CnaHandle soundEffect, out long outDurationTicks);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_create(CnaHandle soundEffect, out CnaHandle instance);
+    internal static partial CnaResult cna_sound_effect_create_instance(CnaHandle soundEffect, out CnaHandle instance);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_soundeffectinstance_release(CnaHandle instance);
+    internal static partial CnaResult cna_sound_effect_instance_destroy(CnaHandle instance);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_play(CnaHandle instance);
+    internal static partial CnaResult cna_sound_effect_instance_play(CnaHandle instance);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_pause(CnaHandle instance);
+    internal static partial CnaResult cna_sound_effect_instance_pause(CnaHandle instance);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_resume(CnaHandle instance);
+    internal static partial CnaResult cna_sound_effect_instance_resume(CnaHandle instance);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_stop(CnaHandle instance, byte immediate);
+    internal static partial CnaResult cna_sound_effect_instance_stop(CnaHandle instance, byte immediate);
+
+    /// <summary>The only real way to read state/volume/pitch/pan/is_looped -- see this section's
+    /// own comment.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sound_effect_instance_get_info(CnaHandle instance, out CnaSoundEffectInstanceInfo outInfo);
 
     [LibraryImport(LibraryName)]
-    internal static partial int cna_soundeffectinstance_get_state(CnaHandle instance);
+    internal static partial CnaResult cna_sound_effect_instance_set_volume(CnaHandle instance, float volume);
 
     [LibraryImport(LibraryName)]
-    internal static partial float cna_soundeffectinstance_get_volume(CnaHandle instance);
+    internal static partial CnaResult cna_sound_effect_instance_set_pitch(CnaHandle instance, float pitch);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_set_volume(CnaHandle instance, float volume);
+    internal static partial CnaResult cna_sound_effect_instance_set_pan(CnaHandle instance, float pan);
 
     [LibraryImport(LibraryName)]
-    internal static partial float cna_soundeffectinstance_get_pitch(CnaHandle instance);
-
-    [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_set_pitch(CnaHandle instance, float pitch);
-
-    [LibraryImport(LibraryName)]
-    internal static partial float cna_soundeffectinstance_get_pan(CnaHandle instance);
-
-    [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_set_pan(CnaHandle instance, float pan);
-
-    [LibraryImport(LibraryName)]
-    internal static partial byte cna_soundeffectinstance_get_is_looped(CnaHandle instance);
-
-    [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_soundeffectinstance_set_is_looped(CnaHandle instance, byte looped);
+    internal static partial CnaResult cna_sound_effect_instance_set_is_looped(CnaHandle instance, byte isLooped);
 
     // -- VertexBuffer / IndexBuffer / VertexDeclaration (real ABI, step 4 of the native-ABI ------
     // migration -- vertex_resources.h/index_resources.h). Replaces the old cna_vertexbuffer_*/

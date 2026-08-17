@@ -3,12 +3,11 @@ using CNA.Interop;
 namespace CNA.Audio;
 
 /// <summary>
-/// A loaded, native-backed sound resource. No ABI shape for audio exists anywhere in the analysis
-/// docs (confirmed by a full-text grep of both -- unlike <c>SpriteBatch.Draw</c>'s §22, audio gets
-/// no concrete struct, just class names to preserve). This whole type's native surface is
-/// self-designed, but shaped to match the real openeggbert/cna C++ engine's own (not yet
-/// C-ABI-exposed) <c>Microsoft::Xna::Framework::Audio::SoundEffect</c> implementation over
-/// SDL3_mixer -- see <see cref="CNA.Interop.Native"/>'s audio section for the full reasoning.
+/// A loaded, native-backed sound resource, now matching the real, shipped openeggbert/cna C API
+/// (<c>audio.h</c>) rather than a self-designed guess -- see <c>NEXT.md</c>'s native-ABI-migration
+/// entry, step 9. Creation now needs a game handle (<see cref="CnaAmbientGame.Current"/>, the
+/// design this project selected back in step 2 specifically for this) -- no parameterless audio
+/// route exists anywhere in the real ABI.
 ///
 /// Deliberately does *not* implement real XNA's fire-and-forget <c>Play()</c>/
 /// <c>Play(volume,pitch,pan)</c> convenience methods on this type: those rely on XNA's internal
@@ -29,18 +28,18 @@ public class SoundEffect : IDisposable
 
     /// <summary>
     /// <paramref name="buffer"/> must be headerless, little-endian, signed 16-bit PCM samples --
-    /// not a WAV/RIFF file and not an XNB asset, matching the real XNA constructor's own
-    /// documented requirement exactly (and the real C++ engine's <c>SoundEffect</c> constructor
-    /// doc comment, which states this in those same words). Only validates
-    /// <paramref name="sampleRate"/> is positive -- real XNA additionally restricts it to the
-    /// 8,000-48,000 Hz range with its own <see cref="ArgumentOutOfRangeException"/>, which isn't
-    /// reproduced here (lower confidence in the exact bounds than in the rest of this
-    /// constructor's validation, so this deliberately validates less rather than risk enforcing
-    /// the wrong limits). <paramref name="loopStart"/>/<paramref name="loopLength"/> are only
-    /// checked for being non-negative, not for actually fitting within the sample count implied
-    /// by <paramref name="count"/> -- the native side is the one place that can validate a loop
-    /// region's own units (samples) against the buffer without duplicating its channel/bit-depth
-    /// interpretation here.
+    /// not a WAV/RIFF file and not an XNB asset, matching real XNA's own constructor and the real
+    /// ABI's own documented requirement for <c>cna_sound_effect_create_pcm16_range_ext</c> exactly
+    /// (real XNA's own 7-argument constructor and this real ABI's "canonical seven-argument
+    /// constructor" turned out to already match). Only validates <paramref name="sampleRate"/> is
+    /// positive -- real XNA additionally restricts it to the 8,000-48,000 Hz range with its own
+    /// <see cref="ArgumentOutOfRangeException"/>, which isn't reproduced here (lower confidence in
+    /// the exact bounds than in the rest of this constructor's validation, so this deliberately
+    /// validates less rather than risk enforcing the wrong limits). <paramref name="loopStart"/>/
+    /// <paramref name="loopLength"/> are only checked for being non-negative, not for actually
+    /// fitting within the sample count implied by <paramref name="count"/> -- the native side is
+    /// the one place that can validate a loop region's own units (samples) against the buffer
+    /// without duplicating its channel/bit-depth interpretation here.
     /// </summary>
     public unsafe SoundEffect(
         byte[] buffer, int offset, int count, int sampleRate, AudioChannels channels, int loopStart, int loopLength)
@@ -52,10 +51,17 @@ public class SoundEffect : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(loopLength);
         ValidateChannels(channels);
 
+        var createInfo = new CnaSoundEffectCreateInfo
+        {
+            SampleRate = (uint)sampleRate,
+            Channels = (uint)channels,
+        };
+
         fixed (byte* basePtr = buffer)
         {
-            CnaResult result = Native.cna_soundeffect_create(
-                basePtr + offset, (nuint)count, sampleRate, (int)channels, loopStart, loopLength, out CnaHandle handle);
+            CnaResult result = Native.cna_sound_effect_create_pcm16_range_ext(
+                CnaAmbientGame.Current, in createInfo, basePtr, (ulong)buffer.Length, offset, count, loopStart, loopLength,
+                out CnaHandle handle);
             CnaException.ThrowIfFailed(result, nameof(SoundEffect));
             _handle = new NativeResourceHandle(handle.Value, ReleaseNative);
         }
@@ -68,11 +74,19 @@ public class SoundEffect : IDisposable
         _handle = new NativeResourceHandle(nativeHandleValue, ReleaseNative);
     }
 
-    private static void ReleaseNative(nint handleValue) => Native.cna_soundeffect_release(new CnaHandle(handleValue));
+    private static void ReleaseNative(nint handleValue) => Native.cna_sound_effect_destroy(new CnaHandle(handleValue));
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
 
-    public TimeSpan Duration => TimeSpan.FromTicks(Native.cna_soundeffect_get_duration_ticks(new CnaHandle(NativeHandleValue)));
+    public TimeSpan Duration
+    {
+        get
+        {
+            CnaResult result = Native.cna_sound_effect_get_duration_ticks(new CnaHandle(NativeHandleValue), out long ticks);
+            CnaException.ThrowIfFailed(result, nameof(Duration));
+            return TimeSpan.FromTicks(ticks);
+        }
+    }
 
     public SoundEffectInstance CreateInstance() => new(CreateNativeInstanceHandle());
 
@@ -86,7 +100,7 @@ public class SoundEffect : IDisposable
     /// </summary>
     internal nint CreateNativeInstanceHandle()
     {
-        CnaResult result = Native.cna_soundeffectinstance_create(new CnaHandle(NativeHandleValue), out CnaHandle instance);
+        CnaResult result = Native.cna_sound_effect_create_instance(new CnaHandle(NativeHandleValue), out CnaHandle instance);
         CnaException.ThrowIfFailed(result, nameof(CreateInstance));
         return instance.Value;
     }
