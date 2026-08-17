@@ -11,6 +11,23 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Eighteenth `/code-review high` pass, over the seventeenth pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still)
+
+Ran the review a fourth time over this feature, over the seventeenth
+pass's `ThrowIfInvalidForSavePicture` extraction. Clean -- no findings.
+Confirmed the check order/semantics are preserved exactly at both call
+sites in both classes, confirmed the two private same-named helpers on
+the base and derived `MediaLibrary` don't collide or shadow (private
+members aren't inherited in C#, so this is a non-issue, not something
+that needed fixing), confirmed no behavior/ordering/exception-type change
+anywhere in the diff.
+
+359/359 tests passing, unchanged; `dotnet build` clean; `samples/HelloGame`
+re-verified unaffected. This closes out the picture-library feature's
+review cycle entirely -- four review passes total across the original
+commit and its two follow-up fixes, the last one landing clean, the same
+shape the `MediaLibrary` music-side feature's five-pass cycle took.
+
 ## Seventeenth `/code-review high` pass, over the sixteenth pass's own fix -- one minor finding, extracted a shared guard (2026-08-17, session 6 continued autonomously still further again yet again once more)
 
 Ran the review over the sixteenth pass's own fix commit (`072b5b4`). One
