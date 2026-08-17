@@ -1,16 +1,30 @@
 using Xunit;
 using XnaMediaPlayer = Microsoft.Xna.Framework.Media.MediaPlayer;
+using XnaSongCollection = Microsoft.Xna.Framework.Media.SongCollection;
 
 namespace CNA.XnaCompat.Tests;
 
 /// <summary>
 /// Runs in its own test process (separate from <c>CNA.Framework.Tests</c>, per <c>dotnet test</c>'s
 /// own per-project test hosts), so the shared static <c>CNA.Media.MediaPlayer</c> state this
-/// forwards to starts fresh here -- same "never call Play with a real Song" caution as
-/// <c>CNA.Tests.MediaPlayerTests</c>, for the same reason.
+/// forwards to starts fresh here -- same "never call Play with a real Song/SongCollection"
+/// caution as <c>CNA.Tests.MediaPlayerTests</c>, for the same reason (mutating the shared queue
+/// before the native call throws would leak into every later test in this assembly).
 /// </summary>
 public class MediaPlayerCompatTests
 {
+    [Fact]
+    public void Play_NullSongCollection_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => XnaMediaPlayer.Play((XnaSongCollection)null!));
+    }
+
+    [Fact]
+    public void Play_NullSongCollectionWithIndex_ThrowsArgumentNullException()
+    {
+        Assert.Throws<ArgumentNullException>(() => XnaMediaPlayer.Play(null!, 0));
+    }
+
     [Fact]
     public void IsShuffled_RoundTrips()
     {

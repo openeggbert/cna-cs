@@ -11,6 +11,38 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `MediaPlayer.Play(SongCollection)` compat mirror: the flagged follow-up, closed (2026-08-17, session 6 continued autonomously still further again)
+
+> The `MediaLibrary` entry's own "where to pick up next" flagged that
+> `Microsoft.Xna.Framework.Media.MediaPlayer.Play(SongCollection)` might
+> now be reachable, since that pass built the first compat
+> `SongCollection` this session ever needed. Checked, confirmed, and
+> closed it as its own small, well-bounded pass rather than letting the
+> observation go stale.
+
+**Confirmed the reasoning held:** `Play(SongCollection)` only needed an
+*upcast* of the input (a compat <c>Song</c> already *is* a
+<c>CNA.Media.Song</c>, so <c>IReadOnlyList&lt;T&gt;</c>'s own covariance
+handles the conversion for free via `.ToList()`), not a downcast of any
+output -- so `MediaPlayer.Queue`'s own structural blocker (`LoadSong`
+always constructing base-typed defensive copies internally) never
+actually applied to this method, only to `Queue` itself. Added
+`Play(SongCollection)`/`Play(SongCollection, int)` to the compat
+`MediaPlayer`, converting via a small `ToBaseSongs` helper (same
+covariance-via-`.ToList()` technique the `MediaLibrary` pass's own
+`Artist`/`Genre`/`Album`/`Playlist` fixes already used).
+
+**Same test-isolation caution applied again, correctly this time on the
+first attempt:** only the null-check failure paths are testable (`Play`
+mutates the shared static queue before the eventual native-call failure,
+so calling it with a real `SongCollection` anywhere would leak state into
+every later test in the same assembly -- see the `MediaQueue`/
+`SongCollection` entry for the original discovery of this constraint).
+
+**Verified:** `dotnet build CNA.sln` clean across all 6 projects. `dotnet
+test CNA.sln`: 314/314 passing (up from 312 -- 2 new tests, both
+null-check failure paths). `samples/HelloGame` re-verified unaffected.
+
 ## Thirteenth `/code-review high` pass, over the `MediaLibrary` commit -- six findings, four fixed (2026-08-17, session 6 continued autonomously still further)
 
 Ran the review a thirteenth time. Six findings, the most of any single

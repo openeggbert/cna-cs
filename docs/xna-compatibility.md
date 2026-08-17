@@ -148,13 +148,16 @@ against `modules/media/`'s own working implementation the same way
 implementation's much larger surface (see the "Not started at all" list
 above) -- and, unlike `Model`, `Song` *does* have a full `CNA.XnaCompat`
 mirror, since its construction has no equivalent blocker.
-`MediaPlayer.Queue`/`Play(SongCollection)` are the one part of this whole
-feature *without* a compat mirror, for a different, more structural
-reason than `Model`'s: `LoadSong` always constructs a base `CNA.Media.Song`
-internally, and `MediaPlayer` being a `static` class means (unlike every
-other compat type this session built) there's no subclassing seam to
-override that -- a compat `Queue` property would return songs that fail
-an explicit compat-typed downcast, not just an inconvenience.
+`MediaPlayer.Queue` is the one part of this whole feature *without* a
+compat mirror, for a different, more structural reason than `Model`'s:
+`LoadSong` always constructs a base `CNA.Media.Song` internally, and
+`MediaPlayer` being a `static` class means (unlike every other compat
+type this session built) there's no subclassing seam to override that --
+a compat `Queue` property would return songs that fail an explicit
+compat-typed downcast, not just an inconvenience. `Play(SongCollection)`
+itself *is* supported despite this -- it only needs an upcast of the
+input, not a downcast of any output, so `Queue`'s own blocker never
+applied to it.
 `Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`/`MediaSource` are
 grounded differently from everything else in this list: not "shaped to
 match a real implementation" at all, since the real implementation's
