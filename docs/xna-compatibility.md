@@ -88,11 +88,16 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     Add/Clear/enumeration) and MediaPlayer.DetectSongEndedByElapsedTime,
     MoveNext/MovePrevious's shuffle/repeat/clamped-direction logic -- also
     zero native ABI, all pure managed logic and math,
-    Album/Artist/Genre/Playlist/MediaLibrary/MediaSource and their
+    Album/Artist/Genre/Playlist/MediaLibrary/MediaSource and their music
     collections -- real and fully testable, but by deliberate design, not
-    a native escape hatch: every collection MediaLibrary exposes is
+    a native escape hatch: every music collection MediaLibrary exposes is
     always empty (see below for why), so there is genuinely no native
-    call anywhere in this feature at all, not even a blocked one
+    call anywhere in that part of the feature at all, not even a blocked
+    one. MediaLibrary's picture side (Picture/PictureAlbum/
+    PictureCollection/PictureAlbumCollection, GetPictureFromToken/
+    SavePicture) -- genuinely real, not always-empty: saving a picture
+    needs only plain file I/O (SavedPictureStore), no native call at all
+    (see below for the image-dimension/thumbnail fallback reasoning)
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -113,11 +118,8 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
     Model file-format loading, MediaPlayer's visualization data
-    (GetVisualizationData), the real C++ engine's picture-library surface
-    (Picture/PictureAlbum/PictureCollection/PictureAlbumCollection,
-    GetPictureFromToken/SavePicture) -- infrastructure-bound the same way
-    MediaLibrary's own music-scanning logic is, and real XNA games
-    essentially never touch it anyway
+    (GetVisualizationData) -- neither blocked on the native ABI, each its
+    own substantial separable feature
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -170,8 +172,25 @@ have a full `CNA.XnaCompat` mirror despite the structural caution
 `MediaPlayer.Queue` needed, because every collection here is provably
 always empty -- there's no real data that could ever diverge between a
 base-typed and compat-typed empty collection, unlike `LoadSong`'s always-
-non-empty, always-base-typed song copies. See `plan.md` Phase 4 and
-`NEXT.md`'s per-session entries for the full detail on each.
+non-empty, always-base-typed song copies.
+`MediaLibrary`'s picture side is grounded the same way `Album`/`Artist`/
+etc. are (real public API surface, read from the real headers/source) but
+needed yet another different compat-mirror shape, because unlike the
+music side its data is genuinely real and growing. A covariant-return
+factory-hook design (the same pattern `Game.CreateGraphicsDevice` uses)
+was tried first and does not fit: `PictureCollection`/`PictureAlbumCollection`
+are independent reimplementations of their `CNA.Media` counterparts, not
+subclasses (same reason as `SongCollection`/`AlbumCollection`), and a
+covariant-return override requires the override's return type to actually
+be a subtype of the base's declared return type -- an independent
+reimplementation by definition is not one. `CNA.XnaCompat`'s `MediaLibrary`/
+`Picture`/`PictureAlbum` are instead full independent reimplementations,
+built directly on `CNA.Media.SavedPictureStore` (the shared low-level,
+security-sensitive file-I/O helper) rather than on the base class's own
+picture-tracking. See `NEXT.md`'s picture-library entry for the full
+reasoning trail, including the abandoned covariant-hook attempt.
+See `plan.md` Phase 4 and `NEXT.md`'s per-session entries for the full
+detail on each.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and

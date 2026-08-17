@@ -11,6 +11,133 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Picture-library subsystem (`Picture`/`PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`, `GetPictureFromToken`/`SavePicture`) -- done, including a real mid-implementation design pivot (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Start the picture-library subsystem")
+
+Picked this up as the next well-scoped feature once the `MediaLibrary`
+music-side object model closed out clean (fifteen review passes, see the
+entries below). Read `Picture.hpp`/`.cpp`, `PictureAlbum.hpp`/`.cpp`,
+`PictureCollection.hpp`, `PictureAlbumCollection.hpp`, and
+`MediaLibrary.cpp`'s `GetPictureFromToken`/`EnsureSavedPicturesAlbum`/
+`SavePicture` (both overloads)/`SavedPictureStore.hpp`/`.cpp` in full
+before writing anything, same discipline as every other feature this
+session.
+
+**Key research finding: this is the opposite shape from the music side.**
+Scanning for pre-existing songs is irreducibly bound to FFmpeg/native
+tag-parsing (why `MediaLibrary`'s music collections stay always-empty). But
+*saving* a picture is genuinely portable: `SavePicture`'s write path needs
+only plain file I/O, and the two pieces that ARE infrastructure-bound --
+real image-dimension detection, real thumbnail generation -- already have
+real, working fallback paths in the upstream C++ engine's own code
+(`width=0, height=0` on a caught decode exception; return the full-size
+image when thumbnail generation fails), not something this project had to
+invent. Reproducing those fallbacks unconditionally is a faithful port of
+an already-real code path, not a shortcut.
+
+**`SavedPictureStore`** (new `internal static class`, ported from the real
+C++ engine's own type of the same name) does the actual file write:
+`GetSavedPicturesDirectory` (best-effort `Directory.CreateDirectory`,
+matching the C++ side's `std::error_code` "attempt then check" contract --
+initially wrote this as `catch (Exception) when (!Directory.Exists(dir))`,
+caught and fixed before any review pass: a `when` filter that evaluates
+false lets the exception escape uncaught, not the intended "catch broadly,
+then check the real outcome" behavior), magic-byte extension sniffing
+(PNG/JPEG/BMP, defaulting to `.png`), and `SanitizePictureName` --
+security-relevant, ported exactly from the real engine: normalizes
+backslashes to forward slashes first (a real traversal vector on Linux too,
+since `Path.GetFileName` only treats `/` as a separator), keeps only the
+last path segment, rejects `.`/`..`/empty in favor of a safe `"picture"`
+fallback. Tested directly against attack vectors (`"../../etc/passwd"`,
+`"..\\..\\evil"`, `"/etc/cron.d/evil"`, `".."`, `"."`, `""`), asserting both
+the resulting filename and that the written file actually lands inside the
+Saved Pictures directory, never outside it.
+
+**Critical safety finding, found by direct investigation before writing any
+test, not assumed:** `Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)`
+(the BCL equivalent of the real engine's native `MediaLibraryPaths::GetPictureRoot()`,
+design invariant #7) resolves to the *actual current user's real Pictures
+folder* in this sandboxed environment -- confirmed via `echo "HOME=$HOME"`,
+`xdg-user-dir PICTURES`, and `ls -la ~/Pictures` (real `Camera`/
+`Screenshots` subdirectories with real dated content). This means
+**`MediaLibrary.SavePicture()` must never be called end-to-end from any
+automated test anywhere in this repository** -- every test in this feature
+either exercises `SavedPictureStore` directly against a throwaway temp
+directory (`Path.Combine(Path.GetTempPath(), "cna-tests-" + Guid.NewGuid())`)
+or exercises only `SavePicture`'s null-argument validation paths, which
+throw before ever reaching the real filesystem.
+
+**The `CNA.Framework` (base) implementation was straightforward** -- object
+model, two-phase `PictureAlbum` construction (matching the real engine's
+own shape, even though this project's scan-free design doesn't strictly
+need the split), `MediaLibrary.SavePicture`/`GetPictureFromToken`/
+`EnsureSavedPicturesAlbum` following the C++ source closely.
+`ReadOnlyMediaCollection<T>` (the shared generic base already extracted
+during the `MediaLibrary` music-side pass) needed one addition: an
+`internal void Add(T item)`, since `Pictures`/`SavedPictures`/a
+`PictureAlbum`'s own `Pictures`/`Albums` are the first collections this
+session has needed to *grow* after construction rather than stay always-
+empty.
+
+**The `CNA.XnaCompat` mirror needed a real, mid-implementation design
+pivot -- worth recording in full since it's a genuine dead end, not just a
+clean success story like every other feature this session.** First
+attempt: since `Picture`/`PictureAlbum` genuinely hold real, growing data
+(unlike `Album`/`Artist`/`Genre`/`Playlist`'s provably-always-empty
+collections), neither established downcast justification applied. Tried
+extending the *third* established pattern instead -- a covariant-return
+factory-hook design, the same one `CNA.Game.CreateGraphicsDevice`/
+`CreateContentManager` already use for `GraphicsDevice`/`Content`: added
+`protected virtual CreatePictureAlbum`/`CreatePicture`/
+`CreatePictureCollection` to `CNA.Media.MediaLibrary` (and
+`CreateAlbumCollection`/`CreatePictureCollection` to `CNA.Media.PictureAlbum`),
+overridden in `CNA.XnaCompat` to substitute compat-typed construction. This
+compiled cleanly for the `Picture`/`PictureAlbum` *element* hooks -- but
+failed with `CS0508` ("return type must be X to match overridden member")
+for the *collection* hooks. Root cause, only obvious after chasing the
+compiler error: `Microsoft.Xna.Framework.Media.PictureCollection`/
+`PictureAlbumCollection` are **independent reimplementations** of their
+`CNA.Media` counterparts, not subclasses -- the same "extending directly
+would inherit an indexer typed to the base namespace's element type"
+reasoning that already forced `SongCollection`/`AlbumCollection` down this
+path in the earlier `MediaLibrary` pass. A covariant-return override
+requires the override's return type to actually *be* a subtype of the
+base's declared return type; an independent reimplementation by definition
+is not one. The factory-hook pattern that works perfectly for
+`GraphicsDevice`/`Content` (genuine subclasses) does not generalize to
+types that were deliberately built as independent reimplementations for an
+unrelated, still-valid reason.
+
+**Resolution:** reverted the covariant hooks out of `CNA.Media.MediaLibrary`/
+`PictureAlbum` entirely (back to plain, non-virtual construction -- no
+trace of the abandoned attempt left in the base layer). `CNA.XnaCompat`'s
+`MediaLibrary`/`Picture`/`PictureAlbum` instead became full independent
+reimplementations, extending the same pattern `SongCollection`/
+`AlbumCollection` already established for collections to the whole
+picture subsystem: compat's `MediaLibrary` maintains its own
+`RootPictureAlbum`/`Pictures`/`SavedPictures`/`_ownedPictures`/
+`EnsureSavedPicturesAlbum`, calling `CNA.Media.SavedPictureStore` (the
+shared, security-sensitive low-level file-I/O helper, reachable via
+`InternalsVisibleTo`) directly rather than routing through the base
+class's own bookkeeping -- reusing the one piece of logic that must not be
+duplicated (path-traversal sanitization) while accepting independent
+reimplementation of the thin orchestration around it. Documented one real,
+narrow consequence rather than engineering around it: a caller that
+explicitly upcasts a compat `MediaLibrary` to `CNA.Media.MediaLibrary` and
+calls `SavePicture` through that reference would write a real file into
+the *base* class's own separate, invisible-to-compat picture state --
+not a realistic path for ported XNA game code (which never references
+`CNA.Media` at all), and the same category of accepted edge case as
+`MediaLibrary.Dispose()` not cascading to compat's `new`-shadowed
+collections (see the fifteenth review pass below).
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings (including
+fixing one `CS1734`/`CS0419` doc-comment-cref warning caught along the
+way); `dotnet test`: 355/355 passing (up from 315 -- 40 new tests: 14 in
+`SavedPictureStoreTests`, 12 in `PictureLibraryTests`, 7 in the extended
+`MediaLibraryTests`, 7 in the extended `MediaLibraryCompatTests`).
+`samples/HelloGame` re-verified unaffected (same `DllNotFoundException` at
+`cna_managed_game_create`).
+
 ## Fifteenth `/code-review high` pass, over the `MediaLibrary` regression fix -- clean (2026-08-17, session 6 continued autonomously still further again once more still)
 
 Ran the review a fifteenth time, over the previous pass's own fix (the

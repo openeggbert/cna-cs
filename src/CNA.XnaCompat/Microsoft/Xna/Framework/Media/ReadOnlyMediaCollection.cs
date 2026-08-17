@@ -34,6 +34,12 @@ public class ReadOnlyMediaCollection<T> : IDisposable, IEnumerable<T>
         IsDisposed = true;
     }
 
+    /// <summary>Appends an item after construction -- <c>internal</c>, used only by this
+    /// namespace's own <c>MediaLibrary</c>/<c>PictureAlbum</c> to grow their picture-related
+    /// collections in place. Same rationale as <c>CNA.Media.ReadOnlyMediaCollection&lt;T&gt;</c>'s
+    /// own copy of this method.</summary>
+    internal void Add(T item) => _items.Add(item);
+
     public List<T>.Enumerator GetEnumerator() => _items.GetEnumerator();
 
     IEnumerator<T> IEnumerable<T>.GetEnumerator() => _items.GetEnumerator();

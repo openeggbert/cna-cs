@@ -32,22 +32,53 @@ namespace CNA.Media;
 /// doc comment) -- unlike <c>Song</c>, they only make sense as part of a coherent scan this
 /// project can't perform, so there's no real reason to hand-build one here either.
 ///
-/// Deliberately out of scope even within this pass, not just deferred by the above: the real C++
-/// engine's picture-library surface (<c>Picture</c>/<c>PictureAlbum</c>/<c>PictureCollection</c>/
-/// <c>PictureAlbumCollection</c>, <c>GetPictureFromToken</c>/<c>SavePicture</c>) -- a separate,
-/// similarly infrastructure-bound feature (native image loading/thumbnailing) that real XNA games
-/// essentially never touch (Zune-era personal-photo browsing, not game asset loading), so it
-/// wasn't worth pulling into this already-large pass. A ported game referencing
-/// <c>MediaLibrary.Pictures</c>/<c>.SavedPictures</c>/<c>.RootPictureAlbum</c> won't compile
-/// against this type yet -- a real, narrow, documented gap.
+/// The picture-library surface (<c>Picture</c>/<c>PictureAlbum</c>/<c>PictureCollection</c>/
+/// <c>PictureAlbumCollection</c>, <see cref="GetPictureFromToken"/>/<see cref="SavePicture(string,byte[])"/>)
+/// is genuinely real, not scoped to always-empty the way the music side above is: unlike scanning
+/// for pre-existing songs (irreducibly bound to native tag-parsing/FFmpeg), *saving* a picture
+/// needs nothing the real C++ engine's own logic doesn't already have a real fallback for --
+/// confirmed by reading <c>MediaLibrary::SavePicture</c>'s own source, not assumed. Writing the
+/// image bytes to a real "Saved Pictures" folder needs only plain file I/O
+/// (<see cref="SavedPictureStore"/>, a faithful port of the real C++ engine's own
+/// <c>SavedPictureStore</c>, including its security-relevant filename sanitization). Real image
+/// dimension detection needs native decoding this project doesn't have -- but the real C++ engine
+/// *already* falls back to <c>width=0, height=0</c> on a decode failure rather than throwing (its
+/// own <c>SavePicture</c> catches the decode exception and continues), so this project's own
+/// always-0 dimensions are that same real fallback path taken unconditionally, not an invented
+/// shortcut. <see cref="Picture.GetThumbnail"/> similarly always takes the real engine's own
+/// thumbnail-generation-failure fallback (return the full-size image) rather than performing real
+/// PNG downscaling this project has no library for. <see cref="RootPictureAlbum"/> starts as a
+/// single, empty root node (no pre-existing-photo scan, for the same reason the music side has
+/// none) rather than <see langword="null"/> -- real XNA's own <c>RootPictureAlbum</c> is documented
+/// to always return a valid album, even an empty one, so a fresh/never-scanned library is exactly
+/// that case, not a special case to work around.
 ///
 /// Not sealed here (unlike real XNA's actual <c>sealed class MediaLibrary</c>) specifically so
 /// <c>Microsoft.Xna.Framework.Media.MediaLibrary</c> can extend this directly -- the same
 /// "preserve the real logic's lineage over namespace purity" trade-off <c>Song</c>/<c>BasicEffect</c>
 /// already made; the compat type itself is sealed, matching real XNA.
+///
+/// CNA.XnaCompat's own <c>MediaLibrary</c> does **not** downcast <see cref="RootPictureAlbum"/>/
+/// <see cref="Pictures"/>/<see cref="SavedPictures"/> the way it downcasts <see cref="MediaSource"/>:
+/// a covariant-return factory-hook design (the same pattern <c>CNA.Game.CreateGraphicsDevice</c>
+/// uses) was tried and does not fit here, because <c>Microsoft.Xna.Framework.Media.PictureCollection</c>/
+/// <c>PictureAlbumCollection</c> are -- like <c>SongCollection</c>/<c>AlbumCollection</c> --
+/// independent reimplementations of their <c>CNA.Media</c> counterparts, not subclasses (extending
+/// directly would inherit an indexer typed to this namespace's <see cref="Picture"/>/
+/// <see cref="PictureAlbum"/>, not the compat one). A covariant-return override requires the
+/// override's return type to actually be a subtype of the declared return type, which an
+/// independent reimplementation by definition is not -- so this class stays a plain, non-virtual
+/// implementation, and CNA.XnaCompat's own <c>MediaLibrary</c> instead maintains its own
+/// independently-tracked, compat-typed picture state, built directly on <see cref="SavedPictureStore"/>
+/// (the shared low-level file-I/O helper) rather than on this class's own bookkeeping -- see that
+/// type's own doc comment.
 /// </summary>
 public class MediaLibrary : IDisposable
 {
+    private readonly string _pictureRoot;
+    private readonly List<Picture> _ownedPictures = [];
+    private PictureAlbum? _savedPicturesAlbum;
+
     public MediaLibrary()
         : this(new MediaSource(MediaSourceType.LocalDevice, "Local Device"))
     {
@@ -68,6 +99,15 @@ public class MediaLibrary : IDisposable
         Artists = new ArtistCollection([]);
         Genres = new GenreCollection([]);
         Playlists = new PlaylistCollection([]);
+
+        // Environment.GetFolderPath is the exact real BCL equivalent of the real C++ engine's own
+        // native MediaLibraryPaths::GetPictureRoot() (design invariant #7) -- returns "" if the
+        // platform has no such concept, matching the C++ side's own possibly-empty pictureRoot_.
+        _pictureRoot = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+        RootPictureAlbum = new PictureAlbum(Path.GetFileName(_pictureRoot), null, _pictureRoot);
+        RootPictureAlbum.SetChildAlbumsAndPictures();
+        Pictures = new PictureCollection([]);
+        SavedPictures = new PictureCollection([]);
     }
 
     public AlbumCollection Albums { get; }
@@ -80,9 +120,97 @@ public class MediaLibrary : IDisposable
 
     public MediaSource MediaSource { get; }
 
+    public PictureCollection Pictures { get; }
+
     public PlaylistCollection Playlists { get; }
 
+    public PictureAlbum RootPictureAlbum { get; }
+
+    public PictureCollection SavedPictures { get; }
+
     public SongCollection Songs { get; }
+
+    /// <summary>Matches the real C++ engine's own <c>GetPictureFromToken</c> exactly: a linear
+    /// search by <see cref="Picture.Token"/> over every picture this library actually owns (only
+    /// ever ones saved via <see cref="SavePicture(string,byte[])"/> in this project, since nothing
+    /// scans for pre-existing pictures), returning <see langword="null"/> for no match rather than
+    /// throwing.</summary>
+    public Picture? GetPictureFromToken(string token)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+
+        foreach (Picture picture in _ownedPictures)
+        {
+            if (picture.Token == token)
+            {
+                return picture;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Matches the real C++ engine's own <c>SavePicture</c> exactly: write the bytes to a
+    /// real "Saved Pictures" file, create a <see cref="Picture"/> for it (width/height 0 -- see
+    /// this type's own doc comment for why that's a real fallback, not an invented one), and
+    /// register it in every collection it's genuinely a member of
+    /// (<see cref="Pictures"/>/<see cref="SavedPictures"/>/the "Saved Pictures"
+    /// <see cref="PictureAlbum"/>'s own <see cref="PictureAlbum.Pictures"/>).</summary>
+    public Picture SavePicture(string name, byte[] imageBuffer)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(imageBuffer);
+
+        string? savedPath = SavedPictureStore.SavePicture(_pictureRoot, name, imageBuffer);
+        if (savedPath is null)
+        {
+            throw new IOException($"Failed to save picture '{name}'.");
+        }
+
+        PictureAlbum parentAlbum = EnsureSavedPicturesAlbum();
+        var picture = new Picture(name, parentAlbum, width: 0, height: 0, DateTime.Now, savedPath);
+        _ownedPictures.Add(picture);
+
+        Pictures.Add(picture);
+        SavedPictures.Add(picture);
+        parentAlbum.Pictures.Add(picture);
+
+        return picture;
+    }
+
+    public Picture SavePicture(string name, Stream source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        using var buffer = new MemoryStream();
+        source.CopyTo(buffer);
+        return SavePicture(name, buffer.ToArray());
+    }
+
+    /// <summary>Lazily creates the real "Saved Pictures" <see cref="PictureAlbum"/> tree node (and
+    /// registers it as a real child of <see cref="RootPictureAlbum"/>) the first time a picture is
+    /// actually saved. Idempotent -- a no-op returning the existing album on later calls. Simpler
+    /// than the real C++ engine's own <c>EnsureSavedPicturesAlbum</c>: that version also has to
+    /// handle <c>rootPictureAlbum_</c> itself being null (when the initial scan never found a
+    /// pictures root to build a tree from) -- this project's own <see cref="RootPictureAlbum"/> is
+    /// never null in the first place (constructed unconditionally, see this type's own doc
+    /// comment), so that whole fallback branch is genuinely dead code here, not omitted by
+    /// oversight.</summary>
+    private PictureAlbum EnsureSavedPicturesAlbum()
+    {
+        if (_savedPicturesAlbum is not null)
+        {
+            return _savedPicturesAlbum;
+        }
+
+        string path = Path.Combine(_pictureRoot, "Saved Pictures");
+        var album = new PictureAlbum("Saved Pictures", RootPictureAlbum, path);
+        album.SetChildAlbumsAndPictures();
+        RootPictureAlbum.Albums.Add(album);
+
+        _savedPicturesAlbum = album;
+        return album;
+    }
 
     public void Dispose()
     {
@@ -96,6 +224,9 @@ public class MediaLibrary : IDisposable
         Artists.Dispose();
         Genres.Dispose();
         Playlists.Dispose();
+        Pictures.Dispose();
+        SavedPictures.Dispose();
+        RootPictureAlbum.Dispose();
         IsDisposed = true;
     }
 }

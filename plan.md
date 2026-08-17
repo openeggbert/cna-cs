@@ -17,12 +17,15 @@ constructors also now done. `Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`'s
 real XNA object model is also now done, deliberately scoped to always-empty
 collections (the real C++ engine's actual scanning logic depends on
 FFmpeg/native tag-parsing infrastructure with no equivalent on either side
-of this binding -- see `NEXT.md` for the detail). What remains: `Model`
-file-loading and the real C++ engine's picture-library surface
-(`Picture`/`PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`,
-similarly infrastructure-bound) (Phase 4 follow-ups, deliberately
-deferred, not blocked) and Phase 6 packaging/cross-platform validation,
-tracked below.
+of this binding -- see `NEXT.md` for the detail). The picture-library
+surface (`Picture`/`PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`,
+`GetPictureFromToken`/`SavePicture`) is also now done, genuinely real (not
+scoped to always-empty) since its write path needs only plain file I/O --
+see `NEXT.md` for the detail, including why its `CNA.XnaCompat` mirror
+ended up an independent reimplementation rather than a subclass. What
+remains: `Model` file-loading (Phase 4 follow-up, deliberately deferred,
+not blocked) and Phase 6 packaging/cross-platform validation, tracked
+below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -573,19 +576,56 @@ Split by whether the type needs the (still nonexistent) native ABI:
       run, exercising real construction/validation/equality behavior with
       no native dependency at all). `samples/HelloGame` re-verified
       unaffected.
+- [x] **The real C++ engine's picture-library surface (`Picture`/
+      `PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`,
+      `GetPictureFromToken`/`SavePicture`) — done, 2026-08-17 (session 6
+      continued autonomously past the `MediaLibrary` checkpoint, per
+      explicit user request to start this subsystem next).** Unlike the
+      music side above, this is genuinely real, not scoped to
+      always-empty: reading `MediaLibrary::SavePicture`'s own C++ source
+      confirmed *saving* a picture needs nothing beyond plain file I/O
+      (`SavedPictureStore`, a faithful port including its security-relevant
+      path-traversal filename sanitization) — the only infrastructure-bound
+      sub-pieces (real image-dimension detection, real thumbnail
+      generation) already have real, working fallback paths in the
+      upstream engine itself (`width=0,height=0` on decode failure;
+      full-size image on thumbnail-generation failure), taken
+      unconditionally here rather than invented. `RootPictureAlbum` starts
+      as a single empty root node (no pre-existing-photo scan, same reason
+      as the music side) rather than null, matching real XNA's own
+      "always a valid album" contract. **`CNA.XnaCompat` mirror needed a
+      genuinely different design from every other feature this session:**
+      a covariant-return factory-hook design (the same pattern
+      `Game.CreateGraphicsDevice` uses) was tried first and does not fit,
+      because `PictureCollection`/`PictureAlbumCollection` are — like
+      `SongCollection`/`AlbumCollection` — independent reimplementations of
+      their `CNA.Media` counterparts, not subclasses, and a covariant
+      override requires the override's return type to actually be a
+      subtype of the base's declared return type. With no safe downcast
+      available for the collections, `Picture`/`PictureAlbum` became
+      independent reimplementations too, and `CNA.XnaCompat`'s own
+      `MediaLibrary` maintains fully independent, compat-typed picture
+      state built directly on `CNA.Media.SavedPictureStore` (the shared
+      low-level, security-sensitive helper — reused, not duplicated)
+      instead of on the base class's own bookkeeping — see `NEXT.md` for
+      the full reasoning trail, including the dead end. **Critical safety
+      finding, load-bearing for all testing in this area:**
+      `Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)`
+      resolves to the real current user's actual Pictures folder in this
+      environment — confirmed, not assumed — so no test anywhere calls
+      `SavePicture` with real data; `SavedPictureStore` (the actual
+      file-writing logic) is tested directly against a throwaway temp
+      directory instead. Verified: `dotnet build` clean across all 6
+      projects, 0 warnings; `dotnet test`: 355/355 passing (up from 315 —
+      40 new tests). `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model` has no file-format loader (parsing a real model format is a
-      separate, much larger problem — see `Model`'s own doc comment); the
-      real C++ engine's picture-library surface (`Picture`/`PictureAlbum`/
-      `PictureCollection`/`PictureAlbumCollection`, `GetPictureFromToken`/
-      `SavePicture`) -- a separate, similarly infrastructure-bound feature
-      (native image loading/thumbnailing) real XNA games essentially never
-      touch (Zune-era personal-photo browsing, not game asset loading);
-      visualization data (`GetVisualizationData`, real-time FFT). None of
-      these are blocked on the native C ABI the way everything else in
-      this phase is — they're scoped out because each is its own
-      substantial, separable feature, not because anything is missing
-      upstream to ground them against.
+      separate, much larger problem — see `Model`'s own doc comment);
+      visualization data (`GetVisualizationData`, real-time FFT). Neither
+      is blocked on the native C ABI the way everything else in this phase
+      is — they're scoped out because each is its own substantial,
+      separable feature, not because anything is missing upstream to
+      ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

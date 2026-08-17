@@ -14,6 +14,15 @@ namespace CNA.XnaCompat.Tests;
 /// <c>AssemblyInfo.cs</c> of its own). Since every collection is always empty anyway (see
 /// <c>CNA.Media.MediaLibrary</c>'s own doc comment), the public surface tested here is also the
 /// only part with anything real to verify.
+///
+/// <c>Picture</c>/<c>PictureAlbum</c> have the same <c>internal</c>-constructor limitation, so only
+/// <c>RootPictureAlbum</c>/<c>Pictures</c>/<c>SavedPictures</c>/<c>GetPictureFromToken</c>'s
+/// public surface (and <c>SavePicture</c>'s null-argument validation, which throws before ever
+/// reaching <c>CNA.Media.SavedPictureStore</c>) can be exercised here. Nothing in this file calls
+/// <c>SavePicture</c> with real data: its picture root resolves to the actual current user's real
+/// Pictures folder in this environment -- see <c>CNA.Framework.Tests</c>'s own
+/// <c>SavedPictureStoreTests</c> doc comment for the full reasoning, which applies identically
+/// here.
 /// </summary>
 public class MediaLibraryCompatTests
 {
@@ -88,5 +97,69 @@ public class MediaLibraryCompatTests
 
         Assert.Single(sources);
         Assert.Equal(XnaMediaSourceType.LocalDevice, sources[0].MediaSourceType);
+    }
+
+    [Fact]
+    public void Constructor_Default_RootPictureAlbumIsNeverNull()
+    {
+        using var library = new XnaMediaLibrary();
+
+        Assert.NotNull(library.RootPictureAlbum);
+        Assert.Null(library.RootPictureAlbum.Parent);
+        Assert.Equal(0, library.RootPictureAlbum.Albums.Count);
+        Assert.Equal(0, library.RootPictureAlbum.Pictures.Count);
+    }
+
+    [Fact]
+    public void Constructor_Default_PicturesAndSavedPicturesStartEmpty()
+    {
+        using var library = new XnaMediaLibrary();
+
+        Assert.Equal(0, library.Pictures.Count);
+        Assert.Equal(0, library.SavedPictures.Count);
+    }
+
+    [Fact]
+    public void GetPictureFromToken_UnknownToken_ReturnsNull()
+    {
+        using var library = new XnaMediaLibrary();
+
+        Assert.Null(library.GetPictureFromToken("nonexistent-token"));
+    }
+
+    [Fact]
+    public void GetPictureFromToken_NullToken_ThrowsArgumentNullException()
+    {
+        using var library = new XnaMediaLibrary();
+
+        Assert.Throws<ArgumentNullException>(() => library.GetPictureFromToken(null!));
+    }
+
+    [Fact]
+    public void SavePicture_NullName_ThrowsArgumentNullException()
+    {
+        // Both overloads validate before ever reaching CNA.Media.SavedPictureStore -- safe to
+        // exercise without touching the real Pictures folder, same reasoning as
+        // CNA.Framework.Tests's MediaLibraryTests.
+        using var library = new XnaMediaLibrary();
+
+        Assert.Throws<ArgumentNullException>(() => library.SavePicture(null!, []));
+        Assert.Throws<ArgumentNullException>(() => library.SavePicture(null!, Stream.Null));
+    }
+
+    [Fact]
+    public void SavePicture_NullImageBuffer_ThrowsArgumentNullException()
+    {
+        using var library = new XnaMediaLibrary();
+
+        Assert.Throws<ArgumentNullException>(() => library.SavePicture("name", (byte[])null!));
+    }
+
+    [Fact]
+    public void SavePicture_NullStream_ThrowsArgumentNullException()
+    {
+        using var library = new XnaMediaLibrary();
+
+        Assert.Throws<ArgumentNullException>(() => library.SavePicture("name", (Stream)null!));
     }
 }

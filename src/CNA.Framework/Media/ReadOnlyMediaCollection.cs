@@ -39,6 +39,19 @@ public class ReadOnlyMediaCollection<T> : IDisposable, IEnumerable<T>
         IsDisposed = true;
     }
 
+    /// <summary>
+    /// Appends an item after construction -- <c>internal</c>, used only by <see cref="MediaLibrary"/>'s
+    /// own <c>SavePicture</c> (the one collection-growth case this feature actually needs: unlike
+    /// <see cref="AlbumCollection"/>/<see cref="ArtistCollection"/>/<see cref="GenreCollection"/>/
+    /// <see cref="PlaylistCollection"/>, which stay permanently empty because nothing scans the
+    /// music library, <see cref="PictureCollection"/>/<see cref="PictureAlbumCollection"/> grow for
+    /// real as pictures are saved -- matches the real C++ engine's own pattern of granting
+    /// <c>MediaLibrary</c> friend access to each collection's private backing store for exactly
+    /// this runtime append, which its own read-only public API deliberately doesn't expose more
+    /// broadly.
+    /// </summary>
+    internal void Add(T item) => _items.Add(item);
+
     public List<T>.Enumerator GetEnumerator() => _items.GetEnumerator();
 
     IEnumerator<T> IEnumerable<T>.GetEnumerator() => _items.GetEnumerator();
