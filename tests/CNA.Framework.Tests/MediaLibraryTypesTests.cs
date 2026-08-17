@@ -141,46 +141,9 @@ public class MediaLibraryTypesTests
         Assert.True(collection.IsDisposed);
     }
 
-    [Fact]
-    public void Song_AlbumArtistGenre_DefaultToNull()
-    {
-        string path = Path.GetTempFileName();
-        try
-        {
-            var song = new Song(path);
-
-            Assert.Null(song.Album);
-            Assert.Null(song.Artist);
-            Assert.Null(song.Genre);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [Fact]
-    public void Song_AlbumArtistGenre_SettableInternally()
-    {
-        string path = Path.GetTempFileName();
-        try
-        {
-            var song = new Song(path);
-            Artist artist = CreateArtist();
-            Genre genre = CreateGenre();
-            var album = new Album("Name", artist, genre, TimeSpan.Zero, new SongCollection([]));
-
-            song.Album = album;
-            song.Artist = artist;
-            song.Genre = genre;
-
-            Assert.Same(album, song.Album);
-            Assert.Same(artist, song.Artist);
-            Assert.Same(genre, song.Genre);
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
+    // Song_AlbumArtistGenre_DefaultToNull/_SettableInternally were removed here -- both needed to
+    // construct a real Song, which now requires a native cna_song_create call (step 10 of the
+    // native-ABI migration; see NEXT.md). No longer testable without a real cna-native and a
+    // running game, the same reason GraphicsDevice/SpriteBatch/VertexBuffer/etc. already have no
+    // unit tests.
 }

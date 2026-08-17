@@ -10,8 +10,10 @@ namespace CNA.Tests;
 /// anywhere in this assembly ever calls <c>MediaPlayer.Play</c> with a real, non-null,
 /// non-disposed <see cref="Song"/> -- doing so would mutate <see cref="MediaPlayer.Queue"/> (via
 /// <c>LoadSong</c>) *before* the native call that ultimately throws, leaking state into every
-/// later test in the run. <see cref="MediaQueueTests"/> covers the queue-mutation logic itself
-/// against fresh, isolated <c>MediaQueue</c> instances instead, precisely to avoid this trap.
+/// later test in the run. This class also no longer covers any test that needs to construct a real
+/// <see cref="Song"/> at all (since step 10 of the native-ABI migration made that a real
+/// <c>cna_song_create</c> call -- see <c>NEXT.md</c>) -- the former dedicated queue-mutation test
+/// class against fresh, isolated <c>MediaQueue</c> instances was removed for the same reason.
 /// </summary>
 public class MediaPlayerTests
 {
@@ -27,24 +29,9 @@ public class MediaPlayerTests
         Assert.Throws<ArgumentNullException>(() => MediaPlayer.Play((SongCollection)null!));
     }
 
-    [Fact]
-    public void Play_DisposedSong_ThrowsObjectDisposedException()
-    {
-        string path = Path.GetTempFileName();
-        try
-        {
-            var song = new Song(path);
-            song.Dispose();
-
-            // Both checks run before the native call, so this is testable without a real
-            // cna-native, same as the null check above.
-            Assert.Throws<ObjectDisposedException>(() => MediaPlayer.Play(song));
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
+    // Play_DisposedSong_ThrowsObjectDisposedException was removed here -- needed to construct a
+    // real Song, which now requires a native cna_song_create call (step 10 of the native-ABI
+    // migration; see NEXT.md). No longer testable without a real cna-native and a running game.
 
     [Fact]
     public void Pause_WhenNotPlaying_IsNoOpAndDoesNotThrow()
@@ -140,55 +127,10 @@ public class MediaPlayerTests
             () => MediaPlayer.DetectSongEndedByElapsedTime(null!, TimeSpan.Zero));
     }
 
-    [Fact]
-    public void DetectSongEndedByElapsedTime_ZeroDuration_NeverReportsEnded()
-    {
-        string path = Path.GetTempFileName();
-        try
-        {
-            var song = new Song(path); // Duration defaults to TimeSpan.Zero.
-
-            Assert.False(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.Zero));
-            Assert.False(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromHours(1)));
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [Fact]
-    public void DetectSongEndedByElapsedTime_ElapsedBeforeDuration_ReturnsFalse()
-    {
-        string path = Path.GetTempFileName();
-        try
-        {
-            var song = new Song(path, "name", durationMS: 5000);
-
-            Assert.False(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromSeconds(4)));
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
-
-    [Fact]
-    public void DetectSongEndedByElapsedTime_ElapsedAtOrPastDuration_ReturnsTrue()
-    {
-        string path = Path.GetTempFileName();
-        try
-        {
-            var song = new Song(path, "name", durationMS: 5000);
-
-            Assert.True(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromSeconds(5)));
-            Assert.True(MediaPlayer.DetectSongEndedByElapsedTime(song, TimeSpan.FromSeconds(6)));
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
+    // DetectSongEndedByElapsedTime_ZeroDuration_NeverReportsEnded/_ElapsedBeforeDuration_ReturnsFalse/
+    // _ElapsedAtOrPastDuration_ReturnsTrue were removed here -- all three needed to construct a real
+    // Song, which now requires a native cna_song_create call (step 10 of the native-ABI migration;
+    // see NEXT.md). No longer testable without a real cna-native and a running game.
 
     [Fact]
     public void IsVisualizationEnabled_DefaultsFalse()

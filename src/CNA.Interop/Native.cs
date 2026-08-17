@@ -619,67 +619,94 @@ internal static partial class Native
         ulong capacity,
         out ulong outElementCount);
 
-    // -- MediaPlayer (Microsoft.Xna.Framework.Media) --------------------------------------------
+    // -- Song (real ABI, media.h -- step 10 of the native-ABI migration) ---------------------
     //
-    // No ABI shape for music/media playback exists in the analysis docs at all (confirmed by a
-    // full-text grep of both, same as audio). Better grounded than that makes it sound, same
-    // reasoning as SoundEffect above: the real openeggbert/cna C++ engine already has a working
-    // (if not yet C-ABI-exposed) Microsoft::Xna::Framework::Media::MediaPlayer implementation over
-    // SDL3_mixer (modules/media/), and these six functions are shaped to match its actual
-    // Play/Pause/Resume/Stop/Volume/Muted semantics. MediaPlayer is process-global/static in real
-    // XNA (not tied to a GraphicsDevice or any other handle) -- these take no CnaHandle parameter,
-    // matching the existing Keyboard/Mouse/GamePad state calls' own no-handle shape rather than
-    // inventing a new calling convention for this project's first static-subsystem native surface.
-    // State/Volume/IsMuted/PlayPosition are deliberately NOT native calls: the real C++ engine's
-    // own MediaPlayer tracks all of that in plain C++ static state (state_/volume_/a chrono-based
-    // timer), not by querying the audio backend, so CNA.Media.MediaPlayer reproduces that as plain
-    // C# static state too -- see MediaPlayer.cs.
-
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial CnaResult cna_mediaplayer_play(string filePath);
+    // Song is a real native object upstream (CNA_SongHandle, cna_song_*) -- this project's own
+    // pre-migration Song was pure C# state with a *file path string* masquerading as "Handle",
+    // never crossing the ABI until MediaPlayer.Play (which then passed that path straight to a
+    // fictional cna_mediaplayer_play(path) route). cna_song_create/_create_with_duration are a
+    // genuine, confirmed match for this project's own two constructors (the "explicit duration in
+    // milliseconds" one already matched real XNA's real 3-argument constructor exactly). See
+    // CNA.Media.Song.cs for how the file-path text is still kept client-side (for
+    // MediaPlayer.LoadSong's defensive-copy pattern) alongside the new native handle.
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_mediaplayer_pause();
+    internal static unsafe partial CnaResult cna_song_create(CnaHandle game, CnaStringView fileName, CnaStringView name, out CnaHandle outSong);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_mediaplayer_resume();
+    internal static unsafe partial CnaResult cna_song_create_with_duration(
+        CnaHandle game, CnaStringView fileName, CnaStringView assetName, int durationMilliseconds, out CnaHandle outSong);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_mediaplayer_stop();
+    internal static partial CnaResult cna_song_destroy(CnaHandle song);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_mediaplayer_set_volume(float volume);
+    internal static partial CnaResult cna_song_get_duration(CnaHandle song, out long outTicks);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_mediaplayer_set_muted(byte muted);
-
-    // Visualization capture/FFT (real openeggbert/cna implementation:
-    // modules/media/src/Internal/VisualizationCapture.cpp + VisualizationFFT.cpp) is real work done
-    // entirely in native code -- a lock-free ring buffer fed from SDL3_mixer's post-mix callback,
-    // and a from-scratch 512-point FFT over it -- so, unlike State/Volume/IsMuted above, this needs
-    // a real native round trip every call, no local C# cache possible for the data itself.
-    // IsVisualizationEnabled's own get/set split still matches State/Volume's pattern: the native
-    // call installs/removes the real post-mix callback (a real, meaningful side effect, avoided
-    // entirely when disabled), but the flag value itself is cached in C# afterward, matching
-    // Volume/IsMuted's own "call native on write, read the cache" shape.
+    internal static partial CnaResult cna_song_set_duration(CnaHandle song, long ticks);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_mediaplayer_set_visualization_enabled(byte enabled);
+    internal static partial CnaResult cna_song_get_is_protected(CnaHandle song, out byte outProtected);
 
-    /// <summary>
-    /// <paramref name="frequencies"/>/<paramref name="samples"/> are both exactly
-    /// <c>CNA.Media.VisualizationData.Size</c> (256) elements -- explicit raw pointers, not a
-    /// bundled snapshot struct, matching the old (pre-migration) vertex/index buffer natives' own
-    /// "explicit buffer, not a collection" convention for bulk binary data
-    /// (<c>analysis_binding_sharp_runtime.md</c> §40) rather than inventing a new pattern for
-    /// exactly two fixed-size arrays -- this function itself is not yet part of the native-ABI
-    /// migration (see NEXT.md, step 10), so its own shape is still self-designed/unconfirmed.
-    /// <paramref name="count"/> is <see cref="nuint"/> (a code-review finding: an earlier version
-    /// used <see langword="int"/> here despite this doc comment's own claim to match that convention
-    /// -- a real mismatch, not just cosmetic,
-    /// since a native side declaring the equivalent parameter as <c>size_t</c> would read
-    /// undefined upper bytes from a 4-byte argument under the platform calling convention).
-    /// </summary>
     [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_mediaplayer_get_visualization_data(float* frequencies, float* samples, nuint count);
+    internal static partial CnaResult cna_song_get_is_rated(CnaHandle song, out byte outRated);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_play_count(CnaHandle song, out int outPlayCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_set_play_count(CnaHandle song, int playCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_rating(CnaHandle song, out int outRating);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_track_number(CnaHandle song, out int outTrackNumber);
+
+    // -- MediaPlayer (real ABI, media_player.h -- step 10) -------------------------------------
+    //
+    // Renamed throughout (cna_mediaplayer_* -> cna_media_player_*). The single biggest shape
+    // change: every one of these now needs a game handle (CnaAmbientGame.Current) -- no
+    // parameterless media route exists anywhere, matching audio's own step 9 finding. Play is a
+    // much deeper change than a rename: cna_mediaplayer_play took a raw file-path string; the real
+    // cna_media_player_play_song takes a CNA_SongHandle -- Song had to become a real native object
+    // first (see this file's own Song section above) before this function could even be called
+    // correctly. State/Volume/IsMuted/PlayPosition stay deliberately NOT native-backed, matching
+    // this project's own pre-migration design choice to mirror the real C++ engine's plain static
+    // state -- see CNA.Media.MediaPlayer.cs for why that choice still holds. This project also
+    // deliberately does not adopt the real native queue (cna_media_queue_*,
+    // cna_media_player_get_queue) or cna_media_player_move_next/_previous/get_is_repeating/
+    // _is_shuffled in this pass -- genuine new capability (this project's own local
+    // CNA.Media.MediaQueue-based queue management already reproduces the same observable XNA
+    // behavior once its own native calls below are fixed), not something the ABI mismatch forces;
+    // see NEXT.md's own "not yet acted on" note for the full reasoning.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_play_song(CnaHandle game, CnaHandle song);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_pause(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_resume(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_stop(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_set_volume(CnaHandle game, float volume);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_set_is_muted(CnaHandle game, byte muted);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_set_is_visualization_enabled(CnaHandle game, byte enabled);
+
+    /// <summary>Matches <c>cna_media_player_get_visualization_data</c> exactly
+    /// (<c>media_player.h:168</c>) -- takes one caller-provided <see cref="CnaVisualizationData"/>
+    /// struct filled in place, not the old guessed shape's three flat pointer/pointer/count
+    /// arguments.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_media_player_get_visualization_data(CnaHandle game, ref CnaVisualizationData data);
 }

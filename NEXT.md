@@ -11,6 +11,65 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 10: `MediaPlayer`/`Song` rewritten -- `Song` becomes a real native object, correcting this session's own earlier stale doc claim about `MediaPlayer.Queue` (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+`Song.Handle` was, before this migration, a raw *file path string* masquerading as a handle --
+`MediaPlayer.Play` passed it straight to a fictional `cna_mediaplayer_play(path)` route that has no
+real equivalent at all. The real ABI's `media.h` has a full `Song` object
+(`CNA_SongHandle`/`cna_song_*`), and `media_player.h`'s real
+`cna_media_player_play_song(game, CNA_SongHandle)` needs one -- so `Song` had to become a genuine
+native-handle-backed type before `MediaPlayer.Play` could even be called correctly, the same
+dependency order `BasicEffect`'s `DirectionalLight` needed in step 8.
+`cna_song_create`/`cna_song_create_with_duration` are a confirmed match for this project's own two
+constructors (the explicit-duration one already matched real XNA's real 3-argument constructor
+exactly, including taking milliseconds as `int32_t`). `IsProtected`/`IsRated`/`Rating`/
+`TrackNumber` -- previously hardcoded C# literals -- are now real native getters, confirmed to
+report the same "nothing scanned this" defaults this project already assumed, since CNA has no
+library-scan infrastructure either.
+
+`Song.Handle`'s *string* role (the file path, needed by `MediaPlayer.LoadSong`'s defensive-copy
+pattern -- constructing a fresh `Song` from the same path so it tracks its own `PlayCount`) is kept
+as a separate `internal string FileName`, alongside the new `internal CnaHandle NativeHandle` --
+rather than adding a native round trip (`cna_song_get_handle_text_size_ext`/`_copy_handle_text_ext`)
+to re-fetch text this project already has from its own constructor argument.
+
+Every `MediaPlayer` native call now needs a game handle (`CnaAmbientGame.Current`) -- no
+parameterless media route exists, matching audio's own step 9 finding exactly. Renamed throughout
+(`cna_mediaplayer_*` -> `cna_media_player_*`). `cna_media_player_get_visualization_data` takes one
+caller-provided `CNA_VisualizationData` struct (fixed 256-float `frequencies`/`samples` arrays)
+filled in place, not the old guessed shape's three flat pointer/pointer/count arguments --
+`MediaPlayer.GetVisualizationData` now copies the native struct's two inline arrays into
+`VisualizationData`'s own long-lived C# arrays, preserving that type's "same array instances
+reused across calls" contract.
+
+### Stale documentation corrected
+
+This session's own earlier synthesis doc said `NEXT.md`/`plan.md`'s "`MediaPlayer.Queue` is a
+permanent gap" conclusion was already false once the real ABI existed (a real
+`CNA_MediaQueueHandle`/`cna_media_queue_*` API exists in `media_player.h`) -- confirmed again while
+actually building this step. **Deliberately not adopted in this pass**: this project's own local
+`CNA.Media.MediaQueue`-based queue management (and `IsRepeating`/`IsShuffled` as plain settable C#
+state, and `MoveNext`/`MovePrevious` as local index arithmetic) already reproduces the same
+observable XNA behavior once its own native calls are fixed to the real
+play/pause/resume/stop/volume/mute/visualization shapes above -- switching to the real native queue
+(`cna_media_player_get_queue`, `cna_media_queue_*`, `cna_media_player_move_next`/`_previous`,
+`cna_media_player_get/set_is_repeating`/`_is_shuffled`) would be a genuine architecture change this
+migration's own scope doesn't force, not a shape fix. Left as a real, available capability for a
+future session to adopt deliberately, not a gap.
+
+### Test coverage: real, deliberate losses, matching the `BasicEffectTests.cs` precedent from step 8
+
+Deleted `SongTests.cs` and `MediaQueueTests.cs` entirely -- every test in both constructed a real
+`Song`, which now requires a native `cna_song_create` call and a running game. Removed the two
+`Song`-constructing tests from `MediaLibraryTypesTests.cs` (`Song_AlbumArtistGenre_DefaultToNull`/
+`_SettableInternally`) and the four from `MediaPlayerTests.cs`
+(`Play_DisposedSong_ThrowsObjectDisposedException` and the three
+`DetectSongEndedByElapsedTime_*` tests that needed a real `Song`), keeping every other test in both
+files that only exercises guard clauses, no-op paths, or pure `IsRepeating`/`IsShuffled` C# state --
+none of which need a `Song` or a native call at all. Noted here explicitly, matching this
+migration's own established practice, rather than silently letting these files bit-rot into a
+compile failure.
+
 ## Native ABI migration, step 9: `SoundEffect`/`SoundEffectInstance` rewritten -- the first real consumer of the ambient game handle from step 2, and confirmation of an asymmetric getter/setter shape flagged as an open question back then (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 Renamed throughout (`cna_soundeffect_*` -> `cna_sound_effect_*`, `cna_soundeffectinstance_*` ->

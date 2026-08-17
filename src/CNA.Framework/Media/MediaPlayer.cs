@@ -63,7 +63,7 @@ public static class MediaPlayer
         set
         {
             float clamped = Math.Clamp(value, 0f, 1f);
-            CnaResult result = Native.cna_mediaplayer_set_volume(clamped);
+            CnaResult result = Native.cna_media_player_set_volume(CnaAmbientGame.Current, clamped);
             CnaException.ThrowIfFailed(result, nameof(Volume));
             _volume = clamped;
         }
@@ -76,7 +76,7 @@ public static class MediaPlayer
         get => _isMuted;
         set
         {
-            CnaResult result = Native.cna_mediaplayer_set_muted(value ? (byte)1 : (byte)0);
+            CnaResult result = Native.cna_media_player_set_is_muted(CnaAmbientGame.Current, value ? (byte)1 : (byte)0);
             CnaException.ThrowIfFailed(result, nameof(IsMuted));
             _isMuted = value;
         }
@@ -112,7 +112,7 @@ public static class MediaPlayer
         get => _isVisualizationEnabled;
         set
         {
-            CnaResult result = Native.cna_mediaplayer_set_visualization_enabled(value ? (byte)1 : (byte)0);
+            CnaResult result = Native.cna_media_player_set_is_visualization_enabled(CnaAmbientGame.Current, value ? (byte)1 : (byte)0);
             CnaException.ThrowIfFailed(result, nameof(IsVisualizationEnabled));
             _isVisualizationEnabled = value;
         }
@@ -190,7 +190,7 @@ public static class MediaPlayer
             return;
         }
 
-        InnerQueue.Add(new Song(song.Handle, song.Name));
+        InnerQueue.Add(new Song(song.FileName, song.Name));
     }
 
     /// <summary>The actual "start native playback" primitive both <see cref="Play(Song)"/> and
@@ -207,7 +207,7 @@ public static class MediaPlayer
             return;
         }
 
-        CnaResult result = Native.cna_mediaplayer_play(song.Handle);
+        CnaResult result = Native.cna_media_player_play_song(CnaAmbientGame.Current, song.NativeHandle);
 
         Timer.Reset();
         SetState(MediaState.Stopped);
@@ -226,7 +226,7 @@ public static class MediaPlayer
             return;
         }
 
-        CnaResult result = Native.cna_mediaplayer_pause();
+        CnaResult result = Native.cna_media_player_pause(CnaAmbientGame.Current);
         CnaException.ThrowIfFailed(result, nameof(Pause));
 
         Timer.Stop();
@@ -240,7 +240,7 @@ public static class MediaPlayer
             return;
         }
 
-        CnaResult result = Native.cna_mediaplayer_resume();
+        CnaResult result = Native.cna_media_player_resume(CnaAmbientGame.Current);
         CnaException.ThrowIfFailed(result, nameof(Resume));
 
         Timer.Start();
@@ -256,7 +256,7 @@ public static class MediaPlayer
             return;
         }
 
-        CnaResult result = Native.cna_mediaplayer_stop();
+        CnaResult result = Native.cna_media_player_stop(CnaAmbientGame.Current);
         CnaException.ThrowIfFailed(result, nameof(Stop));
 
         Timer.Reset();
@@ -378,15 +378,18 @@ public static class MediaPlayer
     /// <c>GetVisualizationData</c> is safe to call either way, writing all-zero data rather than
     /// throwing when disabled or when nothing has been captured yet, so this doesn't guard on the
     /// flag itself either.</summary>
-    public static unsafe void GetVisualizationData(VisualizationData data)
+    public static void GetVisualizationData(VisualizationData data)
     {
         ArgumentNullException.ThrowIfNull(data);
 
-        fixed (float* frequencies = data.Frequencies)
-        fixed (float* samples = data.Samples)
+        var native = new CnaVisualizationData();
+        CnaResult result = Native.cna_media_player_get_visualization_data(CnaAmbientGame.Current, ref native);
+        CnaException.ThrowIfFailed(result, nameof(GetVisualizationData));
+
+        for (int i = 0; i < VisualizationData.Size; i++)
         {
-            CnaResult result = Native.cna_mediaplayer_get_visualization_data(frequencies, samples, VisualizationData.Size);
-            CnaException.ThrowIfFailed(result, nameof(GetVisualizationData));
+            data.Frequencies[i] = native.Frequencies[i];
+            data.Samples[i] = native.Samples[i];
         }
     }
 }
