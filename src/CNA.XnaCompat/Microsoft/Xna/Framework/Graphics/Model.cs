@@ -44,6 +44,17 @@ public sealed class Model : CNA.Graphics.Model
     // real XNA (and the base method called directly) leaves alone. A single Bones.Count-sized,
     // lazily-grown shared buffer fixes both: it can never hold more than Bones.Count meaningful
     // entries to begin with, and it's only (re)allocated once per instance.
+    //
+    // A follow-up review pass flagged this buffer as unsynchronized shared mutable state across
+    // CopyAbsoluteBoneTransformsTo/CopyBoneTransformsFrom/CopyBoneTransformsTo -- true, but not a
+    // real-world bug: this exactly matches the base class's own Draw()/_sharedDrawBoneMatrices
+    // pattern (also a private, lazily-grown, unlocked instance buffer, unquestioned there), and
+    // real XNA's own GraphicsDevice-adjacent APIs -- which bone-transform copying is tightly
+    // coupled to, being part of the skinning/rendering pipeline -- are fundamentally single-
+    // threaded by design, with no cross-thread safety guaranteed anywhere in the real framework.
+    // Adding locking here would be new overhead on a hot per-frame path to guard against a call
+    // pattern XNA itself never supported, and would diverge from the exact pattern this fix was
+    // written to match.
     private CNA.Matrix[] _sharedConversionBuffer = [];
 
     public Model(GraphicsDevice graphicsDevice, IReadOnlyList<ModelBone> bones, IReadOnlyList<ModelMesh> meshes)

@@ -30,6 +30,38 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## Twenty-third `/code-review high` pass, over the twenty-second pass's own fix -- one finding, documented against an existing base-class precedent rather than fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more)
+
+Ran the review over the twenty-second pass's own fix (commit `904bb0f`).
+One finding: the new `_sharedConversionBuffer` field (introduced to fix
+the previous pass's buffer-clobbering/GC-pressure bugs) is unsynchronized
+shared mutable state across `CopyAbsoluteBoneTransformsTo`/
+`CopyBoneTransformsFrom`/`CopyBoneTransformsTo` -- concurrent calls to
+any two of them on the same `Model` instance from different threads
+could race on it.
+
+Checked whether this is a real bug worth fixing before touching anything:
+it's the *exact same shape* of pattern as the base class's own
+`Draw()`/`_sharedDrawBoneMatrices` (a private, lazily-grown, unlocked
+instance buffer) -- unquestioned there, and explicitly what this pass's
+own fix said it was matching. Real XNA's own `GraphicsDevice`-adjacent
+APIs, which bone-transform copying is tightly coupled to (it's part of
+the skinning/rendering pipeline), are fundamentally single-threaded by
+design -- real XNA has never guaranteed cross-thread safety for this
+category of API at all. Adding locking would be new per-frame overhead
+to guard against a call pattern XNA itself never supported, and would
+make this method diverge from the exact pattern it was written to match.
+Documented this reasoning directly in the code (the reviewer's own point
+that it wasn't documented anywhere was fair) rather than adding
+synchronization -- the same "verify against real XNA's actual guarantees
+before treating a superficially-real finding as one, then document the
+judgment call so it isn't rediscovered as a surprise later" discipline
+this session has applied to several other findings.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 391/391 passing, unchanged (comment-only change, no behavior
+change). `samples/HelloGame` re-verified unaffected.
+
 ## Twenty-second `/code-review high` pass, over the `Model` compat mirror commit -- a real, confirmed data-clobbering bug, plus a GC-pressure fix and a duplication cleanup (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again)
 
 Ran the review over the `Model` compat mirror commit (`f19f6c6`). Five
