@@ -30,6 +30,137 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## `Model`'s `CNA.XnaCompat` mirror -- done, applying (and extending) the `BasicEffect` narrow-gap precedent rather than the picture-library's full-independent-reimplementation one (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Build Model's CNA.XnaCompat mirror")
+
+Picked this up once the `.xnb` loading feature's own review cycle closed
+clean. Read every relevant base type in full before designing anything
+(`Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart` and all four collection
+types), plus the two most relevant existing compat precedents in this
+codebase: `Game.CreateGraphicsDevice`'s covariant-hook pattern and
+`BasicEffect`'s own compat mirror -- the latter turned out to be the
+single most load-bearing piece of research for this whole design.
+
+**The `BasicEffect` precedent changed the scope of this task
+substantially, in a good way.** Its own doc comment documents a real,
+deliberate, *accepted* compat gap: `CurrentTechnique`/`.Passes`/
+`DirectionalLight0-2` all stay base-typed (`CNA.Graphics`-namespaced)
+forever, because they're constructed once inside the base constructor
+with no subclass override seam -- and the doc comment's own reasoning for
+why this is *fine*, not a shortcut, is worth restating: "the common
+`effect.CurrentTechnique.Passes[0].Apply();` ... idiom still compiles and
+works correctly ... only an explicit type declaration would fail to
+compile." Applying that exact reasoning to `Model`: does `ModelMeshPart`
+(and its own `VertexBuffer`/`IndexBuffer`/`Effect`/`ModelMeshPartCollection`/
+`ModelEffectCollection`) actually need mirroring, or does ordinary
+`var`-typed/`foreach` consumption already work through the base types,
+the same way `BasicEffect.CurrentTechnique.Passes[0].Apply()` does?
+Confirmed it's the same situation: compat `VertexBuffer`/`IndexBuffer`/
+`BasicEffect` all subclass their `CNA.Graphics` counterparts directly (an
+existing fact of this codebase, not something new), so a base-typed
+`ModelMeshPart.VertexBuffer`/`.IndexBuffer`/`.Effect` property can already
+legitimately *hold* a compat-typed instance -- ordinary consumption never
+breaks. Only an explicit `Microsoft.Xna.Framework.Graphics.ModelMeshPart`
+(or its collections) type declaration would fail to compile, which real
+XNA game code rarely does (games touch mesh parts through `foreach`/`var`
+far more often than by explicitly declaring the type). Scoped this pass
+to `Model`/`ModelBone`/`ModelBoneCollection`/`ModelMesh`/`ModelMeshCollection`
+only, on that reasoning -- `ModelMeshPart`/its collections stay a real,
+documented, narrow gap, not mirrored in this pass.
+
+**Where `Model`'s own design *did* need genuinely new reasoning, beyond
+copying `BasicEffect`'s:**
+
+- **`Bones`/`Meshes` are independent reimplementations of their
+  collections, not downcasts -- the same wall the picture-library's
+  `PictureAlbum` hit, solved the same way, but for a different underlying
+  reason.** `ModelBoneCollection`/`ModelMeshCollection` are, like
+  `SongCollection`, independent reimplementations of their `CNA.Graphics`
+  counterparts (extending directly would inherit an indexer typed to the
+  base namespace's element type) -- so a covariant-return factory hook
+  (which only works when the compat type genuinely subclasses the base
+  one) doesn't apply, same wall as the picture-library. The fix here is
+  simpler than the picture-library's needed, though: `Model.Bones`/
+  `.Meshes` are populated *exactly once*, at construction, from this
+  class's own constructor parameters -- never grown afterward (unlike
+  `PictureAlbum.Pictures`, grown by `SavePicture` well after
+  construction) -- so building compat's own `Bones`/`Meshes` directly
+  from the *same, already-compat-typed* constructor parameters the base
+  constructor also receives is enough; no parallel internal bookkeeping
+  or reused-low-level-helper design was needed the way `SavedPictureStore`
+  was for the picture library.
+- **`ModelBone.Children` is a real exception to "no parallel bookkeeping
+  needed" above -- it *does* grow after construction, via `AddChild`.**
+  The base class's own `Children` is built inside the base constructor
+  from the base class's own private list, with no override seam --
+  exactly the `PictureAlbum.Albums`/`.Pictures` situation, not the
+  `Model.Bones`/`.Meshes` one. Solved the same way `PictureAlbum` was:
+  compat `ModelBone` keeps its own parallel `_children` list and a
+  same-named `AddChild(ModelBone child)` method that calls
+  `base.AddChild` (so anything reading through a base-typed reference
+  still sees correct, if base-typed, data) and then grows its own list.
+  Turned out this isn't `new`-hiding at all, just a genuinely separate
+  overload (`ModelBone`'s compat-typed parameter doesn't match the base
+  method's signature), which the compiler pointed out directly (`CS0109`)
+  -- removed the unnecessary `new` keyword once caught, rather than
+  leaving a misleading modifier on something that wasn't actually hiding
+  anything.
+- **`CopyAbsoluteBoneTransformsTo`/`CopyBoneTransformsFrom`/
+  `CopyBoneTransformsTo` needed real overloads despite taking "just a
+  `Matrix`," which usually needs zero compat handling anywhere in this
+  codebase (implicit conversion operators handle it for free).** The
+  reason: their parameter is a *`Matrix[]`* array, and C#'s implicit
+  conversion operators only apply to single values, never element-wise
+  across an array -- a caller's real `Microsoft.Xna.Framework.Matrix[]`
+  buffer (the realistic shape real XNA game code actually uses for this
+  exact API: `var transforms = new Matrix[model.Bones.Count];
+  model.CopyAbsoluteBoneTransformsTo(transforms);` is a standard XNA 3D
+  idiom) would not bind to the base method's `CNA.Matrix[]`-typed
+  overload at all without one doing the element-wise conversion itself --
+  the same "element-wise conversion, not a collection-level one" pattern
+  `ContentManager`'s own `SpriteFontData` conversion helpers already use
+  in this compat layer. Also not `new`-hiding, for the same
+  different-parameter-type reason as `AddChild` above -- caught the same
+  way (`CS0109`), fixed the same way.
+- **`Root`'s downcast is safe for the same "single construction seam"
+  reason `MediaLibrary.MediaSource`/`SpriteFont.Texture` already
+  established**, applied fresh here: `Root` is just a reference into the
+  same `bones` constructor parameter this class's own constructor already
+  requires to be compat-typed, so whatever the base constructor stores
+  there is provably compat-typed too -- no independent tracking needed,
+  unlike `Bones`/`Meshes`'s own container-type problem.
+- **`ModelMesh.ParentBone`'s downcast is safe for a related but distinct
+  reason worth spelling out**: it's a *publicly settable* property, set
+  either by `Model`'s own constructor (from the caller-supplied
+  `meshParentBones` list) or by hand-building code calling the setter
+  directly -- both paths require a compat-typed value (the constructor
+  parameter is compat-typed; the compat `new` setter's own parameter
+  type is compat-typed), so `base.ParentBone` ends up holding a
+  compat-typed value regardless of which of the two paths actually set
+  it, for every realistically-reachable compat instance.
+
+Not attempted in this pass, explicitly deferred: `ContentManager.Load<Model>()`
+on the compat `ContentManager` still returns a base-typed `Model` (it
+doesn't override `Load<T>`'s `Model` case at all yet) -- doing so would
+need its own `XnbModelBuilder`-equivalent, reusing `CNA.Content.Xnb`'s
+shared, native-free parsing layer directly (the same "reuse the shared
+low-level helper, reimplement the thin orchestration around it" pattern
+the picture-library's compat `MediaLibrary` already established for
+`SavedPictureStore`) -- a real, separate, well-scoped follow-up, not
+folded into this pass given how much design work the hand-buildable
+mirror alone already needed.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings (after
+removing the unnecessary `new` keywords `CS0109` flagged, and fixing a
+few doc-comment `cref`s that didn't resolve to inherited members via
+simple name); `dotnet test`: 391/391 passing (up from 380 -- 11 new
+tests, all for `ModelBone`/`ModelBoneCollection` via `ModelBone.Children`
+-- `Model`/`ModelMesh` both need a `GraphicsDevice` to construct, and
+this project's `CNA.XnaCompat.Tests` has no `InternalsVisibleTo` grant to
+reach compat `GraphicsDevice`'s `protected internal` constructor, the
+same pre-existing limitation already documented on compat `VertexBuffer`/
+`IndexBuffer`/`BasicEffect` -- not a new gap this pass introduced).
+`samples/HelloGame` re-verified unaffected.
+
 ## Twentieth `/code-review high` pass, over the nineteenth pass's own fix -- no correctness bugs, two minor cleanups (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more)
 
 Ran the review over the nineteenth pass's own five fixes (commit

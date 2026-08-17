@@ -148,16 +148,20 @@ source, not invented. `Model`/`ModelMesh`/`ModelMeshPart`/`ModelBone` are
 grounded the strongest of any Phase 4 item so far: not just "shaped to
 match a real implementation" but built entirely out of already-native-backed
 primitives, needing no new native function at all -- see `plan.md` Phase 4
-for the detail. Note also that `Model`/its collection types still have
-**no `CNA.XnaCompat` mirror** -- this used to be justified by "there is no
-`ContentManager.Load<Model>` to produce one any other way," which is no
-longer true now that real `.xnb` `Model` loading exists (see below); it's
-now a genuine, standalone follow-up (building the mirror would need its
-own design pass, the same kind of thing `MediaLibrary`'s picture side
-needed for its own collections) rather than a moot point, and is tracked
-as such rather than silently left stale. `var`-typed/chained consumption
-of the `CNA.Graphics`-namespaced types works fine in the meantime, same
-as `EffectTechnique`/`DirectionalLight`'s existing compat gap. `Song`/`MediaPlayer` are grounded
+for the detail. `Model`/`ModelBone`/`ModelMesh` and their collections now
+have a `CNA.XnaCompat` mirror too, deliberately scoped down the same way
+`BasicEffect`'s own mirror is: `ModelMeshPart`/`ModelMeshPartCollection`/
+`ModelEffectCollection` stay base-typed, matching
+`BasicEffect.CurrentTechnique`/`.Passes`/`DirectionalLight0-2`'s own
+precedent exactly -- ordinary `var`-typed/`foreach` consumption of mesh
+parts already works (compat `VertexBuffer`/`IndexBuffer`/`BasicEffect`
+all subclass their base counterparts, so a base-typed `ModelMeshPart`
+property can already legitimately hold a compat-typed instance), so only
+an explicit `Microsoft.Xna.Framework.Graphics.ModelMeshPart` type
+declaration is the real, narrow, documented gap. `ContentManager.Load<Model>()`
+on the compat `ContentManager` doesn't yet return a compat-typed `Model`
+either -- a separate, deliberately deferred follow-up (see `NEXT.md` for
+the full design reasoning on both). `Song`/`MediaPlayer` are grounded
 against `modules/media/`'s own working implementation the same way
 `SoundEffect`/`BasicEffect` were, deliberately scoped down from that
 implementation's much larger surface (see the "Not started at all" list

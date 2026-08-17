@@ -30,8 +30,16 @@ reference implementation and a real MonoGame-compiled fixture -- LZX/LZ4
 compression and the real engine's own `.cnj`/glTF content paths are all
 deliberately out of scope (see `NEXT.md` for why -- each is its own large,
 separable feature, and the real engine hasn't even wired its own
-`ModelReader` into `ContentManager::Load<Model>()` yet either). What
-remains: Phase 6 packaging/cross-platform validation, tracked below.
+`ModelReader` into `ContentManager::Load<Model>()` yet either). `Model`'s
+`CNA.XnaCompat` mirror (`Model`/`ModelBone`/`ModelBoneCollection`/
+`ModelMesh`/`ModelMeshCollection`) is also now done, hand-buildable-only
+scope -- `ModelMeshPart`/`ModelMeshPartCollection`/`ModelEffectCollection`
+deliberately stay base-typed (a real, narrow, documented gap, same shape
+as `BasicEffect.CurrentTechnique`'s own), and `ContentManager.Load<Model>()`
+on the compat `ContentManager` doesn't yet return a compat-typed `Model`
+(a separate, deferred follow-up) -- see `NEXT.md` for the full design
+reasoning. What remains: Phase 6 packaging/cross-platform validation,
+tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -677,14 +685,57 @@ Split by whether the type needs the (still nonexistent) native ABI:
       high` pass that fixed a real "loaded models render nothing" bug
       plus four corrupt-input safety gaps — see `NEXT.md`).
       `samples/HelloGame` re-verified unaffected.
+- [x] **`Model`'s `CNA.XnaCompat` mirror (`Model`/`ModelBone`/
+      `ModelBoneCollection`/`ModelMesh`/`ModelMeshCollection`) — done,
+      2026-08-17 (session 6 continued autonomously past the `.xnb`
+      loading checkpoint, per explicit user selection of "Build Model's
+      CNA.XnaCompat mirror").** Real design work, not a small addition:
+      `ModelBoneCollection`/`ModelMeshCollection` are independent
+      reimplementations (same "extending directly would inherit the
+      wrong element type" reasoning as `SongCollection`), `ModelBone`'s
+      `Children` needed its own independently-tracked, `AddChild`-synced
+      storage (the base class's own `Children` is built inside the base
+      constructor with no override seam — the same wall the
+      picture-library's `PictureAlbum` hit), and `Model`'s own
+      `CopyAbsoluteBoneTransformsTo`/`CopyBoneTransformsFrom`/
+      `CopyBoneTransformsTo` needed real element-wise-converting overloads
+      despite taking "just a `Matrix`" — their parameter is a `Matrix[]`,
+      and C#'s implicit conversion operators (which handle every other
+      inherited-unchanged scalar member in this compat layer for free)
+      don't apply across arrays. **Deliberately scoped down, matching
+      `BasicEffect.CurrentTechnique`/`DirectionalLight0-2`'s own precedent
+      exactly:** `ModelMeshPart`/`ModelMeshPartCollection`/
+      `ModelEffectCollection` stay base-typed -- `ModelMeshPart`'s own
+      `VertexBuffer`/`IndexBuffer`/`Effect` can already legitimately
+      *hold* compat-typed instances (compat `VertexBuffer`/`IndexBuffer`/
+      `BasicEffect` all subclass their base counterparts directly), so
+      ordinary `var`-typed/`foreach` consumption already works; only an
+      explicit `Microsoft.Xna.Framework.Graphics.ModelMeshPart` type
+      declaration would fail to compile — a real, narrow, documented gap,
+      not an oversight. `ContentManager.Load<Model>()` on the compat
+      `ContentManager` also does **not** yet return a compat-typed
+      `Model` (would need its own `XnbModelBuilder`-equivalent, reusing
+      `CNA.Content.Xnb`'s shared parsing layer the same way the
+      picture-library's compat `MediaLibrary` reuses
+      `SavedPictureStore`) — a separate, deliberately deferred follow-up,
+      not attempted in this pass. Verified: `dotnet build` clean across
+      all 6 projects, 0 warnings; `dotnet test`: 391/391 passing (up from
+      380 — 11 new tests, all for `ModelBone`/`ModelBoneCollection`, the
+      only new compat type reachable from `CNA.XnaCompat.Tests` without a
+      real `cna-native` — `Model`/`ModelMesh` both need a `GraphicsDevice`,
+      unreachable there, same pre-existing limitation already documented
+      on compat `VertexBuffer`/`IndexBuffer`/`BasicEffect`).
+      `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
-      `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths (see
-      the entry above); `MediaPlayer`'s visualization data
-      (`GetVisualizationData`, real-time FFT). None of these are blocked
-      on the native C ABI the way everything else in this phase is —
-      they're scoped out because each is its own substantial, separable
-      feature, not because anything is missing upstream to ground them
-      against.
+      `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths and
+      its compat mirror's `ModelMeshPart`/`ModelMeshPartCollection`/
+      `ModelEffectCollection` gap (see the two entries above);
+      `ContentManager.Load<Model>()` not yet compat-typed;
+      `MediaPlayer`'s visualization data (`GetVisualizationData`,
+      real-time FFT). None of these are blocked on the native C ABI the
+      way everything else in this phase is — they're scoped out because
+      each is its own substantial, separable feature, not because
+      anything is missing upstream to ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 
