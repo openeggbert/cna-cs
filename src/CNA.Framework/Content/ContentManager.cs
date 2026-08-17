@@ -131,14 +131,24 @@ public class ContentManager
         XnbContentReader contentReader;
         if (header.Compression == XnbCompression.Lzx)
         {
-            int decompressedSize = reader.ReadInt32();
-            int compressedSize = header.TotalLength - 14;
-            if (compressedSize < 0)
+            // A code-review finding caught a real gap here: header.TotalLength is only checked
+            // against the actual stream length (in XnbHeader.Read), never against
+            // XnbHeader.LzxPayloadOffset -- a file whose header claims exactly 10-13 bytes total
+            // (too short to hold the 4-byte decompressed-size field that must follow for an
+            // Lzx-flagged file) would previously reach reader.ReadInt32() below with fewer than 4
+            // bytes left in the stream, throwing an unhandled System.IO.EndOfStreamException
+            // instead of this project's own ContentLoadException contract for corrupt content.
+            // Checked here, before that read, rather than after it (where a compressedSize < 0
+            // check would be unreachable dead code: reaching it at all already implies
+            // TotalLength >= LzxPayloadOffset, since ReadInt32() would have thrown otherwise).
+            if (header.TotalLength < XnbHeader.LzxPayloadOffset)
             {
                 throw new ContentLoadException(
                     $"'{assetName}' is not a valid LZX-compressed .xnb file (its declared total length is too short to hold a compressed payload).");
             }
 
+            int decompressedSize = reader.ReadInt32();
+            int compressedSize = header.TotalLength - XnbHeader.LzxPayloadOffset;
             byte[] compressed = reader.ReadBytes(compressedSize);
             byte[] decompressed = XnbLzxDecompression.Decompress(compressed, decompressedSize, assetName);
             contentReader = XnbContentReader.Create(new BinaryReader(new MemoryStream(decompressed)));

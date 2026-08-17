@@ -23,6 +23,14 @@ internal enum XnbCompression
 /// byte-for-byte against a real, uncompressed, MonoGame-compiled <c>Model</c> asset.</summary>
 internal readonly record struct XnbHeader(char Platform, int Version, XnbCompression Compression, int TotalLength)
 {
+    /// <summary>Byte offset, from the start of the file, where an LZX-compressed <c>.xnb</c> file's
+    /// compressed payload begins: the 10-byte container header plus the 4-byte decompressed-size
+    /// field that immediately follows it for <see cref="XnbCompression.Lzx"/> files only. A named
+    /// constant (a code-review finding caught the raw literal <c>14</c> duplicated across
+    /// <c>ContentManager.LoadXnbModelData</c> and its tests) rather than a magic number, so a future
+    /// change to either field's size only needs updating here.</summary>
+    internal const int LzxPayloadOffset = 14;
+
     /// <summary>Reads and validates the 10-byte header at the current stream position. Cross-checks
     /// <see cref="TotalLength"/> against <paramref name="streamLength"/> so a truncated/corrupt file
     /// fails clearly here rather than partway through object-graph parsing.</summary>

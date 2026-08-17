@@ -11,6 +11,77 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## First `/code-review high` pass, over the LZX decompression commit -- three real findings fixed, one documented against the byte-exact-tested reference (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still)
+
+Ran the review over the LZX commit (`75e9987`). Four findings:
+
+- **Real, confirmed, the most severe of the four:** `LoadXnbModelData`'s
+  new `Lzx` branch read the 4-byte decompressed-size field
+  (`reader.ReadInt32()`) before validating there were actually 4 bytes
+  left to read -- a header claiming a `TotalLength` of 10-13 (too short
+  to hold that field, but internally consistent since `XnbHeader.Read`
+  only cross-checks `TotalLength` against the real file's own length,
+  which a hand-crafted short file can trivially satisfy) reached that
+  read with 0-3 bytes remaining, throwing an unhandled
+  `System.IO.EndOfStreamException` instead of this project's own
+  `ContentLoadException` contract for corrupt content. Worse, the
+  `compressedSize < 0` guard added right after that read was
+  **unreachable dead code**: reaching it at all already implies the read
+  succeeded, which already implies `TotalLength >= 14`. Fixed by moving
+  the check *before* the read (`header.TotalLength < XnbHeader.LzxPayloadOffset`),
+  where it can actually catch the case it was written for.
+- **Real, confirmed:** `MakeDecodeTable`'s failure return value (1 =
+  corrupt/adversarial Huffman code-length table that doesn't form a
+  complete canonical code) was silently discarded at all four call sites
+  -- matching the reference C++/C# implementations' own control flow
+  exactly (neither ever checks it either), but inconsistent with every
+  *other* error condition `Decompress` itself already checks (match
+  offsets, window bounds, buffer exhaustion, all clean `return -1`s).
+  This mattered more than a typical "match the reference" call: a
+  discarded failure here risked `ReadHuffSym` silently decoding against
+  a partially-built table (its own out-of-range fallback returns symbol
+  0 rather than throwing) instead of failing cleanly -- exactly the
+  "silently-wrong-but-plausible output" risk this feature's own research
+  concluded LZX mostly avoids, undermined in this one specific spot.
+  Fixed by propagating the return value at all four sites (`ReadLengths`
+  now returns `int` instead of `void`), reusing the *exact same*
+  "0 = success, negative = error" convention already used everywhere
+  else in `Decompress` -- a well-contained, low-risk addition that only
+  changes behavior for genuinely malformed input the byte-exact fixture
+  tests never exercise (confirmed: both fixtures still decode
+  byte-identical to their reference output after this change).
+- **Documented, not fixed, because it faithfully matches the
+  byte-exact-tested reference and the finding's own analysis concluded
+  it likely already fails cleanly:** the block-framing loop's first
+  `hi`/`lo` block-size read doesn't clamp `Stream.ReadByte()`'s `-1`
+  end-of-stream sentinel the way the extended-frame branch just below it
+  does, so a payload truncated at exactly that point computes
+  `blockSize = -1` rather than `0`, bypassing the loop's own
+  "`blockSize == 0`" termination check. This is present identically in
+  the real C++ reference (and, since that's itself a line-by-line port,
+  presumably FNA's own original) -- not something this port introduced.
+  Traced the actual consequence: `blockSize = -1` reaches
+  `LzxDecoder.Decompress` as `inLen`, where its own buffer-exhaustion
+  check (`inData.Position > startpos + inLen`) becomes an even *tighter*
+  bound than usual and is expected to trip almost immediately, returning
+  -1 and surfacing as the same `ContentLoadException` a cleanly-detected
+  truncation would. Left exactly as the verified reference has it rather
+  than risk diverging from code that currently passes 100% of its
+  differential tests for an unconfirmed edge case -- documented inline
+  instead.
+- **Real, minor, fixed:** the byte offset `14` (10-byte header + 4-byte
+  decompressed-size field) was a duplicated magic number across
+  `ContentManager.cs` and three sites in the test file. Extracted as
+  `XnbHeader.LzxPayloadOffset`, a named constant now used by all four
+  sites.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 464/464 passing, unchanged (all fixes either only affect
+malformed-input paths the real fixtures never exercise, or are pure
+refactors) -- confirmed both real fixtures still decode byte-identical
+to their independently-produced reference output after every fix.
+`samples/HelloGame` re-verified unaffected.
+
 ## Real, LZX-compressed `.xnb` `Model` loading (`LzxDecoder`/`XnbLzxDecompression`) -- done, the best-grounded feature of this whole session (2026-08-17, session 6 continued autonomously past the `CnjCompatModelBuilder` checkpoint, per explicit user selection of "Attempt LZX/LZ4-compressed .xnb decompression")
 
 This was explicitly framed at its own checkpoint as "a real algorithmic

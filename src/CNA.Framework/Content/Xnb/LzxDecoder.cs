@@ -280,7 +280,17 @@ internal sealed class LzxDecoder
         return 0;
     }
 
-    private void ReadLengths(byte[] lens, uint first, uint last, BitBuffer bitbuf)
+    /// <summary>Returns 0 on success, 1 if the pretree's own <see cref="MakeDecodeTable"/> call
+    /// failed (a corrupt/adversarial code-length table that doesn't form a complete canonical
+    /// Huffman code) -- a code-review finding caught this failure previously being silently
+    /// discarded at every one of this method's own callers (matching this method's own, and the
+    /// reference C++/C# implementations', original control flow -- <see cref="MakeDecodeTable"/>'s
+    /// failure return was never checked anywhere it's called), which risked <see cref="ReadHuffSym"/>
+    /// silently decoding against a partially-built table (its own out-of-range fallback returns
+    /// symbol 0 rather than throwing) instead of failing cleanly. <see cref="Decompress"/>'s own
+    /// three call sites now check this return value the same way it already checks every other
+    /// error condition in that method (0 = success, negative = error).</summary>
+    private int ReadLengths(byte[] lens, uint first, uint last, BitBuffer bitbuf)
     {
         for (uint x = 0; x < 20; x++)
         {
@@ -288,7 +298,10 @@ internal sealed class LzxDecoder
             _pretreeLen[x] = (byte)y;
         }
 
-        MakeDecodeTable(PretreeMaxSymbols, PretreeTableBits, _pretreeLen, _pretreeTable);
+        if (MakeDecodeTable(PretreeMaxSymbols, PretreeTableBits, _pretreeLen, _pretreeTable) != 0)
+        {
+            return 1;
+        }
 
         for (uint x = first; x < last;)
         {
@@ -338,6 +351,8 @@ internal sealed class LzxDecoder
                 lens[x++] = (byte)z;
             }
         }
+
+        return 0;
     }
 
     private static uint ReadHuffSym(ushort[] table, byte[] lengths, int nsyms, int nbits, BitBuffer bitbuf)
@@ -436,21 +451,47 @@ internal sealed class LzxDecoder
                             _alignedLen[i] = (byte)j;
                         }
 
-                        MakeDecodeTable(AlignedMaxSymbols, AlignedTableBits, _alignedLen, _alignedTable);
+                        // A code-review finding caught MakeDecodeTable's failure return value being
+                        // silently discarded at every call site in this switch (matching the
+                        // reference C++/C# implementations' own control flow, but inconsistent with
+                        // every other error condition in this method, which all propagate cleanly)
+                        // -- checked here and below now, the same "0 = success, negative = error"
+                        // convention already used throughout Decompress.
+                        if (MakeDecodeTable(AlignedMaxSymbols, AlignedTableBits, _alignedLen, _alignedTable) != 0)
+                        {
+                            return -1;
+                        }
+
                         // Rest of aligned header is same as verbatim.
                         goto case BlockType.Verbatim;
 
                     case BlockType.Verbatim:
-                        ReadLengths(_maintreeLen, 0, 256, bitbuf);
-                        ReadLengths(_maintreeLen, 256, _mainElements, bitbuf);
-                        MakeDecodeTable(MaintreeMaxSymbols, MaintreeTableBits, _maintreeLen, _maintreeTable);
+                        if (ReadLengths(_maintreeLen, 0, 256, bitbuf) != 0 ||
+                            ReadLengths(_maintreeLen, 256, _mainElements, bitbuf) != 0)
+                        {
+                            return -1;
+                        }
+
+                        if (MakeDecodeTable(MaintreeMaxSymbols, MaintreeTableBits, _maintreeLen, _maintreeTable) != 0)
+                        {
+                            return -1;
+                        }
+
                         if (_maintreeLen[0xE8] != 0)
                         {
                             _intelStarted = true;
                         }
 
-                        ReadLengths(_lengthLen, 0, NumSecondaryLengths, bitbuf);
-                        MakeDecodeTable(LengthMaxSymbols, LengthTableBits, _lengthLen, _lengthTable);
+                        if (ReadLengths(_lengthLen, 0, NumSecondaryLengths, bitbuf) != 0)
+                        {
+                            return -1;
+                        }
+
+                        if (MakeDecodeTable(LengthMaxSymbols, LengthTableBits, _lengthLen, _lengthTable) != 0)
+                        {
+                            return -1;
+                        }
+
                         break;
 
                     case BlockType.Uncompressed:

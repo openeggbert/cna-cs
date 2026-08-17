@@ -28,7 +28,7 @@ public class XnbLzxDecompressionTests
         Assert.Equal(XnbCompression.Lzx, header.Compression);
 
         int decompressedSize = reader.ReadInt32();
-        int compressedSize = header.TotalLength - 14;
+        int compressedSize = header.TotalLength - XnbHeader.LzxPayloadOffset;
         byte[] compressed = reader.ReadBytes(compressedSize);
 
         byte[] actual = XnbLzxDecompression.Decompress(compressed, decompressedSize, fixtureName);
@@ -73,7 +73,7 @@ public class XnbLzxDecompressionTests
         XnbHeader header = XnbHeader.Read(reader, fileBytes.Length);
 
         int decompressedSize = reader.ReadInt32();
-        int compressedSize = header.TotalLength - 14;
+        int compressedSize = header.TotalLength - XnbHeader.LzxPayloadOffset;
         byte[] compressed = reader.ReadBytes(compressedSize);
         byte[] decompressed = XnbLzxDecompression.Decompress(compressed, decompressedSize, fixtureName);
 

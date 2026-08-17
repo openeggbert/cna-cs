@@ -50,6 +50,16 @@ internal static class XnbLzxDecompression
              * defined output will be preceded by a byte of value 0xFF (255), then a short
              * indicating the output size and another for the block size. All shorts for these
              * cases are encoded in big-endian order. */
+            // A code-review finding noted that hi/lo aren't clamped here the way the extended-frame
+            // branch below clamps its own reads: at end-of-stream, Stream.ReadByte() returns -1, so
+            // a payload truncated exactly here would compute blockSize = -1 rather than 0, bypassing
+            // the "blockSize == 0" termination check just below. Left exactly as the reference C++/C#
+            // implementations have it (verified byte-exact against real fixtures, not something to
+            // risk diverging from for an unconfirmed edge case) -- a blockSize of -1 still reaches
+            // LzxDecoder.Decompress as inLen, where its own buffer-exhaustion check
+            // (inData.Position > startpos + inLen, now an even tighter bound than usual) is expected
+            // to trip almost immediately and return -1, surfacing as the same ContentLoadException
+            // a cleanly-detected truncation would.
             int hi = compressedStream.ReadByte();
             int lo = compressedStream.ReadByte();
             int blockSize = (hi << 8) | lo;

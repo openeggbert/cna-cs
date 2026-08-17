@@ -1025,7 +1025,14 @@ Split by whether the type needs the (still nonexistent) native ABI:
       fixtures' independently-produced reference output, and an
       integration check that a real compressed non-`Model` fixture
       decompresses correctly then fails cleanly on its unsupported root
-      type reader, not a crash or a hang). `samples/HelloGame`
+      type reader, not a crash or a hang); includes a follow-up
+      `/code-review high` pass that fixed a real unhandled-`EndOfStreamException`
+      gap (a too-short-for-its-payload `.xnb` header previously crashed
+      instead of throwing `ContentLoadException`) and a real
+      discarded-error-return-value gap in `LzxDecoder.MakeDecodeTable`'s
+      four call sites (matching the reference implementations' own
+      control flow, but inconsistent with every other error condition
+      `Decompress` already checks) — see `NEXT.md`. `samples/HelloGame`
       re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own bone-hierarchy/skinning/PBR/morph-target `.cnj`
