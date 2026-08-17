@@ -315,7 +315,11 @@ mirror, exactly `XnbCompatModelBuilder`'s shape: reuses the shared
 native-free `.cnj` parsing step, builds compat-typed `Model`/`ModelBone`/
 `ModelMesh`/`ModelMeshPart`/buffers/`BasicEffect` throughout, and reuses
 `CnjModelBuilder.ApplyBasicEffectData` directly for its (trivial,
-one-line) effect field-assignment logic rather than duplicating it.
+one-line) effect field-assignment logic rather than duplicating it, and
+now also links a document's own real `"bones"` hierarchy exactly like
+the base path does (its own bone-construction control flow near-duplicates
+`CnjModelBuilder.Build`'s, the same trade-off `XnbCompatModelBuilder`
+already accepts for its own relationship to `XnbModelBuilder`).
 See `plan.md` Phase 4 and `NEXT.md`'s per-session entries for the full
 detail on each.
 

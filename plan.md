@@ -79,8 +79,12 @@ convention already ported), so it was carved out and built as its own
 increment; `.cnj`'s skinning surface (vertex strides 48/52/56/68,
 `"skeleton"`/`"animations"`) stays explicitly out of scope, confirmed to
 have no real payoff without a `SkinnedEffect` type, which doesn't exist
-anywhere in this project. What remains: Phase 6 packaging/cross-platform
-validation, tracked below.
+anywhere in this project. `CnjCompatModelBuilder` (the `.cnj` path's
+`CNA.XnaCompat` mirror) now also links a document's own real bone
+hierarchy, closing that deferred follow-up -- previously it explicitly
+rejected such a document rather than silently producing a wrong bone
+structure. What remains: Phase 6 packaging/cross-platform validation,
+tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -1111,13 +1115,28 @@ Split by whether the type needs the (still nonexistent) native ABI:
       only 32 and 48 actually do; the severity conclusion didn't change,
       32 alone already justifies it) — see `NEXT.md`). `samples/HelloGame`
       re-verified unaffected.
+- [x] **`CnjCompatModelBuilder`'s own bone-hierarchy follow-up — done,
+      2026-08-17 (session 6 continued autonomously past the `.cnj`
+      bone-hierarchy review-cycle checkpoint, per explicit user selection
+      of "Extend CnjCompatModelBuilder for bone hierarchy").** Closes the
+      one deferral flagged when the base `.cnj` bone-hierarchy feature
+      landed. Mirrors `CnjModelBuilder.Build`'s own dual-path bone
+      construction exactly (real hierarchy when `CnjModelData.Bones` is
+      non-empty, the original synthesize-a-bone-per-mesh fallback
+      otherwise) -- the explicit rejection this builder previously threw
+      for a bone-hierarchy document is gone, replaced by the real
+      linking logic. Verified: `dotnet build` clean across all 6
+      projects, 0 warnings; `dotnet test`: 476/476 passing, unchanged —
+      no new testable surface (constructing a working compat
+      `ContentManager`/`GraphicsDevice` at all needs a real `cna-native`,
+      the same pre-existing limitation this builder's own compat wiring
+      already has). `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own `.cnj` skinning surface (vertex strides 48/52/56/68,
       `"skeleton"`/`"animations"`, every `SkinnedEffect`-family effect
       type -- confirmed architecturally separate from the now-supported
       bone hierarchy, and requiring new `Effect` subclasses plus new
-      native ABI work regardless), `CnjCompatModelBuilder`'s own
-      bone-hierarchy follow-up, runtime glTF content paths, and
+      native ABI work regardless), runtime glTF content paths, and
       MonoGame's own `Lz4` `.xnb` extension (see the `.xnb`/`.cnj`
       loading entries above), and `ModelMeshPart`'s own
       `ModelEffectCollection`/`ModelMesh.Effects` gap (see that entry

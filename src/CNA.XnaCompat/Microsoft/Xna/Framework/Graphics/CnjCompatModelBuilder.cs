@@ -27,22 +27,18 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// type -- see <see cref="ModelMesh"/>'s own doc comment for why that one specific gap doesn't have
 /// a safe fix.
 ///
-/// The "no bone hierarchy, synthesize one root bone plus one child bone per mesh" control flow below
-/// *does* near-duplicate <c>CNA.Content.Cnj.CnjModelBuilder.Build</c>'s own -- the same trade-off
-/// <see cref="XnbCompatModelBuilder"/>'s own doc comment already accepts (and explains in full) for
-/// its own near-duplication of <c>CNA.Content.Xnb.XnbModelBuilder.Build</c>. <b>If you fix a bug in
-/// this method, check <c>CNA.Content.Cnj.CnjModelBuilder.Build</c> too</b> -- there is no
-/// compiler-enforced link between the two.
+/// When the document has a real, multi-entry <c>"bones"</c> hierarchy (<c>CnjModelData.Bones</c>
+/// non-empty, cnjVersion 2), this links that real, file-supplied bone tree -- matching
+/// <c>CNA.Content.Cnj.CnjModelBuilder.Build</c>'s own identical dual-path shape exactly (a single
+/// forward pass, since <c>.cnj</c> encodes each bone's own parent index). Otherwise (no real
+/// hierarchy), this builder falls back to its original, pre-hierarchy behavior: synthesizes one root
+/// <see cref="ModelBone"/> ("Root") plus one real, synthetic child bone per mesh.
 ///
-/// <b>Real, documented gap, not yet closed:</b> unlike the base (non-compat) path, this builder does
-/// not yet link a document's own real <c>"bones"</c> hierarchy (<c>CnjModelData.Bones</c>, cnjVersion
-/// 2) -- it explicitly rejects such a document with a <c>ContentLoadException</c> rather than
-/// silently falling back to the synthesize-a-bone-per-mesh shape below (which would produce a
-/// genuinely *wrong*, not just incomplete, bone structure for it). Closing this gap is its own
-/// separate, deliberately deferred follow-up, matching the "narrow reader/builder first, compat
-/// mirror as a distinct, separately-reviewed follow-up" cadence this whole feature has already used
-/// twice (once for the base <c>.cnj</c> reader itself, once for this compat mirror's own original
-/// <c>BasicEffect</c>-only scope).
+/// This control flow *does* near-duplicate <c>CNA.Content.Cnj.CnjModelBuilder.Build</c>'s own -- the
+/// same trade-off <see cref="XnbCompatModelBuilder"/>'s own doc comment already accepts (and explains
+/// in full) for its own near-duplication of <c>CNA.Content.Xnb.XnbModelBuilder.Build</c>. <b>If you
+/// fix a bug in this method, check <c>CNA.Content.Cnj.CnjModelBuilder.Build</c> too</b> -- there is
+/// no compiler-enforced link between the two.
 /// </summary>
 internal static class CnjCompatModelBuilder
 {
@@ -51,22 +47,31 @@ internal static class CnjCompatModelBuilder
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         ArgumentNullException.ThrowIfNull(data);
 
-        // CnjModelBuilder.Build (the base, non-compat path) now links a document's own real
-        // "bones" hierarchy when present -- this compat mirror doesn't yet, matching this whole
-        // feature's own "narrow reader/builder first, compat mirror as a distinct, separately
-        // -reviewed follow-up" cadence. Rejecting explicitly here (rather than silently falling
-        // back to the synthesize-a-bone-per-mesh shape below, which would produce a genuinely
-        // *wrong* bone structure for such a document) matches this whole feature's "detect and
-        // throw a clear exception, never silently mis-load" discipline.
-        if (data.Bones.Count > 0)
-        {
-            throw new CNA.Content.ContentLoadException(
-                "This .cnj document has a real 'bones' hierarchy, which CnjCompatModelBuilder does not yet support " +
-                "(CNA.Content.Cnj.CnjModelBuilder, the non-compat path, already does).");
-        }
+        bool hasBoneHierarchy = data.Bones.Count > 0;
 
-        var rootBone = new ModelBone(0, "Root");
-        var bones = new List<ModelBone> { rootBone };
+        List<ModelBone> bones;
+        if (hasBoneHierarchy)
+        {
+            bones = new List<ModelBone>(data.Bones.Count);
+            for (int i = 0; i < data.Bones.Count; i++)
+            {
+                CnjBoneData boneData = data.Bones[i];
+                var bone = new ModelBone(i, boneData.Name) { Transform = boneData.Transform };
+                bones.Add(bone);
+
+                // Entry 0 is always the root -- its own recorded Parent value is unused, matching
+                // CnjModelReader.ReadBones's own doc comment. Every later entry's Parent was already
+                // validated (< i) by the reader, so it's always an already-constructed earlier bone.
+                if (i > 0)
+                {
+                    bones[boneData.Parent].AddChild(bone);
+                }
+            }
+        }
+        else
+        {
+            bones = [new ModelBone(0, "Root")];
+        }
 
         var meshes = new List<ModelMesh>(data.Meshes.Count);
         var meshParentBones = new List<ModelBone>(data.Meshes.Count);
@@ -84,11 +89,23 @@ internal static class CnjCompatModelBuilder
             var mesh = new ModelMesh(graphicsDevice, meshData.Name, [part]);
             meshes.Add(mesh);
 
-            var childBone = new ModelBone(bones.Count, meshData.Name);
-            rootBone.AddChild(childBone);
-            bones.Add(childBone);
-            mesh.ParentBone = childBone;
-            meshParentBones.Add(childBone);
+            ModelBone parentBone;
+            if (hasBoneHierarchy)
+            {
+                // Guaranteed non-null here -- CnjModelReader only leaves ParentBoneIndex null when
+                // the document has no real bone hierarchy, the else branch below.
+                parentBone = bones[meshData.ParentBoneIndex!.Value];
+            }
+            else
+            {
+                var childBone = new ModelBone(bones.Count, meshData.Name);
+                bones[0].AddChild(childBone);
+                bones.Add(childBone);
+                parentBone = childBone;
+            }
+
+            mesh.ParentBone = parentBone;
+            meshParentBones.Add(parentBone);
 
             // Same ordering requirement as CNA.Content.Cnj.CnjModelBuilder.Build's own -- Effect
             // assignment has to happen after the ModelMesh constructor above (which sets the part's

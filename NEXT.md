@@ -11,6 +11,36 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `CnjCompatModelBuilder`'s own bone-hierarchy follow-up -- done, closing the last deferral from the `.cnj` bone-hierarchy feature (2026-08-17, session 6 continued autonomously past the `.cnj` bone-hierarchy review-cycle checkpoint, per explicit user selection of "Extend CnjCompatModelBuilder for bone hierarchy")
+
+Small, well-precedented, exactly the shape the checkpoint question
+itself described it as. `CnjModelBuilder.Build` (the base, non-compat
+path) already had the real bone-construction logic to mirror; this was
+a matter of porting that same dual-path shape (real hierarchy when
+`CnjModelData.Bones` is non-empty, the original synthesize-a-bone-per-mesh
+fallback otherwise) into `CnjCompatModelBuilder`, replacing the explicit
+`ContentLoadException` rejection that builder threw for a bone-hierarchy
+document since that feature first landed.
+
+No new logic needed inventing -- the only real decision was making sure
+the compat-typed bone construction stayed faithful to the base path's
+own control flow (entry 0 always the root regardless of its own recorded
+`Parent` value, every later entry's `Parent` already validated by
+`CnjModelReader` so no redundant bounds-checking needed here, effect
+assignment still happening after the `ModelMesh` constructor sets each
+part's `Parent` link). `CnjCompatModelBuilder`'s own doc comment updated
+to describe the dual-path shape directly (the "real, documented gap, not
+yet closed" section is gone -- there's no gap left to document).
+
+No new testable surface -- constructing a working compat
+`ContentManager`/`GraphicsDevice` at all needs a real `cna-native`, the
+same pre-existing limitation this builder's own compat wiring has had
+since it first landed.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 476/476 passing, unchanged. `samples/HelloGame` re-verified
+unaffected.
+
 ## Fourth `/code-review high` pass, over the third pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again yet again once more)
 
 Ran the review over the dedup/doc-accuracy fix commit (`ef53838`) --
