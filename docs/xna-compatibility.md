@@ -159,8 +159,9 @@ all subclass their base counterparts, so a base-typed `ModelMeshPart`
 property can already legitimately hold a compat-typed instance), so only
 an explicit `Microsoft.Xna.Framework.Graphics.ModelMeshPart` type
 declaration is the real, narrow, documented gap. `ContentManager.Load<Model>()`
-on the compat `ContentManager` doesn't yet return a compat-typed `Model`
-either -- a separate, deliberately deferred follow-up (see `NEXT.md` for
+on the compat `ContentManager` now also returns a real, compat-typed
+`Model` (`XnbCompatModelBuilder`, reusing the base class's own
+`.xnb`-parsing directly rather than duplicating it -- see `NEXT.md` for
 the full design reasoning on both). `Song`/`MediaPlayer` are grounded
 against `modules/media/`'s own working implementation the same way
 `SoundEffect`/`BasicEffect` were, deliberately scoped down from that

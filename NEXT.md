@@ -30,6 +30,86 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## `ContentManager.Load<Model>()` on the compat `ContentManager` -- done, closing the last deferred follow-up from the `Model` compat mirror (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Wire compat ContentManager.Load<Model>()")
+
+Closed the one remaining explicitly-deferred piece from the `Model`
+compat mirror pass: `Microsoft.Xna.Framework.Content.ContentManager.Load<Model>()`
+now returns a real, compat-typed `Model` instead of the base-typed one it
+silently fell through to before (any `Model` request previously hit the
+`throw new NotSupportedException($"Unsupported content type {typeof(T)}.")`
+fallback, since `Model` wasn't recognized as a case at all).
+
+**Split `CNA.Content.ContentManager.LoadModel` into two methods, so the
+parsing half is reusable without duplicating any `.xnb` format logic --
+the same "reuse the shared low-level helper, reimplement only the thin
+native-backed assembly around it" pattern this compat layer's own
+`MediaLibrary` already established for `SavedPictureStore`.**
+`LoadXnbModelData(string assetName)` does everything up through producing
+an `XnbModelData` (pure C#, no native call, the same parsing this
+feature already had); `LoadModel(string assetName)` calls it and then
+`XnbModelBuilder.Build` for the base-typed path, unchanged in behavior
+from before the split. `CNA.XnaCompat.ContentManager` calls
+`LoadXnbModelData` directly and hands the result to a new
+`XnbCompatModelBuilder.Build`, this compat layer's own counterpart to
+`XnbModelBuilder`.
+
+**One real compiler-caught design correction along the way:** the first
+attempt made `LoadXnbModelData` `protected` (matching every other
+`ContentManager` load-helper's own accessibility), which failed to
+compile with `CS0050` ("inconsistent accessibility") -- `XnbModelData` is
+`internal`, and a `protected` member's signature must be visible to *any*
+subclass in *any* assembly, not just the one (`CNA.XnaCompat`) this
+project's own `InternalsVisibleTo` grant actually covers. A hypothetical
+third-party assembly subclassing the *public* `ContentManager` class
+would have no access to an `internal` return type at all -- the compiler
+was right to reject this, not being overly strict. Fixed by making
+`LoadXnbModelData` `internal` instead (matching `SavedPictureStore`'s own
+accessibility, reachable by `CNA.XnaCompat` the same way), rather than
+either widening `XnbModelData` to `public` (unnecessary new public API
+surface for what's meant to stay an implementation detail) or duplicating
+the parsing call.
+
+**`XnbCompatModelBuilder` builds compat-typed `Model`/`ModelBone`/
+`ModelMesh`, but each mesh's `ModelMeshPart`s stay base-typed** -- the
+exact same documented, narrow compat gap `Model`'s own doc comment
+already established for hand-built compat models, applied identically
+here rather than re-litigated. `XnbModelBuilder`'s own
+`BuildVertexBuffer`/`BuildIndexBuffer`/`BuildBasicEffect` (previously
+`private`) were made `internal` specifically so `XnbCompatModelBuilder`
+could call them directly instead of duplicating them -- they already
+build exactly the base-typed `VertexBuffer`/`IndexBuffer`/`BasicEffect`
+instances a base-typed `ModelMeshPart` needs regardless of which builder
+is doing the constructing, so there was nothing compat-specific left for
+a separate copy of that logic to add.
+
+**`GraphicsDevice`'s downcast in `LoadCompatModel` is safe for the same
+"single construction seam, provably compat-typed" reason already
+established for `MediaSource`/`SpriteFont.Texture`/`Model.Root`**:
+`Game.EnsureGraphicsDevice()` always sets `Content.GraphicsDevice` from
+its own covariant-return `CreateGraphicsDevice` hook, which for a compat
+`Game` always returns a compat-typed instance -- so `base.GraphicsDevice`
+is guaranteed compat-typed for every realistically-reachable compat
+`ContentManager`.
+
+**Not independently testable, and this is not a new gap -- it's the same
+one already documented for `XnbModelBuilder` itself.** Neither the
+`LoadModel`/`LoadXnbModelData` split nor the new compat wiring changes
+what's testable: `ContentManager.RootDirectory`'s setter calls a real
+native function (`cna_content_set_root_directory`), so even constructing
+a working `ContentManager` to exercise `LoadXnbModelData`/`LoadModel`/
+`LoadCompatModel` through needs a real `cna-native` -- this project's own
+existing `.xnb` parsing tests (`XnbModelReaderTests.cs`) already work
+around this by calling `XnbHeader.Read`/`XnbContentReader.Create`
+directly against a raw file stream, bypassing `ContentManager` entirely,
+and that's still the right approach; there's no new testable surface
+this split introduces. `XnbCompatModelBuilder.Build`/`XnbModelBuilder.Build`
+both construct real, native-backed `VertexBuffer`/`GraphicsDevice`
+instances internally, so they're blocked the same way regardless.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 391/391 passing, unchanged (no new testable surface, see above).
+`samples/HelloGame` re-verified unaffected.
+
 ## Twenty-fourth `/code-review high` pass, over the twenty-third pass's own doc-only fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still)
 
 Ran the review a fifth time over this feature, over the twenty-third

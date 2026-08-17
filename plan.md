@@ -35,11 +35,12 @@ separable feature, and the real engine hasn't even wired its own
 `ModelMesh`/`ModelMeshCollection`) is also now done, hand-buildable-only
 scope -- `ModelMeshPart`/`ModelMeshPartCollection`/`ModelEffectCollection`
 deliberately stay base-typed (a real, narrow, documented gap, same shape
-as `BasicEffect.CurrentTechnique`'s own), and `ContentManager.Load<Model>()`
-on the compat `ContentManager` doesn't yet return a compat-typed `Model`
-(a separate, deferred follow-up) -- see `NEXT.md` for the full design
-reasoning. What remains: Phase 6 packaging/cross-platform validation,
-tracked below.
+as `BasicEffect.CurrentTechnique`'s own). `ContentManager.Load<Model>()`
+on the compat `ContentManager` now also returns a real, compat-typed
+`Model` (`XnbCompatModelBuilder`, reusing the base class's own
+`.xnb`-parsing directly rather than duplicating it) -- see `NEXT.md` for
+the full design reasoning on both. What remains: Phase 6
+packaging/cross-platform validation, tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -726,11 +727,36 @@ Split by whether the type needs the (still nonexistent) native ABI:
       unreachable there, same pre-existing limitation already documented
       on compat `VertexBuffer`/`IndexBuffer`/`BasicEffect`).
       `samples/HelloGame` re-verified unaffected.
+- [x] **`ContentManager.Load<Model>()` on the compat `ContentManager` —
+      done, 2026-08-17 (session 6 continued autonomously past the compat
+      mirror checkpoint, per explicit user selection of "Wire compat
+      ContentManager.Load<Model>()").** Closes the one deferral flagged
+      in the entry above. Split `CNA.Content.ContentManager.LoadModel`
+      into `LoadXnbModelData` (pure `.xnb` parsing, unchanged behavior)
+      and `LoadModel` (parsing + base-typed assembly), so
+      `CNA.XnaCompat.ContentManager` can reuse the parsing step directly
+      without duplicating any `.xnb` format logic, then hand the result
+      to a new `XnbCompatModelBuilder` (this compat layer's own
+      counterpart to `XnbModelBuilder`, reusing its now-`internal`
+      `BuildVertexBuffer`/`BuildIndexBuffer`/`BuildBasicEffect` directly
+      rather than duplicating them, since `ModelMeshPart` stays
+      base-typed regardless of which builder constructs it). One real
+      compiler-caught correction along the way: `LoadXnbModelData` first
+      tried `protected` (matching every other load-helper), which failed
+      with `CS0050` since its `internal`-typed return value isn't visible
+      to a hypothetical third-party subclass of the *public*
+      `ContentManager` outside this project's own `InternalsVisibleTo`
+      grant — fixed by using `internal` instead (matching
+      `SavedPictureStore`'s own accessibility). Verified: `dotnet build`
+      clean across all 6 projects, 0 warnings; `dotnet test`: 391/391
+      passing, unchanged — no new testable surface (constructing a
+      working `ContentManager` at all needs a real `cna-native`, the
+      same pre-existing limitation `XnbModelBuilder` itself already has).
+      `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths and
       its compat mirror's `ModelMeshPart`/`ModelMeshPartCollection`/
-      `ModelEffectCollection` gap (see the two entries above);
-      `ContentManager.Load<Model>()` not yet compat-typed;
+      `ModelEffectCollection` gap (see the entries above);
       `MediaPlayer`'s visualization data (`GetVisualizationData`,
       real-time FFT). None of these are blocked on the native C ABI the
       way everything else in this phase is — they're scoped out because

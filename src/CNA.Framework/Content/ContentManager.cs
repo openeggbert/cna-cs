@@ -95,21 +95,24 @@ public class ContentManager
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
     }
 
-    /// <summary>Reads a real, uncompressed <c>.xnb</c> <see cref="Model"/> asset from
-    /// <see cref="RootDirectory"/> -- see this type's own doc comment. <c>protected</c>, matching
-    /// <see cref="LoadNativeTexture2DHandle"/>'s own accessibility, for the same reason: a seam for
-    /// a future CNA.XnaCompat <c>ContentManager</c> override to reuse without touching
-    /// <c>CNA.Content.Xnb</c> directly (no such override exists yet -- <see cref="Model"/> still has
-    /// no <c>CNA.XnaCompat</c> mirror at all, a separate, larger follow-up; see <c>plan.md</c>).</summary>
-    protected Model LoadModel(string assetName)
+    /// <summary>Parses a real, uncompressed <c>.xnb</c> <see cref="Model"/> asset's bytes from
+    /// <see cref="RootDirectory"/> into an intermediate, native-free <see cref="XnbModelData"/> --
+    /// deliberately split out from <see cref="LoadModel"/> (which needs a real
+    /// <see cref="Graphics.GraphicsDevice"/> to finish the job) so <c>CNA.XnaCompat</c>'s own
+    /// <c>ContentManager</c> can reuse this exact parsing step to build its own compat-typed
+    /// <see cref="Model"/>, without duplicating any <c>.xnb</c> format logic -- the same "reuse the
+    /// shared low-level parsing/helper, reimplement only the thin native-backed assembly around it"
+    /// pattern <c>CNA.XnaCompat.MediaLibrary</c> already established for
+    /// <see cref="Media.SavedPictureStore"/>. <c>internal</c>, not <c>protected</c> like
+    /// <see cref="LoadNativeTexture2DHandle"/>'s own -- <see cref="XnbModelData"/> is itself
+    /// <c>internal</c>, and a <c>protected</c> member's signature must be visible to *any*
+    /// subclass in *any* assembly, not just the one (<c>CNA.XnaCompat</c>) this project's own
+    /// <c>InternalsVisibleTo</c> grant actually covers (a real <c>CS0050</c> compiler error caught
+    /// this during implementation) -- <c>internal</c> matches <see cref="Media.SavedPictureStore"/>'s
+    /// own accessibility for the identical reason.</summary>
+    internal XnbModelData LoadXnbModelData(string assetName)
     {
         ArgumentNullException.ThrowIfNull(assetName);
-
-        if (GraphicsDevice is null)
-        {
-            throw new ContentLoadException(
-                $"Cannot load Model '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
-        }
 
         string path = ResolveXnbAssetPath(assetName);
         using FileStream stream = File.OpenRead(path);
@@ -125,7 +128,21 @@ public class ContentManager
                 $"'{assetName}' is not a Model asset (its .xnb root object's type reader was not ModelReader).");
         }
 
-        return XnbModelBuilder.Build(GraphicsDevice, modelData);
+        return modelData;
+    }
+
+    /// <summary>Builds the final, real, native-backed <see cref="Model"/> from
+    /// <see cref="LoadXnbModelData"/> -- see this type's own doc comment for why only this step
+    /// (not the parsing <see cref="LoadXnbModelData"/> does) is native-ABI-blocked.</summary>
+    protected Model LoadModel(string assetName)
+    {
+        if (GraphicsDevice is null)
+        {
+            throw new ContentLoadException(
+                $"Cannot load Model '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
+        }
+
+        return XnbModelBuilder.Build(GraphicsDevice, LoadXnbModelData(assetName));
     }
 
     private string ResolveXnbAssetPath(string assetName)

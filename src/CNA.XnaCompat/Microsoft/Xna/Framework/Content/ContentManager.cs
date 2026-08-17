@@ -5,6 +5,12 @@ namespace Microsoft.Xna.Framework.Content;
 /// content types (currently <see cref="Graphics.Texture2D"/>), reusing the base class's protected
 /// native-load helper so this project never references CNA.Interop directly. See
 /// ../../../../../docs/architecture.md and ../../../../../docs/xna-compatibility.md.
+///
+/// <see cref="Graphics.Model"/> is different from the rest: it reuses the base class's own
+/// <c>LoadXnbModelData</c> (real <c>.xnb</c> parsing, no native call at all) directly, then hands
+/// the result to <see cref="Graphics.XnbCompatModelBuilder"/> -- this compat layer's own
+/// counterpart to <c>CNA.Content.Xnb.XnbModelBuilder</c> -- rather than re-parsing anything. See
+/// that type's own doc comment for the full reasoning.
 /// </summary>
 public class ContentManager : CNA.Content.ContentManager
 {
@@ -39,7 +45,31 @@ public class ContentManager : CNA.Content.ContentManager
             return (T)(object)new Audio.SoundEffect(LoadNativeSoundEffectHandle(assetName));
         }
 
+        if (typeof(T) == typeof(Graphics.Model))
+        {
+            return (T)(object)LoadCompatModel(assetName);
+        }
+
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
+    }
+
+    /// <summary>Same <c>GraphicsDevice</c>-availability contract as the base class's own
+    /// <c>LoadModel</c> -- <c>GraphicsDevice</c> below is guaranteed compat-typed for every
+    /// reachable compat <see cref="ContentManager"/> instance (see <c>Microsoft.Xna.Framework.Game</c>'s
+    /// own doc comment: its <c>EnsureGraphicsDevice</c> always sets <c>Content.GraphicsDevice</c>
+    /// from its own covariant-return <c>CreateGraphicsDevice</c> hook), so the downcast is the same
+    /// "single construction seam, provably compat-typed" pattern established elsewhere this
+    /// session, not an unchecked assumption.</summary>
+    private Graphics.Model LoadCompatModel(string assetName)
+    {
+        if (base.GraphicsDevice is null)
+        {
+            throw new CNA.Content.ContentLoadException(
+                $"Cannot load Model '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
+        }
+
+        var graphicsDevice = (Graphics.GraphicsDevice)base.GraphicsDevice;
+        return Graphics.XnbCompatModelBuilder.Build(graphicsDevice, LoadXnbModelData(assetName));
     }
 
     /// <summary>Element-wise conversion, not a collection-level one -- see the identical pattern
