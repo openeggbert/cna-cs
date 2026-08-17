@@ -99,7 +99,8 @@ public class CnjModelReaderTests
     [Fact]
     public void Read_UnsupportedCnjVersion_ThrowsContentLoadException()
     {
-        const string json = """{"cnjVersion":2,"type":"Model"}""";
+        // cnjVersion 2 is now supported (real "bones" hierarchy) -- version 3 stays unsupported.
+        const string json = """{"cnjVersion":3,"type":"Model"}""";
 
         Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
     }
@@ -121,9 +122,78 @@ public class CnjModelReaderTests
     }
 
     [Fact]
-    public void Read_MultiEntryBonesArray_ThrowsContentLoadException()
+    public void Read_MultiEntryBonesArray_ParsesRealHierarchy()
     {
-        const string json = """{"cnjVersion":1,"type":"Model","bones":[{"name":"A"},{"name":"B"}]}""";
+        // cnjVersion 2's real "bones" scene-graph hierarchy -- three bones, parent-before-child
+        // (Root -> Body -> Head), Head's transform a non-identity translation to confirm the
+        // 16-element row-major float array is actually read, not just defaulted.
+        const string json = """
+            {"cnjVersion":2,"type":"Model","bones":[
+                {"name":"Root"},
+                {"name":"Body","parent":0},
+                {"name":"Head","parent":1,"transform":[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,2,0,1]}
+            ],"meshes":[]}
+            """;
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Equal(3, data.Bones.Count);
+        Assert.Equal("Root", data.Bones[0].Name);
+        Assert.Equal(-1, data.Bones[0].Parent);
+        Assert.Equal("Body", data.Bones[1].Name);
+        Assert.Equal(0, data.Bones[1].Parent);
+        Assert.Equal("Head", data.Bones[2].Name);
+        Assert.Equal(1, data.Bones[2].Parent);
+        Assert.Equal(2f, data.Bones[2].Transform.M42);
+    }
+
+    [Fact]
+    public void Read_BonesWithDefaultsOnly_UsesNameAndParentFallbacks()
+    {
+        // No "name"/"parent"/"transform" fields at all -- every default applies: entry 0 -> "Root",
+        // later entries -> "Node{index}" and parent 0, transform -> identity.
+        const string json = """{"cnjVersion":2,"type":"Model","bones":[{},{},{}],"meshes":[]}""";
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Equal("Root", data.Bones[0].Name);
+        Assert.Equal("Node1", data.Bones[1].Name);
+        Assert.Equal(0, data.Bones[1].Parent);
+        Assert.Equal("Node2", data.Bones[2].Name);
+        Assert.Equal(0, data.Bones[2].Parent);
+        Assert.Equal(Matrix.Identity, data.Bones[2].Transform);
+    }
+
+    [Fact]
+    public void Read_BoneWithOutOfRangeParent_ThrowsContentLoadException()
+    {
+        const string json = """{"cnjVersion":2,"type":"Model","bones":[{"name":"A"},{"name":"B","parent":5}]}""";
+
+        Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
+    }
+
+    [Fact]
+    public void Read_BoneWithForwardReferenceParent_ThrowsContentLoadException()
+    {
+        // parent-before-child is a real invariant, not just a convention -- a bone referencing a
+        // *later* entry (including itself) must be rejected, not silently accepted.
+        const string json = """{"cnjVersion":2,"type":"Model","bones":[{"name":"A"},{"name":"B","parent":1}]}""";
+
+        Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
+    }
+
+    [Fact]
+    public void Read_BoneWithNonObjectEntry_ThrowsContentLoadException()
+    {
+        const string json = """{"cnjVersion":2,"type":"Model","bones":["not an object","also not"]}""";
+
+        Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
+    }
+
+    [Fact]
+    public void Read_BoneWithWrongLengthTransform_ThrowsContentLoadException()
+    {
+        const string json = """{"cnjVersion":2,"type":"Model","bones":[{"name":"A"},{"name":"B","transform":[1,2,3]}]}""";
 
         Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
     }
@@ -135,7 +205,71 @@ public class CnjModelReaderTests
 
         CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
 
+        Assert.Empty(data.Bones);
         Assert.Empty(data.Meshes);
+    }
+
+    [Fact]
+    public void Read_MeshWithParentBone_UsesRealHierarchy()
+    {
+        const string json = """
+            {"cnjVersion":2,"type":"Model","bones":[
+                {"name":"Root"},
+                {"name":"Body","parent":0}
+            ],"meshes":[
+                {"name":"M","vertices":"quad_verts.bin","indices":"quad_idx.bin","vertexStride":32,"parentBone":1}
+            ]}
+            """;
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Equal(1, Assert.Single(data.Meshes).ParentBoneIndex);
+    }
+
+    [Fact]
+    public void Read_MeshWithoutParentBoneField_DefaultsToRootWhenHierarchyPresent()
+    {
+        const string json = """
+            {"cnjVersion":2,"type":"Model","bones":[
+                {"name":"Root"},
+                {"name":"Body","parent":0}
+            ],"meshes":[
+                {"name":"M","vertices":"quad_verts.bin","indices":"quad_idx.bin","vertexStride":32}
+            ]}
+            """;
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Equal(0, Assert.Single(data.Meshes).ParentBoneIndex);
+    }
+
+    [Fact]
+    public void Read_MeshWithNoBoneHierarchy_HasNullParentBoneIndex()
+    {
+        const string json = """
+            {"cnjVersion":1,"type":"Model","meshes":[
+                {"name":"M","vertices":"quad_verts.bin","indices":"quad_idx.bin","vertexStride":32}
+            ]}
+            """;
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        Assert.Null(Assert.Single(data.Meshes).ParentBoneIndex);
+    }
+
+    [Fact]
+    public void Read_MeshWithOutOfRangeParentBone_ThrowsContentLoadException()
+    {
+        const string json = """
+            {"cnjVersion":2,"type":"Model","bones":[
+                {"name":"Root"},
+                {"name":"Body","parent":0}
+            ],"meshes":[
+                {"name":"M","vertices":"quad_verts.bin","indices":"quad_idx.bin","vertexStride":32,"parentBone":9}
+            ]}
+            """;
+
+        Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
     }
 
     [Fact]

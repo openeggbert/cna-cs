@@ -11,6 +11,112 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `.cnj`'s own real `"bones"` rigid scene-graph hierarchy (cnjVersion 2) -- done, after research confirmed skinning is architecturally separate and has no real payoff without a `SkinnedEffect` this project doesn't have (2026-08-17, session 6 continued autonomously past the LZX decompression review-cycle checkpoint, per explicit user selection of "Attempt .cnj's bone-hierarchy/skinning surface")
+
+The checkpoint that led here explicitly named the risk: "a substantial
+expansion of the already-finished minimal reader's own deliberately-cut
+scope." Rather than commit to the whole surface at once, dispatched a
+dedicated research fork first -- the same discipline that turned the
+original `.cnj`/glTF ask into a well-scoped minimal reader, and the LZX
+ask into a fully-grounded implementation. It paid off again here, in the
+opposite direction from the LZX result: instead of finding everything
+was more tractable than expected, it found the ask itself was really
+*two* separable things, one worth building now and one not worth
+attempting at all yet.
+
+**What the research established** (full spec at
+`/tmp/.../scratchpad/cnj-skinning-spec.md`):
+
+1. **Bone hierarchy and skinning are architecturally independent in the
+   real format, not one feature split for convenience.** `"bones"`
+   (`ParseCnjBoneArrayEXT`, `ContentManager.cpp:1252-1301`) is a flat,
+   parent-before-child scene-graph array -- each entry's own JSON
+   `parent` field is a 0-based index into the same array, always an
+   already-constructed earlier entry (entry 0 is always the root). This
+   is closely analogous to `.xnb`'s own bone convention this project
+   already ported (`XnbModelBuilder.Build`) -- if anything simpler to
+   link, since `.cnj` encodes each bone's own *parent*, needing only a
+   single forward pass, unlike `.xnb`'s child-*index-list* encoding,
+   which needs a second pass once every bone exists.
+2. **Skinning (vertex strides 48/52/56/68, `"skeleton"`/`"animations"`)
+   has no real payoff to attempt even partially, confirmed by direct
+   search:** this project has **zero** `SkinnedEffect` implementation
+   anywhere -- not stubbed, not native-ABI-blocked, simply never
+   started (one doc-comment mention total, in `CnaGpuDrawParams`, noting
+   it as a feature "this project doesn't implement yet"). Looking at the
+   real reader's own per-mesh effect dispatch: a `.cnj` mesh using
+   stride 52/56/68 will, in every practically-occurring case, also
+   specify a `SkinnedEffect`-family `"effect"` value -- which this
+   reader's existing effect-name check already rejects. So even if
+   stride 52/56/68 *parsing* were added, the mesh would still be
+   rejected moments later at the effect check, unless that check were
+   *also* loosened to accept `"SkinnedEffect"` while still being unable
+   to construct one -- not a coherent middle ground. This is a
+   materially weaker case than this project's own established "data
+   loads now, native rendering comes later" pattern (`BasicEffect`
+   data, `VertexBuffer`/`IndexBuffer` construction): there, the blocker
+   is "native ABI not implemented yet," with the full managed type
+   already built and correct. Here, the blocker is "the managed type
+   doesn't exist at all" -- loading skinned vertex *bytes* in isolation
+   has nothing downstream to ever connect to.
+3. **No byte-exact fixture exists for bone hierarchy, unlike `quad.cnj`'s
+   own precedent -- a real, honest gap, stated plainly.** No `.cnj`
+   fixture with a multi-entry `"bones"` array exists anywhere in the
+   `cna` repo, and `CnjModelTests.cpp`'s own two tests don't exercise
+   `hasBoneHierarchy` at all. This increment's own tests use
+   hand-authored fixtures verified by re-deriving expected results from
+   the confirmed source logic, not by porting an already-passing
+   upstream test -- a genuine, if modest, step down in rigor from every
+   other `.cnj`/`.xnb` increment this session built, worth naming
+   directly rather than glossing over.
+
+**What got built**, in `src/CNA.Framework/Content/Cnj/`:
+
+- `CnjModelData`/`CnjMeshData`: gained `Bones` (`IReadOnlyList<CnjBoneData>`,
+  empty unless the document has a real, multi-entry hierarchy -- matching
+  the real engine's own `hasBoneHierarchy = cnjBones.size() > 1` check
+  exactly, so a single "bones" entry stays the cnjVersion-1-compatible
+  "no real hierarchy" case it always was) and `ParentBoneIndex`
+  (`int?`, only consulted when `Bones` is non-empty).
+- `CnjModelReader`: `MaxSupportedCnjVersion` raised to 2; the old
+  "reject a multi-entry bones array outright" check replaced with real
+  parsing (`ReadBones`) -- name/parent/transform per entry, matching the
+  real format's own defaults exactly (`"Root"`/`"Node{index}"` name
+  fallbacks, parent default `-1` for entry 0 and `0` for later entries,
+  identity transform default), with an out-of-range or forward-referencing
+  `parent` rejected cleanly, matching this reader's own pervasive
+  "reject a corrupt cross-reference" discipline. Each mesh's own
+  `"parentBone"` field is read only when the document has a real
+  hierarchy, also bounds-checked.
+- `CnjModelBuilder.Build`: gained a second bone-construction branch
+  (single forward pass, real hierarchy) alongside its existing "no
+  hierarchy, synthesize a bone per mesh" fallback -- selected by whether
+  `data.Bones` is non-empty. Every excluded skinning surface (vertex
+  strides 48/52/56/68, `"skeleton"`/`"animations"`, every non-`BasicEffect`
+  effect) stays rejected exactly as before this increment.
+- `CnjCompatModelBuilder` (`CNA.XnaCompat`): explicitly rejects a
+  bone-hierarchy document with a clear `ContentLoadException` instead of
+  silently falling back to its own unchanged synthesize-a-bone-per-mesh
+  shape -- a real behavior divergence would otherwise have opened up
+  here (a compat-typed load of a bone-hierarchy `.cnj` would have
+  silently produced a *wrong*, not just incomplete, bone structure, with
+  no error at all) had this builder been left untouched. Closing the
+  real gap (linking the hierarchy on the compat side too) stays its own
+  separate, deliberately deferred follow-up, matching the "narrow
+  reader/builder first, compat mirror as a distinct, separately-reviewed
+  follow-up" cadence this whole feature has already used twice.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings;
+`dotnet test`: 473/473 passing (up from 464 -- 9 new tests: real
+multi-bone parsing including a non-identity transform, field-default
+fallbacks, out-of-range/forward-referencing/non-object bone rejection,
+malformed-transform rejection, mesh `parentBone` wiring in both the
+hierarchy-present and hierarchy-absent cases, and out-of-range
+`parentBone` rejection; two existing tests updated for the now-legitimate
+behavior change -- cnjVersion 2 no longer rejected, a multi-entry
+`"bones"` array no longer rejected outright). `samples/HelloGame`
+re-verified unaffected.
+
 ## Second `/code-review high` pass, over the first pass's own fix -- clean (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again)
 
 Ran the review over the LZX fix commit (`4fe1b44`). Clean -- zero

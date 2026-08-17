@@ -33,6 +33,16 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// its own near-duplication of <c>CNA.Content.Xnb.XnbModelBuilder.Build</c>. <b>If you fix a bug in
 /// this method, check <c>CNA.Content.Cnj.CnjModelBuilder.Build</c> too</b> -- there is no
 /// compiler-enforced link between the two.
+///
+/// <b>Real, documented gap, not yet closed:</b> unlike the base (non-compat) path, this builder does
+/// not yet link a document's own real <c>"bones"</c> hierarchy (<c>CnjModelData.Bones</c>, cnjVersion
+/// 2) -- it explicitly rejects such a document with a <c>ContentLoadException</c> rather than
+/// silently falling back to the synthesize-a-bone-per-mesh shape below (which would produce a
+/// genuinely *wrong*, not just incomplete, bone structure for it). Closing this gap is its own
+/// separate, deliberately deferred follow-up, matching the "narrow reader/builder first, compat
+/// mirror as a distinct, separately-reviewed follow-up" cadence this whole feature has already used
+/// twice (once for the base <c>.cnj</c> reader itself, once for this compat mirror's own original
+/// <c>BasicEffect</c>-only scope).
 /// </summary>
 internal static class CnjCompatModelBuilder
 {
@@ -40,6 +50,20 @@ internal static class CnjCompatModelBuilder
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         ArgumentNullException.ThrowIfNull(data);
+
+        // CnjModelBuilder.Build (the base, non-compat path) now links a document's own real
+        // "bones" hierarchy when present -- this compat mirror doesn't yet, matching this whole
+        // feature's own "narrow reader/builder first, compat mirror as a distinct, separately
+        // -reviewed follow-up" cadence. Rejecting explicitly here (rather than silently falling
+        // back to the synthesize-a-bone-per-mesh shape below, which would produce a genuinely
+        // *wrong* bone structure for such a document) matches this whole feature's "detect and
+        // throw a clear exception, never silently mis-load" discipline.
+        if (data.Bones.Count > 0)
+        {
+            throw new CNA.Content.ContentLoadException(
+                "This .cnj document has a real 'bones' hierarchy, which CnjCompatModelBuilder does not yet support " +
+                "(CNA.Content.Cnj.CnjModelBuilder, the non-compat path, already does).");
+        }
 
         var rootBone = new ModelBone(0, "Root");
         var bones = new List<ModelBone> { rootBone };

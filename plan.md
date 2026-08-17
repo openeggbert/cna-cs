@@ -70,8 +70,17 @@ port of the real openeggbert/cna C++ engine's own `LzxDecoder`, confirmed
 byte-for-byte against two real MonoGame fixtures and an independently
 FNA-produced reference decompressed output, closing most of the `.xnb`
 loading feature's own original LZX/LZ4 deferral (`Lz4` -- a MonoGame-only
-extension with no local format grounding -- stays out of scope). What
-remains: Phase 6 packaging/cross-platform validation, tracked below.
+extension with no local format grounding -- stays out of scope). `.cnj`'s
+own real `"bones"` rigid scene-graph hierarchy (cnjVersion 2) is also now
+supported on the base `ContentManager` -- research confirmed this is
+architecturally independent of skinning in the real format (a flat,
+parent-index-encoded array, closely analogous to `.xnb`'s own bone
+convention already ported), so it was carved out and built as its own
+increment; `.cnj`'s skinning surface (vertex strides 48/52/56/68,
+`"skeleton"`/`"animations"`) stays explicitly out of scope, confirmed to
+have no real payoff without a `SkinnedEffect` type, which doesn't exist
+anywhere in this project. What remains: Phase 6 packaging/cross-platform
+validation, tracked below.
 **Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
@@ -1034,15 +1043,69 @@ Split by whether the type needs the (still nonexistent) native ABI:
       control flow, but inconsistent with every other error condition
       `Decompress` already checks) — see `NEXT.md`. `samples/HelloGame`
       re-verified unaffected.
+- [x] **`.cnj`'s own real `"bones"` rigid scene-graph hierarchy (cnjVersion
+      2) — done, 2026-08-17 (session 6 continued autonomously past the
+      LZX decompression review-cycle checkpoint, per explicit user
+      selection of "Attempt .cnj's bone-hierarchy/skinning surface,"
+      then a dedicated research pass narrowed that to bone hierarchy
+      only).** Research first (this session's own standing discipline)
+      confirmed the real `.cnj` format keeps bone hierarchy and skinning
+      **architecturally separate already**, not one feature split for
+      convenience: `"bones"` is a flat, parent-before-child scene-graph
+      array (`ParseCnjBoneArrayEXT`) used to position rigid mesh pieces,
+      closely analogous to `.xnb`'s own bone convention already ported
+      in this project (`XnbModelBuilder`) — if anything simpler to link,
+      since `.cnj` encodes each bone's own parent index, needing only a
+      single forward pass, unlike `.xnb`'s child-index-list encoding.
+      Skinning (vertex strides 48/52/56/68, `"skeleton"`/`"animations"`)
+      was confirmed to have **no real payoff to attempt even partially**:
+      this project has no `SkinnedEffect` type anywhere (not stubbed,
+      not native-ABI-blocked, simply never started), and a real `.cnj`
+      mesh using a skinned vertex stride will, in every practically-occurring
+      case, also specify a `SkinnedEffect`-family `"effect"` value this
+      reader already rejects — so loading skinned vertex *bytes* in
+      isolation has nothing downstream to connect to, unlike this
+      project's own established "data loads now, native rendering comes
+      later" pattern (which needs the *managed* type to already exist,
+      just blocked on native — not true here). `CnjModelData`/`CnjMeshData`
+      gained `Bones`/`ParentBoneIndex`; `CnjModelBuilder.Build` gained a
+      second bone-construction branch (real hierarchy) alongside its
+      existing "no hierarchy, synthesize a bone per mesh" fallback,
+      selected by whether the document has more than one `"bones"` entry
+      (matching the real engine's own `hasBoneHierarchy` convention
+      exactly). `CnjCompatModelBuilder` was **not** extended to link real
+      bone hierarchies in this pass (its own separate, deliberately
+      deferred follow-up, matching this whole feature's established
+      cadence) — it now explicitly rejects a bone-hierarchy document with
+      a clear `ContentLoadException` instead of silently falling back to
+      its own (now genuinely *wrong*, not just incomplete) synthesized-bone
+      shape. A real, honest testing gap, stated plainly rather than
+      glossed over: unlike `quad.cnj`'s own byte-exact upstream-test
+      port, no real `.cnj` fixture with a multi-bone array exists
+      anywhere in the reference C++ engine's own test suite to
+      cross-check against, so this increment's own tests use
+      hand-authored fixtures verified against manually-derived expected
+      structure from the confirmed source logic, not an independent
+      reference. Verified: `dotnet build` clean across all 6 projects,
+      0 warnings; `dotnet test`: 473/473 passing (up from 464 — 9 new
+      tests covering real multi-bone parsing, field defaults, malformed/
+      out-of-range bone and mesh-parent-bone rejection, and the
+      no-hierarchy fallback's continued correctness). `samples/HelloGame`
+      re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
-      `Model`'s own bone-hierarchy/skinning/PBR/morph-target `.cnj`
-      surface, runtime glTF content paths, and MonoGame's own `Lz4`
-      `.xnb` extension (see the `.xnb`/`.cnj` loading entries above), and
-      `ModelMeshPart`'s own `ModelEffectCollection`/`ModelMesh.Effects`
-      gap (see that entry above, a real permanent gap, not deferred
-      pending further work). None of these are blocked on the native C
-      ABI the way everything else in this phase is — they're scoped out
-      because each is its own substantial, separable feature (or, for
+      `Model`'s own `.cnj` skinning surface (vertex strides 48/52/56/68,
+      `"skeleton"`/`"animations"`, every `SkinnedEffect`-family effect
+      type -- confirmed architecturally separate from the now-supported
+      bone hierarchy, and requiring new `Effect` subclasses plus new
+      native ABI work regardless), `CnjCompatModelBuilder`'s own
+      bone-hierarchy follow-up, runtime glTF content paths, and
+      MonoGame's own `Lz4` `.xnb` extension (see the `.xnb`/`.cnj`
+      loading entries above), and `ModelMeshPart`'s own
+      `ModelEffectCollection`/`ModelMesh.Effects` gap (see that entry
+      above, a real permanent gap, not deferred pending further work).
+      None of these are blocked on the native C ABI the way everything
+      else in this phase is — they're scoped out because each is its own
+      substantial, separable feature (or, for
       `ModelEffectCollection`, structurally unfixable, and for `Lz4`, not
       grounded against any reachable format reference).
 - [ ] Build the compatibility matrix (§73) from real tests, not from this

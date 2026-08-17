@@ -77,12 +77,15 @@ throwing." Only the final step (constructing the real, GPU-backed
 `ContentManager.Load<Model>()`) needs the native ABI, same as everything
 else below. `Model` file-loading also now covers a real, minimal-scope
 subset of the real C++ engine's own `.cnj` JSON format (`CNA.Content.Cnj`)
--- JSON envelope plus flat mesh list, `BasicEffect` only, vertex sidecar
-strides 16/20/24/32 only, tried only when no `.xnb` file of the same
-asset name exists. MonoGame's own Lz4 `.xnb` extension (no local format
-grounding exists to implement it correctly), `.cnj`'s own
-bone-hierarchy/skinning/PBR/morph-target surface, and runtime glTF are
-all explicitly out of scope (see [`NEXT.md`](NEXT.md)).
+-- JSON envelope, an optional real `"bones"` rigid scene-graph hierarchy
+(cnjVersion 2), `BasicEffect` only, vertex sidecar strides 16/20/24/32
+only, tried only when no `.xnb` file of the same asset name exists.
+MonoGame's own Lz4 `.xnb` extension (no local format grounding exists to
+implement it correctly), `.cnj`'s own skinning surface (confirmed
+architecturally separate from the now-supported bone hierarchy, and not
+renderable in any meaningful way regardless, since this project has no
+`SkinnedEffect` anywhere to consume it), and runtime glTF are all
+explicitly out of scope (see [`NEXT.md`](NEXT.md)).
 Everything else native-backed (`Game`, `GraphicsDevice`, `Texture2D`,
 `SpriteBatch` including the full extended `Draw`/`DrawString` overload
 families, `RenderTarget2D`, `SoundEffect`/`SoundEffectInstance`,
@@ -109,7 +112,7 @@ engine, not a stub. See
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 464 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 473 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

@@ -109,10 +109,11 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     why only the final VertexBuffer/IndexBuffer construction step is
     blocked). Reading a
     real, minimal-scope subset of the real engine's own .cnj JSON Model
-    format (CNA.Content.Cnj: JSON envelope + flat mesh list, BasicEffect
-    only, vertex sidecar strides 16/20/24/32 only) -- also zero native
-    ABI, same "parse pure data, block only on final VertexBuffer/
-    IndexBuffer construction" split as the .xnb path.
+    format (CNA.Content.Cnj: JSON envelope + an optional real "bones"
+    rigid scene-graph hierarchy (cnjVersion 2), BasicEffect only, vertex
+    sidecar strides 16/20/24/32 only) -- also zero native ABI, same
+    "parse pure data, block only on final VertexBuffer/IndexBuffer
+    construction" split as the .xnb path.
     VisualizationData's own construction (two 256-element float[] arrays,
     all-zero until MediaPlayer.GetVisualizationData populates them) --
     zero native ABI, pure managed data (see below for why populating them
@@ -144,10 +145,15 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
 
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
-    Model's own .cnj bone-hierarchy/skinning/PBR/morph-target surface,
-    runtime glTF content paths, and MonoGame's own Lz4 .xnb extension
-    (see above/below for why only a minimal-scope .cnj subset and LZX,
-    not Lz4, were in scope for their respective formats),
+    Model's own .cnj skinning surface (vertex strides 48/52/56/68,
+    "skeleton"/"animations" runtime animation playback, and every
+    SkinnedEffect-family effect type -- confirmed architecturally
+    separate from the "bones" rigid hierarchy, which is now supported;
+    not renderable in any meaningful way regardless, since this project
+    has no SkinnedEffect anywhere to consume skinning data), morph
+    targets, runtime glTF content paths, and MonoGame's own Lz4 .xnb
+    extension (see above/below for why only a minimal-scope .cnj subset
+    and LZX, not Lz4, were in scope for their respective formats),
     ModelMeshPart's own ModelEffectCollection/ModelMesh.Effects compat gap
     (a real, permanent structural limitation, not a temporary scope cut --
     see plan.md Phase 4 for why) -- none of these are blocked on the
@@ -292,10 +298,17 @@ document names is validated by `CnjPathContainment` (a direct port of
 the real engine's own `PathContainment.hpp` component-wise containment
 check) before it is ever opened, since it's untrusted, file-supplied
 input, distinct in shape from `SavedPictureStore.SanitizePictureName`'s
-own bare-filename check. Deliberately scoped to a flat mesh list (no
-bone hierarchy/skinning/morph targets) and `BasicEffect` only (no
-`PbrEffect`/`SkinnedEffect`/`DualTextureEffect`) -- each excluded surface
-is rejected with a clear, documented exception, never silently
+own bare-filename check. Real, multi-entry `"bones"` hierarchies (cnjVersion
+2) are supported -- grounded against `ParseCnjBoneArrayEXT`'s own real
+parent-index/transform encoding, confirmed a single forward pass suffices
+(unlike `.xnb`'s own child-index-list encoding, which needs two passes).
+Skinning (vertex strides 48/52/56/68, `"skeleton"`/`"animations"`) stays
+deliberately out of scope, confirmed architecturally *independent* of the
+now-supported `"bones"` hierarchy, not a smaller slice of it -- and
+confirmed to have no real payoff without a `SkinnedEffect` type, which
+doesn't exist anywhere in this project. `BasicEffect` stays the only
+supported effect (no `PbrEffect`/`SkinnedEffect`/`DualTextureEffect`) --
+each excluded surface is rejected with a clear, documented exception, never silently
 mis-loaded, the same discipline `.xnb`'s own Lz4 rejection already
 established. `CnjCompatModelBuilder` is this path's own `CNA.XnaCompat`
 mirror, exactly `XnbCompatModelBuilder`'s shape: reuses the shared

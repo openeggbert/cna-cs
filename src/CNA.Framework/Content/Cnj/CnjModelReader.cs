@@ -8,17 +8,21 @@ namespace CNA.Content.Cnj;
 /// Reads a real, minimal-scope <c>.cnj</c> <c>Model</c> document into a <see cref="CnjModelData"/>,
 /// matching the real openeggbert/cna C++ engine's own <c>ModelTypeReader::Read</c>
 /// (<c>modules/content/src/Xna/ContentManager.cpp</c>) for the subset this reader supports: a JSON
-/// envelope plus a flat <c>"meshes"</c> array, <c>BasicEffect</c> only, vertex sidecar strides
-/// 16/20/24/32 only. Deliberately, explicitly out of scope (rejected with a clear
-/// <see cref="ContentLoadException"/>, never silently ignored or mis-loaded -- matching this
-/// project's own <c>.xnb</c>-side "detect and throw a clear, documented exception" precedent for
-/// LZX/LZ4 compression): the <c>"bones"</c> hierarchy (cnjVersion 2), <c>"skeleton"</c>/
-/// <c>"animations"</c> (skinned rigid meshes), per-mesh <c>"morphTargets"</c>, every non-
-/// <c>BasicEffect</c> effect type, and vertex strides 48/52/56/68 (the PBR/skinned shapes).
-/// <c>"lights"</c> is the one field this reader silently ignores rather than rejects -- a pure
-/// lighting *enhancement*, not a structural feature, so omitting it changes a loaded model's lit
-/// appearance, not its structural correctness (the same tier this project's own
-/// <c>XnbBasicEffectReader</c> already accepted for stubbing full material fidelity).
+/// envelope plus a flat <c>"meshes"</c> array, an optional real <c>"bones"</c> scene-graph hierarchy
+/// (cnjVersion 2), <c>BasicEffect</c> only, vertex sidecar strides 16/20/24/32 only. Deliberately,
+/// explicitly out of scope (rejected with a clear <see cref="ContentLoadException"/>, never silently
+/// ignored or mis-loaded -- matching this project's own <c>.xnb</c>-side "detect and throw a clear,
+/// documented exception" precedent for LZX/LZ4 compression): <c>"skeleton"</c>/<c>"animations"</c>
+/// (skinning/runtime animation playback -- a wholly separate subsystem from the rigid <c>"bones"</c>
+/// hierarchy this reader *does* support, confirmed architecturally independent in the real C++
+/// source; also not renderable in any meaningful way today, since this project has no
+/// <c>SkinnedEffect</c> anywhere to ever consume the skinning data), per-mesh <c>"morphTargets"</c>,
+/// every non-<c>BasicEffect</c> effect type, and vertex strides 48/52/56/68 (the tangent/skinned
+/// shapes, which pair with <c>"skeleton"</c>-consuming effects for the identical reason). <c>"lights"</c>
+/// is the one field this reader silently ignores rather than rejects -- a pure lighting
+/// *enhancement*, not a structural feature, so omitting it changes a loaded model's lit appearance,
+/// not its structural correctness (the same tier this project's own <c>XnbBasicEffectReader</c>
+/// already accepted for stubbing full material fidelity).
 ///
 /// Unlike the real C++ reader (which locates <c>"meshes"</c> via a hand-rolled brace-matching scan
 /// over the raw JSON string, a historical artifact of its own JSON library's limitations), this
@@ -33,7 +37,7 @@ namespace CNA.Content.Cnj;
 /// </summary>
 internal static class CnjModelReader
 {
-    private const int MaxSupportedCnjVersion = 1;
+    private const int MaxSupportedCnjVersion = 2;
 
     internal static CnjModelData Read(string json, string assetName, string rootDirectory)
     {
@@ -61,12 +65,14 @@ internal static class CnjModelReader
 
             ValidateEnvelope(root, assetName);
 
+            IReadOnlyList<CnjBoneData> bones = ReadBones(root, assetName);
+
             var meshes = new List<CnjMeshData>();
             if (root.TryGetProperty("meshes", out JsonElement meshesElement) && meshesElement.ValueKind == JsonValueKind.Array)
             {
                 foreach (JsonElement meshElement in meshesElement.EnumerateArray())
                 {
-                    CnjMeshData? mesh = ReadMesh(meshElement, assetName, rootDirectory);
+                    CnjMeshData? mesh = ReadMesh(meshElement, assetName, rootDirectory, bones.Count);
                     if (mesh is not null)
                     {
                         meshes.Add(mesh);
@@ -74,7 +80,7 @@ internal static class CnjModelReader
                 }
             }
 
-            return new CnjModelData(meshes);
+            return new CnjModelData(bones, meshes);
         }
     }
 
@@ -91,7 +97,7 @@ internal static class CnjModelReader
         {
             throw new ContentLoadException(
                 $"'{assetName}.cnj' has cnjVersion {version}, which this minimal .cnj Model reader does not support " +
-                $"(only version {MaxSupportedCnjVersion} is -- a higher version implies bone-hierarchy/skinning semantics this reader doesn't implement).");
+                $"(only versions 1-{MaxSupportedCnjVersion} are -- a higher version implies skinning semantics this reader doesn't implement).");
         }
 
         if (!root.TryGetProperty("type", out JsonElement typeElement) ||
@@ -113,33 +119,116 @@ internal static class CnjModelReader
                 $"'{assetName}.cnj' has a 'skeleton' field (skinned rigid meshes), which this minimal .cnj Model reader does not support.");
         }
 
-        // A "bones" array of 0 or 1 entries is the cnjVersion-1-compatible "no real hierarchy" case
-        // the real engine itself falls back to -- fine to silently ignore. More than one entry
-        // implies real bone-hierarchy semantics (cnjVersion 2), rejected outright as an independent
-        // safety net alongside the cnjVersion check above. A code-review finding caught a gap here:
-        // a *present* "bones" field that isn't a JSON array at all (an author mistake, e.g. an
-        // object or a number) was previously treated as "no bones" instead of being rejected --
-        // diverging from every other malformed-field case in this reader, which throws rather than
-        // silently ignoring. JSON null is deliberately treated the same as "absent," not as
-        // malformed -- a second code-review finding caught the first fix over-rejecting
-        // "bones": null, which some JSON authoring conventions emit for every unset optional field
-        // rather than omitting the key entirely.
-        if (root.TryGetProperty("bones", out JsonElement bonesElement) && bonesElement.ValueKind != JsonValueKind.Null)
+        // A present-but-non-array "bones" field (an author mistake, e.g. an object or a number) is
+        // rejected here, at the envelope-validation stage, matching every other malformed-field case
+        // in this reader -- ReadBones (called separately, after this method returns) handles the
+        // real array-shaped case, including the "0 or 1 entries means no real hierarchy" convention.
+        // JSON null is deliberately treated the same as "absent," not as malformed -- a code-review
+        // finding caught an earlier version of this check over-rejecting "bones": null, which some
+        // JSON authoring conventions emit for every unset optional field rather than omitting the
+        // key entirely.
+        if (root.TryGetProperty("bones", out JsonElement bonesElement) &&
+            bonesElement.ValueKind != JsonValueKind.Null &&
+            bonesElement.ValueKind != JsonValueKind.Array)
         {
-            if (bonesElement.ValueKind != JsonValueKind.Array)
-            {
-                throw new ContentLoadException($"'{assetName}.cnj' has a 'bones' field that is not a JSON array.");
-            }
-
-            if (bonesElement.GetArrayLength() > 1)
-            {
-                throw new ContentLoadException(
-                    $"'{assetName}.cnj' has a multi-entry 'bones' array (bone hierarchy), which this minimal .cnj Model reader does not support.");
-            }
+            throw new ContentLoadException($"'{assetName}.cnj' has a 'bones' field that is not a JSON array.");
         }
     }
 
-    private static CnjMeshData? ReadMesh(JsonElement meshElement, string assetName, string rootDirectory)
+    /// <summary>Reads the document's real, multi-entry <c>"bones"</c> scene-graph hierarchy
+    /// (cnjVersion 2) -- a flat array, parent-before-child, entry 0 always the root. Returns an
+    /// empty list (matching the real engine's own <c>hasBoneHierarchy = cnjBones.size() &gt; 1</c>
+    /// check) when <c>"bones"</c> is absent, null, or has 0-1 entries -- that's the
+    /// cnjVersion-1-compatible "no real hierarchy" case, and <see cref="CnjModelBuilder"/> still
+    /// synthesizes a fresh child bone per mesh for it, exactly as before this increment. A single
+    /// forward pass suffices (unlike <see cref="XnbModelReader"/>'s own two-pass bone-hierarchy
+    /// read): each entry encodes its own parent's index, always an already-constructed earlier
+    /// entry, never a later one.</summary>
+    private static IReadOnlyList<CnjBoneData> ReadBones(JsonElement root, string assetName)
+    {
+        if (!root.TryGetProperty("bones", out JsonElement bonesElement) ||
+            bonesElement.ValueKind != JsonValueKind.Array ||
+            bonesElement.GetArrayLength() <= 1)
+        {
+            return [];
+        }
+
+        int count = bonesElement.GetArrayLength();
+        var bones = new List<CnjBoneData>(count);
+        int index = 0;
+        foreach (JsonElement boneElement in bonesElement.EnumerateArray())
+        {
+            if (boneElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new ContentLoadException($"'{assetName}.cnj' has a non-object entry in its 'bones' array.");
+            }
+
+            string name = GetString(boneElement, "name") ?? "";
+            if (name.Length == 0)
+            {
+                name = index == 0 ? "Root" : $"Node{index}";
+            }
+
+            int defaultParent = index == 0 ? -1 : 0;
+            int parent = defaultParent;
+            if (boneElement.TryGetProperty("parent", out JsonElement parentElement))
+            {
+                if (parentElement.ValueKind != JsonValueKind.Number || !parentElement.TryGetInt32(out parent))
+                {
+                    throw new ContentLoadException($"'{assetName}.cnj' bone {index} ('{name}') field 'parent' must be an integer.");
+                }
+            }
+
+            // Entry 0 is always the root regardless of its own recorded 'parent' value (there is no
+            // earlier entry for it to reference); every later entry's 'parent' must reference an
+            // already-constructed earlier entry -- parent-before-child is a real invariant, not just
+            // a convention, matching the real engine's own cross-reference rejection here.
+            if (index > 0 && (parent < 0 || parent >= index))
+            {
+                throw new ContentLoadException($"'{assetName}.cnj' bone {index} ('{name}') has an out-of-range 'parent' index ({parent}).");
+            }
+
+            Matrix transform = GetTransform(boneElement, assetName, index, name);
+
+            bones.Add(new CnjBoneData(name, parent, transform));
+            index++;
+        }
+
+        return bones;
+    }
+
+    private static Matrix GetTransform(JsonElement boneElement, string assetName, int index, string name)
+    {
+        if (!boneElement.TryGetProperty("transform", out JsonElement transformElement))
+        {
+            return Matrix.Identity;
+        }
+
+        if (transformElement.ValueKind != JsonValueKind.Array || transformElement.GetArrayLength() != 16)
+        {
+            throw new ContentLoadException($"'{assetName}.cnj' bone {index} ('{name}') field 'transform' must be a 16-element array.");
+        }
+
+        Span<float> m = stackalloc float[16];
+        int i = 0;
+        foreach (JsonElement element in transformElement.EnumerateArray())
+        {
+            if (element.ValueKind != JsonValueKind.Number || !element.TryGetSingle(out float value))
+            {
+                throw new ContentLoadException($"'{assetName}.cnj' bone {index} ('{name}') field 'transform' must contain only numbers.");
+            }
+
+            m[i++] = value;
+        }
+
+        return new Matrix(
+            m[0], m[1], m[2], m[3],
+            m[4], m[5], m[6], m[7],
+            m[8], m[9], m[10], m[11],
+            m[12], m[13], m[14], m[15]);
+    }
+
+    private static CnjMeshData? ReadMesh(JsonElement meshElement, string assetName, string rootDirectory, int boneCount)
     {
         if (meshElement.ValueKind != JsonValueKind.Object)
         {
@@ -225,8 +314,24 @@ internal static class CnjModelReader
 
         bool vertexColorEnabled = GetBool(meshElement, "vertexColorEnabled", false);
 
+        // Only consulted when the document has a real bone hierarchy (boneCount > 0) -- matching
+        // this reader's own "0 or 1 'bones' entries means no real hierarchy" convention, in which
+        // case CnjModelBuilder still synthesizes a fresh child bone per mesh instead, unchanged.
+        int? parentBoneIndex = null;
+        if (boneCount > 0)
+        {
+            int rawParentBone = GetInt(meshElement, "parentBone", 0, assetName, name, "parentBone");
+            if (rawParentBone < 0 || rawParentBone >= boneCount)
+            {
+                throw new ContentLoadException(
+                    $"'{assetName}.cnj' mesh '{name}' has an out-of-range 'parentBone' index ({rawParentBone}).");
+            }
+
+            parentBoneIndex = rawParentBone;
+        }
+
         var effectData = new CnjBasicEffectData(textureReference, vertexColorEnabled);
-        return new CnjMeshData(name, vertexBufferData, indexBufferData, primitiveCount, effectData);
+        return new CnjMeshData(name, vertexBufferData, indexBufferData, primitiveCount, effectData, parentBoneIndex);
     }
 
     private static string ResolveContainedSidecarPath(string rootDirectory, string assetName, string meshName, string field, string relativePath)
