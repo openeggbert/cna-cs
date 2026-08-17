@@ -12,6 +12,20 @@ namespace CNA.Content.Xnb;
 /// "compiles, but needs a real <c>cna-native</c> to actually run" situation as
 /// <see cref="ContentManager.Load{T}"/>'s existing <see cref="Texture2D"/>/<c>SoundEffect</c>/
 /// <see cref="SpriteFont"/> cases.
+///
+/// <c>CNA.XnaCompat</c>'s own <c>XnbCompatModelBuilder</c> is this method's compat-typed
+/// counterpart -- it near-duplicates this method's bone-tree/mesh-part/effect-assignment-ordering
+/// control flow rather than sharing it (a code-review finding, confirmed and accepted rather than
+/// engineered around: <see cref="ModelBoneCollection"/>/<see cref="ModelMeshCollection"/> are
+/// independent reimplementations, not subclasses -- the same wall that already ruled out a
+/// covariant-return factory hook when this whole feature was designed -- so sharing this control
+/// flow would need generic type parameters with delegate factories for every construction point,
+/// real added complexity for what's a few dozen lines of straight-line assembly code. The same
+/// "independent reimplementation accepts some duplication as the cost of a real structural
+/// constraint" trade-off this project's own picture-library feature already made for
+/// <c>MediaLibrary.SavePicture</c>'s orchestration). <b>If you fix a bug here (like the
+/// once-real "Effect assignment order matters" one below), check <c>XnbCompatModelBuilder.Build</c>
+/// too</b> -- there is no compiler-enforced link between the two.
 /// </summary>
 internal static class XnbModelBuilder
 {

@@ -54,21 +54,25 @@ public class ContentManager : CNA.Content.ContentManager
     }
 
     /// <summary>Same <c>GraphicsDevice</c>-availability contract as the base class's own
-    /// <c>LoadModel</c> -- <c>GraphicsDevice</c> below is guaranteed compat-typed for every
+    /// <c>LoadModel</c>. <c>GraphicsDevice</c> is guaranteed compat-typed for every *normally*
     /// reachable compat <see cref="ContentManager"/> instance (see <c>Microsoft.Xna.Framework.Game</c>'s
     /// own doc comment: its <c>EnsureGraphicsDevice</c> always sets <c>Content.GraphicsDevice</c>
-    /// from its own covariant-return <c>CreateGraphicsDevice</c> hook), so the downcast is the same
-    /// "single construction seam, provably compat-typed" pattern established elsewhere this
-    /// session, not an unchecked assumption.</summary>
+    /// from its own covariant-return <c>CreateGraphicsDevice</c> hook) -- but unlike this session's
+    /// other "single construction seam" downcasts, <c>GraphicsDevice</c> is a <em>publicly
+    /// settable</em> property on the base class, not something only ever assigned through one
+    /// controlled path: a code-review finding correctly pointed out that a base-typed
+    /// <c>CNA.Graphics.GraphicsDevice</c> assigned to it directly (bypassing <c>Game</c> entirely)
+    /// would previously have thrown an unhandled <see cref="InvalidCastException"/> instead of a
+    /// clean, documented <see cref="CNA.Content.ContentLoadException"/> -- fixed below with a
+    /// pattern-match that treats "non-null but not compat-typed" the same as "null."</summary>
     private Graphics.Model LoadCompatModel(string assetName)
     {
-        if (base.GraphicsDevice is null)
+        if (base.GraphicsDevice is not Graphics.GraphicsDevice graphicsDevice)
         {
             throw new CNA.Content.ContentLoadException(
-                $"Cannot load Model '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
+                $"Cannot load Model '{assetName}': ContentManager.GraphicsDevice is null or not a compat-typed GraphicsDevice.");
         }
 
-        var graphicsDevice = (Graphics.GraphicsDevice)base.GraphicsDevice;
         return Graphics.XnbCompatModelBuilder.Build(graphicsDevice, LoadXnbModelData(assetName));
     }
 

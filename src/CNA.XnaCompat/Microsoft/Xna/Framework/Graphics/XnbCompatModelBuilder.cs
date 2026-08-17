@@ -19,6 +19,15 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// base-typed <c>VertexBuffer</c>/<c>IndexBuffer</c>/<c>BasicEffect</c> instances a base-typed
 /// <see cref="CNA.Graphics.ModelMeshPart"/> needs, so there is nothing compat-specific left for a
 /// separate copy of that logic to add.
+///
+/// The bone-tree/mesh-part/effect-assignment-ordering/parent-bone-fallback control flow below
+/// *does* near-duplicate <c>CNA.Content.Xnb.XnbModelBuilder.Build</c>'s own -- a code-review
+/// finding, confirmed and accepted rather than engineered around (see that type's own doc comment
+/// for the full reasoning: a shared, generic, delegate-parameterized assembler was judged more
+/// complex than the duplication it would remove, the same trade-off already accepted for
+/// <c>MediaLibrary.SavePicture</c>'s own orchestration duplication). <b>If you fix a bug in this
+/// method, check <c>CNA.Content.Xnb.XnbModelBuilder.Build</c> too</b> -- there is no
+/// compiler-enforced link between the two.
 /// </summary>
 internal static class XnbCompatModelBuilder
 {

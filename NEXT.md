@@ -30,6 +30,54 @@ feature's review cycle entirely -- four review passes total across the
 original commit and its two follow-up fixes, the last one landing clean,
 the same shape the picture-library feature's own four-pass cycle took.
 
+## Twenty-fifth `/code-review high` pass, over the `ContentManager.Load<Model>()` compat wiring commit -- a real InvalidCastException gap, plus a documented duplication trade-off (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again)
+
+Ran the review over the compat `Load<Model>()` wiring commit (`13f635c`).
+Two findings:
+
+- **Real, confirmed:** `LoadCompatModel` null-checked `base.GraphicsDevice`
+  then hard-cast it to the compat `GraphicsDevice` type -- the doc
+  comment's own "single construction seam, provably compat-typed"
+  justification turned out to be weaker here than every other place this
+  session has used that reasoning: `ContentManager.GraphicsDevice` is a
+  *publicly settable* property on the base class, not something only
+  ever assigned through one controlled path (unlike, say,
+  `MediaLibrary.MediaSource`, set exclusively by a constructor). Code
+  that assigns a base-typed `CNA.Graphics.GraphicsDevice` to it directly
+  -- bypassing `Game` entirely -- would have hit an unhandled
+  `InvalidCastException` instead of the clean, documented
+  `ContentLoadException` every other corrupt/mismatched-input case in
+  this feature produces. Fixed by replacing the null-check-then-cast with
+  a single pattern-match (`is not Graphics.GraphicsDevice graphicsDevice`)
+  that treats "non-null but not compat-typed" the same as "null" --
+  and corrected the doc comment to state the weaker guarantee honestly
+  rather than repeat the stronger claim other downcasts in this session
+  can actually make.
+- **Documented, not fixed, applying the exact trade-off already accepted
+  for `MediaLibrary.SavePicture`'s own orchestration duplication:**
+  `XnbCompatModelBuilder.Build` near-duplicates
+  `CNA.Content.Xnb.XnbModelBuilder.Build`'s bone-tree/mesh-part/
+  effect-assignment-ordering/parent-bone-fallback control flow -- the
+  reviewer specifically noted the previously-fixed "Effect assignment
+  order matters" bug's own logic is copy-pasted, not shared, so a future
+  fix to one copy has no compiler-enforced reason to reach the other.
+  Considered a shared, generic, delegate-parameterized assembler (the
+  only way to actually eliminate this, since `ModelBoneCollection`/
+  `ModelMeshCollection` being independent reimplementations already ruled
+  out a covariant-hook alternative when this whole feature was designed)
+  and judged it more complex than the ~50 lines of straight-line
+  construction code it would remove -- the same call already made for
+  `SavePicture`. Added explicit, mutual cross-referencing doc comments in
+  both builders ("if you fix a bug here, check the other one too") as the
+  mitigation, matching this session's own established pattern for this
+  exact category of accepted trade-off.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 391/391 passing, unchanged (the `GraphicsDevice` fix isn't
+independently testable here either, same pre-existing native-construction
+limitation as the rest of this feature). `samples/HelloGame` re-verified
+unaffected.
+
 ## `ContentManager.Load<Model>()` on the compat `ContentManager` -- done, closing the last deferred follow-up from the `Model` compat mirror (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Wire compat ContentManager.Load<Model>()")
 
 Closed the one remaining explicitly-deferred piece from the `Model`
