@@ -40,7 +40,7 @@ public class Texture2D : IDisposable
 
     /// <summary>
     /// Wraps an already-created native texture handle -- used by <c>ContentManager.Load&lt;T&gt;</c>,
-    /// which receives the handle directly from <c>cna_content_load_texture2d</c> rather than
+    /// which receives the handle directly from <c>cna_content_manager_load_texture2d</c> rather than
     /// creating a texture from scratch. <c>protected internal</c> so CNA.XnaCompat's
     /// <c>Texture2D</c> subclass constructor can forward to it -- see docs/architecture.md.
     /// </summary>

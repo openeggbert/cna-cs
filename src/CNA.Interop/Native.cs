@@ -271,20 +271,28 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial void cna_gamepad_get_capabilities(int playerIndex, out CnaGamePadCapabilities capabilities);
 
-    // -- ContentManager (§26, §44) -------------------------------------------------------------
+    // -- ContentManager (real ABI, content.h -- step 6 of the native-ABI migration) -----------
+    //
+    // Renamed throughout (cna_content_* -> cna_content_manager_*) and switched from
+    // StringMarshalling.Utf8 (null-terminated) to CnaStringView (pointer+length) -- see
+    // CnaStringMarshal.cs. content_manager itself is now always the handle
+    // cna_game_get_content_manager_ext returns (see Game.cs step 2), a borrowed handle safe to
+    // reuse across calls -- unaffected by that string-marshaling change.
 
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial CnaResult cna_content_set_root_directory(CnaHandle content, string rootDirectory);
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_set_root_directory(CnaHandle contentManager, CnaStringView rootDirectory);
 
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial CnaResult cna_content_load_texture2d(
-        CnaHandle content,
-        string assetName,
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_load_texture2d(
+        CnaHandle contentManager,
+        CnaStringView assetName,
         out CnaHandle texture);
 
     /// <summary>No ABI shape for this exists upstream -- self-designed for this repository, see
     /// <see cref="CnaSpriteFontData"/>. Fails with <see cref="CnaResult"/> (not a silent
-    /// truncation) if the asset has more than <see cref="CnaGlyphBuffer.MaxGlyphs"/> glyphs.
+    /// truncation) if the asset has more than <see cref="CnaGlyphBuffer.MaxGlyphs"/> glyphs. Not
+    /// renamed to the real <c>cna_content_manager_*</c> convention -- there is nothing real to
+    /// match, so keeping the old name avoids implying a confirmed shape that doesn't exist.
     /// </summary>
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial CnaResult cna_content_load_spritefont(
@@ -292,12 +300,10 @@ internal static partial class Native
         string assetName,
         out CnaSpriteFontData data);
 
-    /// <summary>No ABI shape for this exists upstream -- self-designed for this repository, see
-    /// <see cref="CnaSpriteFontData"/>.</summary>
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial CnaResult cna_content_load_soundeffect(
-        CnaHandle content,
-        string assetName,
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_load_sound_effect(
+        CnaHandle contentManager,
+        CnaStringView assetName,
         out CnaHandle soundEffect);
 
     // -- SoundEffect / SoundEffectInstance -----------------------------------------------------

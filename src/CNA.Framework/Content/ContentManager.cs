@@ -63,7 +63,8 @@ public class ContentManager
         set
         {
             ArgumentNullException.ThrowIfNull(value);
-            CnaResult result = Native.cna_content_set_root_directory(new CnaHandle(_nativeHandleValue), value);
+            CnaResult result = CnaStringMarshal.WithStringView(
+                value, view => Native.cna_content_manager_set_root_directory(new CnaHandle(_nativeHandleValue), view));
             CnaException.ThrowIfFailed(result, nameof(RootDirectory));
             _rootDirectory = value;
         }
@@ -236,14 +237,18 @@ public class ContentManager
 
     protected nint LoadNativeTexture2DHandle(string assetName)
     {
-        CnaResult result = Native.cna_content_load_texture2d(new CnaHandle(_nativeHandleValue), assetName, out CnaHandle texture);
+        CnaHandle texture = CnaHandle.Zero;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            assetName, view => Native.cna_content_manager_load_texture2d(new CnaHandle(_nativeHandleValue), view, out texture));
         CnaException.ThrowIfFailed(result, nameof(Load));
         return texture.Value;
     }
 
     protected nint LoadNativeSoundEffectHandle(string assetName)
     {
-        CnaResult result = Native.cna_content_load_soundeffect(new CnaHandle(_nativeHandleValue), assetName, out CnaHandle soundEffect);
+        CnaHandle soundEffect = CnaHandle.Zero;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            assetName, view => Native.cna_content_manager_load_sound_effect(new CnaHandle(_nativeHandleValue), view, out soundEffect));
         CnaException.ThrowIfFailed(result, nameof(Load));
         return soundEffect.Value;
     }

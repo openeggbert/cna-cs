@@ -11,6 +11,34 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 6: `ContentManager` rewritten, and a real, reusable `CnaStringView` marshaling helper built for the first time (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+`content.h` confirms `ContentManager`'s real shape closely matches what this project already
+guessed: `cna_content_manager_set_root_directory`/`_load_texture2d`/`_load_sound_effect`, all taking
+the borrowed handle `cna_game_get_content_manager_ext` already returns (fixed in step 2, safe to
+reuse across calls -- unlike the graphics-device handle). The old names
+(`cna_content_set_root_directory`/`_load_texture2d`/`_load_soundeffect`) don't exist upstream;
+renamed to the real `cna_content_manager_*` convention.
+
+The real, load-bearing change is the string-marshaling convention itself: every one of these takes
+a `CNA_StringView` (pointer + byte length) now, not the null-terminated `string` marshaling
+(`LibraryImport(..., StringMarshalling = Utf8)`) this project used everywhere a string crossed the
+ABI before any real ABI existed. Built the first actual consumer of the `CnaStringView` type this
+migration defined back in step 2 but never used until now: `CnaStringMarshal.WithStringView` (new
+file) UTF-8-encodes a managed string into a stack-allocated buffer (falling back to a heap buffer
+past 256 bytes, avoiding stack exhaustion for anything unusually long) and invokes a native call
+with the resulting view, `fixed`-pinned for exactly the call's own duration -- the same
+"self-contained pin, callback style" shape this project already uses for other pointer-taking
+calls, not a new pattern invented for this one case. Every future string-taking native call in this
+migration (MediaPlayer, GamePad/Keyboard/Mouse's `_ext` string routes, anything else) can reuse this
+directly rather than re-deriving the same `fixed`/stackalloc logic per call site.
+
+`cna_content_load_spritefont` is untouched -- still no real ABI shape exists for `SpriteFont`
+content loading at all (confirmed again, not just carried over from before this migration started);
+kept its old name deliberately, rather than renaming it to the `cna_content_manager_*` convention
+just for cosmetic consistency with functions that now have real backing, since doing so would imply
+a confirmed shape that doesn't exist.
+
 ## Native ABI migration, step 5: `Texture2D`/`RenderTarget2D` rewritten -- confirming `RenderTarget2D` is a real, separate resource type upstream, and closing `GraphicsDevice.SetRenderTarget`'s own deferred gap from step 3 (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 ### `Texture2D` -- better preserved than most subsystems, once the right header was read
