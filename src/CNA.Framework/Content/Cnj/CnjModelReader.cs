@@ -116,13 +116,23 @@ internal static class CnjModelReader
         // A "bones" array of 0 or 1 entries is the cnjVersion-1-compatible "no real hierarchy" case
         // the real engine itself falls back to -- fine to silently ignore. More than one entry
         // implies real bone-hierarchy semantics (cnjVersion 2), rejected outright as an independent
-        // safety net alongside the cnjVersion check above.
-        if (root.TryGetProperty("bones", out JsonElement bonesElement) &&
-            bonesElement.ValueKind == JsonValueKind.Array &&
-            bonesElement.GetArrayLength() > 1)
+        // safety net alongside the cnjVersion check above. A code-review finding caught a gap here:
+        // a *present* "bones" field that isn't a JSON array at all (an author mistake, e.g. an
+        // object or a number) was previously treated as "no bones" instead of being rejected --
+        // diverging from every other malformed-field case in this reader, which throws rather than
+        // silently ignoring.
+        if (root.TryGetProperty("bones", out JsonElement bonesElement))
         {
-            throw new ContentLoadException(
-                $"'{assetName}.cnj' has a multi-entry 'bones' array (bone hierarchy), which this minimal .cnj Model reader does not support.");
+            if (bonesElement.ValueKind != JsonValueKind.Array)
+            {
+                throw new ContentLoadException($"'{assetName}.cnj' has a 'bones' field that is not a JSON array.");
+            }
+
+            if (bonesElement.GetArrayLength() > 1)
+            {
+                throw new ContentLoadException(
+                    $"'{assetName}.cnj' has a multi-entry 'bones' array (bone hierarchy), which this minimal .cnj Model reader does not support.");
+            }
         }
     }
 
@@ -184,7 +194,24 @@ internal static class CnjModelReader
         byte[] vertexBytes = ReadSidecarBytes(verticesPath, assetName, name, "vertices");
         byte[] indexBytes = ReadSidecarBytes(indicesPath, assetName, name, "indices");
 
+        // Truncate to a whole number of vertices/indices before reuse -- vertexCount/indexCount
+        // below are already computed by integer division (matching the real engine's own "file
+        // byte length is the sole source of truth" convention), but XnbVertexBufferData/
+        // XnbIndexBufferData's own documented invariant (see XnbVertexBufferReader.cs) is
+        // Data.Length == count * stride exactly. A code-review finding caught this: unlike the
+        // .xnb path (which reads exactly that many bytes off the stream to begin with), this
+        // path reads a sidecar file's *entire* raw contents, so a corrupt/careless file whose
+        // length isn't an exact multiple of the stride/index size would otherwise carry a
+        // trailing partial-element remainder straight through to VertexBuffer/IndexBuffer.SetData,
+        // which uploads the array's full length -- overrunning a native buffer sized for the
+        // truncated count.
         int vertexCount = vertexBytes.Length / stride;
+        int vertexByteLength = vertexCount * stride;
+        if (vertexByteLength != vertexBytes.Length)
+        {
+            vertexBytes = vertexBytes[..vertexByteLength];
+        }
+
         var vertexBufferData = new XnbVertexBufferData(declaration, vertexCount, vertexBytes);
 
         // Matches the same XNA-standard ModelProcessor convention already documented for the .xnb
@@ -193,6 +220,12 @@ internal static class CnjModelReader
         bool use32BitIndices = vertexCount > 65535;
         int indexSize = use32BitIndices ? 4 : 2;
         int indexCount = indexBytes.Length / indexSize;
+        int indexByteLength = indexCount * indexSize;
+        if (indexByteLength != indexBytes.Length)
+        {
+            indexBytes = indexBytes[..indexByteLength];
+        }
+
         int primitiveCount = indexCount / 3;
         var indexBufferData = new XnbIndexBufferData(!use32BitIndices, indexBytes);
 

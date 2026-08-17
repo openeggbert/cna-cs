@@ -11,6 +11,58 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## First `/code-review high` pass, over the `.cnj` Model reader commit -- three real findings, all fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more)
+
+Ran the review over the `.cnj` reader commit (`63f157d`). Three findings,
+all real, all fixed:
+
+- **Real, confirmed, the most severe of the three:** `CnjModelReader`
+  reuses `XnbVertexBufferData`/`XnbIndexBufferData` (whose documented
+  invariant, established by `XnbVertexBufferReader`, is
+  `Data.Length == count * stride` exactly), but unlike the `.xnb` path
+  (which reads exactly that many bytes off the stream to begin with), the
+  `.cnj` path reads a sidecar file's *entire* raw contents via
+  `File.ReadAllBytes` and only computes the element count by integer
+  division afterward -- so a corrupt/careless sidecar file whose byte
+  length isn't an exact multiple of the stride/index size carried a
+  trailing partial-element remainder straight through to
+  `XnbVertexBufferData`/`XnbIndexBufferData`, which
+  `CnjModelBuilder`'s `VertexBuffer`/`IndexBuffer.SetData(data.Data)`
+  later uploads at its *full* length -- overrunning a native buffer sized
+  for the truncated count. Currently latent (`CnjModelBuilder` is
+  native-ABI-blocked, no test exercises it yet), but a genuine divergence
+  from the real C++ reference (`BuildVertexBufferFromRawBytes`, which
+  loops only `numVertices` times) that directly contradicts this
+  feature's own stated "fail cleanly on corrupt/careless content" goal.
+  Fixed by truncating both byte arrays to a whole number of
+  elements (`count * stride`/`count * indexSize`) before they're wrapped,
+  with a regression test (`truncated_verts.bin`/`truncated_idx.bin`, new
+  fixtures: 40 bytes at stride 32 and 7 bytes of 16-bit indices, each one
+  trailing byte-or-more short of a whole element) confirming the
+  resulting `Data.Length` is exactly the truncated size.
+- **Real, confirmed:** `CnjPathContainment.TryResolve`'s containment
+  check rejected `relative.StartsWith("..")` on the *whole relative path
+  string* -- the same string-prefix mistake its own doc comment
+  explicitly calls out avoiding for the root-containment check a few
+  lines above, just applied to the other operand. This wrongly rejected
+  a legitimate, fully-contained directory that merely starts with two
+  dots (e.g. `"..backup/file.bin"`) as if it were a parent-traversal
+  escape. Fixed to compare only the *first path component* to `".."`
+  exactly (matching the real engine's own `*rel.begin() == ".."` check),
+  with a regression test confirming `"..backup/file.bin"` now resolves
+  correctly.
+- **Real, confirmed:** a `"bones"` field present but not a JSON array (an
+  author mistake -- an object, a number, ...) was silently treated as "no
+  bones" instead of being rejected, diverging from every other
+  malformed-field case in this reader (unsupported `vertexStride`/
+  `effect`/`morphTargets` all throw). Fixed by checking presence and
+  array-ness separately, throwing a clear `ContentLoadException` for the
+  non-array case before the existing multi-entry check runs.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 457/457 passing (up from 454 -- 3 new regression tests, one per
+finding). `samples/HelloGame` re-verified unaffected.
+
 ## `Model` file-loading via a real, minimal-scope `.cnj` JSON reader (`CNA.Content.Cnj`) -- done, after two rounds of scope-narrowing research resolved an undocumented vertex-layout convention (2026-08-17, session 6 continued autonomously past the visualization-data checkpoint, per explicit user selection of "Attempt Model's .cnj/glTF content paths," then "Investigate .cnj's vertex-layout convention further," then "Attempt a minimal .cnj Model reader")
 
 This was explicitly *not* the recommended option at its own checkpoint --

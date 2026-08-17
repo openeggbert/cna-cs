@@ -58,7 +58,20 @@ internal static class CnjPathContainment
         // lexically_relative check -- deliberately *not* a bare StartsWith(canonicalRoot), which
         // would wrongly accept a sibling directory like "root-evil" as contained within "root".
         string relative = Path.GetRelativePath(canonicalRoot, joined);
-        if (relative == "." || relative.StartsWith("..", StringComparison.Ordinal))
+        if (relative == ".")
+        {
+            return false;
+        }
+
+        // Reject only when the *first path component* is exactly ".." -- a code-review finding
+        // caught this previously being a bare StartsWith("..") on the whole relative string, which
+        // wrongly rejected a legitimate, fully-contained directory that merely starts with two dots
+        // (e.g. "..backup/file.bin") as if it were a parent-traversal escape. The real engine's own
+        // check (`*rel.begin() == ".."` in PathContainment.hpp) compares the exact first component
+        // for the same reason.
+        int separatorIndex = relative.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+        string firstComponent = separatorIndex < 0 ? relative : relative[..separatorIndex];
+        if (firstComponent == "..")
         {
             return false;
         }

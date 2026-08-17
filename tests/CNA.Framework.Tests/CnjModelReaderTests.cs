@@ -239,6 +239,39 @@ public class CnjModelReaderTests
     }
 
     [Fact]
+    public void Read_SidecarBytesNotWholeNumberOfElements_TruncatesRatherThanOverrunning()
+    {
+        // Regression test (code review finding): XnbVertexBufferData/XnbIndexBufferData's own
+        // documented invariant is Data.Length == count * (stride|indexSize) exactly -- previously,
+        // a sidecar file whose byte length wasn't an exact multiple of that carried its trailing
+        // partial-element remainder straight through, which would later overrun the native buffer
+        // VertexBuffer/IndexBuffer.SetData uploads into (sized for the truncated count).
+        const string json = """
+            {"cnjVersion":1,"type":"Model","meshes":[
+                {"name":"M","vertices":"truncated_verts.bin","indices":"truncated_idx.bin","vertexStride":32}
+            ]}
+            """;
+
+        CnjModelData data = CnjModelReader.Read(json, "ok", AssetsDirectory);
+
+        CnjMeshData mesh = Assert.Single(data.Meshes);
+        Assert.Equal(1, mesh.VertexBuffer.VertexCount);
+        Assert.Equal(32, mesh.VertexBuffer.Data.Length); // 40-byte file truncated to one whole vertex
+        Assert.Equal(6, mesh.IndexBuffer.Data.Length); // 7-byte file truncated to three whole 16-bit indices
+    }
+
+    [Fact]
+    public void Read_NonArrayBonesField_ThrowsContentLoadException()
+    {
+        // Regression test (code review finding): a "bones" field present but not a JSON array (an
+        // author mistake) was previously silently treated as "no bones" instead of being rejected,
+        // diverging from every other malformed-field case in this reader.
+        const string json = """{"cnjVersion":1,"type":"Model","bones":{"name":"Root"},"meshes":[]}""";
+
+        Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
+    }
+
+    [Fact]
     public void Read_MeshWithEmptyNameField_DefaultsToMesh()
     {
         const string json = """

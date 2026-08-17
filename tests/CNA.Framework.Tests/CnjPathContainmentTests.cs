@@ -92,6 +92,18 @@ public class CnjPathContainmentTests
     }
 
     [Fact]
+    public void TryResolve_DirectoryNameStartingWithTwoDots_ResolvesUnderRoot()
+    {
+        // Regression test (code review finding): a bare StartsWith("..") on the whole relative
+        // path string previously rejected a legitimate, fully-contained directory that merely
+        // starts with two dots (not an actual ".." parent-traversal component).
+        bool ok = CnjPathContainment.TryResolve(Root, "..backup/file.bin", out string resolved);
+
+        Assert.True(ok);
+        Assert.Equal(Path.Combine(Root, "..backup", "file.bin"), resolved);
+    }
+
+    [Fact]
     public void TryResolve_SiblingDirectoryWithSharedPrefix_ReturnsFalse()
     {
         // Regression case this spec calls out explicitly: component-wise containment must reject a
