@@ -11,6 +11,58 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Fourteenth `/code-review high` pass, over the `MediaLibrary` fix commit -- caught a fix that introduced a worse bug than it solved (2026-08-17, session 6 continued autonomously still further again once more)
+
+Ran the review a fourteenth time, over the previous pass's own four
+fixes. One real, confirmed regression -- and a notable one, since it was
+*introduced by a fix the previous review pass itself asked for*:
+
+- **Reverted, real, confirmed via a concrete two-instance repro the
+  review itself constructed:** the previous pass's fix for "compat
+  `MediaLibrary` allocates 5 redundant empty collections per instance"
+  replaced per-instance `new([])` initializers with 5 `static readonly`
+  shared singletons. This looked safe under the "these collections are
+  provably always empty and never mutated" reasoning that fix's own doc
+  comment gave -- but `ReadOnlyMediaCollection<T>.Dispose()` mutates a
+  *different* piece of state than the collection's contents: a public
+  `IsDisposed` flag, which absolutely is not safe to share. With the
+  shared-singleton version, `libraryA.Albums.Dispose()` silently set
+  `libraryB.Albums.IsDisposed = true` too, for every `MediaLibrary`
+  instance in the whole process, not just the two in a hypothetical
+  test. Reverted to per-instance allocation -- the original "5 redundant
+  allocations" cost this was fixing was already flagged as "minor,
+  non-hot-path" by the *first* review pass that found it, and a
+  `MediaLibrary` is not something game code constructs in a hot loop, so
+  reverting loses nothing that mattered and removes a real correctness
+  bug. **Worth internalizing as a general lesson, not just this one
+  fix:** "this data is provably immutable, so sharing one instance is
+  safe" is a claim about the object's *content*, not necessarily every
+  piece of *state* the object exposes (like a disposal flag) -- worth
+  checking explicitly what a shared object's own mutable surface actually
+  is before assuming immutable content implies a whole object is safe to
+  share.
+- **Fixed, real, and the same review pass noted the irony directly:** the
+  previous pass's `Artist`/`Genre`/`Album`/`Playlist` constructor fixes
+  each added their own private `ToBaseAlbums`/`ToBaseSongs` conversion
+  helper, duplicating the identical ~1-line-times-2 logic across all four
+  files -- in the same commit that extracted `ReadOnlyMediaCollection<T>`
+  specifically to eliminate an equivalent duplication elsewhere. Extracted
+  a shared `MediaCollectionConversion` static class (`ToBase(AlbumCollection)`/
+  `ToBase(SongCollection)`), used by all four constructors and also by
+  the separately-added `MediaPlayer.Play(SongCollection)`'s own
+  equivalent conversion (which had the identical duplicated logic, not
+  flagged by this review pass since it landed in a later commit, but
+  fixed here anyway while the shared helper already existed).
+
+Added a regression test proving the fix:
+`Albums_DisposingOneInstance_DoesNotAffectAnotherInstance` constructs two
+`MediaLibrary` instances, disposes one's `Albums`, and asserts the
+other's stayed un-disposed -- would have failed against the shared-
+singleton version and passes now.
+
+315/315 tests passing (up from 314 -- +1 regression test); `dotnet build`
+clean; `samples/HelloGame` re-verified unaffected.
+
 ## `MediaPlayer.Play(SongCollection)` compat mirror: the flagged follow-up, closed (2026-08-17, session 6 continued autonomously still further again)
 
 > The `MediaLibrary` entry's own "where to pick up next" flagged that

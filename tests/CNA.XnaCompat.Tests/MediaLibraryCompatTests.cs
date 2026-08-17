@@ -65,6 +65,23 @@ public class MediaLibraryCompatTests
     }
 
     [Fact]
+    public void Albums_DisposingOneInstance_DoesNotAffectAnotherInstance()
+    {
+        // Regression test: an earlier version shared one static empty AlbumCollection across
+        // every MediaLibrary instance to avoid a handful of small allocations, but
+        // ReadOnlyMediaCollection<T>.Dispose() mutates a public IsDisposed flag -- sharing meant
+        // disposing any one MediaLibrary's Albums silently marked every MediaLibrary's Albums
+        // disposed, process-wide. A code review caught this before it shipped further.
+        using var libraryA = new XnaMediaLibrary();
+        using var libraryB = new XnaMediaLibrary();
+
+        libraryA.Albums.Dispose();
+
+        Assert.True(libraryA.Albums.IsDisposed);
+        Assert.False(libraryB.Albums.IsDisposed);
+    }
+
+    [Fact]
     public void MediaSource_GetAvailableMediaSources_ReturnsExactlyLocalDevice()
     {
         IReadOnlyList<XnaMediaSource> sources = XnaMediaSource.GetAvailableMediaSources();

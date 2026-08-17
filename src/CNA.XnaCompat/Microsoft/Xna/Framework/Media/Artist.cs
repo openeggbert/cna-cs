@@ -11,7 +11,7 @@ namespace Microsoft.Xna.Framework.Media;
 public class Artist : CNA.Media.Artist
 {
     internal Artist(string name, AlbumCollection albums, SongCollection songs)
-        : base(name, ToBaseAlbums(albums), ToBaseSongs(songs))
+        : base(name, MediaCollectionConversion.ToBase(albums), MediaCollectionConversion.ToBase(songs))
     {
         Albums = albums;
         Songs = songs;
@@ -20,8 +20,4 @@ public class Artist : CNA.Media.Artist
     public new AlbumCollection Albums { get; }
 
     public new SongCollection Songs { get; }
-
-    private static CNA.Media.AlbumCollection ToBaseAlbums(AlbumCollection albums) => new(albums.ToList());
-
-    private static CNA.Media.SongCollection ToBaseSongs(SongCollection songs) => new(songs.ToList());
 }

@@ -81,7 +81,7 @@ public static class MediaPlayer
     private static CNA.Media.SongCollection ToBaseSongs(SongCollection songs)
     {
         ArgumentNullException.ThrowIfNull(songs);
-        return new CNA.Media.SongCollection(songs.ToList());
+        return MediaCollectionConversion.ToBase(songs);
     }
 
     public static void Pause() => CNA.Media.MediaPlayer.Pause();

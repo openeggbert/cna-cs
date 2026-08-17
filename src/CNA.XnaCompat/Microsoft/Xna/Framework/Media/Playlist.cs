@@ -5,12 +5,10 @@ namespace Microsoft.Xna.Framework.Media;
 public class Playlist : CNA.Media.Playlist
 {
     internal Playlist(string name, SongCollection songs, TimeSpan duration)
-        : base(name, ToBaseSongs(songs), duration)
+        : base(name, MediaCollectionConversion.ToBase(songs), duration)
     {
         Songs = songs;
     }
 
     public new SongCollection Songs { get; }
-
-    private static CNA.Media.SongCollection ToBaseSongs(SongCollection songs) => new(songs.ToList());
 }

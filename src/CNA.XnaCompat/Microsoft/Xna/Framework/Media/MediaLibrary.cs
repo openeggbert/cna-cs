@@ -19,18 +19,6 @@ namespace Microsoft.Xna.Framework.Media;
 /// </summary>
 public sealed class MediaLibrary : CNA.Media.MediaLibrary
 {
-    // Shared across every instance rather than allocated per-MediaLibrary (a real code-review
-    // finding): every collection here is provably always empty and never mutated, so there is no
-    // reason for two different MediaLibrary instances to each own their own separate empty
-    // AlbumCollection/etc. -- one shared instance per type is just as correct and avoids churning
-    // 5 short-lived wrapper allocations on top of the base constructor's own 5 every time a game
-    // constructs a MediaLibrary.
-    private static readonly AlbumCollection EmptyAlbums = new([]);
-    private static readonly ArtistCollection EmptyArtists = new([]);
-    private static readonly GenreCollection EmptyGenres = new([]);
-    private static readonly PlaylistCollection EmptyPlaylists = new([]);
-    private static readonly SongCollection EmptySongs = new([]);
-
     public MediaLibrary()
         : this(new MediaSource(MediaSourceType.LocalDevice, "Local Device"))
     {
@@ -41,15 +29,23 @@ public sealed class MediaLibrary : CNA.Media.MediaLibrary
     {
     }
 
-    public new AlbumCollection Albums => EmptyAlbums;
+    // Deliberately one allocation per instance, not a shared static empty singleton: a prior
+    // version of this file shared one instance across every MediaLibrary to save a handful of
+    // small allocations, but ReadOnlyMediaCollection<T>.Dispose() mutates a public IsDisposed
+    // flag -- a genuine per-instance state, not part of the "always empty" content these
+    // collections were actually safe to share. Sharing meant disposing *any* MediaLibrary's
+    // Albums silently marked *every* MediaLibrary's Albums disposed, process-wide -- a real
+    // regression a code review caught. Reverted: the base class itself already allocates its own
+    // 5 collections per instance, so this is not a new cost, just restoring the original shape.
+    public new AlbumCollection Albums { get; } = new([]);
 
-    public new ArtistCollection Artists => EmptyArtists;
+    public new ArtistCollection Artists { get; } = new([]);
 
-    public new GenreCollection Genres => EmptyGenres;
+    public new GenreCollection Genres { get; } = new([]);
 
     public new MediaSource MediaSource => (MediaSource)base.MediaSource;
 
-    public new PlaylistCollection Playlists => EmptyPlaylists;
+    public new PlaylistCollection Playlists { get; } = new([]);
 
-    public new SongCollection Songs => EmptySongs;
+    public new SongCollection Songs { get; } = new([]);
 }
