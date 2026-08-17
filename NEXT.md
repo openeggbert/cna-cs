@@ -11,6 +11,53 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Second `/code-review high` pass, over the first pass's own fix -- a real overreach caught, more severe than what it fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more again)
+
+Ran the review over the null-handling fix commit (`1246a5e`). Two
+findings, both real, converged on independently by three of the four
+finder angles:
+
+- **Real, confirmed, and genuinely more severe than the gap the first
+  pass fixed:** making the shared `GetInt` helper universally
+  null-tolerant (the first pass's own fix) silently changed
+  `"vertexStride": null`'s behavior too -- previously a clean
+  `ContentLoadException` ("must be an integer"), now a silent default to
+  16. This is a materially worse failure mode than the original gap:
+  `RequireWholeNumberOfElements`'s own "whole number of elements" check
+  can't catch it, since any multiple of 32/48/52/56/68 is also a
+  multiple of 16 -- real vertex bytes authored at a different stride
+  would be silently reinterpreted as `VertexPositionColor` with a
+  completely wrong field layout and roughly double the real vertex
+  count, not a clean rejection. Exactly the "silently-wrong-but-plausible
+  output" risk this whole `.cnj`/`.xnb` effort has been careful to avoid
+  everywhere else. The first pass's own reasoning ("this also
+  retroactively makes the pre-existing `vertexStride` field
+  null-tolerant, a reasonable side benefit") was wrong -- fixing the
+  shared helper for one caller's sake silently widened another,
+  unrelated caller's contract in a way nothing tested or reasoned about.
+  Fixed by splitting `GetInt` back into two: the original (kept strict,
+  used only by `"vertexStride"`, where a wrong/guessed stride is
+  actively dangerous) and a new `GetOptionalInt` (null-tolerant, used
+  only by `"parentBone"`, where defaulting to the root bone on a
+  missing/null value is always a safe, meaningful choice) -- the two
+  fields genuinely need different null semantics, not one shared rule.
+- **Real, confirmed, a real duplication risk:** the "treat null as
+  absent" check itself was independently re-implemented three times
+  (bone `"parent"`, `"transform"`, and the original `GetInt` fix) with
+  inconsistent boolean polarity between them (`&& ValueKind != Null` in
+  one place, `|| ValueKind == Null` in another) -- the exact "near-duplicate
+  inline checks are a drift risk" issue this same file's own
+  `RequireWholeNumberOfElements` helper was already extracted to prevent,
+  reintroduced by this diff. Fixed by extracting one shared
+  `IsAbsentOrNull` helper, now the single implementation all three
+  null-tolerant call sites (plus the new `GetOptionalInt`) use
+  consistently.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 476/476 passing (up from 475 -- one new regression test locking
+in `"vertexStride": null`'s restored strict, throwing behavior).
+`samples/HelloGame` re-verified unaffected.
+
 ## First `/code-review high` pass, over the `.cnj` bone-hierarchy commit -- three real findings, all the same root cause, all fixed (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again once more still yet again once more)
 
 Ran the review over the bone-hierarchy commit (`3d32797`). Three

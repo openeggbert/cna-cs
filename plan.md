@@ -1087,16 +1087,24 @@ Split by whether the type needs the (still nonexistent) native ABI:
       hand-authored fixtures verified against manually-derived expected
       structure from the confirmed source logic, not an independent
       reference. Verified: `dotnet build` clean across all 6 projects,
-      0 warnings; `dotnet test`: 475/475 passing (up from 464 — 11 new
+      0 warnings; `dotnet test`: 476/476 passing (up from 464 — 12 new
       tests covering real multi-bone parsing, field defaults, malformed/
       out-of-range bone and mesh-parent-bone rejection, and the
-      no-hierarchy fallback's continued correctness; includes a follow-up
-      `/code-review high` pass that fixed a real null-vs-absent
-      inconsistency — a bone's own `"parent"`/`"transform"` fields and a
-      mesh's own `"parentBone"` field all originally rejected JSON `null`
-      instead of falling back to their defaults, inconsistent with this
-      same diff's own established "null means absent" convention for the
-      top-level `"bones"` field — see `NEXT.md`). `samples/HelloGame`
+      no-hierarchy fallback's continued correctness; includes two
+      follow-up `/code-review high` passes — the first fixed a real
+      null-vs-absent inconsistency (a bone's own `"parent"`/`"transform"`
+      fields and a mesh's own `"parentBone"` field all originally
+      rejected JSON `null` instead of falling back to their defaults);
+      the second caught that first fix's own overreach, where making the
+      shared `GetInt` helper universally null-tolerant silently changed
+      `"vertexStride": null` from a clean rejection into a silent
+      default of 16 -- a materially worse outcome (real vertex bytes
+      authored at a different stride reinterpreted with a completely
+      wrong field layout, since any multiple of 32/48/52/56/68 is also a
+      multiple of 16), fixed by splitting `GetInt` (kept strict) from a
+      new `GetOptionalInt` (null-tolerant, used only where that's safe)
+      and extracting one shared `IsAbsentOrNull` check instead of three
+      independently-reimplemented ones — see `NEXT.md`). `samples/HelloGame`
       re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own `.cnj` skinning surface (vertex strides 48/52/56/68,

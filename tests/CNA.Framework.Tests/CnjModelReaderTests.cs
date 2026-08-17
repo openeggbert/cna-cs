@@ -366,6 +366,27 @@ public class CnjModelReaderTests
         Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
     }
 
+    [Fact]
+    public void Read_MeshWithNullVertexStride_ThrowsContentLoadException()
+    {
+        // Regression test (code review finding): an earlier fix made GetInt (used for
+        // "vertexStride") treat null the same as "absent" for every caller, including this one --
+        // but silently defaulting a null/wrong stride to 16 is actively dangerous, not just
+        // permissive: RequireWholeNumberOfElements's own "whole number of elements" check can't
+        // catch it (any multiple of 32/48/52/56/68 is also a multiple of 16), so real vertex bytes
+        // authored at a different stride would be silently reinterpreted with a completely wrong
+        // field layout -- silent geometry corruption, not a clean rejection. "vertexStride" must
+        // keep throwing on null, unlike "parentBone" (GetOptionalInt), where defaulting to the root
+        // bone is always a safe, meaningful choice.
+        const string json = """
+            {"cnjVersion":1,"type":"Model","meshes":[
+                {"name":"M","vertices":"quad_verts.bin","indices":"quad_idx.bin","vertexStride":null}
+            ]}
+            """;
+
+        Assert.Throws<ContentLoadException>(() => CnjModelReader.Read(json, "bad", AssetsDirectory));
+    }
+
     [Theory]
     [InlineData("SkinnedEffect")]
     [InlineData("PbrEffect")]

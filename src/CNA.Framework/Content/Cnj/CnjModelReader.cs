@@ -176,7 +176,7 @@ internal static class CnjModelReader
             // field originally rejected null instead of falling back to defaultParent the same way.
             int defaultParent = index == 0 ? -1 : 0;
             int parent = defaultParent;
-            if (boneElement.TryGetProperty("parent", out JsonElement parentElement) && parentElement.ValueKind != JsonValueKind.Null)
+            if (!IsAbsentOrNull(boneElement, "parent", out JsonElement parentElement))
             {
                 if (parentElement.ValueKind != JsonValueKind.Number || !parentElement.TryGetInt32(out parent))
                 {
@@ -205,7 +205,7 @@ internal static class CnjModelReader
     private static Matrix GetTransform(JsonElement boneElement, string assetName, int index, string name)
     {
         // Same null-treated-as-absent fix as "parent" above.
-        if (!boneElement.TryGetProperty("transform", out JsonElement transformElement) || transformElement.ValueKind == JsonValueKind.Null)
+        if (IsAbsentOrNull(boneElement, "transform", out JsonElement transformElement))
         {
             return Matrix.Identity;
         }
@@ -326,7 +326,7 @@ internal static class CnjModelReader
         int? parentBoneIndex = null;
         if (boneCount > 0)
         {
-            int rawParentBone = GetInt(meshElement, "parentBone", 0, assetName, name, "parentBone");
+            int rawParentBone = GetOptionalInt(meshElement, "parentBone", 0, assetName, name, "parentBone");
             if (rawParentBone < 0 || rawParentBone >= boneCount)
             {
                 throw new ContentLoadException(
@@ -400,13 +400,22 @@ internal static class CnjModelReader
         };
     }
 
+    /// <summary>Strict: an absent field falls back to <paramref name="defaultValue"/>, but a
+    /// *present* non-integer value -- including JSON <c>null</c> -- always throws. Used only for
+    /// <c>"vertexStride"</c>, where silently guessing a value on <c>null</c> would be actively
+    /// dangerous rather than merely permissive: a code-review finding caught an earlier version of
+    /// this method treating <c>null</c> the same as "absent" here too, which would have let
+    /// <c>"vertexStride": null</c> silently default to 16 -- <see cref="RequireWholeNumberOfElements"/>'s
+    /// own whole-number check can't catch this (any multiple of 32/48/52/56/68 is also a multiple of
+    /// 16), so real vertex bytes authored at a different stride would be silently reinterpreted with
+    /// a completely wrong field layout and double-or-more the real vertex count -- silent geometry
+    /// corruption with no diagnostic, exactly what this reader's own doc comment promises never
+    /// happens. See <see cref="GetOptionalInt"/> for the *other* shape (null genuinely means
+    /// "absent," used for <c>"parentBone"</c>, where defaulting to the root bone on a missing/null
+    /// value is always a safe, meaningful choice).</summary>
     private static int GetInt(JsonElement element, string propertyName, int defaultValue, string assetName, string meshName, string field)
     {
-        // A code-review finding caught this null-vs-absent gap too (this method's own "parentBone"
-        // caller, new in the same diff that added it, was the case that surfaced it) -- null is
-        // treated as "absent" the same way GetBool already does, matching ValidateEnvelope's own
-        // established convention for the top-level "bones" field.
-        if (!element.TryGetProperty(propertyName, out JsonElement value) || value.ValueKind == JsonValueKind.Null)
+        if (!element.TryGetProperty(propertyName, out JsonElement value))
         {
             return defaultValue;
         }
@@ -417,5 +426,38 @@ internal static class CnjModelReader
         }
 
         return result;
+    }
+
+    /// <summary>Same shape as <see cref="GetInt"/>, but JSON <c>null</c> is treated the same as
+    /// "absent" too (falls back to <paramref name="defaultValue"/>) -- see that method's own doc
+    /// comment for why the two are kept deliberately separate rather than merged into one
+    /// null-tolerant helper.</summary>
+    private static int GetOptionalInt(JsonElement element, string propertyName, int defaultValue, string assetName, string meshName, string field)
+    {
+        if (IsAbsentOrNull(element, propertyName, out JsonElement value))
+        {
+            return defaultValue;
+        }
+
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out int result))
+        {
+            throw new ContentLoadException($"'{assetName}.cnj' mesh '{meshName}' field '{field}' must be an integer.");
+        }
+
+        return result;
+    }
+
+    /// <summary>Shared by every field where JSON <c>null</c> is deliberately treated the same as
+    /// "absent" (bone <c>"parent"</c>/<c>"transform"</c>, mesh <c>"parentBone"</c> via
+    /// <see cref="GetOptionalInt"/>) -- a code-review finding caught this exact check being
+    /// independently re-implemented at each call site with inconsistent boolean polarity (some
+    /// `&amp;&amp; ValueKind != Null`, some `|| ValueKind == Null`), the same "near-duplicate inline
+    /// checks are a drift risk" issue <see cref="RequireWholeNumberOfElements"/> was already
+    /// extracted to prevent elsewhere in this file. Deliberately <b>not</b> used by
+    /// <c>"vertexStride"</c>'s own <see cref="GetInt"/> -- see that method's own doc comment for
+    /// why that field needs different (stricter) null handling.</summary>
+    private static bool IsAbsentOrNull(JsonElement element, string propertyName, out JsonElement value)
+    {
+        return !element.TryGetProperty(propertyName, out value) || value.ValueKind == JsonValueKind.Null;
     }
 }
