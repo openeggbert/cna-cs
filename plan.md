@@ -669,12 +669,14 @@ Split by whether the type needs the (still nonexistent) native ABI:
       `ContentManager.GraphicsDevice` is a new settable property, wired by
       `Game.EnsureGraphicsDevice()` once its own device becomes available.
       Verified: `dotnet build` clean across all 6 projects, 0 warnings;
-      `dotnet test`: 375/375 passing (up from 359 — 16 new tests,
+      `dotnet test`: 380/380 passing (up from 359 — 21 new tests,
       including a full end-to-end parse of a real MonoGame-compiled
       `Model` `.xnb` fixture, vendored into `tests/CNA.Framework.Tests/assets/`
       from `openeggbert/cna`'s own MIT-licensed MonoGame test fixtures —
-      see that directory's own `README.md`). `samples/HelloGame`
-      re-verified unaffected.
+      see that directory's own `README.md`, and a follow-up `/code-review
+      high` pass that fixed a real "loaded models render nothing" bug
+      plus four corrupt-input safety gaps — see `NEXT.md`).
+      `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own `.cnj`/glTF/LZX-compressed `.xnb` content paths (see
       the entry above); `MediaPlayer`'s visualization data

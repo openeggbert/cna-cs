@@ -11,6 +11,76 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Nineteenth `/code-review high` pass, over the `Model` `.xnb` loading commit -- five real findings, one of them the standout bug of this whole feature (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again)
+
+Ran the review over the `.xnb` Model-loading commit (`93a0d1b`) -- a much
+larger diff than any prior review target this session. Five findings,
+all real, all fixed:
+
+- **The standout bug:** `XnbModelBuilder.Build` parsed each mesh part's
+  `BasicEffect` data (`XnbBasicEffectData`) but never actually applied it
+  to a real `BasicEffect` or assigned it to `ModelMeshPart.Effect` --
+  every loaded model's every part had `Effect == null`. Since
+  `ModelMesh.Draw()` skips any part with a null effect
+  (`if (effect is null ...) continue;`), a model loaded via
+  `ContentManager.Load<Model>()` would compile, load without error, and
+  then **render literally nothing** the first time a game actually tried
+  to draw it -- a much worse failure mode than the documented "BasicEffect
+  reader is minimal" scope decision was meant to produce. Fixed:
+  `XnbModelBuilder` now constructs a real `BasicEffect(graphicsDevice)`
+  and applies every field the parser actually has
+  (`DiffuseColor`/`EmissiveColor`/`SpecularColor`/`SpecularPower`/`Alpha`/
+  `VertexColorEnabled`), assigning it to each part *after* that part's
+  mesh is constructed (matching `ModelMeshPart.Effect`'s own documented
+  "parent must be set first" requirement) -- only the external texture
+  reference stays unresolved (still needs `ContentManager.Load<Texture2D>()`,
+  itself native-ABI-blocked), left honestly unset (`TextureEnabled` stays
+  `false`) rather than a misleading half-application.
+- **A real corruption-safety gap:** `XnbIndexBufferReader` never checked
+  that a buffer's byte size was a whole multiple of its index element
+  size (2 or 4 bytes) -- `XnbModelBuilder.BuildIndexBuffer`'s
+  `dataSize / elementSize` integer division would then silently
+  under-allocate the real, native-backed `IndexBuffer` relative to the
+  byte array written into it, risking an out-of-bounds native write for a
+  corrupt file. Fixed: `XnbIndexBufferReader` now rejects a non-whole-number
+  size immediately, at the source.
+- **The `ContentLoadException` contract had a real hole:** bone
+  references (parent/child/mesh-parent/root-bone, all read via
+  `XnbContentReader.ReadBoneReference`) were decoded but never
+  bounds-checked against the actual bone count, so a corrupt file could
+  make `XnbModelBuilder` index its `bones` list out of range --
+  an unhandled `ArgumentOutOfRangeException`, not the clear
+  `ContentLoadException` every other corrupt-input case in this feature
+  produces. Fixed once, centrally, in `ReadBoneReference` itself (covers
+  every caller automatically, rather than needing a bounds check at each
+  of the four call sites).
+- **Same contract hole, different mechanism:** each shared-resource fixup
+  (`part.VertexBuffer = (XnbVertexBufferData)o`, and the `IndexBuffer`/
+  `Effect` lines beside it) cast the resolved shared resource without
+  checking its actual type first -- a corrupt file with a mismatched
+  type-reader at one of those slots would throw an unhandled
+  `InvalidCastException`. Fixed with a small `RequireType<T>` helper that
+  throws `ContentLoadException` on a type mismatch instead.
+- **A missing plausibility bound:** `boneCount`/`meshCount`/`partCount`
+  were read straight from the file with no sanity cap at all, unlike the
+  type-reader-table count (capped at 4096) and vertex element count
+  (capped at 1024) elsewhere in this same feature -- a corrupt file
+  setting e.g. `boneCount` to over a billion would trigger a huge `List<T>`
+  allocation/stall instead of a clean, immediate rejection. Fixed with a
+  shared, generous-but-bounded cap (1,000,000) across all three.
+
+Added regression tests for everything testable without a real
+`cna-native` (the index-buffer divisibility check, bone-reference bounds
+checking including a valid-index control case, and the implausible-bone-count
+check) -- the `BasicEffect` fix itself isn't independently testable here
+(same native-ABI-blocked situation as `XnbModelBuilder`'s other half), but
+the existing real-fixture end-to-end test continuing to pass after the fix
+confirms the correct-input path wasn't broken by any of these five changes.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 380/380 passing (up from 375 -- 5 new regression tests).
+`samples/HelloGame` re-verified unaffected.
+
 ## `Model` file-loading via real, uncompressed `.xnb` binary assets -- done, after research overturned the plan's own scope estimate twice in one pass (2026-08-17, session 6 continued autonomously yet again, per explicit user selection of "Start Model file-loading")
 
 Picked this up as the next feature once the picture-library's review cycle

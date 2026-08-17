@@ -166,6 +166,58 @@ public class XnbModelReaderTests
         Assert.Equal("Hello", result);
     }
 
+    [Theory]
+    [InlineData(true, 3)] // 3 is not a whole number of 2-byte (sixteen-bit) indices
+    [InlineData(false, 6)] // 6 is not a whole number of 4-byte (thirty-two-bit) indices
+    public void XnbIndexBufferReader_Read_SizeNotWholeNumberOfIndices_ThrowsContentLoadException(bool sixteenBits, int dataSize)
+    {
+        // Regression test (code review finding): a size that doesn't evenly divide by the index
+        // element size would previously reach XnbModelBuilder.BuildIndexBuffer, where integer
+        // division silently truncated the element count -- allocating a native IndexBuffer smaller
+        // than the byte array later written into it. Rejected at the reader instead.
+        XnbContentReader reader = CreateReader(
+            typeReaderNames: [],
+            sharedResourceCount: 0,
+            writeRoot: w =>
+            {
+                w.Write(sixteenBits);
+                w.Write(dataSize);
+                w.Write(new byte[dataSize]);
+            });
+
+        Assert.Throws<ContentLoadException>(() => XnbIndexBufferReader.Read(reader));
+    }
+
+    [Fact]
+    public void ReadBoneReference_OutOfRangeIndex_ThrowsContentLoadException()
+    {
+        // Regression test (code review finding): an out-of-range bone reference previously reached
+        // XnbModelBuilder's own bones[index] lookups unchecked, risking an unhandled
+        // ArgumentOutOfRangeException instead of this feature's usual ContentLoadException contract
+        // for corrupt files.
+        XnbContentReader reader = CreateReader(typeReaderNames: [], sharedResourceCount: 0, writeRoot: w => w.Write((byte)200));
+
+        Assert.Throws<ContentLoadException>(() => reader.ReadBoneReference(boneCount: 2));
+    }
+
+    [Fact]
+    public void ReadBoneReference_ValidIndex_ReturnsZeroBasedIndex()
+    {
+        XnbContentReader reader = CreateReader(typeReaderNames: [], sharedResourceCount: 0, writeRoot: w => w.Write((byte)2));
+
+        Assert.Equal(1, reader.ReadBoneReference(boneCount: 2));
+    }
+
+    [Fact]
+    public void XnbModelReader_Read_ImplausibleBoneCount_ThrowsContentLoadException()
+    {
+        // Regression test (code review finding): boneCount had no plausibility bound, unlike the
+        // type-reader-table count and vertex element count elsewhere in this feature.
+        XnbContentReader reader = CreateReader(typeReaderNames: [], sharedResourceCount: 0, writeRoot: w => w.Write(2_000_000_000u));
+
+        Assert.Throws<ContentLoadException>(() => XnbModelReader.Read(reader));
+    }
+
     /// <summary>Builds a minimal, hand-crafted <c>.xnb</c> payload (type-reader table + a
     /// zero-version entry per name + shared resource count + root object bytes), starting a
     /// <see cref="BinaryReader"/> positioned right after the (never-written) 10-byte header --

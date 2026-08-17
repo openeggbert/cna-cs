@@ -29,9 +29,21 @@ namespace CNA.Content.Xnb;
 /// </summary>
 internal static class XnbModelReader
 {
+    // A code-review finding: unlike the type-reader-table count (capped at 4096) and vertex
+    // element count (capped at 1024) elsewhere in this feature, these three counts had no
+    // plausibility bound at all -- a corrupt file could set e.g. boneCount to over a billion and
+    // trigger a huge List<T> allocation/stall instead of a clean, immediate ContentLoadException.
+    // Generous (real models can legitimately have thousands of bones/meshes/parts) but bounded.
+    private const int MaxPlausibleCount = 1_000_000;
+
     internal static object Read(XnbContentReader reader)
     {
         uint boneCount = reader.ReadUInt32();
+        if (boneCount > MaxPlausibleCount)
+        {
+            throw new ContentLoadException($"Corrupt .xnb file: implausible bone count {boneCount}.");
+        }
+
         var bones = new List<XnbBoneData>((int)boneCount);
         for (uint i = 0; i < boneCount; i++)
         {
@@ -55,6 +67,11 @@ internal static class XnbModelReader
         }
 
         int meshCount = reader.ReadInt32();
+        if (meshCount is < 0 or > MaxPlausibleCount)
+        {
+            throw new ContentLoadException($"Corrupt .xnb file: implausible mesh count {meshCount}.");
+        }
+
         var meshes = new List<XnbMeshData>(meshCount);
         for (int m = 0; m < meshCount; m++)
         {
@@ -64,6 +81,11 @@ internal static class XnbModelReader
             reader.RejectNonNullTag($"Mesh '{meshName}'");
 
             int partCount = reader.ReadInt32();
+            if (partCount is < 0 or > MaxPlausibleCount)
+            {
+                throw new ContentLoadException($"Corrupt .xnb file: implausible mesh part count {partCount}.");
+            }
+
             var parts = new List<XnbMeshPartData>(partCount);
             for (int p = 0; p < partCount; p++)
             {
@@ -81,10 +103,15 @@ internal static class XnbModelReader
                     PrimitiveCount = primitiveCount,
                 };
 
-                // Fixed order, matching real XNA's own ModelReader exactly.
-                reader.ReadSharedResource(o => part.VertexBuffer = (XnbVertexBufferData)o);
-                reader.ReadSharedResource(o => part.IndexBuffer = (XnbIndexBufferData)o);
-                reader.ReadSharedResource(o => part.Effect = (XnbBasicEffectData)o);
+                // Fixed order, matching real XNA's own ModelReader exactly. A code-review finding:
+                // each cast previously trusted the resolved shared resource was always the
+                // expected type -- a corrupt file with a mismatched type-reader at one of these
+                // slots would otherwise surface as an unhandled InvalidCastException instead of
+                // the clear ContentLoadException every other corrupt-input case in this feature
+                // produces.
+                reader.ReadSharedResource(o => part.VertexBuffer = RequireType<XnbVertexBufferData>(o, "VertexBuffer"));
+                reader.ReadSharedResource(o => part.IndexBuffer = RequireType<XnbIndexBufferData>(o, "IndexBuffer"));
+                reader.ReadSharedResource(o => part.Effect = RequireType<XnbBasicEffectData>(o, "Effect"));
 
                 parts.Add(part);
             }
@@ -96,5 +123,16 @@ internal static class XnbModelReader
         reader.RejectNonNullTag("Model");
 
         return new XnbModelData(bones, meshes, rootBoneIndex);
+    }
+
+    private static T RequireType<T>(object resource, string fieldName) where T : class
+    {
+        if (resource is not T typed)
+        {
+            throw new ContentLoadException(
+                $"Corrupt .xnb file: mesh part's {fieldName} shared resource was {resource.GetType().Name}, expected {typeof(T).Name}.");
+        }
+
+        return typed;
     }
 }

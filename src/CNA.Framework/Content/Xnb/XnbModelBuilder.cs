@@ -51,6 +51,22 @@ internal static class XnbModelBuilder
             var mesh = new ModelMesh(graphicsDevice, meshData.Name, parts) { BoundingSphere = meshData.BoundingSphere };
             meshes.Add(mesh);
 
+            // Effect assignment has to happen *after* the ModelMesh constructor above (which sets
+            // each part's Parent link) -- see ModelMeshPart.Effect's own doc comment: assigning it
+            // before the part has a parent is a real, matching-the-real-engine no-op for mesh
+            // effect-collection registration. A code-review finding caught this originally being
+            // skipped entirely: every loaded ModelMeshPart.Effect stayed null, so
+            // ModelMesh.Draw() silently skipped every part ("if (effect is null ...) continue;")
+            // -- the model loaded without error but rendered nothing.
+            for (int i = 0; i < meshData.Parts.Count; i++)
+            {
+                XnbBasicEffectData? effectData = meshData.Parts[i].Effect;
+                if (effectData is not null)
+                {
+                    parts[i].Effect = BuildBasicEffect(graphicsDevice, effectData);
+                }
+            }
+
             // -1 ("no parent bone") falls back to bone 0, matching Model's own 4-argument
             // constructor's existing rootBoneIndex leniency (see Model.cs) -- a mesh genuinely has
             // to hang off *some* bone for CopyAbsoluteBoneTransformsTo to make sense of it.
@@ -77,4 +93,21 @@ internal static class XnbModelBuilder
         buffer.SetData(data.Data);
         return buffer;
     }
+
+    /// <summary>Applies every field <see cref="XnbBasicEffectData"/> actually carries -- everything
+    /// except <see cref="XnbBasicEffectData.TextureReference"/>, which stays unresolved (see that
+    /// type's own doc comment for why: resolving it needs <c>ContentManager.Load&lt;Texture2D&gt;()</c>,
+    /// itself native-ABI-blocked). <see cref="BasicEffect.TextureEnabled"/> is left at its default
+    /// (<see langword="false"/>) rather than set <see langword="true"/> with no actual texture,
+    /// which would be a real, misleading divergence from the source asset -- not a full
+    /// reproduction of it, but an honest one.</summary>
+    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data) => new(graphicsDevice)
+    {
+        DiffuseColor = data.DiffuseColor,
+        EmissiveColor = data.EmissiveColor,
+        SpecularColor = data.SpecularColor,
+        SpecularPower = data.SpecularPower,
+        Alpha = data.Alpha,
+        VertexColorEnabled = data.VertexColorEnabled,
+    };
 }

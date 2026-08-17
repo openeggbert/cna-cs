@@ -213,11 +213,28 @@ internal sealed class XnbContentReader
     /// full <c>uint32</c> -- real XNA's own size-optimizing encoding for <c>ModelReader</c>, ported
     /// exactly, including the <c>&lt; 255</c> threshold (not <c>&lt;= 255</c> or <c>&lt; 256</c>).
     /// A raw value of <c>0</c> means "no bone" (returned here as <c>-1</c>); a real reference is
-    /// stored 1-based, so a nonzero raw value is decremented to the real, 0-based bone index.</summary>
+    /// stored 1-based, so a nonzero raw value is decremented to the real, 0-based bone index.
+    /// Bounds-checked against <paramref name="boneCount"/> here -- a code-review finding: every
+    /// caller (<see cref="XnbModelReader"/>'s bone-hierarchy/mesh/root reads, and
+    /// <see cref="XnbModelBuilder"/>'s own indexing into its bones list) trusted this value without
+    /// re-checking it, so a corrupt file with an out-of-range reference would otherwise surface as
+    /// an unhandled <see cref="ArgumentOutOfRangeException"/> deep in list-indexing code instead of
+    /// the clear <see cref="ContentLoadException"/> every other corrupt-input case in this feature
+    /// produces.</summary>
     internal int ReadBoneReference(int boneCount)
     {
         uint raw = boneCount < 255 ? _reader.ReadByte() : _reader.ReadUInt32();
-        return raw == 0 ? -1 : (int)(raw - 1);
+        if (raw == 0)
+        {
+            return -1;
+        }
+
+        if (raw > boneCount)
+        {
+            throw new ContentLoadException($"Corrupt .xnb file: bone reference {raw} is out of range for {boneCount} bones.");
+        }
+
+        return (int)(raw - 1);
     }
 
     /// <summary>Reads and rejects an object's <c>Tag</c> -- matching real XNA's own <c>ModelReader</c>
