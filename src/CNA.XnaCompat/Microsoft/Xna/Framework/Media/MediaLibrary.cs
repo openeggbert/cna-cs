@@ -116,8 +116,7 @@ public sealed class MediaLibrary : CNA.Media.MediaLibrary
     /// first -- same reasoning as <c>CNA.Media.MediaLibrary.SavePicture</c>'s own doc comment.</summary>
     public new Picture SavePicture(string name, byte[] imageBuffer)
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        ArgumentNullException.ThrowIfNull(name);
+        ThrowIfInvalidForSavePicture(name);
         ArgumentNullException.ThrowIfNull(imageBuffer);
 
         string? savedPath = CNA.Media.SavedPictureStore.SavePicture(_pictureRoot, name, imageBuffer);
@@ -141,13 +140,21 @@ public sealed class MediaLibrary : CNA.Media.MediaLibrary
     /// doc comment: validates before ever draining <paramref name="source"/>.</summary>
     public new Picture SavePicture(string name, Stream source)
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        ArgumentNullException.ThrowIfNull(name);
+        ThrowIfInvalidForSavePicture(name);
         ArgumentNullException.ThrowIfNull(source);
 
         using var buffer = new MemoryStream();
         source.CopyTo(buffer);
         return SavePicture(name, buffer.ToArray());
+    }
+
+    /// <summary>Same rationale as <c>CNA.Media.MediaLibrary</c>'s own private method of the same
+    /// name -- extracted so both <c>SavePicture</c> overloads share one definition of "invalid to
+    /// save a picture" rather than repeating the same two checks independently.</summary>
+    private void ThrowIfInvalidForSavePicture(string name)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ArgumentNullException.ThrowIfNull(name);
     }
 
     /// <summary>Same rationale as <c>CNA.Media.MediaLibrary</c>'s own private method of the same

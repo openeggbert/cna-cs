@@ -166,8 +166,7 @@ public class MediaLibrary : IDisposable
     /// precedent, there guarding an argument's disposal rather than <see langword="this"/>'s own).</summary>
     public Picture SavePicture(string name, byte[] imageBuffer)
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        ArgumentNullException.ThrowIfNull(name);
+        ThrowIfInvalidForSavePicture(name);
         ArgumentNullException.ThrowIfNull(imageBuffer);
 
         string? savedPath = SavedPictureStore.SavePicture(_pictureRoot, name, imageBuffer);
@@ -187,21 +186,31 @@ public class MediaLibrary : IDisposable
         return picture;
     }
 
-    /// <summary>Validates <see cref="IsDisposed"/>/<paramref name="name"/> itself, before ever
-    /// draining <paramref name="source"/> -- a code-review finding: the previous version left both
-    /// checks to the <c>byte[]</c> overload it delegates to, so a disposed instance or a null
-    /// <paramref name="name"/> only failed *after* fully copying <paramref name="source"/> into
-    /// memory, wastefully (and destructively, for a non-seekable/network stream) consuming it for a
-    /// call that was always going to fail.</summary>
+    /// <summary>Validates itself, before ever draining <paramref name="source"/> -- a code-review
+    /// finding: the previous version left both checks to the <c>byte[]</c> overload it delegates
+    /// to, so a disposed instance or a null <paramref name="name"/> only failed *after* fully
+    /// copying <paramref name="source"/> into memory, wastefully (and destructively, for a
+    /// non-seekable/network stream) consuming it for a call that was always going to fail.</summary>
     public Picture SavePicture(string name, Stream source)
     {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        ArgumentNullException.ThrowIfNull(name);
+        ThrowIfInvalidForSavePicture(name);
         ArgumentNullException.ThrowIfNull(source);
 
         using var buffer = new MemoryStream();
         source.CopyTo(buffer);
         return SavePicture(name, buffer.ToArray());
+    }
+
+    /// <summary>Shared by both <c>SavePicture</c> overloads -- a follow-up code-review finding on
+    /// the fix that first introduced these checks: each overload originally repeated the identical
+    /// two lines directly (needed so the <see cref="Stream"/> overload fails before ever draining
+    /// its argument, not after delegating), which worked but meant the same guard existed
+    /// twice with no compiler-enforced reason to keep the two copies in sync. Extracted here so
+    /// there is exactly one place that defines what "invalid to save a picture" means.</summary>
+    private void ThrowIfInvalidForSavePicture(string name)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ArgumentNullException.ThrowIfNull(name);
     }
 
     /// <summary>Lazily creates the real "Saved Pictures" <see cref="PictureAlbum"/> tree node (and

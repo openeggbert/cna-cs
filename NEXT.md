@@ -11,6 +11,41 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Seventeenth `/code-review high` pass, over the sixteenth pass's own fix -- one minor finding, extracted a shared guard (2026-08-17, session 6 continued autonomously still further again yet again once more)
+
+Ran the review over the sixteenth pass's own fix commit (`072b5b4`). One
+finding, low severity but real: `SavePicture(string, Stream)` re-validates
+`IsDisposed`/`name` directly (needed so it fails before draining `source`,
+not after delegating) *and* the `byte[]` overload it then calls re-runs
+the identical two checks again -- functionally harmless (both checks are
+cheap and idempotent), but genuinely duplicated logic with "no
+compiler-enforced reason to notice the sibling delegate call re-runs the
+same checks," in the review's own words -- a real drift risk if a future
+change to the exception type/message/check order lands in one copy and
+not the other.
+
+Extracted a shared `private void ThrowIfInvalidForSavePicture(string
+name)` in both `CNA.Framework`'s and `CNA.XnaCompat`'s `MediaLibrary`,
+called from both `SavePicture` overloads in each. This doesn't eliminate
+the *double execution* at runtime (the `Stream` overload still calls it
+directly, then again via its delegation to the `byte[]` overload) --
+that's intentional and stays, since it's what makes the `Stream` overload
+fail before draining -- it eliminates the *duplicated definition*, so
+there is now exactly one place per class that defines what "invalid to
+save a picture" means.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 359/359 passing, unchanged (pure refactor, no behavior change, so
+no new tests needed -- the existing `SavePicture_AfterDispose_*`/
+`SavePicture_NullName_*` tests from the sixteenth pass already cover the
+extracted method's behavior). `samples/HelloGame` re-verified unaffected.
+
+This closes out the picture-library feature's review cycle: three review
+passes total (the original commit, its fix, and the fix's own follow-up),
+the last one landing with only a minor, now-resolved finding -- the same
+"review the fix, not just the feature" discipline the `MediaLibrary`
+music-side feature's five-pass cycle established.
+
 ## Sixteenth `/code-review high` pass, over the picture-library commit -- two real bugs fixed, two judged pre-existing-pattern and documented (2026-08-17, session 6 continued autonomously still further again yet again)
 
 Ran the review over the picture-library commit (`1937ba4`). Four findings;
