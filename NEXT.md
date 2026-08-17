@@ -11,6 +11,83 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Thirteenth `/code-review high` pass, over the `MediaLibrary` commit -- six findings, four fixed (2026-08-17, session 6 continued autonomously still further)
+
+Ran the review a thirteenth time. Six findings, the most of any single
+pass this session -- four real and fixed, two accepted as real but
+low-priority and folded into the same fix pass anyway since it touched
+the same files:
+
+- **Fixed, real, the standout bug:** compat `Song.cs` was never updated
+  when the base `CNA.Media.Song` gained `Album`/`Artist`/`Genre`
+  properties in the same commit -- every other new compat type in that
+  commit got a `new` compat-typed override, this file was simply missed.
+  Added the three overrides. While fixing this, caught a second, self-
+  introduced bug in the process: the new overrides' setters had no
+  explicit accessor-level modifier, so they defaulted to `public set`,
+  silently *widening* real XNA's actual get-only surface (and the base
+  class's own deliberate `internal set`) into a fully public one nothing
+  asked for. Fixed to `internal set`, matching the base exactly.
+- **Fixed, real:** compat `Album`'s internal constructor accepted
+  base-typed (`CNA.Media.Artist?`/`Genre?`) parameters rather than
+  compat-typed ones, so its own `(Artist?)base.Artist`/`(Genre?)base.Genre`
+  downcast getters were only safe *in practice* (nothing currently calls
+  this constructor with real data), not *provably* safe by construction
+  the way the doc comment's safety argument implied. Changed the
+  constructor to accept compat-typed `Artist?`/`Genre?`/`SongCollection`
+  directly, converting to base-typed only at the `base(...)` call site --
+  now the compiler itself enforces what the doc comment used to just
+  assert.
+- **Fixed, real, the biggest single change:** eight near-identical
+  ~30-line `List<T>`-wrapping `IDisposable`/`IEnumerable<T>` collection
+  classes (`Song`/`Album`/`Artist`/`Genre`/`Playlist`Collection, once
+  each in `CNA.Framework`/`CNA.XnaCompat`) with no shared base --
+  extracted a shared `ReadOnlyMediaCollection<T>` (one copy per project,
+  necessarily `public` rather than `internal`: a `public sealed class
+  SongCollection` cannot derive from an `internal` base -- C# CS0060 --
+  same shape the BCL's own `ReadOnlyCollection<T>` uses for the identical
+  reason). Every one of the eight collection types is now a ~10-line
+  thin subclass. Directly relevant given the `Song` bug just above: this
+  is exactly the kind of "the same fix has to be manually reapplied N
+  times, and it's easy to miss one" risk the review's own reasoning
+  called out, demonstrated in the very same diff it was reviewing.
+- **Fixed, real, same root cause as the `Album` finding:** `Artist`/
+  `Genre`/`Playlist`'s compat constructors accepted `albums`/`songs`
+  parameters that were silently discarded in favor of hardcoded fresh
+  empty collections in the `new`-shadowed properties -- confusing for a
+  future maintainer expecting the constructor's own parameters to be
+  reflected in the resulting object. Changed all three to genuinely store
+  what's passed to the constructor (still always empty in practice, since
+  nothing currently constructs these with real data, but no longer
+  silently different from what the constructor signature promises).
+- **Fixed, real but minor:** compat `MediaLibrary`'s five `new`-shadowed
+  collection properties each allocated a fresh empty wrapper per
+  instance, on top of the five the base constructor already allocates.
+  Replaced with five `static readonly` shared empty instances -- safe
+  specifically because these collections are provably immutable and
+  permanently empty (unlike a cache of *mutable* shared state, which
+  would be a real bug), cutting the redundant half of the allocation
+  entirely.
+- **Accepted as a real observation, not actioned as a separate fix:** the
+  review noted that each compat type re-derives its own bespoke,
+  hand-verified safety argument for its downcast rather than a
+  structural mechanism enforcing the invariant project-wide. The `Album`/
+  `Artist`/`Genre`/`Playlist` fixes above *are* exactly that kind of
+  structural fix, applied file-by-file rather than as one shared
+  mechanism -- judged sufficient for now (four call sites, now all
+  compiler-enforced) rather than designing a general-purpose "safe
+  downcast" abstraction for a pattern that's shown up in maybe half a
+  dozen places across the whole session.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects (needed one extra fix mid-refactor: `ReadOnlyMediaCollection<T>`
+had to be `public`, not `internal` -- CS0060 caught immediately on first
+build attempt, not a design decision that could have shipped silently
+wrong). `dotnet test CNA.sln`: 312/312 passing (up from 311 -- the
+refactor itself was behavior-preserving with zero test changes needed;
++1 new regression test for the `Song.Album`/`.Artist`/`.Genre` compat
+override fix). `samples/HelloGame` re-verified unaffected.
+
 ## `Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`: real XNA object model, scoped to always-empty (2026-08-17, session 6 continued autonomously past the "everything tractable is done" checkpoint, by explicit user choice)
 
 > Reported that every well-scoped, high-confidence task was done and

@@ -36,6 +36,24 @@ public class SongCompatTests
     }
 
     [Fact]
+    public void AlbumArtistGenre_DefaultToNull()
+    {
+        string path = Path.GetTempFileName();
+        try
+        {
+            var song = new XnaSong(path);
+
+            Assert.Null(song.Album);
+            Assert.Null(song.Artist);
+            Assert.Null(song.Genre);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void FromUri_PlainPath_ReturnsFrameworkNamespacedSong()
     {
         string path = Path.GetTempFileName();

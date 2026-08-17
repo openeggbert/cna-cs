@@ -4,12 +4,18 @@ namespace Microsoft.Xna.Framework.Media;
 /// comment.</summary>
 public class Genre : CNA.Media.Genre
 {
-    internal Genre(string name, CNA.Media.AlbumCollection albums, CNA.Media.SongCollection songs)
-        : base(name, albums, songs)
+    internal Genre(string name, AlbumCollection albums, SongCollection songs)
+        : base(name, ToBaseAlbums(albums), ToBaseSongs(songs))
     {
+        Albums = albums;
+        Songs = songs;
     }
 
-    public new AlbumCollection Albums { get; } = new([]);
+    public new AlbumCollection Albums { get; }
 
-    public new SongCollection Songs { get; } = new([]);
+    public new SongCollection Songs { get; }
+
+    private static CNA.Media.AlbumCollection ToBaseAlbums(AlbumCollection albums) => new(albums.ToList());
+
+    private static CNA.Media.SongCollection ToBaseSongs(SongCollection songs) => new(songs.ToList());
 }

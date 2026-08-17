@@ -80,7 +80,7 @@ isn't. `MediaPlayer` straddles the same way: `State`/`Volume`/`IsMuted`/
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 311 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 312 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

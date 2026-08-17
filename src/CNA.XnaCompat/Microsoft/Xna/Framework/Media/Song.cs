@@ -7,6 +7,18 @@ namespace Microsoft.Xna.Framework.Media;
 /// comment), so there's no reason not to inherit unchanged. Sealed here, matching real XNA's own
 /// <c>sealed class Song</c> exactly -- <c>CNA.Media.Song</c> itself is deliberately left unsealed
 /// so this class can extend it.
+///
+/// <see cref="Album"/>/<see cref="Artist"/>/<see cref="Genre"/> need <c>new</c> overrides (a real
+/// gap a code review caught -- every other new compat type added alongside these got one, this
+/// file was simply missed). The downcast getters are safe in *practice* today (nothing in this
+/// project ever sets these to anything but <see langword="null"/> -- no <c>MediaLibrary</c> scan
+/// exists, see that type's own doc comment), but not *provably* safe by construction the way
+/// <c>MediaLibrary.MediaSource</c>'s own downcast is: <see cref="CNA.Media.Song.Album"/>/etc. have
+/// an <c>internal set</c>, so a hypothetical future caller within this project's own
+/// <c>InternalsVisibleTo</c> boundary could set a compat <see cref="Song"/>'s underlying field to
+/// a base-typed instance directly. Flagged here so a future real <c>MediaLibrary</c> scan
+/// implementation knows to always construct compat-typed <see cref="Album"/>/<see cref="Artist"/>/
+/// <see cref="Genre"/> when populating a compat <see cref="Song"/>'s fields.
 /// </summary>
 public sealed class Song : CNA.Media.Song
 {
@@ -18,6 +30,24 @@ public sealed class Song : CNA.Media.Song
     public Song(string fileName, string assetName, int durationMS)
         : base(fileName, assetName, durationMS)
     {
+    }
+
+    public new Album? Album
+    {
+        get => (Album?)base.Album;
+        internal set => base.Album = value;
+    }
+
+    public new Artist? Artist
+    {
+        get => (Artist?)base.Artist;
+        internal set => base.Artist = value;
+    }
+
+    public new Genre? Genre
+    {
+        get => (Genre?)base.Genre;
+        internal set => base.Genre = value;
     }
 
     /// <summary>
