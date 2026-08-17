@@ -13,11 +13,17 @@ already be done by every native-backed type's own original design;
 name-indexed effect-parameter system for it to apply to). `MediaQueue`/
 `SongCollection` (multi-song playlists, shuffle, repeat-driven
 auto-advance) and `VertexBuffer`/`IndexBuffer`'s real-XNA `Type`-taking
-constructors also now done. What remains: `Model` file-loading and the
-real `Album`/`Artist`/`Genre`/`MediaLibrary` scanning subsystem (Phase 4
-follow-ups, deliberately deferred, not blocked) and Phase 6
-packaging/cross-platform validation, tracked below.
-**Date:** 2026-08-16 (see `NEXT.md` for the session-by-session history and
+constructors also now done. `Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`'s
+real XNA object model is also now done, deliberately scoped to always-empty
+collections (the real C++ engine's actual scanning logic depends on
+FFmpeg/native tag-parsing infrastructure with no equivalent on either side
+of this binding -- see `NEXT.md` for the detail). What remains: `Model`
+file-loading and the real C++ engine's picture-library surface
+(`Picture`/`PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`,
+similarly infrastructure-bound) (Phase 4 follow-ups, deliberately
+deferred, not blocked) and Phase 6 packaging/cross-platform validation,
+tracked below.
+**Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
 `../cnabinding/analysis_binding_sharp_runtime.md`,
@@ -533,17 +539,53 @@ Split by whether the type needs the (still nonexistent) native ABI:
       test-isolation design this needed, since `MediaPlayer`'s shared
       static state makes "which tests are safe to write" a real
       constraint). `samples/HelloGame` re-verified unaffected.
+- [x] **`Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`/`MediaSource` and
+      their collections — done, scoped to an always-empty object model,
+      2026-08-17 (session 6 continued autonomously past the original
+      "Phase 4/5 complete" checkpoint, per explicit user request to keep
+      going, then an explicit scoping decision after research revealed
+      the real feature's actual dependency shape).** Reading the real C++
+      engine's own `MediaLibrary::BuildFromRoots` showed its scanning
+      logic depends on infrastructure with no equivalent anywhere in this
+      binding and no C ABI exposure to build against: real ID3v2/Vorbis/FLAC
+      tag parsing, FFmpeg-based audio duration probing
+      (`avformat_find_stream_info`), a native directory-scanning index,
+      and a native cover-art image loader. Unlike `BasicEffect`/`Model`/
+      `Song` (each "shaped to match a real implementation, just needs
+      porting"), this is not portable at any reasonable scope -- it would
+      need either a large new native ABI surface upstream (itself needing
+      FFmpeg-equivalent decoding exposed through a C API) or reimplementing
+      binary audio-tag/container parsing from scratch in pure C#.
+      Implemented instead: the real XNA public API surface in full (every
+      type, every property, `MediaLibrary`'s own real constructor
+      validation) but every collection is always empty, since nothing
+      ever scans anything -- an honest, documented scope decision (see
+      `MediaLibrary`'s own doc comment), not a silent stub. `Album`/
+      `Artist`/`Genre`/`Playlist`'s constructors stay `MediaLibrary`-only
+      (matching real XNA's own choice, unlike `Song`'s `CNAEXT` public
+      one) since they only make sense as part of a coherent scan this
+      project can't perform. Full `CNA.XnaCompat` mirror, safe in a way
+      `MediaPlayer.Queue` wasn't: since every collection is *provably*
+      always empty, a `new`-shadowed compat-typed collection can never
+      diverge from the base one there's no real data to disagree on.
+      Verified: `dotnet build` clean across all 6 projects; `dotnet test`:
+      311/311 passing (up from 280 — 31 new tests, all passing on first
+      run, exercising real construction/validation/equality behavior with
+      no native dependency at all). `samples/HelloGame` re-verified
+      unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model` has no file-format loader (parsing a real model format is a
       separate, much larger problem — see `Model`'s own doc comment); the
-      real C++ engine's `Album`/`Artist`/`Genre`/`MediaLibrary` scanning
-      subsystem (no real XNA game needs this for basic playback, and it
-      needs a real on-disk-scan/tag-parsing implementation this project
-      has no equivalent for); visualization data (`GetVisualizationData`,
-      real-time FFT). None of these are blocked on the native C ABI the
-      way everything else in this phase is — they're scoped out because
-      each is its own substantial, separable feature, not because
-      anything is missing upstream to ground them against.
+      real C++ engine's picture-library surface (`Picture`/`PictureAlbum`/
+      `PictureCollection`/`PictureAlbumCollection`, `GetPictureFromToken`/
+      `SavePicture`) -- a separate, similarly infrastructure-bound feature
+      (native image loading/thumbnailing) real XNA games essentially never
+      touch (Zune-era personal-photo browsing, not game asset loading);
+      visualization data (`GetVisualizationData`, real-time FFT). None of
+      these are blocked on the native C ABI the way everything else in
+      this phase is — they're scoped out because each is its own
+      substantial, separable feature, not because anything is missing
+      upstream to ground them against.
 - [ ] Build the compatibility matrix (§73) from real tests, not from this
       list.
 

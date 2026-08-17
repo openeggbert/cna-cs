@@ -11,6 +11,146 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## `Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`: real XNA object model, scoped to always-empty (2026-08-17, session 6 continued autonomously past the "everything tractable is done" checkpoint, by explicit user choice)
+
+> Reported that every well-scoped, high-confidence task was done and
+> asked the user how to continue, offering to stop, attempt two
+> lower-confidence guesses, or start one of the two large deferred
+> features. User chose to start the `MediaLibrary` subsystem.
+
+**Research came first, and it changed the plan significantly.** Reading
+the real C++ engine's `MediaLibrary.hpp` showed the real feature is much
+bigger than "Album/Artist/Genre" -- it also owns an entire parallel
+picture-library subsystem (`Picture`/`PictureAlbum`/`PictureCollection`/
+`PictureAlbumCollection`, `GetPictureFromToken`/`SavePicture`). Reading
+`MediaLibrary.cpp`'s actual `BuildFromRoots` scan logic showed something
+more fundamental: unlike every other native-backed feature this session
+grounded against a real, working C++ implementation, this one's real
+logic is bound to infrastructure with **no equivalent anywhere in this
+binding and no C ABI exposure to build one against** -- real ID3v2/Vorbis/
+FLAC tag parsing (`CNA::Internal::Media::AudioTagParser`), FFmpeg-based
+audio duration probing (`AudioDurationProbe::ProbeDurationMS`, built on
+`avformat_find_stream_info`), a native directory-scanning index, and a
+native cover-art image loader. This is categorically different from
+`BasicEffect`/`Model`/`Song`'s own "real, working implementation just
+needs porting/reflecting" situation -- there is no C# equivalent to port
+*to*, and no native ABI shape to design *for*, without either a large new
+native surface upstream (itself needing FFmpeg-equivalent decoding
+exposed through a C API, a substantial problem in its own right) or
+reimplementing binary audio-tag/container parsing from scratch in pure
+C#. Reported this finding back to the user with concrete options rather
+than silently picking a direction or grinding ahead on a guess -- this
+was a genuine "the task is different in kind than assumed" moment, not
+just a sizing question. **User chose: implement the real XNA object model
+in full, but every collection stays always-empty.**
+
+**A second real discovery while reading the headers, worth internalizing
+as a pattern:** `Album`'s (and `Artist`/`Genre`/`Playlist`'s) constructor
+is `private`, friended only to `MediaLibrary` -- unlike `Song`/`ModelBone`/
+`SongCollection`, the real C++ engine's own authors deliberately did
+**not** give these a `CNAEXT`-public hand-building constructor. That's a
+real signal, not an oversight: those types only make sense as part of a
+coherent library scan (cross-referenced `Album`↔`Artist`↔`Genre`↔`Song`
+relationships), unlike a standalone `Song` or `ModelBone`, which are each
+meaningful in isolation. Respected that signal -- none of these four
+types got a `CNAEXT` public constructor here either, even though this
+project's own "no content pipeline exists" reasoning could have justified
+inventing one the way it did for `Song`. **Worth remembering for any
+future CNAEXT decision:** the real C++ engine having *already* made a
+CNAEXT-or-not choice for a given type is itself evidence about whether
+hand-building genuinely makes sense for it -- check what the engine
+authors decided before assuming every construction gap needs a CNAEXT
+escape hatch the way `Song`/`ModelBone` got one.
+
+**Equality semantics reproduced exactly, not guessed, by reading each
+type's own `.cpp`:** `Artist`/`Genre`/`Playlist.Equals` compare by name
+only; `Album.Equals` compares by *(Name, Artist)*, not name alone (album
+names collide across different artists), delegating to `Artist.Equals`
+for the artist half rather than reference equality -- confirmed by
+reading `Album.cpp`'s own `Equals` body, not assumed from the property
+list. `Album.HasArt` is hardcoded `false` and
+`GetAlbumArt`/`GetThumbnail` always throw
+`InvalidOperationException` -- correct here specifically because no
+`Album` in this project is ever backed by a real scanned file with real
+art to report (matches the same "this is the actually correct answer,
+not an unimplemented stub" reasoning `Song.IsProtected` already
+established), not a stub standing in for unwritten logic.
+
+**`Song.Album`/`.Artist`/`.Genre` added, always `null`, with `internal`
+setters reserved for a hypothetical future real scan.** These didn't
+exist before this pass (deliberately omitted when `Song` was first
+built, since `Album`/`Artist`/`Genre` didn't exist yet) -- completes
+`Song`'s own real XNA public API surface now that the types they'd
+reference exist, without implying they're ever actually populated today.
+
+**Compat-layer mirror needed careful design, but turned out to be fully
+safe, unlike `MediaPlayer.Queue`'s genuine structural blocker two entries
+ago.** Two separate safety arguments, not one:
+- **`MediaLibrary`/`Album`/`Artist`/`Genre`/`Playlist`'s `new`-shadowed
+  collection properties (`Albums`, `Songs`, etc.):** safe because every
+  collection is *provably* always empty on both sides -- there's no real
+  data that could ever diverge between a base-typed and compat-typed
+  version of an empty collection, unlike `MediaPlayer.Queue` (where
+  `LoadSong` always constructs real, non-empty, base-typed `Song` copies
+  regardless of caller). The two-independent-pieces-of-mutable-state bug
+  class this session found and fixed once for `GraphicsDevice.Indices`
+  fundamentally needs *real, divergeable data* to bite -- an empty
+  collection can't disagree with another empty collection.
+- **`MediaLibrary.MediaSource`'s downcast:** safe for the different,
+  "single construction seam, provably compat-typed" reason
+  `SpriteFont.Texture` already established -- the compat `MediaLibrary`
+  type has exactly two constructors, and both of them always supply a
+  compat-typed `MediaSource` to the base constructor, so `base.MediaSource`
+  is guaranteed compat-typed for every actually-reachable compat
+  instance.
+- The five collection types (`Song`/`Album`/`Artist`/`Genre`/
+  `Playlist`Collection) are independent compat-namespaced implementations,
+  not subclasses of their `CNA.Media` counterparts -- extending directly
+  would inherit an indexer/enumerator typed to the base namespace's
+  element type, defeating the entire point of a compat-typed collection
+  (same reasoning `SpriteBatch`'s own compat `SongCollection`
+  would have needed, had it been built). This is also the first time this
+  session built a compat `SongCollection` at all -- it didn't exist
+  before (the earlier `MediaPlayer.Queue`/`Play(SongCollection)` compat
+  gap meant nothing needed one yet). **Worth flagging as a real, separate
+  follow-up, not acted on in this pass:** now that a compat
+  `SongCollection` exists, `Microsoft.Xna.Framework.Media.MediaPlayer.Play(SongCollection)`
+  may be reachable after all (the original blocker was specifically about
+  `Queue`'s *output* type, not about accepting a compat `SongCollection`
+  as an *input* parameter) -- worth reassessing as its own small,
+  separately-scoped pass rather than folding into this one.
+
+**Deliberately out of scope even within this pass, not just deferred by
+the empty-collections decision:** the real C++ engine's entire
+picture-library surface (`Picture`/`PictureAlbum`/`PictureCollection`/
+`PictureAlbumCollection`, `GetPictureFromToken`/`SavePicture`) -- a
+separate, similarly infrastructure-bound feature (native image loading/
+thumbnailing) that real XNA games essentially never touch (Zune-era
+personal-photo browsing, not game asset loading), so it wasn't worth
+pulling into this already-large pass. `MediaLibrary.Pictures`/
+`.SavedPictures`/`.RootPictureAlbum` don't exist on this project's
+`MediaLibrary` yet -- a real, narrow, documented gap, not silently
+missing.
+
+**Verified, not just written:** `dotnet build CNA.sln` clean across all 6
+projects (0 warnings -- one real mistake caught and fixed during this
+pass: `CNA.Media.MediaLibrary` was initially written `sealed`, which
+would have blocked the planned compat mirror entirely; un-sealed it the
+same way `Song`/`BasicEffect` already established, once the compat type
+itself failed to compile against it). `dotnet test CNA.sln`: 311/311
+passing (up from 280 -- 31 new tests: real construction/validation/
+equality behavior for every new type, all reachable without any native
+dependency at all, plus a `MediaSourceType` parity entry and focused
+compat tests covering `MediaLibrary`'s public-only-reachable surface).
+`samples/HelloGame` re-verified unaffected.
+
+**Where to pick up next:** the `Play(SongCollection)` compat-mirror
+reassessment flagged above is a small, well-bounded next step. Beyond
+that, `Model` file-loading and the real C++ engine's picture-library
+surface are the two remaining large, separately-scoped Phase 4
+follow-ups -- a `/code-review high` pass over this commit is the
+immediate next step, following this session's own established rhythm.
+
 ## Twelfth `/code-review high` pass, over the `VertexBuffer`/`IndexBuffer` `Type`-constructor commit -- clean (2026-08-16, session 6 continued autonomously still further again)
 
 Ran the review a twelfth time, over the `VertexBuffer`/`IndexBuffer`

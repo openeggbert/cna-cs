@@ -49,7 +49,14 @@ managed logic built entirely on top of already native-backed primitives
 (`SetVertexBuffer`, `Indices`, `Effect.Apply()`, `DrawIndexedPrimitives`).
 `Song` (construction, equality, `FromUri`) is real and testable today
 too, against real temporary files — its own escape hatch is a plain
-file-existence check, no native call at all.
+file-existence check, no native call at all. `Album`/`Artist`/`Genre`/
+`Playlist`/`MediaLibrary` are real and fully testable too, but by
+deliberate design rather than a native escape hatch: every collection
+`MediaLibrary` exposes is always empty, since the real C++ engine's own
+scanning logic depends on FFmpeg/native tag-parsing infrastructure this
+binding has no way to reach (see [`NEXT.md`](NEXT.md) for the detail) —
+the full real XNA object model compiles and runs, it just never has
+anything real to report.
 Everything else native-backed (`Game`, `GraphicsDevice`, `Texture2D`,
 `SpriteBatch` including the full extended `Draw`/`DrawString` overload
 families, `RenderTarget2D`, `SoundEffect`/`SoundEffectInstance`,
@@ -73,7 +80,7 @@ isn't. `MediaPlayer` straddles the same way: `State`/`Volume`/`IsMuted`/
 and where to pick up next.
 
 `dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 280 unit tests. Running `samples/HelloGame`
+and `dotnet test` passes all 311 unit tests. Running `samples/HelloGame`
 builds and starts, then throws a `DllNotFoundException` for `cna-native`
 from inside `Game`'s constructor — exactly the expected failure point until
 the upstream C ABI ships, not a bug here.

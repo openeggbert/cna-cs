@@ -14,15 +14,14 @@ namespace CNA.Media;
 /// logic's lineage over namespace purity" trade-off <c>RenderTarget2D</c>/<c>BasicEffect</c>
 /// already made -- the compat type itself is sealed, matching real XNA.
 ///
-/// Deliberately omits <c>Album</c>/<c>Artist</c>/<c>Genre</c> and the whole <c>MediaLibrary</c>
-/// scanning subsystem the real C++ engine also implements: those need a real media-library scan
-/// (tag parsing, on-disk indexing) this project has no equivalent for and that real XNA games
-/// overwhelmingly don't touch for simple background-music playback, the realistic first target
-/// here (matching this project's own "simple games first" philosophy -- see
-/// docs/xna-compatibility.md). <see cref="IsProtected"/>/<see cref="IsRated"/>/<see cref="Rating"/>/
-/// <see cref="TrackNumber"/> are kept (real XNA public API a ported game might reference) but
-/// always report their real "nothing scanned this" defaults, the same "this is the actually
-/// correct answer, not an unimplemented stub" reasoning the real C++ engine's own
+/// <see cref="Album"/>/<see cref="Artist"/>/<see cref="Genre"/> stay <c>null</c> forever in this
+/// project (their setters are <c>internal</c>, reserved for a real <see cref="MediaLibrary"/> scan
+/// this project doesn't implement -- see that type's own doc comment for why): correct for any
+/// song that wasn't produced by a library scan, matching real XNA's own documented behavior for a
+/// standalone-constructed <c>Song</c>, not an unimplemented stub. <see cref="IsProtected"/>/
+/// <see cref="IsRated"/>/<see cref="Rating"/>/<see cref="TrackNumber"/> are kept (real XNA public
+/// API a ported game might reference) but always report their real "nothing scanned this"
+/// defaults, the same "this is the actually correct answer" reasoning the real C++ engine's own
 /// <c>IsProtected</c> doc comment already uses.
 /// </summary>
 public class Song : IDisposable, IEquatable<Song>
@@ -53,6 +52,12 @@ public class Song : IDisposable, IEquatable<Song>
     }
 
     public string Name { get; }
+
+    public Album? Album { get; internal set; }
+
+    public Artist? Artist { get; internal set; }
+
+    public Genre? Genre { get; internal set; }
 
     public TimeSpan Duration { get; set; }
 

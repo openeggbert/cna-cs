@@ -87,7 +87,12 @@ Compiles + verified real behavior (no native dependency; see plan.md Phase 4):
     SongCollection (indexer, Count, ActiveSong/ActiveSongIndex,
     Add/Clear/enumeration) and MediaPlayer.DetectSongEndedByElapsedTime,
     MoveNext/MovePrevious's shuffle/repeat/clamped-direction logic -- also
-    zero native ABI, all pure managed logic and math
+    zero native ABI, all pure managed logic and math,
+    Album/Artist/Genre/Playlist/MediaLibrary/MediaSource and their
+    collections -- real and fully testable, but by deliberate design, not
+    a native escape hatch: every collection MediaLibrary exposes is
+    always empty (see below for why), so there is genuinely no native
+    call anywhere in this feature at all, not even a blocked one
 
 Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
     Game, GameTime, GraphicsDeviceManager, GraphicsDevice (Clear,
@@ -108,8 +113,11 @@ Compiles, but blocked on the native CNA C ABI (openeggbert/cna) to run:
 Not started at all (all deliberately deferred, not blocked -- see plan.md
 Phase 4's own follow-up bullet):
     Model file-format loading, MediaPlayer's visualization data
-    (GetVisualizationData), the real C++ engine's
-    Album/Artist/Genre/MediaLibrary scanning subsystem
+    (GetVisualizationData), the real C++ engine's picture-library surface
+    (Picture/PictureAlbum/PictureCollection/PictureAlbumCollection,
+    GetPictureFromToken/SavePicture) -- infrastructure-bound the same way
+    MediaLibrary's own music-scanning logic is, and real XNA games
+    essentially never touch it anyway
 ```
 
 Note on trust level: the items above are *not* all equally well-grounded.
@@ -146,9 +154,21 @@ reason than `Model`'s: `LoadSong` always constructs a base `CNA.Media.Song`
 internally, and `MediaPlayer` being a `static` class means (unlike every
 other compat type this session built) there's no subclassing seam to
 override that -- a compat `Queue` property would return songs that fail
-an explicit compat-typed downcast, not just an inconvenience. See
-`plan.md` Phase 4 and `NEXT.md`'s per-session entries for the full detail
-on each.
+an explicit compat-typed downcast, not just an inconvenience.
+`Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`/`MediaSource` are
+grounded differently from everything else in this list: not "shaped to
+match a real implementation" at all, since the real implementation's
+actual scanning logic depends on FFmpeg/native tag-parsing infrastructure
+with no equivalent on either side of this binding -- what's grounded here
+is the real XNA *public API surface* (every type/property/constructor
+validation, read from the real headers), deliberately not the scanning
+behavior behind it, which stays permanently empty by design. This *does*
+have a full `CNA.XnaCompat` mirror despite the structural caution
+`MediaPlayer.Queue` needed, because every collection here is provably
+always empty -- there's no real data that could ever diverge between a
+base-typed and compat-typed empty collection, unlike `LoadSong`'s always-
+non-empty, always-base-typed song copies. See `plan.md` Phase 4 and
+`NEXT.md`'s per-session entries for the full detail on each.
 
 "Compiles + verified" means real unit tests pass with no native library
 present — see `tests/CNA.Framework.Tests/MatrixTests.cs` and
