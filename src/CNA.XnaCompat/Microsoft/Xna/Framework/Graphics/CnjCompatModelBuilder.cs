@@ -12,11 +12,16 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// <c>SavedPictureStore</c>).
 ///
 /// Builds compat-typed <see cref="Model"/>/<see cref="ModelBone"/>/<see cref="ModelMesh"/>/
-/// <see cref="ModelMeshPart"/> throughout, same as <see cref="XnbCompatModelBuilder"/> -- so this
-/// has its own <see cref="VertexBuffer"/>/<see cref="IndexBuffer"/>/<see cref="BasicEffect"/>
-/// construction and its own <see cref="VertexDeclaration"/> converter, rather than reusing
-/// <c>CNA.Content.Cnj.CnjModelBuilder</c>'s own (base-typed) versions of those, for the identical
-/// reason <see cref="XnbCompatModelBuilder"/>'s own doc comment already explains.
+/// <see cref="ModelMeshPart"/> throughout, same as <see cref="XnbCompatModelBuilder"/> -- rather
+/// than reusing <c>CNA.Content.Cnj.CnjModelBuilder</c>'s own (base-typed)
+/// <see cref="VertexBuffer"/>/<see cref="IndexBuffer"/> construction, for the identical reason
+/// <see cref="XnbCompatModelBuilder"/>'s own doc comment already explains. Reuses
+/// <see cref="XnbCompatModelBuilder.BuildVertexBuffer"/>/<see cref="XnbCompatModelBuilder.BuildIndexBuffer"/>/
+/// <see cref="XnbCompatModelBuilder.ToCompat"/> directly rather than duplicating them, though --
+/// <c>CnjMeshData</c>'s vertex/index buffer data is itself the exact same, format-agnostic
+/// <c>CNA.Content.Xnb</c>-namespaced types <c>XnbCompatModelBuilder</c> already builds from
+/// (a code-review finding caught a first attempt duplicating those three members byte-for-byte,
+/// with nothing actually format-specific about them).
 ///
 /// <c>ModelMesh.Effects</c>/<c>ModelEffectCollection</c> still stay base-typed, unaffected by this
 /// type -- see <see cref="ModelMesh"/>'s own doc comment for why that one specific gap doesn't have
@@ -44,8 +49,8 @@ internal static class CnjCompatModelBuilder
 
         foreach (CnjMeshData meshData in data.Meshes)
         {
-            VertexBuffer vertexBuffer = BuildVertexBuffer(graphicsDevice, meshData.VertexBuffer);
-            IndexBuffer indexBuffer = BuildIndexBuffer(graphicsDevice, meshData.IndexBuffer);
+            VertexBuffer vertexBuffer = XnbCompatModelBuilder.BuildVertexBuffer(graphicsDevice, meshData.VertexBuffer);
+            IndexBuffer indexBuffer = XnbCompatModelBuilder.BuildIndexBuffer(graphicsDevice, meshData.IndexBuffer);
 
             var part = new ModelMeshPart(
                 vertexBuffer, indexBuffer, meshData.VertexBuffer.VertexCount, meshData.PrimitiveCount, startIndex: 0, vertexOffset: 0);
@@ -70,22 +75,6 @@ internal static class CnjCompatModelBuilder
         return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex: 0);
     }
 
-    private static VertexBuffer BuildVertexBuffer(GraphicsDevice graphicsDevice, CNA.Content.Xnb.XnbVertexBufferData data)
-    {
-        var buffer = new VertexBuffer(graphicsDevice, ToCompat(data.Declaration), data.VertexCount, BufferUsage.None);
-        buffer.SetData(data.Data);
-        return buffer;
-    }
-
-    private static IndexBuffer BuildIndexBuffer(GraphicsDevice graphicsDevice, CNA.Content.Xnb.XnbIndexBufferData data)
-    {
-        IndexElementSize size = data.SixteenBits ? IndexElementSize.SixteenBits : IndexElementSize.ThirtyTwoBits;
-        int indexCount = data.Data.Length / (data.SixteenBits ? 2 : 4);
-        var buffer = new IndexBuffer(graphicsDevice, size, indexCount, BufferUsage.None);
-        buffer.SetData(data.Data);
-        return buffer;
-    }
-
     /// <summary>Reuses <c>CNA.Content.Cnj.CnjModelBuilder.ApplyBasicEffectData</c> directly for the
     /// field-assignment logic itself (matching <see cref="XnbCompatModelBuilder"/>'s own identical
     /// reuse of <c>XnbModelBuilder.ApplyBasicEffectData</c>) -- nothing about it is compat-specific,
@@ -96,20 +85,5 @@ internal static class CnjCompatModelBuilder
         var effect = new BasicEffect(graphicsDevice);
         CnjModelBuilder.ApplyBasicEffectData(effect, data);
         return effect;
-    }
-
-    /// <summary>Same reasoning and shape as <see cref="XnbCompatModelBuilder"/>'s own identical
-    /// converter -- <c>CNA.Content.Cnj</c> has no knowledge of this namespace, so it only ever
-    /// produces a base <see cref="CNA.Graphics.VertexDeclaration"/>.</summary>
-    private static VertexDeclaration ToCompat(CNA.Graphics.VertexDeclaration declaration)
-    {
-        CNA.Graphics.VertexElement[] source = declaration.GetVertexElements();
-        var elements = new VertexElement[source.Length];
-        for (int i = 0; i < source.Length; i++)
-        {
-            elements[i] = source[i];
-        }
-
-        return new VertexDeclaration(declaration.VertexStride, elements);
     }
 }

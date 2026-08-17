@@ -94,14 +94,20 @@ internal static class XnbCompatModelBuilder
         return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex);
     }
 
-    private static VertexBuffer BuildVertexBuffer(GraphicsDevice graphicsDevice, XnbVertexBufferData data)
+    // internal, not private -- a code-review finding caught CnjCompatModelBuilder duplicating these
+    // three members byte-for-byte, since CnjMeshData reuses these exact CNA.Content.Xnb-namespaced
+    // types verbatim (they're format-agnostic: "declaration/count/raw bytes" and "sixteen-bit
+    // flag/raw bytes"), so there was nothing compat-specific enough about the .xnb path here to
+    // justify a second, identical copy -- the same "reuse if there's no real difference" reasoning
+    // this class's own BuildBasicEffect already applies to XnbModelBuilder.ApplyBasicEffectData.
+    internal static VertexBuffer BuildVertexBuffer(GraphicsDevice graphicsDevice, XnbVertexBufferData data)
     {
         var buffer = new VertexBuffer(graphicsDevice, ToCompat(data.Declaration), data.VertexCount, BufferUsage.None);
         buffer.SetData(data.Data);
         return buffer;
     }
 
-    private static IndexBuffer BuildIndexBuffer(GraphicsDevice graphicsDevice, XnbIndexBufferData data)
+    internal static IndexBuffer BuildIndexBuffer(GraphicsDevice graphicsDevice, XnbIndexBufferData data)
     {
         IndexElementSize size = data.SixteenBits ? IndexElementSize.SixteenBits : IndexElementSize.ThirtyTwoBits;
         int indexCount = data.Data.Length / (data.SixteenBits ? 2 : 4);
@@ -124,12 +130,14 @@ internal static class XnbCompatModelBuilder
     }
 
     /// <summary>Converts a base <see cref="CNA.Graphics.VertexDeclaration"/> (all
-    /// <c>CNA.Content.Xnb</c> ever produces, since that namespace has no knowledge of
-    /// <c>CNA.XnaCompat</c>) into this namespace's own -- element-wise, through
+    /// <c>CNA.Content.Xnb</c>/<c>CNA.Content.Cnj</c> ever produce, since neither namespace has any
+    /// knowledge of <c>CNA.XnaCompat</c>) into this namespace's own -- element-wise, through
     /// <see cref="VertexElement"/>'s own implicit conversion operators, the same "arrays of a
     /// type with a user-defined conversion operator do not convert automatically" reason every
-    /// other array conversion in this compat layer needs one.</summary>
-    private static VertexDeclaration ToCompat(CNA.Graphics.VertexDeclaration declaration)
+    /// other array conversion in this compat layer needs one. <c>internal</c>, reused by
+    /// <see cref="CnjCompatModelBuilder"/> for the same reason <see cref="BuildVertexBuffer"/>/
+    /// <see cref="BuildIndexBuffer"/> are.</summary>
+    internal static VertexDeclaration ToCompat(CNA.Graphics.VertexDeclaration declaration)
     {
         CNA.Graphics.VertexElement[] source = declaration.GetVertexElements();
         var elements = new VertexElement[source.Length];

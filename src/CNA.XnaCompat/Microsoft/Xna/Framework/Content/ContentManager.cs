@@ -75,7 +75,13 @@ public class ContentManager : CNA.Content.ContentManager
         }
 
         // Same .xnb-then-.cnj dispatch order as the base class's own LoadModel -- a real .xnb file
-        // always shadows a .cnj of the same asset name.
+        // always shadows a .cnj of the same asset name. Each branch's File.Exists check here is
+        // followed by LoadXnbModelData/LoadCnjModelData re-resolving and re-checking the identical
+        // path -- a code-review finding flagged the redundant stat() this costs, but the base
+        // class's own LoadModel already made this exact trade-off for the .xnb case (see its own
+        // doc comment), so this only extends an already-accepted pattern rather than introduce a
+        // new one; not worth restructuring already-reviewed-clean load-helper signatures to shave
+        // one syscall off a content-loading path that isn't a hot loop.
         if (File.Exists(Path.Combine(RootDirectory, assetName + ".xnb")))
         {
             return Graphics.XnbCompatModelBuilder.Build(graphicsDevice, LoadXnbModelData(assetName));

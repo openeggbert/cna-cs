@@ -11,6 +11,42 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## First `/code-review high` pass, over the `CnjCompatModelBuilder` commit -- one real duplication fixed, one minor finding documented against an already-accepted precedent (2026-08-17, session 6 continued autonomously still further again yet again once more still yet again once more again yet again once more still yet again once more once more still yet again once more once more again yet again)
+
+Ran the review over the compat-mirror commit (`45f700b`). Two findings:
+
+- **Real, confirmed:** `CnjCompatModelBuilder`'s `BuildVertexBuffer`/
+  `BuildIndexBuffer`/`ToCompat` were byte-for-byte identical to
+  `XnbCompatModelBuilder`'s own same-named private methods -- not a
+  coincidence, since `CnjMeshData`'s vertex/index buffer data is itself
+  the exact same, format-agnostic `CNA.Content.Xnb`-namespaced types
+  `XnbCompatModelBuilder` already builds from (the same reuse this
+  session already made on the base, non-compat side for
+  `XnbVertexBufferData`/`XnbIndexBufferData` themselves). Unlike
+  `Build()`'s own near-duplication (justified because the bone-tree
+  control flow genuinely differs between the two formats), these three
+  helpers have zero behavioral difference, so there was no reason to
+  accept the duplication. Fixed by making all three `internal` on
+  `XnbCompatModelBuilder` and having `CnjCompatModelBuilder` call them
+  directly -- the same "reuse if there's no real difference" pattern
+  `BuildBasicEffect`'s own reuse of `XnbModelBuilder.ApplyBasicEffectData`
+  (and now `CnjModelBuilder.ApplyBasicEffectData`) already established.
+- **Documented, not fixed, because it extends an already-accepted
+  precedent rather than introduce a new one:** the compat
+  `LoadCompatModel`'s new `.cnj` branch calls `File.Exists` and then
+  `LoadCnjModelData` re-resolves and re-checks the identical path --
+  a real, harmless redundant `stat()` call. Checked whether this was
+  new: the base class's own `LoadModel` already made the identical
+  trade-off for its `.xnb` branch when `.cnj` dispatch was first wired
+  in (commit `63f157d`), and that went through three review passes
+  without being flagged. Not worth restructuring already-reviewed-clean
+  load-helper signatures to shave one syscall off a content-loading path
+  that isn't a hot loop -- documented inline instead.
+
+Verified: `dotnet build` clean across all 6 projects, 0 warnings; `dotnet
+test`: 459/459 passing, unchanged (the dedup is a pure refactor, no new
+testable surface). `samples/HelloGame` re-verified unaffected.
+
 ## The `.cnj` path's own `CNA.XnaCompat` mirror (`CnjCompatModelBuilder`) -- done, closing the last deferred follow-up from the `.cnj` reader feature (2026-08-17, session 6 continued autonomously past the `.cnj` reader's own review-cycle checkpoint, per explicit user selection of "Mirror .cnj in CNA.XnaCompat")
 
 Small, well-scoped, and low-risk compared to everything else this

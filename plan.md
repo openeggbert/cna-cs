@@ -963,7 +963,12 @@ Split by whether the type needs the (still nonexistent) native ABI:
       passing, unchanged — no new testable surface (constructing a
       working compat `ContentManager`/`GraphicsDevice` at all needs a
       real `cna-native`, the same pre-existing limitation
-      `XnbCompatModelBuilder`'s own compat wiring already has).
+      `XnbCompatModelBuilder`'s own compat wiring already has); includes
+      a follow-up `/code-review high` pass that deduplicated
+      `BuildVertexBuffer`/`BuildIndexBuffer`/`ToCompat` (byte-for-byte
+      identical to `XnbCompatModelBuilder`'s own, since `.cnj`'s buffer
+      data reuses the exact same format-agnostic types) into shared,
+      `internal` members on `XnbCompatModelBuilder` — see `NEXT.md`.
       `samples/HelloGame` re-verified unaffected.
 - [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
       `Model`'s own bone-hierarchy/skinning/PBR/morph-target `.cnj`
