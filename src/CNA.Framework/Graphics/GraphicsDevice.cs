@@ -71,22 +71,16 @@ public class GraphicsDevice
     /// (which inherits from CNA.XnaCompat's own <c>Texture2D</c>, not this project's
     /// <see cref="RenderTarget2D"/> -- see that type's doc comment) upcast straight into this
     /// parameter with no override needed, matching every other XnaCompat <c>Draw</c>/<c>Clear</c>
-    /// overload's "inherited unchanged, converts through implicit operators" pattern.
-    ///
-    /// Still calls the old, guessed, nonexistent <c>cna_graphics_device_set_render_target</c> --
-    /// deliberately not fixed by this step of the native-ABI migration. The real ABI has no generic
-    /// render-target setter at all: binding is type-specific
-    /// (<c>cna_graphics_device_set_render_target2d</c>/<c>_cube</c>, taking that resource's own
-    /// distinct handle type), and <see cref="RenderTarget2D"/> currently gets its native handle from
-    /// <c>cna_texture2d_create</c> rather than the real, separate <c>cna_render_target2d_create</c>
-    /// resource type -- fixing this method correctly needs <see cref="RenderTarget2D"/>'s own
-    /// creation path fixed first, together, not fixed here in isolation against a handle shape that
-    /// is about to change anyway. See <c>NEXT.md</c>'s native-ABI-migration entry, step 5.
+    /// overload's "inherited unchanged, converts through implicit operators" pattern. Whoever calls
+    /// this is expected to pass an actual <see cref="RenderTarget2D"/> (or a compat subclass of
+    /// one) -- passing a plain <see cref="Texture2D"/> is a caller error the real native call now
+    /// catches on its own (it validates the handle really is a render target), unlike before this
+    /// migration when nothing could.
     /// </summary>
     public void SetRenderTarget(Texture2D? renderTarget)
     {
         CnaHandle handle = renderTarget is null ? CnaHandle.Zero : new CnaHandle(renderTarget.NativeHandleValue);
-        CnaResult result = Native.cna_graphics_device_set_render_target(ResolveNativeDeviceHandle(), handle);
+        CnaResult result = Native.cna_graphics_device_set_render_target2d(ResolveNativeDeviceHandle(), handle);
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
     }
 

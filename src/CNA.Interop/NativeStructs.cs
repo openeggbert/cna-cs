@@ -129,9 +129,11 @@ internal readonly struct CnaGamePadState
 }
 
 /// <summary>
-/// ABI-shaped game pad capabilities snapshot. No ABI shape exists upstream for this call (same
-/// caveat as <c>cna_render_target2d_create</c> in Native.cs) -- self-designed for this
-/// repository. <c>SupportedButtons</c> reuses <see cref="CnaGamePadState.Buttons"/>'s exact bit
+/// ABI-shaped game pad capabilities snapshot. No ABI shape has been confirmed upstream for this
+/// call yet -- self-designed for this repository, not yet reached by the native-ABI migration
+/// (see NEXT.md, step 11; a real shape does now exist -- <c>CNA_GamePadCapabilities</c> in
+/// <c>input_gamepad.h</c> -- a stale claim this doc comment made before that was confirmed).
+/// <c>SupportedButtons</c> reuses <see cref="CnaGamePadState.Buttons"/>'s exact bit
 /// layout (see <c>CNA.Input.Buttons</c>) rather than one bool field per button, and
 /// <c>Features</c> packs the remaining thumbstick/trigger/vibration/voice booleans into a second
 /// bitmask -- see <c>CNA.Input.GamePadCapabilities</c> for the bit assignments, which live there

@@ -11,6 +11,56 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Native ABI migration, step 5: `Texture2D`/`RenderTarget2D` rewritten -- confirming `RenderTarget2D` is a real, separate resource type upstream, and closing `GraphicsDevice.SetRenderTarget`'s own deferred gap from step 3 (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
+
+### `Texture2D` -- better preserved than most subsystems, once the right header was read
+
+`texture.h` has several real texture-creation routes (`create_standalone`/`create_from_rgba8`/
+`create_cpu_only_rgba8`/`create_from_file[_with_device]`/`create_from_encoded_memory`), and *none*
+of them allocate an empty, dimensions-only, device-attached texture the way real XNA's own
+`new Texture2D(device, width, height)` does -- every device-attached route there requires pixel
+data upfront. That looked like a real gap (documented as a live open question in this session's
+own status update) until reading `graphics.h` directly: it has its *own*, separate
+`cna_texture2d_create(device, CNA_Texture2DCreateInfo, out_texture)`, which is exactly the "just
+allocate, no pixels yet" route this constructor needs -- a different, simpler function from
+everything in `texture.h`, in a different header a first pass had not yet read. `graphics.h` also
+has `cna_texture2d_get_info`/`CNA_Texture2DInfo` (real `width`/`height` fields) and
+`cna_texture2d_destroy` -- resolving two more open questions the earlier research forks had
+flagged as unresolved (`texture.h`'s own, differently-shaped `CNA_TextureInfo` has no
+width/height at all, and its own destroy claim was genuinely unconfirmable from that header alone).
+`cna_texture2d_set_data_rgba8` replaces the old guessed raw-byte-pointer shape with a
+`const CNA_Color*` pixel array -- a reinterpretation of the same bytes at the call site, not a
+behavior change to this project's own `SetData(byte[])` contract.
+
+### `RenderTarget2D` is a real, separate resource type -- not a texture with usage flags
+
+Confirmed via `render_target.h`: its own `cna_render_target2d_create`/`cna_render_target_get_info`/
+`cna_render_target_destroy`, none of them `cna_texture2d_*`. `CNA.Graphics.Texture2D`'s
+`ReleaseNative`/`Width`/`Height` are now `virtual` so `RenderTarget2D` can override them to call
+the real render-target functions instead, while still sharing `Texture2D`'s `Dispose`/handle
+machinery -- matching real XNA's own `RenderTarget2D : Texture2D` ancestry, which this project
+already had right.
+
+**Found and fixed a real bug this same step would otherwise have left behind**: CNA.XnaCompat's own
+`RenderTarget2D` inherits from CNA.XnaCompat's own `Texture2D` (not `CNA.Graphics.RenderTarget2D`),
+specifically so `Texture2D t = someRenderTarget;` compiles in game code -- but that means it does
+**not** inherit `CNA.Graphics.RenderTarget2D`'s new overrides. Without also overriding
+`ReleaseNative`/`Width`/`Height` on the XnaCompat side, that class would have silently kept calling
+the plain-texture natives on a handle `cna_render_target2d_create` actually created -- exactly the
+kind of bug this step exists to fix, just reintroduced one level up. Fixed by giving
+`CNA.Graphics.RenderTarget2D` `internal static` helpers (`ReleaseNativeRenderTarget`/
+`GetDimensions`, the latter returning a plain tuple, never a `CNA.Interop` type, matching this
+project's "XnaCompat never names a CNA.Interop type" boundary) that both class hierarchies' own
+overrides call into, rather than duplicating the native calls.
+
+### `GraphicsDevice.SetRenderTarget` -- the gap step 3 deliberately deferred, now closed
+
+`cna_graphics_device_set_render_target2d(device, render_target)` is real and confirmed
+(`render_target.h:210`); the old guessed `cna_graphics_device_set_render_target` doesn't exist. Only
+the native function called needed to change -- `SetRenderTarget`'s own public signature
+(`Texture2D?`, not the stricter `RenderTarget2D?`) stays exactly as documented before, including
+the reasoning for why it's deliberately loose.
+
 ## Native ABI migration, step 4: `VertexBuffer`/`IndexBuffer`/`VertexDeclaration` rewritten -- a real, confirmed capability gap (no generic vertex readback) found and documented, not guessed (2026-08-17, session 7 continued autonomously, same governing directive and compilation hold as the entries below)
 
 `VertexDeclaration` is now a real native resource in the ABI (`cna_vertex_declaration_create_with_stride`/

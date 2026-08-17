@@ -99,11 +99,11 @@ internal static partial class Native
 
     // -- GraphicsDevice (real ABI, graphics_device.h) -----------------------------------------
     //
-    // Step 3 of the native-ABI migration (see NEXT.md) -- fixes the confirmed-shape functions
-    // below (Clear, SetVertexBuffer, Indices' rename, DrawIndexedPrimitives' real 7-argument
-    // arity) and the device-handle-sourcing problem project-wide, but deliberately leaves
-    // cna_graphics_device_set_render_target as-is (see CNA.Graphics.GraphicsDevice.SetRenderTarget's
-    // own doc comment for why that one specific function is deferred to step 5).
+    // Step 3 of the native-ABI migration (see NEXT.md) fixed the confirmed-shape functions below
+    // (Clear, SetVertexBuffer, Indices' rename, DrawIndexedPrimitives' real 7-argument arity) and
+    // the device-handle-sourcing problem project-wide; step 5 (RenderTarget2D) finished the job by
+    // fixing SetRenderTarget's own native call too, once RenderTarget2D had its own real handle
+    // type to pass it.
 
     /// <summary>Matches <c>cna_graphics_device_clear_options</c> exactly
     /// (<c>graphics_device.h:731</c>) -- the real ABI's general clear route; no bare
@@ -115,16 +115,14 @@ internal static partial class Native
     internal static partial CnaResult cna_graphics_device_clear_options(
         CnaHandle device, CnaClearOptions options, CnaColor color, float depth, int stencil);
 
-    /// <summary>
-    /// Sets the active render target, or restores the back buffer when <paramref name="renderTarget"/>
-    /// is <see cref="CnaHandle.Zero"/>. Still the old, guessed, self-designed shape -- the real ABI
-    /// has no function by this name at all (render-target binding is type-specific:
-    /// <c>cna_graphics_device_set_render_target2d</c>/<c>_cube</c>, each taking that resource's own
-    /// distinct handle type) -- deliberately not fixed by this step; see
-    /// <c>CNA.Graphics.GraphicsDevice.SetRenderTarget</c>'s own doc comment.
-    /// </summary>
+    /// <summary>Matches <c>cna_graphics_device_set_render_target2d</c> exactly
+    /// (<c>render_target.h:210</c>) -- the old guessed <c>cna_graphics_device_set_render_target</c>
+    /// has no real equivalent; render-target binding is type-specific (a separate
+    /// <c>_set_render_target_cube</c> also exists, unused here since this project has no cube
+    /// render targets). <see cref="CnaHandle.Zero"/> restores the back buffer, same sentinel this
+    /// file already used elsewhere before this function's real name was confirmed.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_set_render_target(CnaHandle device, CnaHandle renderTarget);
+    internal static partial CnaResult cna_graphics_device_set_render_target2d(CnaHandle device, CnaHandle renderTarget);
 
     /// <summary>Matches <c>cna_graphics_device_set_vertex_buffer</c> exactly
     /// (<c>graphics_device.h:798</c>, "Binds one vertex buffer at vertex offset zero") -- a real,
@@ -169,46 +167,57 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_apply_basic_effect(CnaHandle device, in CnaBasicEffectParams effectParams);
 
-    // -- Texture2D (§9, §24 SafeHandle-backed resource) --------------------------------------
+    // -- Texture2D (real ABI, graphics.h -- step 5 of the native-ABI migration) --------------
+    //
+    // cna_texture2d_create here (graphics.h) is a different, simpler function from the several
+    // creation routes in texture.h (create_standalone/create_from_rgba8/create_cpu_only_rgba8/
+    // create_from_file[_with_device]/create_from_encoded_memory) -- this is the one that actually
+    // allocates an empty, dimensions-only, device-attached texture, matching real XNA's own
+    // new Texture2D(device, width, height). texture.h's own CNA_TextureInfo has no width/height at
+    // all; graphics.h's CNA_Texture2DInfo does -- resolves what was an open question before this
+    // migration read graphics.h directly.
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_texture2d_create(
+    internal static unsafe partial CnaResult cna_texture2d_create(
         CnaHandle device,
-        int width,
-        int height,
+        in CnaTexture2DCreateInfo createInfo,
         out CnaHandle texture);
 
     [LibraryImport(LibraryName)]
-    internal static partial void cna_texture2d_release(CnaHandle texture);
+    internal static partial CnaResult cna_texture2d_destroy(CnaHandle texture);
 
     [LibraryImport(LibraryName)]
-    internal static partial int cna_texture2d_get_width(CnaHandle texture);
+    internal static unsafe partial CnaResult cna_texture2d_get_info(CnaHandle texture, out CnaTexture2DInfo outInfo);
 
+    /// <summary>Matches <c>cna_texture2d_set_data_rgba8</c> exactly (<c>graphics.h:674</c>) --
+    /// takes a <c>const CNA_Color*</c> pixel array plus a pixel count, not a raw byte pointer plus
+    /// a byte length the way the old guessed shape did.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial int cna_texture2d_get_height(CnaHandle texture);
-
-    [LibraryImport(LibraryName)]
-    internal static unsafe partial CnaResult cna_texture2d_set_data(
+    internal static unsafe partial CnaResult cna_texture2d_set_data_rgba8(
         CnaHandle texture,
-        byte* data,
-        nuint byteLength);
+        CnaColor* pixels,
+        ulong pixelCount);
 
-    // -- RenderTarget2D (no upstream ABI shape exists yet; self-designed, see NEXT.md) -------
+    // -- RenderTarget2D (real ABI, render_target.h -- step 5) ---------------------------------
+    //
+    // RenderTarget2D is its own real resource type upstream, not a texture created with special
+    // usage flags the way this project originally guessed: its own create/get_info/destroy routes,
+    // none of which are cna_texture2d_*. CNA.Graphics.RenderTarget2D still subclasses Texture2D
+    // (matching real XNA's own RenderTarget2D : Texture2D), but its release/Width/Height now
+    // override Texture2D's own (now virtual) implementations to call these functions instead --
+    // see RenderTarget2D.cs.
 
-    /// <summary>
-    /// Creates a render-target-usage texture. The resulting handle is released through the
-    /// ordinary <see cref="cna_texture2d_release"/> and read back through
-    /// <see cref="cna_texture2d_get_width"/>/<see cref="cna_texture2d_get_height"/> -- deliberately
-    /// *not* given its own release/getter functions, since <c>CNA.Graphics.RenderTarget2D</c>
-    /// subclasses <c>Texture2D</c> and the native handle is texture-shaped either way; only
-    /// creation needs render-target-specific usage flags on the native side.
-    /// </summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_render_target2d_create(
+    internal static unsafe partial CnaResult cna_render_target2d_create(
         CnaHandle device,
-        int width,
-        int height,
+        in CnaRenderTarget2DCreateInfo createInfo,
         out CnaHandle renderTarget);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_render_target_get_info(CnaHandle renderTarget, out CnaRenderTargetInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_destroy(CnaHandle renderTarget);
 
     // -- SpriteBatch (§22) ---------------------------------------------------------------------
     //
