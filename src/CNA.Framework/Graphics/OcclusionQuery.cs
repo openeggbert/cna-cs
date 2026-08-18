@@ -1,0 +1,73 @@
+using CNA.Interop;
+
+namespace CNA.Graphics;
+
+/// <summary>
+/// Matches real XNA's <c>OcclusionQuery</c>: counts the pixels that survived depth testing between
+/// <see cref="Begin"/> and <see cref="End"/>, so a game can skip work for geometry that turned out
+/// to be hidden.
+///
+/// The result is not available immediately -- the GPU finishes the query some frames later, which
+/// is why <see cref="IsComplete"/> exists and why reading <see cref="PixelCount"/> before it is
+/// true is a caller error rather than a blocking wait.
+/// </summary>
+public class OcclusionQuery : IDisposable
+{
+    private readonly NativeResourceHandle _handle;
+
+    public OcclusionQuery(GraphicsDevice graphicsDevice)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+
+        CnaResult result = Native.cna_occlusion_query_create(graphicsDevice.ResolveNativeDeviceHandle(), out CnaHandle query);
+        CnaException.ThrowIfFailed(result, nameof(OcclusionQuery));
+
+        GraphicsDevice = graphicsDevice;
+        _handle = new NativeResourceHandle(query.AsNint, h => Native.cna_occlusion_query_destroy(new CnaHandle(h)));
+    }
+
+    public GraphicsDevice GraphicsDevice { get; }
+
+    private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
+
+    public void Begin()
+    {
+        CnaResult result = Native.cna_occlusion_query_begin(NativeHandle);
+        CnaException.ThrowIfFailed(result, nameof(Begin));
+    }
+
+    public void End()
+    {
+        CnaResult result = Native.cna_occlusion_query_end(NativeHandle);
+        CnaException.ThrowIfFailed(result, nameof(End));
+    }
+
+    public bool IsComplete
+    {
+        get
+        {
+            CnaResult result = Native.cna_occlusion_query_get_is_complete(NativeHandle, out byte value);
+            CnaException.ThrowIfFailed(result, nameof(IsComplete));
+            return value != 0;
+        }
+    }
+
+    /// <summary>Only meaningful once <see cref="IsComplete"/> is <see langword="true"/>; the
+    /// native call reports a failure otherwise rather than blocking, matching real XNA's own
+    /// "throws if the query is not complete" contract.</summary>
+    public int PixelCount
+    {
+        get
+        {
+            CnaResult result = Native.cna_occlusion_query_get_pixel_count(NativeHandle, out int value);
+            CnaException.ThrowIfFailed(result, nameof(PixelCount));
+            return value;
+        }
+    }
+
+    public void Dispose()
+    {
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
+    }
+}

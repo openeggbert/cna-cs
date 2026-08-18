@@ -1405,7 +1405,13 @@ WP11–WP14 are the largest new subsystems and come last.
       <details>**WP9 — Touch input.** `TouchPanel`, `TouchPanelCapabilities`,
       `TouchCollection`, `TouchLocation`, `TouchLocationState`,
       `GestureSample`, `GestureType`. Native: `input_touch.h`.</details>
-- [ ] **WP10 — Remaining buffer/query graphics types.**
+- [x] **WP10 — Remaining buffer/query graphics types — done 2026-08-18.**
+      Coverage →149/201. `DynamicVertexBuffer`/`DynamicIndexBuffer` turned out
+      to be the *same* native resource with a `dynamic` create-info flag, not
+      separate bindings, so they are thin subclasses. `DrawUserIndexedPrimitives`
+      still outstanding (needs `CNA_UserIndices`) — moved to WP15.
+      Original scope:
+      <details>**WP10 — Remaining buffer/query graphics types.**
       `DynamicVertexBuffer`, `DynamicIndexBuffer`, `VertexBufferBinding`,
       `OcclusionQuery`, and `GraphicsDevice.SetVertexBuffers(params
       VertexBufferBinding[])` / `DrawUserIndexedPrimitives` /

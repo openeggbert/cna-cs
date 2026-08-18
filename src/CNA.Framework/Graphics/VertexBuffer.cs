@@ -32,6 +32,18 @@ public class VertexBuffer : IDisposable
     }
 
     public VertexBuffer(GraphicsDevice graphicsDevice, VertexDeclaration vertexDeclaration, int vertexCount, BufferUsage bufferUsage)
+        : this(graphicsDevice, vertexDeclaration, vertexCount, bufferUsage, dynamic: false)
+    {
+    }
+
+    /// <summary>The one real constructor. <paramref name="dynamic"/> maps straight onto
+    /// <c>CNA_VertexBufferCreateInfo.dynamic</c>: a dynamic vertex buffer is the *same* native
+    /// resource with that flag set, not a separate type, which is why
+    /// <see cref="DynamicVertexBuffer"/> is a thin subclass rather than its own binding.
+    /// <c>protected internal</c> so that subclass can reach it without the flag becoming public
+    /// API real XNA never had.</summary>
+    protected internal VertexBuffer(
+        GraphicsDevice graphicsDevice, VertexDeclaration vertexDeclaration, int vertexCount, BufferUsage bufferUsage, bool dynamic)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         ArgumentNullException.ThrowIfNull(vertexDeclaration);
@@ -49,7 +61,7 @@ public class VertexBuffer : IDisposable
                 VertexDeclaration = declarationHandle,
                 VertexCount = vertexCount,
                 BufferUsage = (uint)bufferUsage,
-                Dynamic = 0,
+                Dynamic = (byte)(dynamic ? 1 : 0),
             };
 
             CnaResult result = Native.cna_vertex_buffer_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);

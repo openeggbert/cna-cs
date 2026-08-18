@@ -274,6 +274,33 @@ public class GraphicsDevice
         CnaException.ThrowIfFailed(result, nameof(SetVertexBuffer));
     }
 
+    /// <summary>Matches real XNA's <c>SetVertexBuffers(params VertexBufferBinding[])</c> -- the
+    /// multi-stream form <see cref="SetVertexBuffer"/> is shorthand for. Passing no bindings (or
+    /// <see langword="null"/>) unbinds every stream, which is what the native call documents an
+    /// empty array as doing.</summary>
+    public unsafe void SetVertexBuffers(params VertexBufferBinding[]? vertexBuffers)
+    {
+        if (vertexBuffers is null || vertexBuffers.Length == 0)
+        {
+            CnaResult emptyResult = Native.cna_graphics_device_set_vertex_buffers(ResolveNativeDeviceHandle(), null, 0);
+            CnaException.ThrowIfFailed(emptyResult, nameof(SetVertexBuffers));
+            return;
+        }
+
+        var native = new CnaVertexBufferBinding[vertexBuffers.Length];
+        for (int i = 0; i < native.Length; i++)
+        {
+            native[i] = vertexBuffers[i].ToNative();
+        }
+
+        fixed (CnaVertexBufferBinding* nativePtr = native)
+        {
+            CnaResult result = Native.cna_graphics_device_set_vertex_buffers(
+                ResolveNativeDeviceHandle(), nativePtr, (ulong)native.Length);
+            CnaException.ThrowIfFailed(result, nameof(SetVertexBuffers));
+        }
+    }
+
     private BlendState? _blendState;
 
     /// <summary>Lazily queries the device's current state on first read (via

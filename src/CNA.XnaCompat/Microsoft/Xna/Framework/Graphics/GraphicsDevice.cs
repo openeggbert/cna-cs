@@ -54,6 +54,23 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
 
     public new GraphicsProfile GraphicsProfile => (GraphicsProfile)base.GraphicsProfile;
 
+    public void SetVertexBuffers(params VertexBufferBinding[]? vertexBuffers)
+    {
+        if (vertexBuffers is null)
+        {
+            base.SetVertexBuffers(null);
+            return;
+        }
+
+        var converted = new CNA.Graphics.VertexBufferBinding[vertexBuffers.Length];
+        for (int i = 0; i < converted.Length; i++)
+        {
+            converted[i] = vertexBuffers[i].ToFramework();
+        }
+
+        base.SetVertexBuffers(converted);
+    }
+
     public new GraphicsAdapter Adapter => (GraphicsAdapter)base.Adapter;
 
     protected override CNA.Graphics.GraphicsAdapter CreateAdapter(uint adapterIndex) => new GraphicsAdapter(this, adapterIndex);

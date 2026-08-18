@@ -605,6 +605,35 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- OcclusionQuery + multi-stream vertex binding (real ABI, graphics_device.h + ------------
+    // -- vertex_resources.h -- Phase 8 WP10)
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_occlusion_query_create(CnaHandle device, out CnaHandle outQuery);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_occlusion_query_destroy(CnaHandle query);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_occlusion_query_begin(CnaHandle query);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_occlusion_query_end(CnaHandle query);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_occlusion_query_get_is_complete(CnaHandle query, out byte outIsComplete);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_occlusion_query_get_pixel_count(CnaHandle query, out int outPixelCount);
+
+    /// <summary>Matches <c>cna_graphics_device_set_vertex_buffers</c> exactly
+    /// (<c>graphics_device.h:826</c>) -- the multi-stream form
+    /// <see cref="cna_graphics_device_set_vertex_buffer"/> is the single-stream shorthand for. An
+    /// empty array unbinds every stream; every binding is validated before any is applied.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_set_vertex_buffers(
+        CnaHandle device, CnaVertexBufferBinding* bindings, ulong bindingCount);
+
     // -- GraphicsDeviceManager (real ABI, runtime_graphics_manager.h -- Phase 8 WP6) ----------
     //
     // cna_graphics_device_manager_create is documented as registering the new manager as the

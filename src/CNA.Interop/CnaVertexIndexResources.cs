@@ -116,3 +116,15 @@ internal struct CnaReservedBytes3
 {
     private byte _element0;
 }
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_VertexBufferBinding</c>
+/// exactly (<c>vertex_resources.h:95-102</c>) -- a plain fixed struct with no
+/// <c>struct_size</c>/<c>struct_version</c> header, since it only ever appears as an array element
+/// whose count is passed alongside.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaVertexBufferBinding
+{
+    public CnaHandle VertexBuffer;
+    public int VertexOffset;
+    public int InstanceFrequency;
+}

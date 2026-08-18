@@ -31,6 +31,15 @@ public class IndexBuffer : IDisposable
     }
 
     public IndexBuffer(GraphicsDevice graphicsDevice, IndexElementSize indexElementSize, int indexCount, BufferUsage bufferUsage)
+        : this(graphicsDevice, indexElementSize, indexCount, bufferUsage, dynamic: false)
+    {
+    }
+
+    /// <summary>The one real constructor -- see <see cref="VertexBuffer"/>'s equivalent for why
+    /// <paramref name="dynamic"/> is a constructor flag rather than a separate native
+    /// resource.</summary>
+    protected internal IndexBuffer(
+        GraphicsDevice graphicsDevice, IndexElementSize indexElementSize, int indexCount, BufferUsage bufferUsage, bool dynamic)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(indexCount);
@@ -44,7 +53,7 @@ public class IndexBuffer : IDisposable
             IndexCount = indexCount,
             IndexElementSize = (uint)indexElementSize,
             BufferUsage = (uint)bufferUsage,
-            Dynamic = 0,
+            Dynamic = (byte)(dynamic ? 1 : 0),
         };
 
         CnaResult result = Native.cna_index_buffer_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);
