@@ -605,6 +605,97 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Content reader extensibility (real ABI, content_readers.h -- Phase 8 WP14) -----------
+    //
+    // This is the *extensibility* half of the content system: ContentManager.Load<T> covers the
+    // built-in types, while a ContentTypeReader lets a game deserialize its own. The reader reads
+    // typed values straight off the stream, which is why the value-reading functions are one per
+    // type rather than a generic route.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_create(in CnaContentReaderCreateInfo createInfo, out CnaHandle outReader);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_destroy(CnaHandle reader);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_get_content_manager(CnaHandle reader, out CnaHandle outContentManager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_get_asset_name_size(CnaHandle reader, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_content_reader_copy_asset_name(
+        CnaHandle reader, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_get_version(CnaHandle reader, out int outVersion);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_get_platform(CnaHandle reader, out byte outPlatform);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_read_matrix(CnaHandle reader, out CnaMatrix outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_read_quaternion(CnaHandle reader, out CnaQuaternion outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_read_vector2(CnaHandle reader, out CnaVector2 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_read_vector3(CnaHandle reader, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_read_vector4(CnaHandle reader, out CnaVector4 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_read_color(CnaHandle reader, out CnaColor outValue);
+
+    /// <summary>Reports whether the tag introduced an object at all -- an <c>.xnb</c> object graph
+    /// encodes null as a tag with no value, which is why this returns a flag rather than an object
+    /// reference.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_reader_read_object_tag(CnaHandle reader, out byte outHasValue);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_content_reader_read_bytes_exact(
+        CnaHandle reader, int count, CnaStringView readerName, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_manager_get_is_registered(CnaStringView canonicalName, out byte outIsRegistered);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_manager_create_reader(CnaStringView canonicalName, out CnaHandle outTypeReader);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_manager_clear_type_creators();
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_destroy(CnaHandle typeReader);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_get_can_deserialize_into_existing_object(CnaHandle typeReader, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_get_target_type_name_size(CnaHandle typeReader, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_content_type_reader_copy_target_type_name(
+        CnaHandle typeReader, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_get_type_version(CnaHandle typeReader, out int outVersion);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_supports_version(CnaHandle typeReader, int serializedVersion, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_initialize(CnaHandle typeReader);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_read_untyped(CnaHandle typeReader, CnaHandle reader, out byte outHasValue);
+
     // -- Game components (real ABI, runtime_components.h -- Phase 8 WP7b) --------------------
     //
     // The native game owns the component collection and drives each component through its own
@@ -1283,6 +1374,12 @@ internal static partial class Native
     // BasicEffect already is; the shared IEffectMatrices/IEffectFog/IEffectLights contracts
     // (cna_effect_matrices_*/cna_effect_fog_*/cna_effect_lights_*) are already declared above and
     // apply to these too, which is why only the effect-specific members appear here.
+
+    /// <summary>Matches <c>cna_effect_material_create</c> exactly (<c>effects.h:1216</c>) -- note
+    /// it clones an *existing* effect rather than taking a device, which is what an EffectMaterial
+    /// is: a per-material copy of a shared effect with its own parameter values.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_material_create(CnaHandle cloneSource, out CnaHandle outEffect);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_alpha_test_effect_create(CnaHandle device, out CnaHandle outEffect);

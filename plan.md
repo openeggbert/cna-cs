@@ -1477,12 +1477,18 @@ WP11–WP14 are the largest new subsystems and come last.
       <details>**WP13 — Storage.** `StorageDevice`, `StorageContainer`, and the
       `IAsyncResult`-based `BeginOpenContainer`/`EndOpenContainer` API
       shape. Native: `storage.h`.</details>
-- [ ] **WP14 — Content pipeline reader API.** `ContentReader`,
+- [x] **WP14 — Content pipeline reader API — done 2026-08-18.** Coverage
+      →200/201. `ContentReader`, `ContentTypeReader`, `ContentTypeReaderManager`,
+      `ContentSerializerAttribute`, `ResourceContentManager`, plus
+      `EffectMaterial`. Registering a *managed* type reader is not possible
+      against this ABI (the registry is keyed by canonical name with no managed
+      callback route) — moved to WP15. Original scope:
+      <details>**WP14 — Content pipeline reader API.** `ContentReader`,
       `ContentTypeReader`/`ContentTypeReader<T>`,
       `ContentTypeReaderManager`, `ContentSerializerAttribute`,
       `ResourceContentManager`. Native: `content_readers.h`. This is the
       extensibility half of the content system — the existing
-      `ContentManager.Load<T>` covers only the built-in types.
+      `ContentManager.Load<T>` covers only the built-in types.</details>
 - [ ] **WP15 — Close the pre-mandate deferrals.** `.cnj` skinning (vertex
       strides 48/52/56/68, `"skeleton"`/`"animations"`), unblocked once
       WP4 lands `SkinnedEffect`; `ModelEffectCollection`'s compat mirror,

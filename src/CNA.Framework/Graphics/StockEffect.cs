@@ -27,6 +27,13 @@ public abstract class StockEffect : Effect
 
     private protected CnaHandle Handle { get; }
 
+    /// <summary>The same handle, reachable from a sibling <see cref="StockEffect"/> rather than
+    /// only from <see langword="this"/>. <see cref="Handle"/> is <c>private protected</c>, which
+    /// C# only lets a subclass read through its *own* type -- so
+    /// <see cref="EffectMaterial"/>, which must clone another effect's handle, needs this
+    /// assembly-internal accessor instead.</summary>
+    internal CnaHandle NativeEffectHandleForCloning => Handle;
+
     private protected override CnaHandle NativeEffectHandle => Handle;
 
     /// <summary>Selects this effect on its owning device. Every stock effect shares
