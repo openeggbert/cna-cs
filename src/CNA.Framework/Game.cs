@@ -480,7 +480,19 @@ public abstract class Game : IDisposable
     /// <c>Microsoft.Xna.Framework.Graphics.GraphicsDevice</c> instead, so <see cref="GraphicsDevice"/>
     /// holds the compat-typed instance without CNA needing to know CNA.XnaCompat exists.
     /// </summary>
-    protected virtual GraphicsDevice CreateGraphicsDevice() => new(GetNativeGraphicsDeviceHandle());
+    /// <summary>
+    /// Passes the <em>game</em> handle, not the device handle.
+    ///
+    /// This read <c>new(GetNativeGraphicsDeviceHandle())</c> until the first integration test ran,
+    /// and that was wrong in a way nothing managed could see: both handles are <see cref="nint"/>,
+    /// so it compiled, and <see cref="GraphicsDevice"/>'s parameter is *named*
+    /// <c>nativeGameHandleValue</c> because every one of its methods re-resolves a fresh device via
+    /// <c>cna_game_get_graphics_device(gameHandle)</c>. Feeding it a device handle meant every
+    /// single call became <c>cna_game_get_graphics_device(deviceHandle)</c> and answered
+    /// <c>INVALID_HANDLE</c>. The entire graphics API -- Clear, SetData, SpriteBatch, all of it --
+    /// could not work, and 701 managed tests said nothing.
+    /// </summary>
+    protected virtual GraphicsDevice CreateGraphicsDevice() => new(NativeHandle);
 
     /// <summary>Same rationale as <see cref="CreateGraphicsDevice"/>, for <see cref="Content"/>.</summary>
     protected virtual ContentManager CreateContentManager() => new(GetNativeContentHandle());
@@ -639,8 +651,7 @@ public abstract class Game : IDisposable
 
         try
         {
-            game.EnsureGraphicsDevice();
-            game.Initialize();
+            game.RunInitializeOnce();
             return CnaResult.Success;
         }
         catch (Exception ex)
@@ -659,6 +670,9 @@ public abstract class Game : IDisposable
 
         try
         {
+            // Native currently calls this *before* the initialize frame hook, so ordering has to be
+            // enforced here -- see RunInitializeOnce.
+            game.RunInitializeOnce();
             game.LoadContent();
             return CnaResult.Success;
         }
@@ -666,6 +680,41 @@ public abstract class Game : IDisposable
         {
             return game.ReportCallbackFailure(outError, ex);
         }
+    }
+
+    private bool _initialized;
+
+    /// <summary>
+    /// Runs <see cref="Initialize"/> exactly once, from whichever native callback arrives first.
+    ///
+    /// XNA's order is <c>Initialize</c> then <c>LoadContent</c> -- games rely on it, because
+    /// <c>LoadContent</c> routinely uses fields <c>Initialize</c> set. The integration test found
+    /// that native delivers the opposite: <c>CnaCApiRuntime.cpp</c>'s <c>Initialize()</c> override
+    /// calls the canonical <c>Game::Initialize()</c> first (which invokes <c>LoadContent</c>
+    /// internally, <c>Game.cpp:667</c>) and only then invokes the <c>initialize</c> frame hook. So
+    /// the observed order was <c>LoadContent -> Initialize -> Update</c>.
+    ///
+    /// That contradicts the C header's own contract for the hook -- "invoked once while the game
+    /// initializes, <em>before content loads</em>" -- so it is a native defect, reported upstream,
+    /// not a rule this binding should adopt. Meanwhile a binding that shipped the inverted order
+    /// would break any ported game that touches an <c>Initialize</c>-assigned field from
+    /// <c>LoadContent</c>, which is most of them.
+    ///
+    /// The guard is deliberately self-healing rather than a reorder: whichever callback lands
+    /// first runs <see cref="Initialize"/>, and the other one finds it already done. When native is
+    /// fixed to honour its own documented order, this keeps working unchanged and simply stops
+    /// mattering.
+    /// </summary>
+    private void RunInitializeOnce()
+    {
+        if (_initialized)
+        {
+            return;
+        }
+
+        _initialized = true;
+        EnsureGraphicsDevice();
+        Initialize();
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]

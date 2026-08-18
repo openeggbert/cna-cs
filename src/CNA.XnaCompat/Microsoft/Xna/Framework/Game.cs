@@ -35,8 +35,13 @@ public abstract class Game : CNA.Game
     protected override Content.ContentManager CreateContentManager() =>
         new Content.ContentManager(GetNativeContentHandle());
 
+    /// <summary>The <em>game</em> handle, for the reason
+    /// <see cref="CNA.Game.CreateGraphicsDevice"/> spells out: the device wrapper re-resolves its
+    /// device from a game handle on every call, so handing it a device handle breaks every
+    /// graphics call. This override carried the same bug as the base and is fixed the same way --
+    /// worth stating, because the two are easy to fix independently and leave compat broken.</summary>
     protected override Graphics.GraphicsDevice CreateGraphicsDevice() =>
-        new Graphics.GraphicsDevice(GetNativeGraphicsDeviceHandle());
+        new Graphics.GraphicsDevice(NativeHandle);
 
     protected override CNA.GameWindow CreateWindow() => new GameWindow(NativeHandle);
 

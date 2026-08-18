@@ -7,20 +7,30 @@ Reproduces the reference example from
 
 ## Status
 
-This sample **builds** today (`dotnet build`), because `CNA.Interop`'s
-`LibraryImport` declarations don't need the native library to exist at
-compile time. It does **not run** yet: `dotnet run` will throw a
-`DllNotFoundException` (or similar) the moment `Game1`'s constructor calls
-into `CNA.Interop.Native`, because `cna-native` — the shared library built
-from `openeggbert/cna`'s C ABI — does not exist upstream yet. See
-`../../plan.md` ("Hard dependency on `openeggbert/cna`").
+This sample builds, and the stack underneath it now runs: `tests/CNA.Integration.Tests`
+constructs a real `Game`, drives real frames, clears the screen and completes a
+`SpriteBatch` pass against the real library.
 
-Once that native library exists for your platform, place it where the
-runtime can find it — either next to this project's build output, or under
-a `runtimes/<rid>/native/` folder once `../../plan.md` Phase 6 (NuGet
-packaging) is implemented — and `dotnet run` should produce a window
-clearing to cornflower blue and drawing a texture, matching the first major
-success criterion in `analysis_binding.md` §70.
+**This section previously said the sample could not run because `cna-native`
+"does not exist upstream yet". That was wrong, and wrong in an expensive way.**
+The library exists and has for some time — it is simply called
+`libcna_c_api.so`, while every `[LibraryImport]` asks for `cna-native`. The
+names never matched, so the loader failed, and the failure was attributed to a
+missing upstream rather than to a lookup that could not succeed.
+`CNA.Interop.NativeLibraryResolver` now bridges the two names.
+
+To run it, point at a build of `openeggbert/cna`:
+
+```
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so dotnet run
+```
+
+or `CNA_NATIVE_DIR=/path/to/build/modules/c-api`. Dropping the library next to
+the build output works too, as will a `runtimes/<rid>/native/` layout once
+`../../plan.md` Phase 6 (NuGet packaging) lands.
+
+Note that this sample loads a texture through the content pipeline, which is a
+step beyond what the integration tests cover — see `Content` below.
 
 ## Content
 

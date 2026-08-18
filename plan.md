@@ -98,13 +98,29 @@ blockers. Not the same claim, and the difference matters:
 | No content-reader registration route | `Load<T>` for a game-defined type fails. |
 | Buffer transfers start at element zero | Nonzero `offsetInBytes` throws — breaks the "update one slice of a big dynamic buffer" pattern particle systems rely on. |
 | `PreparingDeviceSettings` cannot write back | MSAA / back-buffer format / adapter chosen before device creation is ignored. |
-| Nothing has ever been executed | No `Game` constructed, no frame drawn, no native object created. |
+| ~~Nothing has ever been executed~~ | **Done.** `tests/CNA.Integration.Tests`, 13 tests against the real library. |
 
-The last row is the one that matters most. Everything else on this list is a
-*known* gap with a documented throw; an unrun binding's unknowns are the ones
-that bite. **The highest-value next task in this repository is an integration
-test that loads `libcna_c_api.so` and drives a real `Game` through a few
-frames** — not more surface coverage.
+That last row was the one that mattered, and running it found two defects no
+managed test could see:
+
+- **The binding could not load the library at all.** Every `[LibraryImport]` asks
+  for `cna-native`; the engine builds `libcna_c_api.so`. The names have never
+  matched. `HelloGame`'s README blamed the failure on the native library "not
+  existing upstream yet" — it existed, under a different name.
+  `NativeLibraryResolver` bridges them.
+- **The graphics device was constructed with the wrong handle.**
+  `CreateGraphicsDevice()` passed the *device* handle where `GraphicsDevice`
+  wanted the *game* handle — both `nint`, so it compiled — and since every
+  `GraphicsDevice` method re-resolves via `cna_game_get_graphics_device(game)`,
+  every graphics call answered `INVALID_HANDLE`. Clear, SetData, SpriteBatch:
+  none of it could work. Present in both `CNA.Game` and the compat override.
+
+And one ordering defect upstream: native invokes the `initialize` frame hook
+*after* `Game::Initialize()`, which itself calls `LoadContent()`, so the observed
+order is `LoadContent -> Initialize -> Update`. That contradicts the C header's
+own contract for the hook ("invoked once while the game initializes, before
+content loads") and XNA's. Reported upstream; `Game.RunInitializeOnce` enforces
+the correct order meanwhile, self-healingly.
 
 ## Corrections — read before trusting a "cannot be done" note below
 
