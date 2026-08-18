@@ -332,8 +332,14 @@ public class ContentManager
         XnbSpriteFontData data = LoadXnbSpriteFontData(assetName);
         Texture2D texture = BuildAtlas(assetName, data.Texture);
 
+        // Detached, not read: this method's contract is to hand back a raw handle its caller wraps
+        // (so each layer can build its own namespace's Texture2D), and `texture` is a throwaway that
+        // existed only to run SetData. Reading NativeHandleValue instead would leave two owners of
+        // one handle, and the throwaway's critical finalizer would destroy a texture the SpriteFont
+        // is still drawing from -- a use-after-free that only shows up at whatever GC happens to
+        // collect it.
         return new SpriteFontData(
-            texture.NativeHandleValue,
+            texture.DetachNativeHandle(),
             data.GlyphBounds,
             data.Cropping,
             data.Characters,
@@ -350,6 +356,9 @@ public class ContentManager
     /// overload in this binding, and a font atlas is sampled at its native size by
     /// <c>SpriteBatch.DrawString</c>, so the lower levels would never be read. Stated here rather
     /// than silently dropped, because a font compiled with mipmaps is a real input.
+    ///
+    /// The returned wrapper is a throwaway whose handle the caller detaches -- see
+    /// <see cref="LoadSpriteFontData"/>.
     /// </summary>
     private Texture2D BuildAtlas(string assetName, XnbTextureData data)
     {

@@ -38,6 +38,23 @@ internal sealed class NativeResourceHandle : SafeHandle
 
     public override bool IsInvalid => handle == IntPtr.Zero;
 
+    /// <summary>
+    /// Gives up ownership: returns the handle value and marks this object closed, so neither
+    /// <c>Dispose</c> nor the critical finalizer will ever release it.
+    ///
+    /// For the narrow case where a managed wrapper exists only to perform one operation and the
+    /// resulting handle then belongs to something else -- <c>ContentManager</c> builds a
+    /// <c>Texture2D</c> to upload a SpriteFont atlas, then hands the handle to the
+    /// <c>SpriteFont</c>'s own texture. Without this, both wrappers would own the same handle and
+    /// the first one's finalizer would destroy a texture the font is still drawing from.
+    /// </summary>
+    public nint Detach()
+    {
+        nint value = handle;
+        SetHandleAsInvalid();
+        return value;
+    }
+
     protected override bool ReleaseHandle()
     {
         _release(handle);

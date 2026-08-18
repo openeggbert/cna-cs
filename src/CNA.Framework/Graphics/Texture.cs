@@ -46,6 +46,10 @@ public abstract class Texture : GraphicsResource
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
 
+    /// <summary>Hands this texture's native handle to a new owner, leaving this object inert -- see
+    /// <see cref="NativeResourceHandle.Detach"/> for the one case that needs it.</summary>
+    internal nint DetachNativeHandle() => _handle.Detach();
+
     /// <summary>How this specific texture kind releases its native handle. Every kind has its own
     /// destroy function (<c>cna_texture2d_destroy</c>, <c>cna_texture3d_destroy</c>,
     /// <c>cna_texturecube_destroy</c>, <c>cna_render_target_destroy</c>) -- there is no shared
