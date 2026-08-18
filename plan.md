@@ -1641,8 +1641,37 @@ WP11–WP14 are the largest new subsystems and come last.
       `HalfTypeHelper`, which is internal in XNA too.
 
       The header audit that ran alongside it is recorded in the Corrections
-      table at the top of this file. A full `/code-review high` pass over
-      Phase 8 remains, and is the one thing left in this work package.
+      table at the top of this file.
+
+      **Review pass — done 2026-08-18.** Reviewed this session's own output,
+      which was all new and none of it previously reviewed. Seven real defects,
+      six of them introduced by these commits:
+      - a **use-after-free** in the SpriteFont atlas upload (two owning wrappers
+        on one texture handle; the throwaway's finalizer would destroy a texture
+        the live font was still drawing from);
+      - `GetRenderTargets` threw on a legitimate sequence, because the
+        single-target `SetRenderTarget` overloads did not update the cache it
+        cross-checks;
+      - disposing a media collection ran `cna_*_dispose` on library-owned
+        objects, marking them disposed for every other reader — and only for the
+        arbitrary subset a caller had indexed;
+      - `NativeEventBridge.Dispose` could leak its GC root permanently if
+        unsubscription threw, and a stale registration would still have
+        dispatched;
+      - `MediaPlayer` cached a game-scoped queue handle for the process;
+      - **WP17's own scope hole**: its note said it covered "every type whose
+        handle accessor is *private*", which left `internal` and
+        `private protected` ones unswept for no reason but phrasing. 32 more
+        unpaired handle reads across ten types, all fixed;
+      - two more fabricated P/Invokes (`cna_runtime_initialize`/`_shutdown`),
+        found by sweeping all 715 declarations against the headers, plus
+        `cna_get_abi_version` — real, bound, and never called, now wired to a
+        real compatibility check.
+
+      Interop verification, mechanical and now clean: **713 declarations, every
+      one present in the headers, every arity matching, and all 62
+      caller-initialized versioned structs correctly passed by `ref` rather than
+      `out`.**
 
 Explicitly still excluded from this mandate (not XNA 4.0 API surface, or
 genuinely unbackable): `Microsoft.Xna.Framework.Net` /

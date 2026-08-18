@@ -11,6 +11,60 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Reviewing my own session: seven defects, six of them mine (2026-08-18, same session)
+
+Reviewed everything written this session before calling it done, on the grounds
+that it was all new and none of it had been through a review. That found seven
+real defects, six introduced by the very commits being reviewed.
+
+The one worth dwelling on is a **use-after-free**, and on how it got in.
+`LoadSpriteFontData`'s contract was "return a raw handle the caller wraps" --
+which was sound while the handle came straight from native and nothing managed
+owned it. Replacing the fabricated loader with a real `.xnb` parse changed where
+the handle comes from: now a `Texture2D` is built to upload the atlas, and
+returning *its* handle left two owning wrappers on one texture. The upload
+wrapper is garbage immediately, so its critical finalizer destroys a texture the
+live `SpriteFont` is still sampling -- at whatever GC happens to collect it.
+
+**Keeping a method's signature while changing what backs it does not keep its
+contract.** Nothing in the type system flagged it, and the doc comment was still
+accurate about what the method returned.
+
+The same shape appeared twice more:
+- `Song`'s handle moved from a bare field into a `NativeResourceHandle`. That
+  created a finalizer, which made all nine of its existing, untouched call sites
+  unsafe. Changing a handle's backing changes whether every existing read on it
+  is sound.
+- `GetRenderTargets` cross-checks a cached array against native's count, but the
+  older single-target `SetRenderTarget` overloads pre-date the cache and never
+  update it -- so adding the cache made an existing method throw.
+
+### WP17 had a hole its own note described
+
+WP17 said it covered "every type whose handle accessor is *private*". That is the
+bug, in the note rather than the code: `internal` and `private protected`
+accessors were out of scope for no reason but how the sweep was phrased, and a
+critical finalizer does not care about C# accessibility. A re-sweep over every
+`Native.cna_*(NativeHandle ...)` site found **32 more unpaired reads** across ten
+types.
+
+A completion claim that names its own scope is only as good as that scope. This
+one read as "done" and was "done for the subset I happened to grep for".
+
+### The mechanical checks are the cheap ones and they keep paying
+
+Sweeping all 715 P/Invoke declarations against the 2,838 header symbols -- the
+generalisation of the check that caught `cna_content_load_spritefont` -- found
+two more fabrications (`cna_runtime_initialize`/`_shutdown`, both dead) and, in
+the other direction, `cna_get_abi_version`: real, bound, never called. A binding
+that does not check ABI version fails against a mismatched library as a garbled
+struct rather than as a message. Now wired up.
+
+Interop is verifiably clean as of this session: 713 declarations, all present,
+all arities matching, and all 62 caller-initialized versioned structs passed by
+`ref` rather than `out` -- the `out`-skips-the-constructor trap that produced two
+defects in the previous review.
+
 ## The audit: ten "the C API cannot do this" claims, all false (2026-08-18, same session)
 
 The single most useful thing done this session was not writing code. It was
