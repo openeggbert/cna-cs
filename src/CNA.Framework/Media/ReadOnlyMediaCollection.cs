@@ -98,10 +98,18 @@ public class ReadOnlyMediaCollection<T> : IDisposable, IEnumerable<T>
         }
     }
 
-    /// <summary>Releases every element handle this collection handed out, then its own. Element
-    /// wrappers are released here rather than left to their finalizers because they are this
-    /// collection's to account for -- it is the only thing that knows the full set, and each one
-    /// holds the library alive until released.</summary>
+    /// <summary>
+    /// Releases every element handle this collection handed out, then its own. Element wrappers are
+    /// released here rather than left to their finalizers because they are this collection's to
+    /// account for -- it is the only thing that knows the full set, and each one holds the library
+    /// alive until released.
+    ///
+    /// Handles only. It deliberately does <b>not</b> call the elements' own <c>Dispose</c>, which
+    /// would additionally run <c>cna_*_dispose</c> -- a flag on the library-owned object that every
+    /// other handle to the same album or song observes. Disposing a view of a library is not a
+    /// statement about the library, and doing it that way would also have marked an arbitrary
+    /// *subset* disposed: only the elements a caller happened to index are in the cache.
+    /// </summary>
     public void Dispose()
     {
         if (IsDisposed)
@@ -113,12 +121,28 @@ public class ReadOnlyMediaCollection<T> : IDisposable, IEnumerable<T>
 
         foreach (T element in _cache.Values)
         {
-            (element as IDisposable)?.Dispose();
+            ReleaseElementHandle(element);
         }
 
         _cache.Clear();
         _handle.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>Gives one element handle back. Every element type this collection is instantiated
+    /// over is either a <see cref="MediaLibraryObject"/> or a <see cref="Song"/>; the type test is
+    /// there because the generic parameter cannot express "one of those two".</summary>
+    private static void ReleaseElementHandle(T element)
+    {
+        switch (element)
+        {
+            case MediaLibraryObject libraryObject:
+                libraryObject.ReleaseHandleOnly();
+                break;
+            case Song song:
+                song.ReleaseHandleOnly();
+                break;
+        }
     }
 
     public IEnumerator<T> GetEnumerator()

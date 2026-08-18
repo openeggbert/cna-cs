@@ -212,6 +212,18 @@ public class Song : IDisposable, IEquatable<Song>
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>Releases this wrapper's handle without the canonical disposal
+    /// <see cref="Dispose"/> performs first -- see
+    /// <see cref="MediaLibraryObject.ReleaseHandleOnly"/> for why a collection needs exactly
+    /// that. A song is doubly exposed to the difference: <c>cna_song_collection_get_at</c>
+    /// documents its result as "the same song the collection holds, not a copy", so a canonical
+    /// dispose through one handle is observed through every other.</summary>
+    internal void ReleaseHandleOnly()
+    {
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     private unsafe string ReadString(NativeStringReader.SizeFunc size, NativeStringReader.CopyFunc copy, string context)
     {
         string value = NativeStringReader.Read(size, copy, NativeHandle, context);

@@ -79,6 +79,25 @@ public abstract class MediaLibraryObject : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Releases this wrapper's handle <b>without</b> the canonical disposal that
+    /// <see cref="Dispose"/> performs first.
+    ///
+    /// The distinction is load-bearing and easy to miss. <c>cna_*_dispose</c> sets a flag on the
+    /// library-owned object, which every other handle to that same album or song observes;
+    /// <c>cna_*_destroy</c> only gives this handle back. A collection cleaning up the element
+    /// handles it handed out wants the second and emphatically not the first -- otherwise merely
+    /// disposing an <see cref="AlbumCollection"/> would mark those albums disposed for every other
+    /// reader of the same library, which is not what disposing a view means.
+    ///
+    /// <see cref="Dispose"/> stays the caller-facing operation and keeps doing both, matching XNA.
+    /// </summary>
+    internal void ReleaseHandleOnly()
+    {
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     /// <summary>Reads a name through the ABI's two-call size/copy pattern, keeping this object
     /// alive across both halves.</summary>
     private protected string ReadName(
