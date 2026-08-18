@@ -11,7 +11,7 @@ namespace CNA.Tests;
 /// </summary>
 public class ModelMeshPartTests
 {
-    private static GraphicsDevice CreateDummyDevice() => new(nativeHandleValue: 0);
+    private static GraphicsDevice CreateDummyDevice() => new(nativeGameHandleValue: 0);
 
     private sealed class NoOpEffect(GraphicsDevice graphicsDevice) : Effect(graphicsDevice)
     {

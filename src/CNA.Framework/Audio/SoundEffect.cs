@@ -63,7 +63,7 @@ public class SoundEffect : IDisposable
                 CnaAmbientGame.Current, in createInfo, basePtr, (ulong)buffer.Length, offset, count, loopStart, loopLength,
                 out CnaHandle handle);
             CnaException.ThrowIfFailed(result, nameof(SoundEffect));
-            _handle = new NativeResourceHandle(handle.Value, ReleaseNative);
+            _handle = new NativeResourceHandle(handle.AsNint, ReleaseNative);
         }
     }
 
@@ -102,7 +102,7 @@ public class SoundEffect : IDisposable
     {
         CnaResult result = Native.cna_sound_effect_create_instance(new CnaHandle(NativeHandleValue), out CnaHandle instance);
         CnaException.ThrowIfFailed(result, nameof(CreateInstance));
-        return instance.Value;
+        return instance.AsNint;
     }
 
     /// <summary>Pure arithmetic (16-bit-PCM byte size to <see cref="TimeSpan"/>), no native call --

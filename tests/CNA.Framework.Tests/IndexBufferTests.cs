@@ -7,7 +7,7 @@ namespace CNA.Tests;
 /// validation is reachable without a real cna-native.</summary>
 public class IndexBufferTests
 {
-    private static GraphicsDevice CreateDummyDevice() => new(nativeHandleValue: 0);
+    private static GraphicsDevice CreateDummyDevice() => new(nativeGameHandleValue: 0);
 
     [Fact]
     public void Constructor_NullGraphicsDevice_Throws()

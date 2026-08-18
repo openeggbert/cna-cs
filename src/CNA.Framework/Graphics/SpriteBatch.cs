@@ -42,7 +42,7 @@ public class SpriteBatch : IDisposable
         CnaResult result = Native.cna_sprite_batch_create(graphicsDevice.ResolveNativeDeviceHandle(), out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(SpriteBatch));
 
-        _handle = new NativeResourceHandle(handle.Value, h => Native.cna_sprite_batch_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_sprite_batch_destroy(new CnaHandle(h)));
     }
 
     private nint NativeHandleValue => _handle.DangerousGetHandle();

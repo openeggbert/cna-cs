@@ -104,7 +104,7 @@ public abstract class Game : IDisposable
     /// <c>CNA_Handle</c> exactly), so this narrows with an explicit, checked-at-the-boundary cast
     /// rather than an implicit one -- see <see cref="CnaHandle"/>'s own doc comment.
     /// </summary>
-    internal nint NativeHandle => checked((nint)_nativeHandle.Value);
+    internal nint NativeHandle => _nativeHandle.AsNint;
 
     public ContentManager Content { get; }
 
@@ -176,7 +176,7 @@ public abstract class Game : IDisposable
     {
         CnaResult result = Native.cna_game_get_graphics_device(_nativeHandle, out CnaHandle device);
         CnaException.ThrowIfFailed(result, "cna_game_get_graphics_device");
-        return checked((nint)device.Value);
+        return device.AsNint;
     }
 
     /// <summary>Same rationale as <see cref="GetNativeGraphicsDeviceHandle"/>'s first paragraph, for
@@ -188,7 +188,7 @@ public abstract class Game : IDisposable
     {
         CnaResult result = Native.cna_game_get_content_manager_ext(_nativeHandle, out CnaHandle contentManager);
         CnaException.ThrowIfFailed(result, "cna_game_get_content_manager_ext");
-        return checked((nint)contentManager.Value);
+        return contentManager.AsNint;
     }
 
     /// <summary>

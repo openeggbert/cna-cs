@@ -14,7 +14,7 @@ namespace CNA.Tests;
 /// </summary>
 public class ModelTests
 {
-    private static GraphicsDevice CreateDummyDevice() => new(nativeHandleValue: 0);
+    private static GraphicsDevice CreateDummyDevice() => new(nativeGameHandleValue: 0);
 
     private sealed class RecordingEffect(GraphicsDevice graphicsDevice) : Effect(graphicsDevice), IEffectMatrices
     {

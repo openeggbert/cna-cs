@@ -54,7 +54,7 @@ public class RenderTarget2D : Texture2D
         CnaResult result = Native.cna_render_target2d_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(RenderTarget2D));
 
-        return handle.Value;
+        return handle.AsNint;
     }
 
     /// <summary>Matches <c>cna_render_target_destroy</c> exactly (<c>render_target.h:277</c>).

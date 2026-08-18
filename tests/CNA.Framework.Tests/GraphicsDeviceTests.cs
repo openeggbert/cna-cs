@@ -11,7 +11,7 @@ namespace CNA.Tests;
 /// </summary>
 public class GraphicsDeviceTests
 {
-    private static GraphicsDevice CreateDummyDevice() => new(nativeHandleValue: 0);
+    private static GraphicsDevice CreateDummyDevice() => new(nativeGameHandleValue: 0);
 
     [Theory]
     [InlineData(-1, 1)]

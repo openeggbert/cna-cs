@@ -241,7 +241,7 @@ public class ContentManager
         CnaResult result = CnaStringMarshal.WithStringView(
             assetName, view => Native.cna_content_manager_load_texture2d(new CnaHandle(_nativeHandleValue), view, out texture));
         CnaException.ThrowIfFailed(result, nameof(Load));
-        return texture.Value;
+        return texture.AsNint;
     }
 
     protected nint LoadNativeSoundEffectHandle(string assetName)
@@ -250,7 +250,7 @@ public class ContentManager
         CnaResult result = CnaStringMarshal.WithStringView(
             assetName, view => Native.cna_content_manager_load_sound_effect(new CnaHandle(_nativeHandleValue), view, out soundEffect));
         CnaException.ThrowIfFailed(result, nameof(Load));
-        return soundEffect.Value;
+        return soundEffect.AsNint;
     }
 
     /// <summary>
@@ -314,7 +314,7 @@ public class ContentManager
         char? defaultCharacter = native.HasDefaultCharacter != 0 ? ToChar(native.DefaultCharacter) : null;
 
         return new SpriteFontData(
-            native.Texture.Value, glyphBounds, cropping, characters, native.LineSpacing, native.Spacing, kerning, defaultCharacter);
+            native.Texture.AsNint, glyphBounds, cropping, characters, native.LineSpacing, native.Spacing, kerning, defaultCharacter);
 
         static char ToChar(int codePoint)
         {

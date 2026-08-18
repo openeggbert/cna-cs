@@ -50,7 +50,7 @@ public class IndexBuffer : IDisposable
         CnaResult result = Native.cna_index_buffer_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(IndexBuffer));
 
-        _handle = new NativeResourceHandle(handle.Value, h => Native.cna_index_buffer_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_index_buffer_destroy(new CnaHandle(h)));
     }
 
     /// <summary>Matches real XNA/MonoGame's own <c>Type</c>-to-<see cref="IndexElementSize"/>

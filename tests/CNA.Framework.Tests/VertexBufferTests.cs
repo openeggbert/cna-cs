@@ -13,7 +13,7 @@ namespace CNA.Tests;
 /// </summary>
 public class VertexBufferTests
 {
-    private static GraphicsDevice CreateDummyDevice() => new(nativeHandleValue: 0);
+    private static GraphicsDevice CreateDummyDevice() => new(nativeGameHandleValue: 0);
 
     [Fact]
     public void Constructor_NullGraphicsDevice_Throws()

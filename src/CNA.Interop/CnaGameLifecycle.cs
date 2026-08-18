@@ -16,11 +16,15 @@ namespace CNA.Interop;
 /// duration of the method that builds it.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct CnaCallbackError
+internal struct CnaCallbackError
 {
-    public readonly uint StructSize;
-    public readonly uint StructVersion;
-    public readonly CnaStringView Message;
+    public uint StructSize;
+    public uint StructVersion;
+
+    /// <summary>Not <see langword="readonly"/> like the two fields above -- this is the one field
+    /// <c>Game</c>'s own callback wrappers actually write to (through a pointer, not a
+    /// constructor), which a <see langword="readonly"/> field cannot allow.</summary>
+    public CnaStringView Message;
 }
 
 /// <summary>
