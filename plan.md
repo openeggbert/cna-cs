@@ -1,5 +1,44 @@
 # CNA.NET (`cna-dotnet`) — Implementation Plan
 
+## Coverage: how it is measured, and what it is
+
+Two diffs against the C++ engine's own `Microsoft/Xna/Framework/**` headers,
+which are the authority — not a remembered list of XNA 4.0.
+
+**Types.** 237 public compat types. Everything the diff still reports is non-XNA:
+CNAEXT effect/vertex/glTF types, MonoGame's `MouseCursor`, FNA's `TextInputEXT`,
+CNA's content-manifest types, and `HalfTypeHelper` (internal in XNA too).
+
+**Members.** Run 2026-08-18, and it should have been run at the same time as the
+type diff — it was not, and it found ~45 real gaps that the type diff and the
+unbound-header sweep both structurally missed. Two kinds in particular:
+
+- members with no native counterpart at all (`BoundingSphere.CreateFromPoints`) —
+  invisible to a sweep that looks for unbound native functions;
+- members mapping onto an *already-bound* function (`Texture2D.GetData`) — the
+  function was bound, so nothing looked missing.
+
+Both layers are now at 41/42 remaining candidates, and every one is verified
+noise. The categories, so a re-run is quick to triage:
+
+| Category | Examples |
+| --- | --- |
+| C++ accessor spelling the normaliser cannot map | `getDeviceCreatedEvent`, `getVertexDeclarationStatic` |
+| private C++ fields | `preferredMultiSampleCount`, `passIndex`, `vertexOffset` |
+| C++ internals | `ContentManager.LoadXnbAsset`, `Texture.ValidateGetDataFormat` |
+| equivalent under a different name | `Get/SetIndexBuffer` → `Indices`; `MaxTextures` → `Count`; cube `Width`/`Height` → `Size` |
+| inherited from the BCL | `LaunchParameters.Add`/`ContainsKey` (from `Dictionary`) |
+| not XNA 4.0 | `AdaptersChanged`, `MonitorHandle`, `ClosestMSAAPower`, `VideoPlayer.VideoInfo` |
+
+The filter that makes this tractable: the C++ headers mark non-XNA members
+`CNAEXT`. Applying it cut the candidate list from 107 to 45 in one step.
+
+**The standard**, restated by the user: FNA is the model. Every XNA 4.0 type
+*and member* present. Where the C ABI cannot back one, implement the real XNA
+signature and throw, naming what is missing — never omit. Members currently in
+that state: `Texture2D.GetData`, `GraphicsDevice.GetVertexBuffers`,
+`RenderTarget2D.ContentLost`, `Effect.Clone` on the abstract base.
+
 ## Corrections — read before trusting a "cannot be done" note below
 
 A header audit on 2026-08-18 checked every claim in this repository that some
