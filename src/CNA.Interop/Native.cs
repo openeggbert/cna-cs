@@ -605,6 +605,203 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Effect reflection surface (real ABI, effects.h -- Phase 8 WP4a) ----------------------
+    //
+    // Parameters, techniques, passes and annotations are all real native objects reachable from an
+    // effect handle. Note the collections and their elements are *borrowed*: cna_effect_get_parameters
+    // hands back a collection owned by the effect, and get_at hands back a parameter owned by that
+    // collection -- only the explicitly-created ones (cna_effect_parameter_create and friends, which
+    // this project never calls) need destroying, which is why nothing here is wrapped in a
+    // NativeResourceHandle.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_get_parameters(CnaHandle effect, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_get_techniques(CnaHandle effect, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_get_current_technique(CnaHandle effect, out CnaHandle outTechnique);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_set_current_technique(CnaHandle effect, CnaHandle technique);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_collection_get_count(CnaHandle collection, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_collection_get_at(CnaHandle collection, ulong index, out CnaHandle outParameter);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_collection_find_name(
+        CnaHandle collection, CnaStringView name, out byte outFound, out CnaHandle outParameter);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_collection_find_semantic(
+        CnaHandle collection, CnaStringView semantic, out byte outFound, out CnaHandle outParameter);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_info(CnaHandle parameter, ref CnaEffectParameterInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_name_byte_count(CnaHandle parameter, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_parameter_copy_name(
+        CnaHandle parameter, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_semantic_byte_count(CnaHandle parameter, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_parameter_copy_semantic(
+        CnaHandle parameter, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_elements(CnaHandle parameter, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_structure_members(CnaHandle parameter, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_annotations(CnaHandle parameter, out CnaHandle outCollection);
+
+    /// <summary>One function for every scalar/vector/matrix type, discriminated by
+    /// <paramref name="valueType"/> -- <paramref name="outValue"/> must point at storage of the
+    /// matching size, which is why <c>CNA.Graphics.EffectParameter</c> wraps each call in a typed
+    /// method rather than exposing this shape.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_parameter_get_value(CnaHandle parameter, CnaEffectValueType valueType, void* outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_parameter_set_value(CnaHandle parameter, CnaEffectValueType valueType, void* value);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_parameter_get_values(
+        CnaHandle parameter, CnaEffectValueType valueType, ulong requestedCount, void* destination, ulong capacity, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_parameter_set_values(
+        CnaHandle parameter, CnaEffectValueType valueType, void* values, ulong count);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_value_texture(
+        CnaHandle parameter, CnaEffectTextureType textureType, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_set_value_texture(
+        CnaHandle parameter, CnaEffectTextureType textureType, CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_get_value_string_byte_count(CnaHandle parameter, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_parameter_copy_value_string(
+        CnaHandle parameter, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_set_value_string(CnaHandle parameter, CnaStringView value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_collection_get_count(CnaHandle collection, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_collection_get_at(CnaHandle collection, ulong index, out CnaHandle outTechnique);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_collection_find(
+        CnaHandle collection, CnaStringView name, out byte outFound, out CnaHandle outTechnique);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_get_name_byte_count(CnaHandle technique, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_technique_copy_name(
+        CnaHandle technique, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_get_passes(CnaHandle technique, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_get_annotations(CnaHandle technique, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_collection_get_count(CnaHandle collection, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_collection_get_at(CnaHandle collection, ulong index, out CnaHandle outPass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_collection_find(
+        CnaHandle collection, CnaStringView name, out byte outFound, out CnaHandle outPass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_get_name_byte_count(CnaHandle pass, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_pass_copy_name(CnaHandle pass, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_get_annotations(CnaHandle pass, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_apply(CnaHandle pass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_collection_get_count(CnaHandle collection, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_collection_get_at(CnaHandle collection, ulong index, out CnaHandle outAnnotation);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_collection_find(
+        CnaHandle collection, CnaStringView name, out byte outFound, out CnaHandle outAnnotation);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_info(CnaHandle annotation, ref CnaEffectAnnotationInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_name_byte_count(CnaHandle annotation, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_annotation_copy_name(
+        CnaHandle annotation, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_semantic_byte_count(CnaHandle annotation, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_annotation_copy_semantic(
+        CnaHandle annotation, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_boolean(CnaHandle annotation, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_int32(CnaHandle annotation, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_single(CnaHandle annotation, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_matrix(CnaHandle annotation, out CnaMatrix outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_vector2(CnaHandle annotation, out CnaVector2 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_vector3(CnaHandle annotation, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_vector4(CnaHandle annotation, out CnaVector4 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_get_value_string_byte_count(CnaHandle annotation, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_annotation_copy_value_string(
+        CnaHandle annotation, byte* destination, ulong capacity, out ulong outByteCount);
+
     // -- Stock effects beyond BasicEffect (real ABI, effects.h -- Phase 8 WP4b) ---------------
     //
     // Each is created from a device and then driven through its own property setters, exactly as

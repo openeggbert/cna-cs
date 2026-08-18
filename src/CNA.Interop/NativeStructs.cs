@@ -432,3 +432,42 @@ internal readonly struct CnaVector3
         Z = z;
     }
 }
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_Quaternion</c> exactly
+/// (<c>quaternion.h</c>). Added by Phase 8 WP4a -- <c>cna_effect_parameter_get/set_value</c>'s
+/// value-type tag includes a quaternion, the first time this project needed one across the
+/// ABI.</summary>
+internal readonly struct CnaQuaternion
+{
+    public readonly float X;
+    public readonly float Y;
+    public readonly float Z;
+    public readonly float W;
+
+    public CnaQuaternion(float x, float y, float z, float w)
+    {
+        X = x;
+        Y = y;
+        Z = z;
+        W = w;
+    }
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_Vector4</c> exactly
+/// (<c>vectors.h</c>). Added by Phase 8 WP4a, which is the first thing in this project to need a
+/// four-component vector across the ABI (<c>cna_effect_annotation_get_value_vector4</c>).</summary>
+internal readonly struct CnaVector4
+{
+    public readonly float X;
+    public readonly float Y;
+    public readonly float Z;
+    public readonly float W;
+
+    public CnaVector4(float x, float y, float z, float w)
+    {
+        X = x;
+        Y = y;
+        Z = z;
+        W = w;
+    }
+}

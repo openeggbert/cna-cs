@@ -27,6 +27,8 @@ public abstract class StockEffect : Effect
 
     private protected CnaHandle Handle { get; }
 
+    private protected override CnaHandle NativeEffectHandle => Handle;
+
     /// <summary>Selects this effect on its owning device. Every stock effect shares
     /// <c>cna_effect_apply</c> -- there is no per-effect-type apply.</summary>
     protected override void OnApply()

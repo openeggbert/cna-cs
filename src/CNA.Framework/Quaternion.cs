@@ -227,4 +227,7 @@ public struct Quaternion : IEquatable<Quaternion>
     public override readonly bool Equals(object? obj) => obj is Quaternion other && Equals(other);
     public override readonly int GetHashCode() => HashCode.Combine(X, Y, Z, W);
     public override readonly string ToString() => $"{{X:{X} Y:{Y} Z:{Z} W:{W}}}";
+    internal readonly CNA.Interop.CnaQuaternion ToNative() => new(X, Y, Z, W);
+
+    internal static Quaternion FromNative(CNA.Interop.CnaQuaternion native) => new(native.X, native.Y, native.Z, native.W);
 }

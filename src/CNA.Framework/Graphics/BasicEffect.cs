@@ -32,6 +32,8 @@ namespace CNA.Graphics;
 public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     private readonly CnaHandle _handle;
+
+    private protected override CnaHandle NativeEffectHandle => _handle;
     private Texture? _texture;
     private bool _disposed;
 

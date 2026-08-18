@@ -1339,7 +1339,15 @@ WP11–WP14 are the largest new subsystems and come last.
       used). Also carries `TextureCollection` and
       `GraphicsDevice.Textures`/`.VertexTextures`, moved here from WP2 —
       the indexer is typed on the `Texture` base this package introduces.</details>
-- [ ] **WP4 — Full effect system.** Name-indexed `EffectParameter` /
+- [x] **WP4 — Full effect system — done 2026-08-18 (WP4a+WP4b).** Coverage
+      →163/201. The fabricated one-pass `EffectTechnique` is gone; techniques,
+      passes, parameters and annotations are now the effect's real native
+      objects. Note §27's `EffectParameter` handle caching (Phase 5) is now
+      genuinely applicable again and remains **not done** — the collections
+      re-resolve on every access by design; revisit if profiling shows it
+      matters. `BasicEffect` still carries its own handle/helper copy instead
+      of deriving from `StockEffect` — tracked in WP15. Original scope:
+      <details>**WP4 — Full effect system.** Name-indexed `EffectParameter` /
       `EffectParameterCollection` / `EffectParameterClass` /
       `EffectParameterType`, `EffectAnnotation(Collection)`,
       `EffectTechniqueCollection`, plus the four remaining stock effects
