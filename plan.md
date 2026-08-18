@@ -1324,7 +1324,13 @@ WP11–WP14 are the largest new subsystems and come last.
       the indexer's element type is XNA's `Texture` base class, which does
       not exist until WP3 introduces it, and a collection typed on
       `Texture2D` today would need re-typing immediately afterwards.
-- [ ] **WP3 — Texture hierarchy.** Introduce the real XNA `Texture` base
+- [x] **WP3 — Texture hierarchy — done 2026-08-18 (WP3a+WP3b).** Coverage
+      →122/201. Texture base + reparent, Texture3D, TextureCube,
+      RenderTargetCube, TextureCollection. SetData/GetData for the 3D/cube
+      forms deliberately deferred (they need the CNA_Texture3DTransfer/
+      CNA_TextureCubeTransfer descriptors, which have no 2D counterpart) --
+      tracked in WP15. Original scope:
+      <details>**WP3 — Texture hierarchy.** Introduce the real XNA `Texture` base
       class and reparent `Texture2D`/`RenderTarget2D` onto it (a breaking
       internal refactor — do it before more texture types exist, not
       after), then `Texture3D` (`texture_volume.h`), `TextureCube`
@@ -1332,7 +1338,7 @@ WP11–WP14 are the largest new subsystems and come last.
       `_set_render_target_cube` this project already noticed but never
       used). Also carries `TextureCollection` and
       `GraphicsDevice.Textures`/`.VertexTextures`, moved here from WP2 —
-      the indexer is typed on the `Texture` base this package introduces.
+      the indexer is typed on the `Texture` base this package introduces.</details>
 - [ ] **WP4 — Full effect system.** Name-indexed `EffectParameter` /
       `EffectParameterCollection` / `EffectParameterClass` /
       `EffectParameterType`, `EffectAnnotation(Collection)`,
@@ -1368,14 +1374,22 @@ WP11–WP14 are the largest new subsystems and come last.
       `FrameworkDispatcher.Update()` finally gives `MediaPlayer.Update`
       its real XNA home (today `Game.Update` calls it directly as a
       documented stand-in — see that method's own doc comment).
-- [ ] **WP8 — `Curve` system.** `Curve`, `CurveKey`, `CurveKeyCollection`,
+- [x] **WP8 — `Curve` system — done 2026-08-18.** Coverage →128/201.
+      Decision recorded: implemented **managed**, not bound to `curve.h`
+      (which does have a full native Curve) — design invariant #3 plus
+      testability, and the tests immediately caught two real math errors in
+      the first draft. Original scope:
+      <details>**WP8 — `Curve` system.** `Curve`, `CurveKey`, `CurveKeyCollection`,
       `CurveContinuity`, `CurveLoopType`, `CurveTangent`. Native:
       `curve.h`, though this is pure math and may be better implemented
       managed-side per design invariant #3 — decide by reading the header
-      first, and record the decision.
-- [ ] **WP9 — Touch input.** `TouchPanel`, `TouchPanelCapabilities`,
+      first, and record the decision.</details>
+- [x] **WP9 — Touch input — done 2026-08-18.** Coverage →135/201. All seven
+      types; CNA-only extensions (`pressure`, `finger_id_ext`) deliberately
+      not surfaced, for XNA-shape fidelity. Original scope:
+      <details>**WP9 — Touch input.** `TouchPanel`, `TouchPanelCapabilities`,
       `TouchCollection`, `TouchLocation`, `TouchLocationState`,
-      `GestureSample`, `GestureType`. Native: `input_touch.h`.
+      `GestureSample`, `GestureType`. Native: `input_touch.h`.</details>
 - [ ] **WP10 — Remaining buffer/query graphics types.**
       `DynamicVertexBuffer`, `DynamicIndexBuffer`, `VertexBufferBinding`,
       `OcclusionQuery`, and `GraphicsDevice.SetVertexBuffers(params

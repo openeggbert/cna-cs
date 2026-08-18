@@ -77,9 +77,8 @@ public class TouchCollectionTests
     {
         TouchCollection touches = default;
 
-        Assert.Equal(0, touches.Count);
-        Assert.False(touches.FindById(1, out _));
         Assert.Empty(touches);
+        Assert.False(touches.FindById(1, out _));
         Assert.Equal(-1, touches.IndexOf(new TouchLocation(1, TouchLocationState.Pressed, Vector2.Zero)));
     }
 
