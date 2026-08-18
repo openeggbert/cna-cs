@@ -110,6 +110,35 @@ public abstract class Game : IDisposable
 
     public GraphicsDevice GraphicsDevice { get; protected set; } = null!;
 
+    private GameWindow? _window;
+
+    /// <summary>Covariant-return factory hook, same pattern as
+    /// <see cref="CreateGraphicsDevice"/>/<see cref="CreateContentManager"/> -- CNA.XnaCompat's
+    /// <c>Game</c> overrides <see cref="CreateWindow"/> to return a
+    /// <c>Microsoft.Xna.Framework.GameWindow</c> instead.</summary>
+    public GameWindow Window => _window ??= CreateWindow();
+
+    protected virtual GameWindow CreateWindow() => new(NativeHandle);
+
+    /// <summary>Matches <c>cna_game_get_is_mouse_visible</c>/<c>_set_is_mouse_visible</c> exactly
+    /// (<c>runtime.h:300,309</c>) -- both take "Active owned or callback-borrowed" handles, so this
+    /// is safe to call any time, including from a game's own constructor (see
+    /// <c>HelloGame</c> in cna-cs-template, which does exactly that).</summary>
+    public bool IsMouseVisible
+    {
+        get
+        {
+            CnaResult result = Native.cna_game_get_is_mouse_visible(_nativeHandle, out byte visible);
+            CnaException.ThrowIfFailed(result, nameof(IsMouseVisible));
+            return visible != 0;
+        }
+        set
+        {
+            CnaResult result = Native.cna_game_set_is_mouse_visible(_nativeHandle, (byte)(value ? 1 : 0));
+            CnaException.ThrowIfFailed(result, nameof(IsMouseVisible));
+        }
+    }
+
     /// <summary>Hands control to native CNA. Blocks until the game exits.</summary>
     public void Run()
     {

@@ -63,6 +63,103 @@ public class GraphicsDevice
         CnaException.ThrowIfFailed(result, nameof(Clear));
     }
 
+    /// <summary>Matches real XNA's full <c>Clear(ClearOptions, Color, float, int)</c> overload --
+    /// unlike the simple <see cref="Clear(Color)"/> overload above, <paramref name="options"/> is
+    /// the caller's own bitmask (cast straight across, since <see cref="ClearOptions"/>'s values
+    /// match <see cref="CnaClearOptions"/> exactly) instead of a hardcoded
+    /// <see cref="CnaClearOptions.Target"/>-only value.</summary>
+    public void Clear(ClearOptions options, Color color, float depth, int stencil)
+    {
+        CnaResult result = Native.cna_graphics_device_clear_options(
+            ResolveNativeDeviceHandle(), (CnaClearOptions)options, color.ToNative(), depth, stencil);
+        CnaException.ThrowIfFailed(result, nameof(Clear));
+    }
+
+    public Viewport Viewport
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_viewport(ResolveNativeDeviceHandle(), out CnaViewport native);
+            CnaException.ThrowIfFailed(result, nameof(Viewport));
+            return Viewport.FromNative(native);
+        }
+        set
+        {
+            CnaResult result = Native.cna_graphics_device_set_viewport(ResolveNativeDeviceHandle(), value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(Viewport));
+        }
+    }
+
+    public GraphicsProfile GraphicsProfile
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_graphics_profile(ResolveNativeDeviceHandle(), out CnaGraphicsProfile native);
+            CnaException.ThrowIfFailed(result, nameof(GraphicsProfile));
+            return (GraphicsProfile)native;
+        }
+    }
+
+    /// <summary>Matches real XNA's <c>DrawUserPrimitives&lt;T&gt;</c>. Only the four vertex types
+    /// the real ABI's own <c>CNA_UserVertexSource</c> names -- <see cref="VertexPositionColor"/>,
+    /// <see cref="VertexPositionColorTexture"/>, <see cref="VertexPositionTexture"/>,
+    /// <see cref="VertexPositionNormalTexture"/> -- are supported; any other <typeparamref name="T"/>
+    /// would need the raw-stream route with a native vertex-declaration resource this project
+    /// doesn't have (see <see cref="CnaUserVertexSource"/>'s own doc comment).</summary>
+    public unsafe void DrawUserPrimitives<T>(PrimitiveType primitiveType, T[] vertexData, int vertexOffset, int primitiveCount)
+        where T : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(vertexData);
+        ArgumentOutOfRangeException.ThrowIfNegative(vertexOffset);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
+
+        CnaUserVertexSource vertexSource = VertexSourceFor<T>();
+
+        fixed (T* vertexDataPtr = vertexData)
+        {
+            var primitives = new CnaUserPrimitives
+            {
+                PrimitiveType = (int)primitiveType,
+                VertexSource = vertexSource,
+                VertexData = vertexDataPtr,
+                VertexDeclaration = CnaHandle.Zero,
+                VertexOffset = vertexOffset,
+                PrimitiveCount = primitiveCount,
+            };
+
+            CnaResult result = Native.cna_graphics_device_draw_user_primitives(ResolveNativeDeviceHandle(), in primitives);
+            CnaException.ThrowIfFailed(result, nameof(DrawUserPrimitives));
+        }
+    }
+
+    private static CnaUserVertexSource VertexSourceFor<T>() where T : unmanaged
+    {
+        if (typeof(T) == typeof(VertexPositionColor))
+        {
+            return CnaUserVertexSource.PositionColor;
+        }
+
+        if (typeof(T) == typeof(VertexPositionColorTexture))
+        {
+            return CnaUserVertexSource.PositionColorTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionTexture))
+        {
+            return CnaUserVertexSource.PositionTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionNormalTexture))
+        {
+            return CnaUserVertexSource.PositionNormalTexture;
+        }
+
+        throw new NotSupportedException(
+            $"DrawUserPrimitives<{typeof(T).Name}> is not supported -- only VertexPositionColor, " +
+            "VertexPositionColorTexture, VertexPositionTexture, and VertexPositionNormalTexture match a real " +
+            "CNA_USER_VERTEX_SOURCE_* identity.");
+    }
+
     /// <summary>
     /// Sets the active render target, or restores the back buffer when <paramref name="renderTarget"/>
     /// is <c>null</c>. Takes <see cref="Texture2D"/> rather than the stricter

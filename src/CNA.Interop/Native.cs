@@ -97,6 +97,28 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_game_get_content_manager_ext(CnaHandle game, out CnaHandle contentManager);
 
+    /// <summary>Matches <c>cna_game_set_window_title</c> exactly (<c>runtime.h:246</c>) -- takes an
+    /// owned game handle, safe to call any time (not callback-scoped), which is why
+    /// <c>CNA.GameWindow.Title</c>'s setter can run from a game's own constructor, the same way
+    /// <c>HelloGame</c> in cna-cs-template does.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_set_window_title(CnaHandle game, CnaStringView title);
+
+    /// <summary>Matches <c>cna_game_window_get_title_size</c> exactly
+    /// (<c>runtime_window.h:126</c>) -- same two-call size-then-copy pattern as
+    /// <see cref="cna_error_get_last_message_size"/>, see <c>CNA.GameWindow.Title</c>'s getter.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_get_title_size(CnaHandle game, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_game_window_copy_title(CnaHandle game, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_get_is_mouse_visible(CnaHandle game, out byte outVisible);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_set_is_mouse_visible(CnaHandle game, byte visible);
+
     // -- GraphicsDevice (real ABI, graphics_device.h) -----------------------------------------
     //
     // Step 3 of the native-ABI migration (see NEXT.md) fixed the confirmed-shape functions below
@@ -202,6 +224,25 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_rasterizer_state(CnaHandle device, in CnaRasterizerState state);
+
+    /// <summary>Matches <c>cna_graphics_device_get_graphics_profile</c> exactly
+    /// (<c>graphics_device.h:368</c>).</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_graphics_profile(CnaHandle device, out CnaGraphicsProfile outProfile);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_viewport(CnaHandle device, out CnaViewport outViewport);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_viewport(CnaHandle device, CnaViewport viewport);
+
+    /// <summary>Matches <c>cna_graphics_device_draw_user_primitives</c> exactly
+    /// (<c>graphics_device.h:1058</c>) -- "no vertex array is retained after the call returns", so
+    /// the pinned pointer inside <paramref name="primitives"/> only needs to stay valid for the
+    /// duration of this call, matching <c>CNA.Graphics.GraphicsDevice.DrawUserPrimitives</c>'s own
+    /// <see langword="fixed"/> block.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_draw_user_primitives(CnaHandle device, in CnaUserPrimitives primitives);
 
     // -- Effect / BasicEffect (real ABI, effects.h -- step 8 of the native-ABI migration) -----
     //
