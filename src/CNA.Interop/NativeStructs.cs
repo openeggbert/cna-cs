@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace CNA.Interop;
 
-/// <summary>ABI-shaped 2D vector. See ../../cnabinding/analysis_binding.md §23.</summary>
+/// <summary>ABI-shaped 2D vector. See openeggbert/cna's analysis_binding.md §23.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct CnaVector2
 {

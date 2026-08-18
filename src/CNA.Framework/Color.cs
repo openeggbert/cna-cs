@@ -1,7 +1,7 @@
 namespace CNA;
 
 /// <summary>
-/// A local, managed RGBA color (one byte per channel). See ../../cnabinding/analysis_binding.md
+/// A local, managed RGBA color (one byte per channel). See openeggbert/cna's analysis_binding.md
 /// §23. Named colors match the standard XNA/X11 color table exactly (139 colors + Transparent).
 /// Packed-uint (<c>PackedValue</c>) layout parity with real XNA is Phase 4 work (see plan.md) --
 /// this struct stores channels directly instead.

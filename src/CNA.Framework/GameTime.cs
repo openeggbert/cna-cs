@@ -1,7 +1,7 @@
 namespace CNA;
 
 /// <summary>
-/// A single frame's timing snapshot. See ../../cnabinding/analysis_binding_sharp_runtime.md §42 --
+/// A single frame's timing snapshot. See openeggbert/cna's analysis_binding_sharp_runtime.md §42 --
 /// crosses the ABI as a POD value (<see cref="CNA.Interop.CnaGameTime"/>), never as any native
 /// time-class instance.
 /// </summary>

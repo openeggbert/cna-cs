@@ -9,7 +9,7 @@ namespace CNA.Interop;
 ///
 /// This is a minimal slice covering exactly what the <c>samples/HelloGame</c> vertical slice
 /// needs (clear screen, load a texture, draw with SpriteBatch, read the keyboard, exit cleanly),
-/// per the "first .NET milestone" in ../../cnabinding/analysis_binding.md §38. It intentionally
+/// per the "first .NET milestone" in openeggbert/cna's analysis_binding.md §38. It intentionally
 /// does not try to guess the full upstream ABI signature set before that ABI exists -- see
 /// plan.md Phase 1 / Phase 4.
 ///

@@ -5952,8 +5952,8 @@ all 6 projects.
 ## Initial scaffold (2026-08-15)
 
 > First real content in this repository (previously just an empty `.git`).
-> Built from `../cnabinding/analysis_binding.md`,
-> `../cnabinding/analysis_binding_sharp_runtime.md`, and
+> Built from `openeggbert/cna`'s `analysis_binding.md`,
+> `openeggbert/cna`'s `analysis_binding_sharp_runtime.md`, and
 > `../cna/analysis_binding_languages.md` — read closely, not skimmed, since
 > the whole point of this repo is to follow that architecture precisely
 > rather than invent a plausible-looking alternative.

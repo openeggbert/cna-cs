@@ -7,7 +7,7 @@ namespace CNA;
 /// release callback for the specific resource type. Every native-backed CNA type
 /// (<c>Texture2D</c>, <c>SpriteBatch</c>, ...) owns one of these rather than a bare handle value,
 /// so normal disposal, forgotten disposal, and GC finalization are all handled uniformly. See
-/// ../../cnabinding/analysis_binding.md §24 and plan.md invariant #4.
+/// openeggbert/cna's analysis_binding.md §24 and plan.md invariant #4.
 /// </summary>
 internal sealed class NativeResourceHandle : SafeHandle
 {

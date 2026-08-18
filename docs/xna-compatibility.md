@@ -1,6 +1,6 @@
 # XNA compatibility goals
 
-Source: `../../cnabinding/analysis_binding.md` §31–§36. This page exists so
+Source: `openeggbert/cna`'s `analysis_binding.md` §31–§36. This page exists so
 the distinction below is stated once, clearly, in this repository, rather
 than assumed.
 

@@ -124,8 +124,8 @@ parameters, and the rest) are **no longer deferrals** -- they are Phase 8
 line items. Phase 6 packaging/cross-platform validation still remains too.
 **Date:** 2026-08-18 (see `NEXT.md` for the session-by-session history and
 where to pick up)
-**Source analysis:** `../cnabinding/analysis_binding.md`,
-`../cnabinding/analysis_binding_sharp_runtime.md`,
+**Source analysis:** `openeggbert/cna`'s `analysis_binding.md`,
+`openeggbert/cna`'s `analysis_binding_sharp_runtime.md`,
 `../cna/analysis_binding_languages.md`
 
 This plan turns the architectural recommendations in the three analysis
@@ -215,7 +215,7 @@ overlap:
 - **Track A (upstream, in `openeggbert/cna`):** design and implement the
   C ABI itself — handles, `CNA_Result`, UTF-8 strings, struct versioning,
   the managed-game callback bridge, etc. Not tracked by this file; see
-  `../cnabinding/analysis_binding.md` §14, §67 Phase 0–1.
+  `openeggbert/cna`'s `analysis_binding.md` §14, §67 Phase 0–1.
 - **Track B (this repository):** build the managed side against the *shape*
   of that ABI as specified in the analysis documents, so that the moment
   Track A lands, Track B only needs to fix up signatures rather than design
@@ -1713,7 +1713,7 @@ Carried over from `analysis_binding.md` §68 and
    `CNA.Framework`.
 6. Nothing in this repository references, includes, or links Sharp Runtime.
    If a future change seems to require that, stop and re-read
-   `../cnabinding/analysis_binding_sharp_runtime.md` §31 first.
+   `openeggbert/cna`'s `analysis_binding_sharp_runtime.md` §31 first.
 7. C# code in this repository uses the real .NET BCL (`System.*`) for
    everything that is not a CNA-specific concept. Never invent a
    `CNA`-flavored reimplementation of an ordinary BCL type.

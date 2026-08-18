@@ -1,8 +1,8 @@
 # Architecture
 
 This document summarizes the architecture defined by
-`../../cnabinding/analysis_binding.md` and
-`../../cnabinding/analysis_binding_sharp_runtime.md`, as applied to this
+`openeggbert/cna`'s `analysis_binding.md` and
+`openeggbert/cna`'s `analysis_binding_sharp_runtime.md`, as applied to this
 repository specifically. Read those two documents for the full reasoning;
 this page is the "what it means for the code in `src/`" version.
 

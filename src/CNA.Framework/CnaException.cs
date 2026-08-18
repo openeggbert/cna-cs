@@ -5,7 +5,7 @@ namespace CNA;
 /// <summary>
 /// The managed exception every failing native CNA call is converted to. No <c>CnaResult</c> and
 /// no native exception ever crosses out of <c>CNA.Interop</c> unconverted -- see
-/// ../../cnabinding/analysis_binding.md §10 and plan.md invariant #2.
+/// openeggbert/cna's analysis_binding.md §10 and plan.md invariant #2.
 /// </summary>
 public class CnaException : Exception
 {

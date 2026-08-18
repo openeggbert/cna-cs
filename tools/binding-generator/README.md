@@ -5,7 +5,7 @@ This directory is a placeholder for the codegen tool referenced throughout
 repetitive, mechanical parts of `CNA.XnaCompat` from `CNA.Framework` (and
 possibly from `CNA.Interop`'s ABI declarations) instead of hand-writing them.
 
-Per `../../cnabinding/analysis_binding.md` §74, automation is a good fit for:
+Per `openeggbert/cna`'s `analysis_binding.md` §74, automation is a good fit for:
 
 - raw FFI declarations,
 - enum mappings (see the two parallel `Keys` enums this would remove),

@@ -100,7 +100,7 @@ might otherwise take thousands of hours into ports that mostly need to
 address genuine API or content incompatibilities. This is why C#/.NET is the
 first official CNA language binding, ahead of JavaScript/TypeScript, Rust,
 Python, and the rest — see
-[`../cnabinding/analysis_binding.md`](../cnabinding/analysis_binding.md) and
+`analysis_binding.md` (in `openeggbert/cna`) and
 [`../cna/analysis_binding_languages.md`](../cna/analysis_binding_languages.md)
 for the full reasoning.
 
@@ -168,10 +168,17 @@ relationship to Microsoft XNA Framework naming, Sharp Runtime, and FNA.
 ## See also
 
 - [`openeggbert/cna`](https://github.com/openeggbert/cna) — the native C++
-  engine this binding wraps.
+  engine this binding wraps. Its `modules/c-api/include/CNA/C/*.h` are the
+  headers every binding here is read from, and its `analysis_binding*.md` are
+  the design analysis this repository's architecture is built on.
+
+  Referenced by repository rather than by relative path on purpose: those files
+  live in a *checkout* of that repository, and the checkout's directory name is
+  not stable. This page used to link `../cnabinding/analysis_binding.md`, which
+  stopped resolving the moment that working copy was renamed.
 - [`openeggbert/sharp-runtime`](https://github.com/openeggbert/sharp-runtime) —
   the native .NET-like C++ library CNA may use internally.
-- `../cnabinding/analysis_binding.md`,
-  `../cnabinding/analysis_binding_sharp_runtime.md`,
+- `openeggbert/cna`'s `analysis_binding.md`,
+  `openeggbert/cna`'s `analysis_binding_sharp_runtime.md`,
   `../cna/analysis_binding_languages.md` — the design analysis this
   repository's architecture is built from.

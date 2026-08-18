@@ -5,7 +5,7 @@ using Microsoft.Xna.Framework.Input;
 namespace HelloGame;
 
 /// <summary>
-/// The reference HelloGame from ../../../cnabinding/analysis_binding.md §38 and §140,
+/// The reference HelloGame from openeggbert/cna's analysis_binding.md §38 and §140,
 /// reproduced exactly to exercise the whole stack: C# -> CNA.XnaCompat -> CNA.Framework ->
 /// CNA.Interop -> CNA C ABI -> C++ CNA -> a CNA renderer -> a window.
 /// </summary>
