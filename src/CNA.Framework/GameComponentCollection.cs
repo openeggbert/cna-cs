@@ -20,6 +20,14 @@ namespace CNA;
 public class GameComponentCollection : ICollection<GameComponent>
 {
     private readonly Game _game;
+
+    /// <summary>Handle-to-wrapper map. Deliberately *not* a membership set: the C API accepts the
+    /// same component twice ("The canonical collection accepts the same component twice, and this
+    /// route does too"), so an entry must survive one removal, and entries are kept after
+    /// <see cref="Remove"/>/<see cref="Clear"/> so a re-added component is still resolvable. An
+    /// earlier revision deleted on removal and made the indexer claim a twice-added component "was
+    /// not added through this collection" -- found by a code-review pass. Native remains the sole
+    /// authority on membership; this only answers "which managed object is this handle".</summary>
     private readonly Dictionary<ulong, GameComponent> _known = [];
 
     internal GameComponentCollection(Game game)
@@ -62,9 +70,19 @@ public class GameComponentCollection : ICollection<GameComponent>
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        CnaResult result = Native.cna_game_components_add(GameHandle, item.NativeHandle);
-        CnaException.ThrowIfFailed(result, nameof(Add));
+        // Registered BEFORE the native call: the C API initializes a component as it is added once
+        // the game is running, so the initialize callback can run inside cna_game_components_add
+        // and a component that inspects Game.Components from its own Initialize would otherwise
+        // find itself unresolvable. Rolled back if the add fails.
         _known[item.NativeHandle.Value] = item;
+
+        CnaResult result = Native.cna_game_components_add(GameHandle, item.NativeHandle);
+        if (result.IsFailure())
+        {
+            _known.Remove(item.NativeHandle.Value);
+            CnaException.ThrowIfFailed(result, nameof(Add));
+        }
+
         ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
     }
 
@@ -77,18 +95,28 @@ public class GameComponentCollection : ICollection<GameComponent>
 
         if (removed != 0)
         {
-            _known.Remove(item.NativeHandle.Value);
+            // _known deliberately keeps its entry -- see that field's doc comment.
             ComponentRemoved?.Invoke(this, new GameComponentCollectionEventArgs(item));
         }
 
         return removed != 0;
     }
 
+    /// <summary>Raises <see cref="ComponentRemoved"/> once per component, matching XNA's
+    /// <c>ClearItems</c> and the C API ("Every removal raises the component-removed event, one per
+    /// component"). An earlier revision raised none, so per-component teardown wired to that event
+    /// never ran on <see cref="Clear"/>.</summary>
     public void Clear()
     {
+        GameComponent[] removed = ComponentRemoved is null ? [] : this.ToArray();
+
         CnaResult result = Native.cna_game_components_clear(GameHandle);
         CnaException.ThrowIfFailed(result, nameof(Clear));
-        _known.Clear();
+
+        foreach (GameComponent component in removed)
+        {
+            ComponentRemoved?.Invoke(this, new GameComponentCollectionEventArgs(component));
+        }
     }
 
     public bool Contains(GameComponent item)
@@ -109,28 +137,74 @@ public class GameComponentCollection : ICollection<GameComponent>
         return index;
     }
 
+    /// <summary>Validates before copying anything -- <c>ICollection&lt;T&gt;.CopyTo</c> requires
+    /// the exception to be thrown before any element is written, and an earlier revision copied
+    /// what fitted and then threw, leaving the caller's array half-populated.</summary>
     public void CopyTo(GameComponent[] array, int arrayIndex)
     {
         ArgumentNullException.ThrowIfNull(array);
+        ArgumentOutOfRangeException.ThrowIfNegative(arrayIndex);
 
         int count = Count;
+        if (arrayIndex > array.Length - count)
+        {
+            throw new ArgumentException(
+                "The destination array is too small for the components in this collection.", nameof(array));
+        }
+
         for (int i = 0; i < count; i++)
         {
             array[arrayIndex + i] = this[i];
         }
     }
 
+    /// <summary>
+    /// Disposes every component this collection has ever been given, releasing its native handle
+    /// and its GC root.
+    ///
+    /// Called by <see cref="Game.Dispose(bool)"/> because the C API requires it: "Every component
+    /// must be released before its game is destroyed." Nothing else can do it -- a component holds
+    /// a strong <see cref="System.Runtime.InteropServices.GCHandle"/> to itself for the native
+    /// callback context, so it is permanently reachable and no finalizer can ever run. Without
+    /// this, the standard XNA pattern <c>Components.Add(new MyComponent(this))</c> followed by
+    /// <c>game.Dispose()</c> violated that precondition and leaked both the native component and
+    /// the managed object for the process lifetime. Found by a code-review pass.
+    /// </summary>
+    internal void DisposeAllKnownComponents()
+    {
+        foreach (GameComponent component in _known.Values.ToArray())
+        {
+            component.Dispose();
+        }
+
+        _known.Clear();
+    }
+
     public event EventHandler<GameComponentCollectionEventArgs>? ComponentAdded;
 
     public event EventHandler<GameComponentCollectionEventArgs>? ComponentRemoved;
 
+    /// <summary>
+    /// Snapshots the collection before yielding. The native collection is the authority and can be
+    /// mutated during enumeration -- including by a component's own callbacks -- and an earlier
+    /// revision indexed it live against a count read once, so removing during a <c>foreach</c>
+    /// silently skipped the next component and then failed with a native out-of-range error
+    /// instead of the <see cref="InvalidOperationException"/> a <c>foreach</c> caller expects.
+    ///
+    /// A snapshot rather than a version counter because this collection holds no version to count:
+    /// native owns the list and does not report modifications. Enumerating a copy is the honest
+    /// option -- mutations during the loop are simply not observed by it.
+    /// </summary>
     public IEnumerator<GameComponent> GetEnumerator()
     {
         int count = Count;
+        var snapshot = new GameComponent[count];
         for (int i = 0; i < count; i++)
         {
-            yield return this[i];
+            snapshot[i] = this[i];
         }
+
+        return ((IEnumerable<GameComponent>)snapshot).GetEnumerator();
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

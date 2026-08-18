@@ -278,6 +278,12 @@ public abstract class Game : IDisposable
         }
 
         _disposed = true;
+
+        // Before cna_game_destroy: the component ABI states "Every component must be released
+        // before its game is destroyed", and a component cannot release itself -- its native
+        // callback context is a strong GCHandle, so it is permanently reachable and unfinalizable.
+        _components?.DisposeAllKnownComponents();
+
         Native.cna_game_destroy(_nativeHandle);
 
         if (CnaAmbientGame.Current == _nativeHandle)
