@@ -5,9 +5,17 @@ namespace CNA.Framework.Tests;
 /// <summary>
 /// <see cref="Curve"/> is one of the few Phase 8 types that is genuinely testable here: it is
 /// managed math with no native dependency (see its own doc comment for why that was a deliberate
-/// choice over binding <c>curve.h</c>). These tests pin the parts most likely to drift silently --
-/// the Hermite basis, all five loop modes, step continuity, and the asymmetric in/out tangent
-/// formulas -- since a wrong curve produces plausible-looking animation rather than an error.
+/// choice over binding <c>curve.h</c>).
+///
+/// <b>These tests are written to fail on a wrong implementation, not merely to pass on the right
+/// one.</b> An earlier revision claimed to pin the Hermite basis but did not: every in-range
+/// evaluation used a curve whose tangents were both zero, so swapping <c>TangentIn</c> and
+/// <c>TangentOut</c> in the basis passed all of them, as did rescaling both tangent terms by the
+/// segment duration. Every loop-mode test also started its range at zero, so dropping the
+/// <c>rangeStart</c> offset passed too, and <see cref="Curve"/>'s binary search was only ever run
+/// with two keys, where its loop body never executes -- <c>return 0;</c> passed. A code-review
+/// pass found all four holes. The tests below close them with hand-computed values on curves that
+/// have non-zero asymmetric tangents, a non-zero range start, and five keys.
 /// </summary>
 public class CurveTests
 {
@@ -190,13 +198,122 @@ public class CurveTests
     /// <summary>An endpoint substitutes itself for its missing neighbour, which must yield a flat
     /// tangent rather than a division by zero.</summary>
     [Fact]
-    public void ComputeTangents_Endpoints_AreFlatNotNaN()
+    public void ComputeTangents_Endpoints_AreFlat()
     {
         Curve curve = TwoKeyLine();
         curve.ComputeTangents(CurveTangent.Smooth);
 
-        Assert.False(float.IsNaN(curve.Keys[0].TangentIn));
-        Assert.False(float.IsNaN(curve.Keys[1].TangentOut));
+        // Asserts the actual value, not just "not NaN" -- the earlier version of this test passed
+        // for an implementation returning any arbitrary number.
+        Assert.Equal(0f, curve.Keys[0].TangentIn);
+        Assert.Equal(0f, curve.Keys[1].TangentOut);
+    }
+
+    /// <summary>
+    /// The one test that actually pins the Hermite basis. Hand-computed: at the segment midpoint
+    /// the basis weights are h00=0.5, h10=0.125, h01=0.5, h11=-0.125, and the tangent terms take
+    /// the *start* key's <c>TangentOut</c> and the *end* key's <c>TangentIn</c> --
+    /// 0.5·0 + 0.125·4 + 0.5·10 + (-0.125)·(-2) = 5.75.
+    ///
+    /// The other two tangents are set to unrelated values so the assertion discriminates: swapping
+    /// in/out yields 7.75, and rescaling the tangent terms by the segment duration (2 here) yields
+    /// 6.5. Both were previously undetectable.
+    /// </summary>
+    [Fact]
+    public void Evaluate_AsymmetricNonZeroTangents_MatchesHandComputedHermiteValue()
+    {
+        var curve = new Curve();
+        curve.Keys.Add(new CurveKey(0f, 0f, 99f, 4f));
+        curve.Keys.Add(new CurveKey(2f, 10f, -2f, 77f));
+
+        Assert.Equal(5.75f, curve.Evaluate(1f), 4);
+    }
+
+    private static Curve FiveKeyRamp()
+    {
+        var curve = new Curve();
+        for (int i = 0; i <= 4; i++)
+        {
+            curve.Keys.Add(new CurveKey(i, i * 10f));
+        }
+
+        return curve;
+    }
+
+    /// <summary>Exercises the binary search with enough keys that its loop body actually runs --
+    /// with only two keys it never does, so a <c>return 0;</c> stub was indistinguishable.</summary>
+    [Theory]
+    [InlineData(0.5f, 5f)]
+    [InlineData(1.5f, 15f)]
+    [InlineData(2.5f, 25f)]
+    [InlineData(3.5f, 35f)]
+    public void Evaluate_FiveKeys_PicksTheRightSegment(float position, float expected) =>
+        Assert.Equal(expected, FiveKeyRamp().Evaluate(position), 4);
+
+    [Theory]
+    [InlineData(0f, 0f)]
+    [InlineData(1f, 10f)]
+    [InlineData(2f, 20f)]
+    [InlineData(3f, 30f)]
+    [InlineData(4f, 40f)]
+    public void Evaluate_FiveKeys_AtEachKeyPosition_ReturnsThatKeysValue(float position, float expected) =>
+        Assert.Equal(expected, FiveKeyRamp().Evaluate(position), 4);
+
+    /// <summary>A curve whose range does not start at zero. Every earlier loop-mode test spanned
+    /// [0,1], so an implementation that dropped the <c>rangeStart</c> offset when folding a
+    /// position back into range passed them all.</summary>
+    private static Curve OffsetRange()
+    {
+        var curve = new Curve();
+        curve.Keys.Add(new CurveKey(5f, 0f));
+        curve.Keys.Add(new CurveKey(7f, 10f));
+        return curve;
+    }
+
+    [Fact]
+    public void Evaluate_CycleLoop_OnAnOffsetRange_FoldsRelativeToRangeStart()
+    {
+        Curve curve = OffsetRange();
+        curve.PostLoop = CurveLoopType.Cycle;
+        curve.PreLoop = CurveLoopType.Cycle;
+
+        Assert.Equal(curve.Evaluate(6f), curve.Evaluate(8f), 4);
+        Assert.Equal(curve.Evaluate(6f), curve.Evaluate(4f), 4);
+    }
+
+    [Fact]
+    public void Evaluate_CycleOffsetLoop_OnAnOffsetRange_AddsOneRangeDeltaPerCycle()
+    {
+        Curve curve = OffsetRange();
+        curve.PostLoop = CurveLoopType.CycleOffset;
+
+        Assert.Equal(curve.Evaluate(6f) + 10f, curve.Evaluate(8f), 4);
+    }
+
+    /// <summary>Picks a position where oscillate and cycle genuinely disagree -- at a whole-cycle
+    /// offset they coincide, so a test there would not tell the two apart.</summary>
+    [Fact]
+    public void Evaluate_OscillateLoop_OnAnOffsetRange_MirrorsRatherThanWraps()
+    {
+        Curve oscillate = OffsetRange();
+        oscillate.PostLoop = CurveLoopType.Oscillate;
+
+        Curve cycle = OffsetRange();
+        cycle.PostLoop = CurveLoopType.Cycle;
+
+        // 7.5 is 0.5 past the end: oscillate folds back to 6.5, cycle wraps to 5.5.
+        Assert.Equal(oscillate.Evaluate(6.5f), oscillate.Evaluate(7.5f), 4);
+        Assert.Equal(cycle.Evaluate(5.5f), cycle.Evaluate(7.5f), 4);
+        Assert.NotEqual(oscillate.Evaluate(7.5f), cycle.Evaluate(7.5f), 4);
+    }
+
+    [Fact]
+    public void Evaluate_ConstantLoop_OnAnOffsetRange_ClampsToEndpoints()
+    {
+        Curve curve = OffsetRange();
+
+        Assert.Equal(0f, curve.Evaluate(1f), 4);
+        Assert.Equal(10f, curve.Evaluate(99f), 4);
     }
 
     [Fact]
