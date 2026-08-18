@@ -16,19 +16,27 @@ namespace Microsoft.Xna.Framework;
 /// </summary>
 public class GameComponentCollectionEventArgs : EventArgs
 {
-    internal GameComponentCollectionEventArgs(CNA.IGameComponent gameComponent)
+    /// <summary>Public, matching real XNA -- its constructor is public too, and a game that raises
+    /// the collection events itself (a test double, for instance) needs to be able to construct
+    /// the argument.</summary>
+    public GameComponentCollectionEventArgs(CNA.IGameComponent gameComponent)
     {
         ArgumentNullException.ThrowIfNull(gameComponent);
-        Component = gameComponent;
+        GameComponent = gameComponent;
     }
 
     /// <summary>
     /// The component the event is about.
+    ///
+    /// Named <c>GameComponent</c>, not <c>Component</c>: real XNA calls it <c>GameComponent</c>,
+    /// and a handler written against XNA reads <c>e.GameComponent</c>. The first version of this
+    /// type used the shorter name, which compiled fine here and would have failed in every ported
+    /// game -- a member-level diff against the engine's own headers is what surfaced it.
     ///
     /// Typed as <see cref="CNA.IGameComponent"/> rather than this namespace's own, for the reason
     /// <see cref="GameComponentCollection"/> records about its element type: the collection holds
     /// <c>CNA.GameComponent</c>, which both namespaces' components derive from, and a cast to the
     /// compat interface would fail for a component that only implements the CNA one.
     /// </summary>
-    public CNA.IGameComponent Component { get; }
+    public CNA.IGameComponent GameComponent { get; }
 }

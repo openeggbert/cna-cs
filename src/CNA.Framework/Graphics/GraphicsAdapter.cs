@@ -117,6 +117,32 @@ public class GraphicsAdapter
         return supported != 0;
     }
 
+    /// <summary>
+    /// The OS monitor handle this adapter drives (an <c>HMONITOR</c> on Windows). Matches real
+    /// XNA's own <c>MonitorHandle</c>, which is likewise an <c>IntPtr</c>.
+    ///
+    /// <c>cna_graphics_adapter_get_native_monitor_handle</c> is real and bound, but its own header
+    /// doc says it "reports the native-monitor-handle mapping as unavailable at the stable C
+    /// boundary" and returns <c>CNA_RESULT_NOT_SUPPORTED</c> after validating the adapter index.
+    /// So this throws today.
+    ///
+    /// Calling the route and translating its failure, rather than throwing unconditionally, is the
+    /// deliberate choice: the property answers correctly the day the engine implements it, with no
+    /// change here, and an invalid adapter index is still reported as an invalid adapter index
+    /// rather than being masked by a blanket throw.
+    /// </summary>
+    /// <exception cref="CnaException">Always, while native reports the mapping unavailable.</exception>
+    public nint MonitorHandle
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_adapter_get_native_monitor_handle(
+                DeviceHandle, AdapterIndex, out ulong value);
+            CnaException.ThrowIfFailed(result, nameof(MonitorHandle));
+            return (nint)value;
+        }
+    }
+
     /// <summary>Re-enumerates the machine's adapters. Real XNA has no equivalent -- its adapter
     /// list is fixed for the process lifetime -- but <c>cna_graphics_adapters_refresh</c> is real,
     /// and without exposing it a caller could never see a monitor hotplug.</summary>

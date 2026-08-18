@@ -1966,6 +1966,21 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_framework_dispatcher_update(CnaHandle game);
 
+    /// <summary>
+    /// The title's base content directory, in the ABI's two-call size-then-copy shape.
+    ///
+    /// The <c>game</c> handle is taken "for thread affinity only" per the header -- the canonical
+    /// accessor behind it is static and resolves the executable's directory on first use, which is
+    /// why <c>CNA.TitleLocation</c> can be a static class despite these needing a handle.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_title_location_get_path_size(CnaHandle game, out ulong outBytes);
+
+    /// <summary>See <see cref="cna_title_location_get_path_size"/>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_title_location_copy_path(
+        CnaHandle game, byte* destination, ulong capacity, out ulong outBytes);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_apply_changes(CnaHandle manager);
 
@@ -2094,6 +2109,20 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_adapters_refresh(CnaHandle device);
+
+    /// <summary>
+    /// <c>display.h</c>'s <c>CNA_NativeHandleValue</c> is a plain <c>uint64_t</c>, not a handle
+    /// struct, so it binds as <see cref="ulong"/> rather than <see cref="CnaHandle"/>.
+    ///
+    /// Documented to return <c>CNA_RESULT_NOT_SUPPORTED</c> and write zero, always -- it is bound
+    /// anyway so <c>CNA.Graphics.GraphicsAdapter.MonitorHandle</c> can exist with its real XNA
+    /// signature and start answering for free if the engine ever implements it. (Named in
+    /// <c>&lt;c&gt;</c> rather than <c>&lt;see cref&gt;</c>: this is the bottom layer, so it cannot
+    /// reference CNA.Framework -- invariant 1.)
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_get_native_monitor_handle(
+        CnaHandle device, uint adapterIndex, out ulong outValue);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_presentation_parameters_init(out CnaPresentationParameters outParameters);

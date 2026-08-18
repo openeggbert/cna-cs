@@ -2,12 +2,27 @@
 
 ## Coverage: how it is measured, and what it is
 
-Two diffs against the C++ engine's own `Microsoft/Xna/Framework/**` headers,
+Three diffs against the C++ engine's own `Microsoft/Xna/Framework/**` headers,
 which are the authority — not a remembered list of XNA 4.0.
 
 **Types.** 237 public compat types. Everything the diff still reports is non-XNA:
 CNAEXT effect/vertex/glTF types, MonoGame's `MouseCursor`, FNA's `TextInputEXT`,
 CNA's content-manifest types, and `HalfTypeHelper` (internal in XNA too).
+
+**Whole types absent from C#** — the third diff, added 2026-08-18, and the one
+that closes the member diff's own blind spot. The member diff walks C++ classes
+and compares members of types that exist on *both* sides; a type with no C# file
+at all is `continue`d past and never reported. So "the member diff is clean" said
+nothing whatsoever about missing types.
+
+It found `TitleLocation` — a real XNA 4.0 static class (FNA ships it too), with
+`cna_title_location_get_path_size`/`_copy_path` sitting unbound in `runtime.h`.
+Now implemented. Of the 227 raw candidates, everything else is `Detail::`/
+`Internal::`/`Platform::` engine internals, `*EXT` extensions, the renderer
+interfaces, or the excluded namespaces below.
+
+Re-run it with `typesweep.py`; it is cheap and it is the only one of the three
+that can see a missing type.
 
 **Members.** Run 2026-08-18, and it should have been run at the same time as the
 type diff — it was not, and it found ~45 real gaps that the type diff and the
@@ -28,10 +43,25 @@ noise. The categories, so a re-run is quick to triage:
 | C++ internals | `ContentManager.LoadXnbAsset`, `Texture.ValidateGetDataFormat` |
 | equivalent under a different name | `Get/SetIndexBuffer` → `Indices`; `MaxTextures` → `Count`; cube `Width`/`Height` → `Size` |
 | inherited from the BCL | `LaunchParameters.Add`/`ContainsKey` (from `Dictionary`) |
-| not XNA 4.0 | `AdaptersChanged`, `MonitorHandle`, `ClosestMSAAPower`, `VideoPlayer.VideoInfo` |
+| not XNA 4.0 | `AdaptersChanged`, `ClosestMSAAPower`, `VideoPlayer.VideoInfo` |
 
 The filter that makes this tractable: the C++ headers mark non-XNA members
 `CNAEXT`. Applying it cut the candidate list from 107 to 45 in one step.
+
+**Two triage errors from the 2026-08-18 member pass, corrected on re-run:**
+
+- `GraphicsAdapter.MonitorHandle` was filed under "not XNA 4.0". It *is* XNA 4.0
+  (`public IntPtr MonitorHandle { get; }`), and `display.h` has a route for it.
+  Now implemented — it throws, because the route is documented to always answer
+  `CNA_RESULT_NOT_SUPPORTED`, which is the throw-don't-omit rule working exactly
+  as intended.
+- compat `GameComponentCollectionEventArgs` named its property `Component`. XNA
+  calls it `GameComponent`. Renamed, and pinned by a test, because a wrong
+  *name* in the compat layer compiles perfectly here and fails only in a ported
+  game — nothing else in this repository can catch one.
+
+The lesson generalises: "not XNA 4.0" is the noise category that needs a real
+check, not a glance. It is the only one whose false positives are silent.
 
 **The standard**, restated by the user: FNA is the model. Every XNA 4.0 type
 *and member* present. Where the C ABI cannot back one, implement the real XNA
@@ -1721,6 +1751,21 @@ outside Xbox Live and are not part of what "write an XNA game" means
 today), and the XNA *content pipeline build tooling*
 (`Microsoft.Xna.Framework.Content.Pipeline.*`, a build-time assembly that
 never shipped in the runtime profile).
+
+Added to that list 2026-08-18, on the same grounds: `Microsoft.Devices.Sensors`
+(`Accelerometer`, `Compass`, `Gyroscope`, `Motion`) and
+`Microsoft.Devices.VibrateController`. The C++ side has all of them, but they are
+the Windows Phone 7 sensor assembly, not the XNA core profile.
+
+**This exclusion is measured against the standard the user actually set, which is
+FNA.** FNA ships no `Microsoft.Xna.Framework.Net.dll`, no
+`Microsoft.Xna.Framework.GamerServices.dll` and no `Microsoft.Devices.Sensors` —
+it covers Framework, Graphics, Audio, Content, Input, Media, Storage and Xact,
+which is exactly the set this binding covers. So "FNA is the model, no gaps" and
+"these three namespaces are out" are the same statement, not a tension between
+two. If the user wants them anyway, the upstream surface is there: 369 exported
+functions across `gamer_services.h`, `net.h`, `net_gamers.h` and
+`net_sessions.h`, plus `sensors.h`.
 
 ### Phase 7+ — Out of scope for this repository
 
