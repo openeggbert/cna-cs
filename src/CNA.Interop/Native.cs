@@ -605,6 +605,69 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Display / adapter / presentation (real ABI, display.h -- Phase 8 WP5) ----------------
+    //
+    // Every adapter function takes a graphics-device handle plus an adapter index rather than an
+    // adapter handle: adapters are not resources with a lifetime here, they are indices into a
+    // list the device can enumerate, refreshed by cna_graphics_adapters_refresh. That is why
+    // CNA.Graphics.GraphicsAdapter holds a device + index, not a handle.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_display_mode_init(int width, int height, uint format, out CnaDisplayMode outMode);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_get_count(CnaHandle device, out ulong outCount);
+
+    /// <summary>Matches <c>cna_graphics_device_get_adapter_index</c> exactly
+    /// (<c>graphics_device.h:357</c>) -- the index of the adapter *this device* renders with,
+    /// which is not necessarily the machine's default one.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_adapter_index(CnaHandle device, out uint outAdapterIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_get_info(CnaHandle device, uint adapterIndex, ref CnaGraphicsAdapterInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_adapter_copy_description(
+        CnaHandle device, uint adapterIndex, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_adapter_copy_device_name(
+        CnaHandle device, uint adapterIndex, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_get_current_display_mode(
+        CnaHandle device, uint adapterIndex, out CnaDisplayMode outMode);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_get_display_mode_count(
+        CnaHandle device, uint adapterIndex, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_adapter_copy_display_modes(
+        CnaHandle device, uint adapterIndex, CnaDisplayMode* destination, ulong capacity, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_is_profile_supported(
+        CnaHandle device, uint adapterIndex, CnaGraphicsProfile profile, out byte outSupported);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapters_refresh(CnaHandle device);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_presentation_parameters_init(out CnaPresentationParameters outParameters);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_presentation_parameters(
+        CnaHandle device, ref CnaPresentationParameters parameters);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_presentation_parameters(
+        CnaHandle device, in CnaPresentationParameters parameters);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_display_mode(CnaHandle device, out CnaDisplayMode outMode);
+
     // -- TouchPanel (real ABI, input.h + input_touch.h -- Phase 8 WP9) ------------------------
     //
     // Split across two headers: the state snapshot lives with the rest of input (cna_touch_get_state

@@ -54,6 +54,21 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
 
     public new GraphicsProfile GraphicsProfile => (GraphicsProfile)base.GraphicsProfile;
 
+    public new GraphicsAdapter Adapter => (GraphicsAdapter)base.Adapter;
+
+    protected override CNA.Graphics.GraphicsAdapter CreateAdapter(uint adapterIndex) => new GraphicsAdapter(this, adapterIndex);
+
+    public new PresentationParameters PresentationParameters
+    {
+        get => (PresentationParameters)base.PresentationParameters;
+        set => base.PresentationParameters = value;
+    }
+
+    protected override CNA.Graphics.PresentationParameters WrapPresentationParameters(CNA.Graphics.PresentationParameters parameters) =>
+        new PresentationParameters(parameters);
+
+    public new DisplayMode DisplayMode => DisplayMode.FromFramework(base.DisplayMode);
+
     /// <summary>Same downcast pass-through pattern as <see cref="Indices"/>, but for a property
     /// whose base default is a real, non-null value -- see the base <c>BlendState</c> property's
     /// own doc comment for why <see cref="QueryBlendState"/> needs its own override here rather

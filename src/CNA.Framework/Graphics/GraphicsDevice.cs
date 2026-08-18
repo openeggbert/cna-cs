@@ -90,6 +90,66 @@ public class GraphicsDevice
         }
     }
 
+    /// <summary>The adapter this device renders with. Real XNA also has a static
+    /// <c>GraphicsAdapter.Adapters</c>; see <see cref="Graphics.GraphicsAdapter"/>'s own doc
+    /// comment for why the enumeration entry points here take a device instead.</summary>
+    public GraphicsAdapter Adapter => CreateAdapter(GetAdapterIndex());
+
+    /// <summary>The index of the adapter *this device* renders with.
+    /// <c>cna_graphics_device_get_adapter_index</c> is the authoritative answer -- deliberately
+    /// not a scan for the <c>is_default_adapter</c> flag, which answers "the machine's default
+    /// adapter", a different question this device need not agree with.
+    ///
+    /// Separate from <see cref="CreateAdapter"/> so the override below receives the index as a
+    /// parameter rather than having to look it up: an override written as
+    /// <c>new GraphicsAdapter(this, base.Adapter.AdapterIndex)</c> would recurse forever, since
+    /// <see cref="Adapter"/> dispatches straight back into the override.</summary>
+    protected uint GetAdapterIndex()
+    {
+        CnaResult result = Native.cna_graphics_device_get_adapter_index(ResolveNativeDeviceHandle(), out uint adapterIndex);
+        CnaException.ThrowIfFailed(result, nameof(Adapter));
+        return adapterIndex;
+    }
+
+    /// <summary>Covariant-return factory hook, same pattern as <see cref="QueryBlendState"/>.</summary>
+    protected virtual GraphicsAdapter CreateAdapter(uint adapterIndex) => new(this, adapterIndex);
+
+    /// <summary>The device's current presentation configuration. The setter applies it through
+    /// <c>cna_graphics_device_set_presentation_parameters</c>; mutating the object a getter
+    /// returned does nothing until it is assigned back, matching real XNA.</summary>
+    public PresentationParameters PresentationParameters
+    {
+        get
+        {
+            var native = new CnaPresentationParameters();
+            CnaResult result = Native.cna_graphics_device_get_presentation_parameters(ResolveNativeDeviceHandle(), ref native);
+            CnaException.ThrowIfFailed(result, nameof(PresentationParameters));
+            return WrapPresentationParameters(PresentationParameters.FromNative(native));
+        }
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            CnaResult result = Native.cna_graphics_device_set_presentation_parameters(ResolveNativeDeviceHandle(), value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(PresentationParameters));
+        }
+    }
+
+    /// <summary>Re-typing hook for CNA.XnaCompat -- takes and returns the public type rather than
+    /// the interop struct, for the same CS0050 reason
+    /// <see cref="SamplerStateCollection.Wrap"/> documents.</summary>
+    protected virtual PresentationParameters WrapPresentationParameters(PresentationParameters parameters) => parameters;
+
+    /// <summary>The display mode this device is currently presenting in.</summary>
+    public DisplayMode DisplayMode
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_display_mode(ResolveNativeDeviceHandle(), out CnaDisplayMode native);
+            CnaException.ThrowIfFailed(result, nameof(DisplayMode));
+            return Graphics.DisplayMode.FromNative(in native);
+        }
+    }
+
     public GraphicsProfile GraphicsProfile
     {
         get
