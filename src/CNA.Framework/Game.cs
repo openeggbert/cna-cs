@@ -670,9 +670,6 @@ public abstract class Game : IDisposable
 
         try
         {
-            // Native currently calls this *before* the initialize frame hook, so ordering has to be
-            // enforced here -- see RunInitializeOnce.
-            game.RunInitializeOnce();
             game.LoadContent();
             return CnaResult.Success;
         }
@@ -685,25 +682,21 @@ public abstract class Game : IDisposable
     private bool _initialized;
 
     /// <summary>
-    /// Runs <see cref="Initialize"/> exactly once, from whichever native callback arrives first.
+    /// Runs <see cref="Initialize"/> exactly once.
     ///
-    /// XNA's order is <c>Initialize</c> then <c>LoadContent</c> -- games rely on it, because
-    /// <c>LoadContent</c> routinely uses fields <c>Initialize</c> set. The integration test found
-    /// that native delivers the opposite: <c>CnaCApiRuntime.cpp</c>'s <c>Initialize()</c> override
-    /// calls the canonical <c>Game::Initialize()</c> first (which invokes <c>LoadContent</c>
-    /// internally, <c>Game.cpp:667</c>) and only then invokes the <c>initialize</c> frame hook. So
-    /// the observed order was <c>LoadContent -> Initialize -> Update</c>.
+    /// The once-guard is all that remains of a workaround. The first integration test found native
+    /// delivering <c>LoadContent -> Initialize -> Update</c>: the C glue called the canonical
+    /// <c>Game::Initialize()</c> -- which ends by calling <c>LoadContent()</c>, exactly as XNA does
+    /// -- and only then invoked the <c>initialize</c> frame hook. That contradicted the header's
+    /// own promise ("invoked once while the game initializes, before content loads"), so it was
+    /// reported rather than adopted, and this method ran <see cref="Initialize"/> from whichever
+    /// callback arrived first.
     ///
-    /// That contradicts the C header's own contract for the hook -- "invoked once while the game
-    /// initializes, <em>before content loads</em>" -- so it is a native defect, reported upstream,
-    /// not a rule this binding should adopt. Meanwhile a binding that shipped the inverted order
-    /// would break any ported game that touches an <c>Initialize</c>-assigned field from
-    /// <c>LoadContent</c>, which is most of them.
-    ///
-    /// The guard is deliberately self-healing rather than a reorder: whichever callback lands
-    /// first runs <see cref="Initialize"/>, and the other one finds it already done. When native is
-    /// fixed to honour its own documented order, this keeps working unchanged and simply stops
-    /// mattering.
+    /// Fixed upstream in CBIND-063 -- the hook now runs before the base, and the delivered order is
+    /// <c>initialize, load_content, begin_run, update, draw</c>. The <c>LoadContent</c> side of the
+    /// workaround is gone; the guard stays because "exactly once" is worth asserting on its own,
+    /// and <c>Game_CallsInitializeOnce_BeforeLoadContent</c> now measures native's real order
+    /// rather than this binding's correction of it.
     /// </summary>
     private void RunInitializeOnce()
     {

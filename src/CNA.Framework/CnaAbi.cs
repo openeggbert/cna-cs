@@ -13,9 +13,20 @@ namespace CNA;
 /// </summary>
 public static class CnaAbi
 {
-    /// <summary>The ABI this binding was written against
-    /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.1.0).</summary>
-    public const uint ExpectedVersion = (0u << 16) | (1u << 8) | 0u;
+    /// <summary>
+    /// The ABI this binding was written against
+    /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.2.0).
+    ///
+    /// Bumped from 0.1.0 when upstream added the content-reader registration, SpriteFont and
+    /// launch-parameter routes. Only the major component gates compatibility, so this was never a
+    /// blocker -- it is kept accurate so the integration test's log line
+    /// ("native ABI x, binding expects y") stays worth reading.
+    ///
+    /// Not to be confused with the ELF symbol version the library exports, which is
+    /// <c>CNA_C_API_0.1</c> and deliberately does <em>not</em> track this. Moving a version node on
+    /// a minor bump would break every already-linked consumer.
+    /// </summary>
+    public const uint ExpectedVersion = (0u << 16) | (2u << 8) | 0u;
 
     private static bool _checked;
 

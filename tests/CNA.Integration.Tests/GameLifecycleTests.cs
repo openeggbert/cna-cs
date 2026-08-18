@@ -175,12 +175,20 @@ public class GameLifecycleTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Initialize and LoadContent must each happen exactly once, and Initialize must come first.
-    /// XNA's documented order, and the thing a game's own field initialisation depends on. Getting
-    /// this wrong is invisible until a game reads something LoadContent was supposed to have set.
+    /// The lifecycle order, measured rather than assumed.
+    ///
+    /// This test found a real defect on its first run: native delivered
+    /// <c>LoadContent -> Initialize -> Update</c>, because the C glue called the canonical
+    /// <c>Game::Initialize()</c> -- which ends by calling <c>LoadContent()</c>, exactly as XNA does
+    /// -- before invoking the <c>initialize</c> frame hook. The header had promised the opposite
+    /// all along. Fixed upstream in CBIND-063.
+    ///
+    /// It survived as long as it did because the native suite's lifecycle assertions counted
+    /// callbacks, and a count cannot see an order. That is the whole reason this asserts the
+    /// *sequence* and not just the totals: exactly the same three counts hold for both orderings.
     /// </summary>
     [NativeFact]
-    public void Game_CallsInitializeOnce_BeforeLoadContent()
+    public void Game_DeliversTheLifecycleCallbacksInXnaOrder()
     {
         using var game = new ProbeGame(framesToRun: 2);
 
@@ -189,14 +197,15 @@ public class GameLifecycleTests(ITestOutputHelper output)
             game.RunOneFrame();
         }
 
+        output.WriteLine("callback order: " + string.Join(" -> ", game.Order));
+
         Assert.Equal(1, game.Initializes);
         Assert.Equal(1, game.LoadContents);
 
-        int initializeAt = game.Order.IndexOf("Initialize");
-        int loadContentAt = game.Order.IndexOf("LoadContent");
-        Assert.True(
-            initializeAt >= 0 && loadContentAt > initializeAt,
-            $"Initialize must precede LoadContent, but the order was: {string.Join(" -> ", game.Order)}");
+        // Initialize then LoadContent, and both before any Update. In XNA, LoadContent runs from
+        // inside base.Initialize(), so a game routinely reads Initialize-assigned fields there.
+        Assert.Equal(["Initialize", "LoadContent"], game.Order.Take(2));
+        Assert.Equal("Update", game.Order.Skip(2).First());
     }
 
     /// <summary>Properties that round-trip through native on every access. A mismatched struct or a
