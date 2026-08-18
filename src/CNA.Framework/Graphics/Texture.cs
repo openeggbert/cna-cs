@@ -67,6 +67,7 @@ public abstract class Texture : GraphicsResource
     {
         var info = new CnaTextureInfo();
         CnaResult result = Native.cna_texture_get_info(new CnaHandle(NativeHandleValue), ref info);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_texture_get_info");
         return info;
     }

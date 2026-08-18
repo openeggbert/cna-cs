@@ -52,6 +52,7 @@ public class Video : IDisposable
         get
         {
             CnaResult result = Native.cna_video_get_width(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Width));
             return value;
         }
@@ -62,6 +63,7 @@ public class Video : IDisposable
         get
         {
             CnaResult result = Native.cna_video_get_height(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Height));
             return value;
         }
@@ -72,6 +74,7 @@ public class Video : IDisposable
         get
         {
             CnaResult result = Native.cna_video_get_frames_per_second(NativeHandle, out float value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(FramesPerSecond));
             return value;
         }
@@ -82,6 +85,7 @@ public class Video : IDisposable
         get
         {
             CnaResult result = Native.cna_video_get_duration(NativeHandle, out long ticks);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Duration));
             return TimeSpan.FromTicks(ticks);
         }
@@ -92,6 +96,7 @@ public class Video : IDisposable
         get
         {
             CnaResult result = Native.cna_video_get_soundtrack_type(NativeHandle, out uint value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(VideoSoundtrackType));
             return (VideoSoundtrackType)value;
         }

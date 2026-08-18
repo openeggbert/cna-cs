@@ -36,6 +36,7 @@ public class ContentReader : BinaryReader
         get
         {
             CnaResult result = Native.cna_content_reader_get_version(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Version));
             return value;
         }
@@ -49,6 +50,7 @@ public class ContentReader : BinaryReader
         get
         {
             CnaResult result = Native.cna_content_reader_get_platform(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Platform));
             return value;
         }
@@ -57,6 +59,7 @@ public class ContentReader : BinaryReader
     public Matrix ReadMatrix()
     {
         CnaResult result = Native.cna_content_reader_read_matrix(NativeHandle, out CnaMatrix value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadMatrix));
         return Matrix.FromNative(value);
     }
@@ -64,6 +67,7 @@ public class ContentReader : BinaryReader
     public Quaternion ReadQuaternion()
     {
         CnaResult result = Native.cna_content_reader_read_quaternion(NativeHandle, out CnaQuaternion value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadQuaternion));
         return Quaternion.FromNative(value);
     }
@@ -71,6 +75,7 @@ public class ContentReader : BinaryReader
     public Vector2 ReadVector2()
     {
         CnaResult result = Native.cna_content_reader_read_vector2(NativeHandle, out CnaVector2 value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadVector2));
         return Vector2.FromNative(value);
     }
@@ -78,6 +83,7 @@ public class ContentReader : BinaryReader
     public Vector3 ReadVector3()
     {
         CnaResult result = Native.cna_content_reader_read_vector3(NativeHandle, out CnaVector3 value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadVector3));
         return Vector3.FromNative(value);
     }
@@ -85,6 +91,7 @@ public class ContentReader : BinaryReader
     public Vector4 ReadVector4()
     {
         CnaResult result = Native.cna_content_reader_read_vector4(NativeHandle, out CnaVector4 value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadVector4));
         return Vector4.FromNative(value);
     }
@@ -92,6 +99,7 @@ public class ContentReader : BinaryReader
     public Color ReadColor()
     {
         CnaResult result = Native.cna_content_reader_read_color(NativeHandle, out CnaColor value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadColor));
         return Color.FromNative(value);
     }
@@ -102,6 +110,7 @@ public class ContentReader : BinaryReader
     public bool ReadObjectTag()
     {
         CnaResult result = Native.cna_content_reader_read_object_tag(NativeHandle, out byte hasValue);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadObjectTag));
         return hasValue != 0;
     }

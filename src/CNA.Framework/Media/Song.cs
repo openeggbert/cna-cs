@@ -22,6 +22,12 @@ namespace CNA.Media;
 /// logic's lineage over namespace purity" trade-off <c>RenderTarget2D</c>/<c>BasicEffect</c>
 /// already made -- the compat type itself is sealed, matching real XNA.
 ///
+/// Every native call below pairs its handle read with <see cref="GC.KeepAlive(object)"/>. That
+/// became load-bearing when this type's handle moved into a
+/// <see cref="NativeResourceHandle"/>: before that it was a bare field with no finalizer, so an
+/// unreachable <see cref="Song"/> could not release itself mid-call. Now it can -- see
+/// <c>plan.md</c> WP17.
+///
 /// <see cref="Album"/>/<see cref="Artist"/>/<see cref="Genre"/> are real native reads over
 /// <c>cna_song_get_album</c>/<c>_artist</c>/<c>_genre</c>. They answer <see langword="null"/> for a
 /// song constructed directly from a file -- correct, and matching real XNA for a
@@ -99,12 +105,14 @@ public class Song : IDisposable, IEquatable<Song>
         get
         {
             CnaResult result = Native.cna_song_get_duration(NativeHandle, out long ticks);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Duration));
             return TimeSpan.FromTicks(ticks);
         }
         set
         {
             CnaResult result = Native.cna_song_set_duration(NativeHandle, value.Ticks);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Duration));
         }
     }
@@ -114,6 +122,7 @@ public class Song : IDisposable, IEquatable<Song>
         get
         {
             CnaResult result = Native.cna_song_get_is_protected(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsProtected));
             return value != 0;
         }
@@ -124,6 +133,7 @@ public class Song : IDisposable, IEquatable<Song>
         get
         {
             CnaResult result = Native.cna_song_get_is_rated(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsRated));
             return value != 0;
         }
@@ -134,12 +144,14 @@ public class Song : IDisposable, IEquatable<Song>
         get
         {
             CnaResult result = Native.cna_song_get_play_count(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PlayCount));
             return value;
         }
         set
         {
             CnaResult result = Native.cna_song_set_play_count(NativeHandle, value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PlayCount));
         }
     }
@@ -149,6 +161,7 @@ public class Song : IDisposable, IEquatable<Song>
         get
         {
             CnaResult result = Native.cna_song_get_rating(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Rating));
             return value;
         }
@@ -159,6 +172,7 @@ public class Song : IDisposable, IEquatable<Song>
         get
         {
             CnaResult result = Native.cna_song_get_track_number(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(TrackNumber));
             return value;
         }
@@ -177,6 +191,8 @@ public class Song : IDisposable, IEquatable<Song>
             }
 
             CnaResult result = Native.cna_song_get_is_disposed(NativeHandle, out byte disposed);
+
+            GC.KeepAlive(this);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsDisposed));
             return disposed != 0;

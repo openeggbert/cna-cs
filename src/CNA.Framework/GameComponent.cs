@@ -67,6 +67,19 @@ public class GameComponent : IGameComponent, IUpdateable, IDisposable
 
     public Game Game { get; }
 
+    /// <summary>
+    /// A bare <see cref="CnaHandle"/>, deliberately -- unlike almost every other native-backed type
+    /// here, which owns a <see cref="NativeResourceHandle"/>.
+    ///
+    /// That is why this type and <see cref="DrawableGameComponent"/> are the one place where a
+    /// native call does <b>not</b> need a <see cref="GC.KeepAlive(object)"/> after reading the
+    /// handle: WP17's hazard is a <see cref="System.Runtime.InteropServices.SafeHandle"/>'s critical
+    /// finalizer running <c>destroy</c> mid-call, and there is no such finalizer here. A component
+    /// is released by <see cref="Dispose(bool)"/> or by native's own disposal callback, never by the
+    /// GC -- its callback context is a strong <see cref="GCHandle"/>, so it is reachable until one
+    /// of those runs. Noted here because a sweep for missing <c>KeepAlive</c> flags these four call
+    /// sites every time.
+    /// </summary>
     internal CnaHandle NativeHandle => _handle;
 
     /// <summary>The first exception a callback threw, if any -- see this class's own doc comment.

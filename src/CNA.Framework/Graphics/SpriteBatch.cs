@@ -75,6 +75,7 @@ public class SpriteBatch : IDisposable
 
         var beginInfo = new CnaSpriteBatchBeginInfo();
         CnaResult result = Native.cna_sprite_batch_begin(new CnaHandle(NativeHandleValue), in beginInfo);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Begin));
 
         _commandBuffer.Clear();
@@ -281,6 +282,8 @@ public class SpriteBatch : IDisposable
             FlushCommandBuffer();
 
             CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));
+
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(End));
         }
         finally

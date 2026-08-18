@@ -84,6 +84,7 @@ public class SoundEffect : IDisposable
         get
         {
             CnaResult result = Native.cna_sound_effect_get_duration_ticks(new CnaHandle(NativeHandleValue), out long ticks);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Duration));
             return TimeSpan.FromTicks(ticks);
         }
@@ -185,6 +186,7 @@ public class SoundEffect : IDisposable
     internal nint CreateNativeInstanceHandle()
     {
         CnaResult result = Native.cna_sound_effect_create_instance(new CnaHandle(NativeHandleValue), out CnaHandle instance);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(CreateInstance));
         return instance.AsNint;
     }

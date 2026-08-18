@@ -69,6 +69,7 @@ public class Texture3D : Texture
     {
         var info = new CnaTexture3DInfo();
         CnaResult result = Native.cna_texture3d_get_info(new CnaHandle(NativeHandleValue), ref info);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_texture3d_get_info");
         return info;
     }

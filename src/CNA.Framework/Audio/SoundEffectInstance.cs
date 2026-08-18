@@ -36,6 +36,7 @@ public class SoundEffectInstance : IDisposable
     public void Play()
     {
         CnaResult result = Native.cna_sound_effect_instance_play(new CnaHandle(NativeHandleValue));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Play));
         _hasBeenPlayed = true;
     }
@@ -43,12 +44,14 @@ public class SoundEffectInstance : IDisposable
     public void Pause()
     {
         CnaResult result = Native.cna_sound_effect_instance_pause(new CnaHandle(NativeHandleValue));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Pause));
     }
 
     public void Resume()
     {
         CnaResult result = Native.cna_sound_effect_instance_resume(new CnaHandle(NativeHandleValue));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Resume));
     }
 
@@ -61,6 +64,7 @@ public class SoundEffectInstance : IDisposable
     public void Stop(bool immediate)
     {
         CnaResult result = Native.cna_sound_effect_instance_stop(new CnaHandle(NativeHandleValue), immediate ? (byte)1 : (byte)0);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Stop));
     }
 
@@ -68,6 +72,7 @@ public class SoundEffectInstance : IDisposable
     {
         var info = new CnaSoundEffectInstanceInfo();
         CnaResult result = Native.cna_sound_effect_instance_get_info(new CnaHandle(NativeHandleValue), ref info);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_sound_effect_instance_get_info");
         return info;
     }
@@ -83,6 +88,7 @@ public class SoundEffectInstance : IDisposable
         set
         {
             CnaResult result = Native.cna_sound_effect_instance_set_volume(new CnaHandle(NativeHandleValue), value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Volume));
         }
     }
@@ -96,6 +102,7 @@ public class SoundEffectInstance : IDisposable
         set
         {
             CnaResult result = Native.cna_sound_effect_instance_set_pitch(new CnaHandle(NativeHandleValue), value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Pitch));
         }
     }
@@ -116,6 +123,8 @@ public class SoundEffectInstance : IDisposable
             }
 
             CnaResult result = Native.cna_sound_effect_instance_set_pan(new CnaHandle(NativeHandleValue), value);
+
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Pan));
         }
     }
@@ -136,6 +145,8 @@ public class SoundEffectInstance : IDisposable
             }
 
             CnaResult result = Native.cna_sound_effect_instance_set_is_looped(new CnaHandle(NativeHandleValue), value ? (byte)1 : (byte)0);
+
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsLooped));
         }
     }

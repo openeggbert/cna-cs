@@ -36,6 +36,7 @@ public class AudioEngine : IDisposable
         get
         {
             CnaResult result = Native.cna_audio_engine_get_is_disposed(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsDisposed));
             return value != 0;
         }
@@ -86,6 +87,7 @@ public class AudioEngine : IDisposable
     public void Update()
     {
         CnaResult result = Native.cna_audio_engine_update(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Update));
     }
 

@@ -28,7 +28,11 @@ public struct HalfVector2 : IPackedVector<uint>, IEquatable<HalfVector2>
 
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y);
 
-    public readonly Vector4 ToVector4() => new Vector4(ToVector2().X, ToVector2().Y, 0f, 1f);
+    public readonly Vector4 ToVector4()
+    {
+        Vector2 value = ToVector2();
+        return new Vector4(value.X, value.Y, 0f, 1f);
+    }
 
     /// <summary>Expands both halves back to single precision.</summary>
     public readonly Vector2 ToVector2() => new(

@@ -64,6 +64,7 @@ public class TextureCube : Texture
     {
         var info = new CnaTextureCubeInfo();
         CnaResult result = Native.cna_texturecube_get_info(new CnaHandle(NativeHandleValue), ref info);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_texturecube_get_info");
         return info;
     }

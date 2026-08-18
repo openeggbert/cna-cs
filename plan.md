@@ -1572,7 +1572,20 @@ WP11–WP14 are the largest new subsystems and come last.
         entry point taking a caller-supplied factory, so nothing on this side
         can reach it. Needs a new C API route.
 - [x] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
-      review; pre-existing, not introduced by it) — done 2026-08-18. Slice 1:**
+      review; pre-existing, not introduced by it) — done 2026-08-18; **slice 1
+      had a scope hole, closed 2026-08-18**. Slice 1's own note said it covered
+      "every type whose handle accessor is *private*" -- which is exactly the
+      bug: `internal` and `private protected` accessors were out of scope for no
+      reason other than how the sweep was phrased, and the hazard does not care
+      about accessibility. A re-sweep over *every* `Native.cna_*(NativeHandle...)`
+      call site found **32 more unpaired reads** across `SoundEffectInstance`
+      (9), `ContentReader` (9), `Video` (5), `Song` (a type that only became
+      exposed to this when its handle moved into a `SafeHandle` this session),
+      `SpriteBatch` (2), `AudioEngine` (2), `SoundEffect` (2), `Texture`,
+      `Texture3D`, `TextureCube`. All fixed. `GameComponent`/
+      `DrawableGameComponent` are the one genuine exemption -- a bare
+      `CnaHandle`, no finalizer -- and now say so, because a sweep flags them
+      every time. **Slice 1:**
       every type whose handle accessor is *private* now pairs each native call
       with `GC.KeepAlive` (151 sites across 20 types, including the delegate
       helpers, `WithStringView` lambdas and expression-bodied members).
