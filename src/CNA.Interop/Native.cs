@@ -313,6 +313,14 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_graphics_device_draw_user_primitives(CnaHandle device, in CnaUserPrimitives primitives);
 
+    /// <summary>Matches <c>cna_graphics_device_draw_user_indexed_primitives</c> exactly
+    /// (<c>graphics_device.h:1071</c>). Unlike the non-indexed form, <c>num_vertices</c> in the
+    /// primitives descriptor is meaningful here -- the header notes it is "used only by the indexed
+    /// route".</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_draw_user_indexed_primitives(
+        CnaHandle device, in CnaUserPrimitives primitives, in CnaUserIndices indices);
+
     // -- Effect / BasicEffect (real ABI, effects.h -- step 8 of the native-ABI migration) -----
     //
     // The old cna_graphics_device_apply_basic_effect (a device-scoped "push these 33 fields as

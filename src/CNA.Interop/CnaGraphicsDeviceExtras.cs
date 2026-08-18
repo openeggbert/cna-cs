@@ -63,6 +63,25 @@ internal unsafe struct CnaUserPrimitives
     }
 }
 
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_UserIndices</c> exactly
+/// (<c>graphics_device.h:954-969</c>) -- the index-array counterpart of
+/// <see cref="CnaUserPrimitives"/>, passed alongside it to the indexed user-primitive draw.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct CnaUserIndices
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint IndexElementSize;
+    public int IndexOffset;
+    public void* IndexData;
+
+    public CnaUserIndices()
+    {
+        StructSize = (uint)sizeof(CnaUserIndices);
+        StructVersion = 1;
+    }
+}
+
 /// <summary>Capacity of each of a device's two texture collections, matching
 /// <c>CNA_TEXTURE_COLLECTION_MAX_TEXTURES</c> (<c>graphics_device.h:584</c>). Deliberately a
 /// separate constant from <see cref="CnaSamplerState.MaxSamplers"/> even though both are 16

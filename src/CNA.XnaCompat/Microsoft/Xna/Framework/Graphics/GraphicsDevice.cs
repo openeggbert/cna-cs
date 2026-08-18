@@ -150,6 +150,36 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         }
     }
 
+    /// <summary>Matches real XNA's <c>DrawUserIndexedPrimitives&lt;T&gt;</c>. Reimplements the
+    /// vertex-type mapping for the same reason <see cref="DrawUserPrimitives{T}"/> does -- compat
+    /// vertex structs are separate types from their CNA.Graphics counterparts -- and reaches the
+    /// shared raw level underneath.</summary>
+    public unsafe void DrawUserIndexedPrimitives<TVertex, TIndex>(
+        PrimitiveType primitiveType,
+        TVertex[] vertexData,
+        int vertexOffset,
+        int numVertices,
+        TIndex[] indexData,
+        int indexOffset,
+        int primitiveCount)
+        where TVertex : unmanaged
+        where TIndex : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(vertexData);
+        ArgumentNullException.ThrowIfNull(indexData);
+
+        CNA.Graphics.UserVertexSource vertexSource = VertexSourceFor<TVertex>();
+        CNA.Graphics.IndexElementSize indexElementSize = CNA.Graphics.IndexBuffer.SizeForType(typeof(TIndex));
+
+        fixed (TVertex* vertexDataPtr = vertexData)
+        fixed (TIndex* indexDataPtr = indexData)
+        {
+            DrawUserIndexedPrimitivesRaw(
+                (CNA.Graphics.PrimitiveType)(int)primitiveType, vertexDataPtr, vertexSource, vertexOffset, numVertices,
+                indexDataPtr, indexElementSize, indexOffset, primitiveCount);
+        }
+    }
+
     private static CNA.Graphics.UserVertexSource VertexSourceFor<T>() where T : unmanaged
     {
         if (typeof(T) == typeof(VertexPositionColor))

@@ -208,6 +208,81 @@ public class GraphicsDevice
             "CNA_USER_VERTEX_SOURCE_* identity.");
     }
 
+    /// <summary>Matches real XNA's <c>DrawUserIndexedPrimitives&lt;T&gt;</c>: the same
+    /// caller-supplied vertex array as <see cref="DrawUserPrimitives{T}"/>, plus a caller-supplied
+    /// index array. <typeparamref name="TIndex"/> must be a 16- or 32-bit integer, which is the
+    /// whole of what an index element can be (see <see cref="IndexElementSize"/>).</summary>
+    public unsafe void DrawUserIndexedPrimitives<TVertex, TIndex>(
+        PrimitiveType primitiveType,
+        TVertex[] vertexData,
+        int vertexOffset,
+        int numVertices,
+        TIndex[] indexData,
+        int indexOffset,
+        int primitiveCount)
+        where TVertex : unmanaged
+        where TIndex : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(vertexData);
+        ArgumentNullException.ThrowIfNull(indexData);
+
+        UserVertexSource vertexSource = VertexSourceFor<TVertex>();
+        IndexElementSize indexElementSize = IndexBuffer.SizeForType(typeof(TIndex));
+
+        fixed (TVertex* vertexDataPtr = vertexData)
+        fixed (TIndex* indexDataPtr = indexData)
+        {
+            DrawUserIndexedPrimitivesRaw(
+                primitiveType, vertexDataPtr, vertexSource, vertexOffset, numVertices,
+                indexDataPtr, indexElementSize, indexOffset, primitiveCount);
+        }
+    }
+
+    /// <summary>The pointer-and-identity level <see cref="DrawUserIndexedPrimitives{TVertex,TIndex}"/>
+    /// builds on, <c>protected</c> for the same reason
+    /// <see cref="DrawUserPrimitivesRaw"/> is -- CNA.XnaCompat's vertex structs are separate types
+    /// and must reach the same native call.</summary>
+    protected unsafe void DrawUserIndexedPrimitivesRaw(
+        PrimitiveType primitiveType,
+        void* vertexData,
+        UserVertexSource vertexSource,
+        int vertexOffset,
+        int numVertices,
+        void* indexData,
+        IndexElementSize indexElementSize,
+        int indexOffset,
+        int primitiveCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(vertexOffset);
+        ArgumentOutOfRangeException.ThrowIfNegative(numVertices);
+        ArgumentOutOfRangeException.ThrowIfNegative(indexOffset);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
+
+        var primitives = new CnaUserPrimitives
+        {
+            PrimitiveType = (int)primitiveType,
+            VertexSource = (CnaUserVertexSource)vertexSource,
+            VertexData = vertexData,
+            VertexDeclaration = CnaHandle.Zero,
+            VertexOffset = vertexOffset,
+
+            // Meaningful only on this route -- the non-indexed draw ignores it, per the header.
+            NumVertices = numVertices,
+            PrimitiveCount = primitiveCount,
+        };
+
+        var indices = new CnaUserIndices
+        {
+            IndexElementSize = (uint)indexElementSize,
+            IndexOffset = indexOffset,
+            IndexData = indexData,
+        };
+
+        CnaResult result = Native.cna_graphics_device_draw_user_indexed_primitives(
+            ResolveNativeDeviceHandle(), in primitives, in indices);
+        CnaException.ThrowIfFailed(result, nameof(DrawUserIndexedPrimitives));
+    }
+
     /// <summary>The pointer-and-identity level <see cref="DrawUserPrimitives{T}"/> builds on --
     /// <c>protected</c>, not <c>private</c>, so CNA.XnaCompat's <c>GraphicsDevice</c> override can
     /// reach it for its own, separately-typed compat vertex structs (structs can't share a type
