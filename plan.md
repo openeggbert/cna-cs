@@ -73,6 +73,39 @@ signature and throw, naming what is missing — never omit. Members currently in
 that state: `Texture2D.GetData`, `GraphicsDevice.GetVertexBuffers`,
 `RenderTarget2D.ContentLost`, `Effect.Clone` on the abstract base.
 
+**Verified against the binary, 2026-08-18** — all 807 P/Invoke declarations
+resolve against every built `libcna_c_api.so` (five variants: headless,
+software, sdl-renderer, opengles3, and cnanext's own). Zero absent. Until now
+every check had been against *headers*; this is the first against the shipped
+symbol table, and it is what rules out `EntryPointNotFoundException` at runtime.
+
+Note for anyone repeating it: the exports are ELF-versioned
+(`cna_album_get_artist@@CNA_C_API_0.1`), so a naive `nm -D | grep` comparison
+reports all 807 as missing. Strip at `@`.
+
+**What this does *not* establish:** that anything runs. No test in this
+repository loads the native library — all 701 are pure managed. Symbols resolving
+is necessary, not sufficient. See "Will XNA games run" below.
+
+## Will XNA 4.0 games run — the honest answer
+
+API surface is complete; *execution* is unproven and there are known functional
+blockers. Not the same claim, and the difference matters:
+
+| Blocker | Effect on a ported game |
+| --- | --- |
+| `cna_effect_create_compiled` → `NOT_SUPPORTED` | `ContentManager.Load<Effect>` cannot work. Any 3D game with a custom `.fx` shader stops here. Stock effects are fine, so 2D and fixed-function 3D are not affected. |
+| No content-reader registration route | `Load<T>` for a game-defined type fails. |
+| Buffer transfers start at element zero | Nonzero `offsetInBytes` throws — breaks the "update one slice of a big dynamic buffer" pattern particle systems rely on. |
+| `PreparingDeviceSettings` cannot write back | MSAA / back-buffer format / adapter chosen before device creation is ignored. |
+| Nothing has ever been executed | No `Game` constructed, no frame drawn, no native object created. |
+
+The last row is the one that matters most. Everything else on this list is a
+*known* gap with a documented throw; an unrun binding's unknowns are the ones
+that bite. **The highest-value next task in this repository is an integration
+test that loads `libcna_c_api.so` and drives a real `Game` through a few
+frames** — not more surface coverage.
+
 ## Corrections — read before trusting a "cannot be done" note below
 
 A header audit on 2026-08-18 checked every claim in this repository that some
