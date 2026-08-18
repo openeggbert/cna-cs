@@ -1,6 +1,16 @@
-import sys, os, glob, collections
+import sys, os, re, glob, collections
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from md2 import cpp_public, normalise, cs_file_members, CPP
+
+
+def drop_cnaext(members, header_src):
+    """CNAEXT is the engine's own "this member is not XNA" marker, and it is a *declaration
+    prefix* -- `CNAEXT static void setPathProperty(...)`. md2.normalise only drops identifiers
+    that literally end in "EXT", so on its own it never applies the real filter and the candidate
+    list comes out roughly twice as long as it should (93 rather than 41). Applying it here is
+    what makes the output triageable by hand."""
+    return {m for m in members
+            if not re.search(r'CNAEXT[^;{\n]*\b' + re.escape(m) + r'\b', header_src)}
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CS = REPO + '/src'
@@ -33,7 +43,7 @@ for layer in ('CNA.Framework', 'CNA.XnaCompat'):
     for h in hdrs:
         name, mem = cpp_public(h)
         if not name: continue
-        mem = normalise(mem)
+        mem = drop_cnaext(normalise(mem), open(h, errors='ignore').read())
         if not mem: continue
         if name not in idx:
             if layer == 'CNA.XnaCompat' and name not in (fw or {}): continue

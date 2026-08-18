@@ -33,8 +33,8 @@ unbound-header sweep both structurally missed. Two kinds in particular:
 - members mapping onto an *already-bound* function (`Texture2D.GetData`) — the
   function was bound, so nothing looked missing.
 
-Both layers are now at 41/42 remaining candidates, and every one is verified
-noise. The categories, so a re-run is quick to triage:
+Both layers are now at 41 remaining candidates across 22 types, and every one is
+verified noise. The categories, so a re-run is quick to triage:
 
 | Category | Examples |
 | --- | --- |
@@ -46,7 +46,11 @@ noise. The categories, so a re-run is quick to triage:
 | not XNA 4.0 | `AdaptersChanged`, `ClosestMSAAPower`, `VideoPlayer.VideoInfo` |
 
 The filter that makes this tractable: the C++ headers mark non-XNA members
-`CNAEXT`. Applying it cut the candidate list from 107 to 45 in one step.
+`CNAEXT`. Applying it cut the candidate list from 107 to 45 in one step. It now
+lives inside `tools/coverage/md2run.py` rather than being reapplied by hand each
+time — `CNAEXT` is a *declaration prefix*, not part of the identifier, so the
+name-based filter it replaced was only ever catching members literally spelled
+`…EXT` and left the list at 93.
 
 **Two triage errors from the 2026-08-18 member pass, corrected on re-run:**
 
