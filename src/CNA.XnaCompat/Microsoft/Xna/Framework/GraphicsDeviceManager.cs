@@ -4,7 +4,7 @@ namespace Microsoft.Xna.Framework;
 /// int/bool preferences and <c>ApplyChanges</c>/<c>ToggleFullScreen</c> are inherited unchanged
 /// from <see cref="CNA.GraphicsDeviceManager"/>; only the members whose enum or device types
 /// differ per namespace need re-typing.</summary>
-public class GraphicsDeviceManager : CNA.GraphicsDeviceManager
+public class GraphicsDeviceManager : CNA.GraphicsDeviceManager, IGraphicsDeviceService, IGraphicsDeviceManager
 {
     public GraphicsDeviceManager(Game game)
         : base(game)
@@ -36,4 +36,35 @@ public class GraphicsDeviceManager : CNA.GraphicsDeviceManager
         get => (DisplayOrientation)(int)base.SupportedOrientations;
         set => base.SupportedOrientations = (CNA.DisplayOrientation)(int)value;
     }
+
+    /// <summary>The compat <see cref="IGraphicsDeviceService"/> contract, satisfied by the same
+    /// object that already satisfies the CNA one -- registered into <c>Game.Services</c> by
+    /// the base constructor, so a component can look up either. The events forward to the base's,
+    /// which are documented as inert until the native subscription route is bound.</summary>
+    Graphics.GraphicsDevice IGraphicsDeviceService.GraphicsDevice => GraphicsDevice;
+
+    event EventHandler<EventArgs>? IGraphicsDeviceService.DeviceCreated
+    {
+        add => base.DeviceCreated += value;
+        remove => base.DeviceCreated -= value;
+    }
+
+    event EventHandler<EventArgs>? IGraphicsDeviceService.DeviceDisposing
+    {
+        add => base.DeviceDisposing += value;
+        remove => base.DeviceDisposing -= value;
+    }
+
+    event EventHandler<EventArgs>? IGraphicsDeviceService.DeviceReset
+    {
+        add => base.DeviceReset += value;
+        remove => base.DeviceReset -= value;
+    }
+
+    event EventHandler<EventArgs>? IGraphicsDeviceService.DeviceResetting
+    {
+        add => base.DeviceResetting += value;
+        remove => base.DeviceResetting -= value;
+    }
+
 }

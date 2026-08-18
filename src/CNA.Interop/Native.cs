@@ -1243,6 +1243,18 @@ internal static partial class Native
     internal static partial CnaResult cna_graphics_device_manager_apply_changes(CnaHandle manager);
 
     [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_create_device(CnaHandle manager);
+
+    /// <summary>Returns whether the frame should be drawn -- the native counterpart of XNA's
+    /// <c>IGraphicsDeviceManager.BeginDraw</c>, which reports <see langword="false"/> while the
+    /// device cannot present.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_begin_draw(CnaHandle manager, out byte outShouldDraw);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_end_draw(CnaHandle manager);
+
+    [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_toggle_full_screen(CnaHandle manager);
 
     [LibraryImport(LibraryName)]

@@ -29,7 +29,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// elsewhere in this compat layer. Only <see cref="Texture"/> needs its own override, for the
 /// same reason <c>SpriteFont.Texture</c> did.
 /// </summary>
-public class BasicEffect : CNA.Graphics.BasicEffect
+public class BasicEffect : CNA.Graphics.BasicEffect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public BasicEffect(GraphicsDevice graphicsDevice)
         : base(graphicsDevice)
@@ -41,4 +41,81 @@ public class BasicEffect : CNA.Graphics.BasicEffect
         get => (Texture2D?)base.Texture;
         set => base.Texture = value;
     }
+
+    Matrix IEffectMatrices.World
+    {
+        get => base.World;
+        set => base.World = value;
+    }
+
+    Matrix IEffectMatrices.View
+    {
+        get => base.View;
+        set => base.View = value;
+    }
+
+    Matrix IEffectMatrices.Projection
+    {
+        get => base.Projection;
+        set => base.Projection = value;
+    }
+
+    Vector3 IEffectFog.FogColor
+    {
+        get => base.FogColor;
+        set => base.FogColor = value;
+    }
+
+    bool IEffectFog.FogEnabled
+    {
+        get => base.FogEnabled;
+        set => base.FogEnabled = value;
+    }
+
+    float IEffectFog.FogStart
+    {
+        get => base.FogStart;
+        set => base.FogStart = value;
+    }
+
+    float IEffectFog.FogEnd
+    {
+        get => base.FogEnd;
+        set => base.FogEnd = value;
+    }
+
+    Vector3 IEffectLights.AmbientLightColor
+    {
+        get => base.AmbientLightColor;
+        set => base.AmbientLightColor = value;
+    }
+
+    bool IEffectLights.LightingEnabled
+    {
+        get => base.LightingEnabled;
+        set => base.LightingEnabled = value;
+    }
+
+    DirectionalLight IEffectLights.DirectionalLight0 => DirectionalLight0;
+
+    DirectionalLight IEffectLights.DirectionalLight1 => DirectionalLight1;
+
+    DirectionalLight IEffectLights.DirectionalLight2 => DirectionalLight2;
+
+    void IEffectLights.EnableDefaultLighting() => base.EnableDefaultLighting();
+
+    /// <summary>Re-typed so the compat <see cref="IEffectLights"/> contract is satisfied with this
+    /// namespace's <see cref="DirectionalLight"/>. Each wraps the single light object the base
+    /// class already constructed rather than building a second one -- see that type's own doc
+    /// comment.</summary>
+    public new DirectionalLight DirectionalLight0 => _light0 ??= new DirectionalLight(base.DirectionalLight0);
+
+    public new DirectionalLight DirectionalLight1 => _light1 ??= new DirectionalLight(base.DirectionalLight1);
+
+    public new DirectionalLight DirectionalLight2 => _light2 ??= new DirectionalLight(base.DirectionalLight2);
+
+    private DirectionalLight? _light0;
+    private DirectionalLight? _light1;
+    private DirectionalLight? _light2;
+
 }

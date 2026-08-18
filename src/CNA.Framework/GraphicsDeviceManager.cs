@@ -23,7 +23,7 @@ namespace CNA;
 /// from what was asked for (a requested back-buffer size the display cannot provide, for example).
 /// Real XNA behaves the same way.
 /// </summary>
-public class GraphicsDeviceManager : IDisposable
+public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceManager, IDisposable
 {
     private readonly NativeResourceHandle _handle;
 
@@ -36,6 +36,14 @@ public class GraphicsDeviceManager : IDisposable
         CnaException.ThrowIfFailed(result, nameof(GraphicsDeviceManager));
 
         _handle = new NativeResourceHandle(manager.AsNint, ReleaseNative);
+
+        // Real XNA's GraphicsDeviceManager registers itself as the game's IGraphicsDeviceService
+        // from its own constructor, which is how components find the device without depending on
+        // the manager type. The C API's create call does the same registration natively (its own
+        // doc calls it "the game's graphics device manager and graphics device service"), so doing
+        // it here keeps the managed service container agreeing with native rather than being a
+        // second, separate registry.
+        game.Services.AddService(typeof(IGraphicsDeviceService), this);
     }
 
     public Game Game { get; }
@@ -201,6 +209,49 @@ public class GraphicsDeviceManager : IDisposable
     /// wrapper around the same native device would give callers two objects whose cached state
     /// (<c>BlendState</c>, <c>Indices</c>, the sampler/texture collections) could disagree.</summary>
     public GraphicsDevice GraphicsDevice => Game.GraphicsDevice;
+
+    // CS0067 ("event is never used") is expected and correct here: these four are deliberately
+    // inert until the native subscription route is bound. Suppressed with a pragma rather than
+    // silenced by a never-called raiser method, so the compiler keeps telling the truth about them
+    // and the reason lives next to the suppression.
+#pragma warning disable CS0067
+
+    /// <summary>Raised after the device is created. Never fires today: device creation happens
+    /// inside native <c>cna_graphics_device_manager_create_device</c>, and the C API's own
+    /// subscription route (<c>cna_graphics_device_manager_subscribe</c>) is not bound yet -- see
+    /// <c>plan.md</c> WP15. The events exist so the <see cref="IGraphicsDeviceService"/> contract
+    /// is real and XNA source that subscribes compiles; they are documented as inert rather than
+    /// omitted.</summary>
+    public event EventHandler<EventArgs>? DeviceCreated;
+
+    public event EventHandler<EventArgs>? DeviceDisposing;
+
+    public event EventHandler<EventArgs>? DeviceReset;
+
+    public event EventHandler<EventArgs>? DeviceResetting;
+
+#pragma warning restore CS0067
+
+    /// <summary>Matches <c>IGraphicsDeviceManager.BeginDraw</c>: <see langword="false"/> tells the
+    /// game to skip this frame's drawing.</summary>
+    public bool BeginDraw()
+    {
+        CnaResult result = Native.cna_graphics_device_manager_begin_draw(NativeHandle, out byte shouldDraw);
+        CnaException.ThrowIfFailed(result, nameof(BeginDraw));
+        return shouldDraw != 0;
+    }
+
+    public void CreateDevice()
+    {
+        CnaResult result = Native.cna_graphics_device_manager_create_device(NativeHandle);
+        CnaException.ThrowIfFailed(result, nameof(CreateDevice));
+    }
+
+    public void EndDraw()
+    {
+        CnaResult result = Native.cna_graphics_device_manager_end_draw(NativeHandle);
+        CnaException.ThrowIfFailed(result, nameof(EndDraw));
+    }
 
     public void Dispose()
     {

@@ -105,6 +105,12 @@ public abstract class Game : IDisposable
     /// </summary>
     internal nint NativeHandle => _nativeHandle.AsNint;
 
+    /// <summary>Matches real XNA's <c>Game.Services</c>: the shared service container components
+    /// use to find each other. Created eagerly rather than lazily because
+    /// <see cref="GraphicsDeviceManager"/> registers itself into it from its own constructor,
+    /// which a game runs before anything reads this.</summary>
+    public GameServiceContainer Services { get; } = new();
+
     public ContentManager Content { get; }
 
     public GraphicsDevice GraphicsDevice { get; protected set; } = null!;

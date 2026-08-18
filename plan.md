@@ -1427,6 +1427,26 @@ WP11–WP14 are the largest new subsystems and come last.
       `index_resources.h`, `graphics_ext.h`, and
       `graphics_device.h`'s already-surveyed `cna_graphics_device_draw_user_
       indexed_primitives` / `_draw_instanced_primitives` / `CNA_UserIndices`.
+- [x] **WP5b — remaining Framework/Graphics mirrors — done 2026-08-18.**
+      Coverage →180/201. Compat `DirectionalLight`, `IEffectMatrices`/
+      `IEffectFog`/`IEffectLights`, `ModelEffectCollection`,
+      `ResourceCreatedEventArgs`/`ResourceDestroyedEventArgs`, plus
+      `GraphicsDeviceInformation`, `PreparingDeviceSettingsEventArgs`,
+      `IGraphicsDeviceService`, `IGraphicsDeviceManager` and `Game.Services`.
+      `GraphicsDeviceManager` now implements both service contracts and
+      registers itself, matching XNA. **Closes the `ModelEffectCollection`
+      "permanent gap"** recorded before the mandate: the fix was to wrap the
+      already-constructed base collection rather than to find an override seam
+      that does not exist.
+- [ ] **WP4c — compat `Effect` base.** The one type in this area still missing.
+      `Microsoft.Xna.Framework.Graphics.Effect` cannot simply be added: the
+      compat stock effects derive from their `CNA.Graphics` counterparts to
+      inherit ~30 native-backed properties each, and C# single inheritance
+      means they cannot also derive from a parallel compat `Effect`. The fix is
+      the one WP3a used for `Texture2D` — expose the leaf effects' native calls
+      as `internal static` helpers and reparent the compat classes onto a compat
+      `Effect` — which is a real refactor of already-reviewed code and wants its
+      own increment. Also fold `BasicEffect` onto `StockEffect` while there.
 - [ ] **WP11 — Full audio.** XACT (`AudioEngine`, `SoundBank`, `WaveBank`,
       `Cue`, `AudioCategory`, `AudioStopOptions`) from `xact.h`; 3D audio
       (`AudioEmitter`, `AudioListener`, `SoundEffect.Apply3D`) and
