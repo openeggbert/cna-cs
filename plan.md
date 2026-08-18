@@ -1348,13 +1348,21 @@ WP11–WP14 are the largest new subsystems and come last.
       also retires the Phase 5 "`EffectParameter` handle caching — not
       applicable" note, which was only true while no such collection
       existed; once it does, §27's caching becomes real work again.
-- [ ] **WP5 — Display / adapter / presentation.** `GraphicsAdapter`,
+- [x] **WP5 — Display / adapter / presentation — done 2026-08-18.** Coverage
+      →145/201. One documented deviation: `GraphicsAdapter.Adapters`/
+      `.DefaultAdapter` cannot be static (every adapter call needs a device
+      handle), so they take a device. Original scope:
+      <details>**WP5 — Display / adapter / presentation.** `GraphicsAdapter`,
       `DisplayMode`, `DisplayModeCollection`, `PresentationParameters`,
       `GraphicsDeviceInformation`, `PreparingDeviceSettingsEventArgs`,
       `ResourceCreatedEventArgs`, `ResourceDestroyedEventArgs`. Native:
       `display.h` (already read once for `CNA_GraphicsProfile`; the
-      adapter/display-mode half of that header is still unbound).
-- [ ] **WP6 — Real `GraphicsDeviceManager`.** Replace the placeholder
+      adapter/display-mode half of that header is still unbound).</details>
+- [x] **WP6 — Real `GraphicsDeviceManager` — done 2026-08-18.** The
+      placeholder (a `Game` property and nothing else) is gone; every
+      preference, `ApplyChanges`, and `ToggleFullScreen` now bind
+      `runtime_graphics_manager.h`. Original scope:
+      <details>**WP6 — Real `GraphicsDeviceManager`.** Replace the placeholder
       (currently only a `Game` property) with the real XNA surface:
       `PreferredBackBufferWidth`/`Height`/`Format`,
       `PreferredDepthStencilFormat`, `IsFullScreen`, `GraphicsProfile`,
@@ -1362,8 +1370,15 @@ WP11–WP14 are the largest new subsystems and come last.
       `SupportedOrientations`, `ApplyChanges()`, `ToggleFullScreen()`,
       and the `IGraphicsDeviceService`/`IGraphicsDeviceManager` contracts.
       Native: `runtime_graphics_manager.h` — already fully surveyed
-      2026-08-18, every function confirmed to exist.
-- [ ] **WP7 — Game component / service model.** `IGameComponent`,
+      2026-08-18, every function confirmed to exist.</details>
+- [~] **WP7 — Game component / service model — WP7a done 2026-08-18**
+      (interfaces, `GameServiceContainer`, `LaunchParameters`,
+      `FrameworkDispatcher`). **WP7b outstanding:** `GameComponent`/
+      `DrawableGameComponent`/`GameComponentCollection`, which must bind
+      `runtime_components.h` rather than be managed-only -- the native game
+      owns its own component collection and drives it through a callback
+      table, so a managed model would compile and never run. Original scope:
+      <details>**WP7 — Game component / service model.** `IGameComponent`,
       `IUpdateable`, `IDrawable`, `GameComponent`,
       `DrawableGameComponent`, `GameComponentCollection`,
       `GameServiceContainer`, `LaunchParameters`, `FrameworkDispatcher`,

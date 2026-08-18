@@ -605,6 +605,79 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- GraphicsDeviceManager (real ABI, runtime_graphics_manager.h -- Phase 8 WP6) ----------
+    //
+    // cna_graphics_device_manager_create is documented as registering the new manager as the
+    // game's graphics device manager and graphics device service, and refuses a second manager per
+    // game -- which is exactly real XNA's own `new GraphicsDeviceManager(this)` contract, so the
+    // managed constructor maps one-to-one onto it rather than deferring creation.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_create(CnaHandle game, out CnaHandle outManager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_destroy(CnaHandle manager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_apply_changes(CnaHandle manager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_toggle_full_screen(CnaHandle manager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_graphics_profile(CnaHandle manager, out CnaGraphicsProfile outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_graphics_profile(CnaHandle manager, CnaGraphicsProfile value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_is_full_screen(CnaHandle manager, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_is_full_screen(CnaHandle manager, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_prefer_multi_sampling(CnaHandle manager, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_prefer_multi_sampling(CnaHandle manager, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_preferred_back_buffer_format(CnaHandle manager, out uint outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_preferred_back_buffer_format(CnaHandle manager, uint value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_preferred_back_buffer_width(CnaHandle manager, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_preferred_back_buffer_width(CnaHandle manager, int value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_preferred_back_buffer_height(CnaHandle manager, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_preferred_back_buffer_height(CnaHandle manager, int value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_preferred_depth_stencil_format(CnaHandle manager, out uint outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_preferred_depth_stencil_format(CnaHandle manager, uint value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_synchronize_with_vertical_retrace(CnaHandle manager, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_synchronize_with_vertical_retrace(CnaHandle manager, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_supported_orientations(CnaHandle manager, out uint outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_supported_orientations(CnaHandle manager, uint value);
+
     // -- Display / adapter / presentation (real ABI, display.h -- Phase 8 WP5) ----------------
     //
     // Every adapter function takes a graphics-device handle plus an adapter index rather than an
