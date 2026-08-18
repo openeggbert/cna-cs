@@ -22,10 +22,18 @@ public static class TouchPanel
         return TouchCollection.FromNative(in state);
     }
 
+    /// <summary>
+    /// Matches real XNA's <c>GetCapabilities</c>: what the touch device actually reports.
+    ///
+    /// This used to call <c>cna_touch_capabilities_init</c>, which only fills a *default* value and
+    /// touches no device at all -- so it answered "no touch device" on a machine that has one. The
+    /// real query, <c>cna_touch_get_capabilities</c>, was sitting unbound; a sweep of unbound header
+    /// functions found it. The two names are one word apart, which is presumably how it happened.
+    /// </summary>
     public static TouchPanelCapabilities GetCapabilities()
     {
         var capabilities = new CnaTouchCapabilities();
-        CnaResult result = Native.cna_touch_capabilities_init(ref capabilities);
+        CnaResult result = Native.cna_touch_get_capabilities(CnaAmbientGame.Current, ref capabilities);
         CnaException.ThrowIfFailed(result, nameof(GetCapabilities));
         return TouchPanelCapabilities.FromNative(in capabilities);
     }

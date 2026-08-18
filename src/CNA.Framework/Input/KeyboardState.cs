@@ -3,7 +3,7 @@ using CNA.Interop;
 namespace CNA.Input;
 
 /// <summary>
-/// A full-keyboard snapshot taken by <see cref="Keyboard.GetState"/>. One native call per
+/// A full-keyboard snapshot taken by <see cref="Keyboard.GetState()"/>. One native call per
 /// snapshot, then every <see cref="IsKeyDown"/> check is local -- see the "input as snapshots"
 /// guidance in ../../cnabinding/analysis_binding.md §25.
 /// </summary>

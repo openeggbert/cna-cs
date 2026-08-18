@@ -12,6 +12,17 @@ namespace CNA.Input;
 /// </summary>
 public static class Keyboard
 {
+    /// <summary>Matches real XNA's <c>GetState(PlayerIndex)</c>. Was missing until a sweep of
+    /// unbound header functions found <c>cna_keyboard_get_state_for_player</c>.</summary>
+    public static KeyboardState GetState(PlayerIndex playerIndex)
+    {
+        var state = new CnaKeyboardState();
+        CnaResult result = Native.cna_keyboard_get_state_for_player(
+            CnaAmbientGame.Current, (uint)playerIndex, ref state);
+        CnaException.ThrowIfFailed(result, nameof(GetState));
+        return new KeyboardState(state);
+    }
+
     public static KeyboardState GetState()
     {
         var state = new CnaKeyboardState();

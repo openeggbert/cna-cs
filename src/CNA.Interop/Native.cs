@@ -642,6 +642,37 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    /// <summary>Rumble (<c>input_gamepad.h</c>). <c>out_applied</c> reports whether the controller
+    /// accepted it -- a pad without motors answers false rather than failing, which is what real
+    /// XNA's <c>bool</c> return means.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_gamepad_set_vibration(
+        CnaHandle game, uint playerIndex, float leftMotor, float rightMotor, out byte outApplied);
+
+    /// <summary>The dead-zone-mode overload of the state capture (<c>input_gamepad.h</c>), matching
+    /// real XNA's <c>GamePad.GetState(PlayerIndex, GamePadDeadZone)</c>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_gamepad_get_state_with_dead_zone(
+        CnaHandle game, uint playerIndex, uint deadZoneMode, ref CnaGamePadState outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_keyboard_get_state_for_player(
+        CnaHandle game, uint playerIndex, ref CnaKeyboardState outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mouse_set_position(CnaHandle game, int x, int y);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mouse_get_window_handle(CnaHandle game, out ulong outWindow);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mouse_set_window_handle(CnaHandle game, ulong window);
+
+    /// <summary>The real device query. Distinct from <c>cna_touch_capabilities_init</c>, which only
+    /// fills a default value -- see <c>CNA.Input.TouchPanel.GetCapabilities</c>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_get_capabilities(CnaHandle game, ref CnaTouchCapabilities outCapabilities);
+
     // -- Content reader extensibility (real ABI, content_readers.h -- Phase 8 WP14) -----------
     //
     // This is the *extensibility* half of the content system: ContentManager.Load<T> covers the
