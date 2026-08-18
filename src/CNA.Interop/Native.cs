@@ -605,6 +605,194 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Stock effects beyond BasicEffect (real ABI, effects.h -- Phase 8 WP4b) ---------------
+    //
+    // Each is created from a device and then driven through its own property setters, exactly as
+    // BasicEffect already is; the shared IEffectMatrices/IEffectFog/IEffectLights contracts
+    // (cna_effect_matrices_*/cna_effect_fog_*/cna_effect_lights_*) are already declared above and
+    // apply to these too, which is why only the effect-specific members appear here.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_create(CnaHandle device, out CnaHandle outEffect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_get_diffuse_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_set_diffuse_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_get_alpha(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_set_alpha(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_get_texture(CnaHandle effect, out byte outHasTexture, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_set_texture(CnaHandle effect, CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_get_vertex_color_enabled(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_set_vertex_color_enabled(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_get_alpha_function(CnaHandle effect, out uint outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_set_alpha_function(CnaHandle effect, uint value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_get_reference_alpha(CnaHandle effect, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_alpha_test_effect_set_reference_alpha(CnaHandle effect, int value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_create(CnaHandle device, out CnaHandle outEffect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_get_diffuse_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_set_diffuse_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_get_alpha(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_set_alpha(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_get_texture(CnaHandle effect, out byte outHasTexture, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_set_texture(CnaHandle effect, CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_get_vertex_color_enabled(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dual_texture_effect_set_vertex_color_enabled(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_create(CnaHandle device, out CnaHandle outEffect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_diffuse_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_diffuse_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_emissive_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_emissive_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_alpha(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_alpha(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_texture(CnaHandle effect, out byte outHasTexture, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_texture(CnaHandle effect, CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_environment_map(CnaHandle effect, out byte outHasTexture, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_environment_map(CnaHandle effect, CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_amount(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_amount(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_specular(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_specular(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_get_fresnel_factor(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_environment_map_effect_set_fresnel_factor(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_create(CnaHandle device, out CnaHandle outEffect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_diffuse_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_diffuse_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_emissive_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_emissive_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_specular_color(CnaHandle effect, out CnaVector3 outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_specular_color(CnaHandle effect, CnaVector3 value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_specular_power(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_specular_power(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_alpha(CnaHandle effect, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_alpha(CnaHandle effect, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_prefer_per_pixel_lighting(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_prefer_per_pixel_lighting(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_texture(CnaHandle effect, out byte outHasTexture, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_texture(CnaHandle effect, CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_vertex_color_enabled(CnaHandle effect, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_vertex_color_enabled(CnaHandle effect, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_get_weights_per_vertex(CnaHandle effect, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_skinned_effect_set_weights_per_vertex(CnaHandle effect, int value);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_skinned_effect_set_bone_transforms(CnaHandle effect, CnaMatrix* transforms, ulong transformCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_skinned_effect_copy_bone_transforms(
+        CnaHandle effect, ulong requestedCount, CnaMatrix* destination, ulong capacity, out ulong outCount);
+
     // -- OcclusionQuery + multi-stream vertex binding (real ABI, graphics_device.h + ------------
     // -- vertex_resources.h -- Phase 8 WP10)
 
