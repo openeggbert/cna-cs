@@ -245,3 +245,54 @@ internal struct CnaRenderTargetCubeCreateInfo
         StructVersion = 1;
     }
 }
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_Texture3DTransfer</c>
+/// exactly (<c>texture_volume.h:61-77</c>) -- a mip level plus an explicit texel box, and the
+/// window into the caller's own array. Unlike the 2D path there is no "has rectangle" flag: a
+/// volume transfer always names its box.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTexture3DTransfer
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public int Level;
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+    public int Front;
+    public int Back;
+    public uint Reserved;
+    public ulong StartIndex;
+    public ulong ElementCount;
+
+    public unsafe CnaTexture3DTransfer()
+    {
+        StructSize = (uint)sizeof(CnaTexture3DTransfer);
+        StructVersion = 1;
+    }
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_TextureCubeTransfer</c>
+/// exactly (<c>texture_volume.h:123-141</c>) -- the 2D shape plus a face selector. Uses this
+/// project's existing <see cref="CnaRect"/> for <c>CNA_Rectangle</c> (<c>core.h:133-145</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTextureCubeTransfer
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Face;
+    public int Level;
+    public byte HasRectangle;
+    public CnaReservedBytes3 Reserved0;
+    public CnaRect Rectangle;
+    public uint Reserved1;
+    public ulong StartIndex;
+    public ulong ElementCount;
+
+    public unsafe CnaTextureCubeTransfer()
+    {
+        StructSize = (uint)sizeof(CnaTextureCubeTransfer);
+        StructVersion = 1;
+    }
+}

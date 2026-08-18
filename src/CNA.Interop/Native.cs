@@ -239,6 +239,14 @@ internal static partial class Native
     internal static partial CnaResult cna_texture3d_destroy(CnaHandle texture);
 
     [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texture3d_set_data(
+        CnaHandle texture, in CnaTexture3DTransfer transfer, CnaColor* data, ulong dataCapacity);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texture3d_get_data(
+        CnaHandle texture, in CnaTexture3DTransfer transfer, CnaColor* destination, ulong destinationCapacity, out ulong outRequiredElements);
+
+    [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_texturecube_create(CnaHandle device, in CnaTextureCubeCreateInfo createInfo, out CnaHandle texture);
 
     [LibraryImport(LibraryName)]
@@ -246,6 +254,14 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_texturecube_destroy(CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texturecube_set_data(
+        CnaHandle texture, in CnaTextureCubeTransfer transfer, CnaColor* data, ulong dataCapacity);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texturecube_get_data(
+        CnaHandle texture, in CnaTextureCubeTransfer transfer, CnaColor* destination, ulong destinationCapacity, out ulong outRequiredElements);
 
     /// <summary>Matches <c>cna_render_target_cube_create</c> exactly
     /// (<c>render_target.h:187</c>). Released through the shared

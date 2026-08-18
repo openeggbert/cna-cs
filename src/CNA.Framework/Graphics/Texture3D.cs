@@ -10,10 +10,10 @@ namespace CNA.Graphics;
 /// <c>create</c>/<c>get_info</c>/<c>destroy</c> triple), not a 2D texture with extra flags -- the
 /// same relationship <see cref="RenderTarget2D"/> has to <see cref="Texture2D"/>.
 ///
-/// <c>SetData</c>/<c>GetData</c> are not implemented yet. The real ABI has them
-/// (<c>cna_texture3d_set_data</c>/<c>_get_data</c>/<c>_set_data_bytes</c>), but they go through a
-/// <c>CNA_Texture3DTransfer</c> descriptor (mip box + caller-array window) that the 2D path has no
-/// equivalent of, so they want their own increment rather than a rushed partial binding here.
+/// <c>SetData</c>/<c>GetData</c> go through a <c>CNA_Texture3DTransfer</c> descriptor -- a mip
+/// level plus an explicit texel box -- which the 2D path has no equivalent of. Unlike the cube and
+/// 2D forms there is no "whole surface" flag: a volume transfer always names its box, so the
+/// convenience overloads below fill it in from the texture's own dimensions.
 /// </summary>
 public class Texture3D : Texture
 {
@@ -72,4 +72,116 @@ public class Texture3D : Texture
         CnaException.ThrowIfFailed(result, "cna_texture3d_get_info");
         return info;
     }
+
+    /// <summary>Writes the whole volume at mip level zero.</summary>
+    public void SetData(Color[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        SetData(0, 0, 0, 0, Width, Height, Depth, data, 0, data.Length);
+    }
+
+    /// <summary>Matches real XNA's box-taking <c>SetData</c>. The box is half-open in each axis,
+    /// as in XNA: <paramref name="right"/>/<paramref name="bottom"/>/<paramref name="back"/> are
+    /// exclusive.</summary>
+    public unsafe void SetData(
+        int level, int left, int top, int right, int bottom, int front, int back,
+        Color[] data, int startIndex, int elementCount)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        var transfer = new CnaTexture3DTransfer
+        {
+            Level = level,
+            Left = left,
+            Top = top,
+            Right = right,
+            Bottom = bottom,
+            Front = front,
+            Back = back,
+            StartIndex = (ulong)startIndex,
+            ElementCount = (ulong)elementCount,
+        };
+
+        CnaColor[] pixels = ToNativeColors(data);
+        fixed (CnaColor* pixelsPtr = pixels)
+        {
+            CnaResult result = Native.cna_texture3d_set_data(
+                new CnaHandle(NativeHandleValue), in transfer, pixelsPtr, (ulong)pixels.Length);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(SetData));
+        }
+    }
+
+    /// <summary>Reads the whole volume at mip level zero.</summary>
+    public Color[] GetData() => GetData(0, 0, 0, 0, Width, Height, Depth);
+
+    /// <summary>Matches real XNA's box-taking <c>GetData</c>. The array is sized from what native
+    /// reports it needs, then trimmed to what it actually wrote -- the C API performs no partial
+    /// write on an insufficient buffer, so asking first is the only correct order.</summary>
+    public unsafe Color[] GetData(int level, int left, int top, int right, int bottom, int front, int back)
+    {
+        var transfer = new CnaTexture3DTransfer
+        {
+            Level = level,
+            Left = left,
+            Top = top,
+            Right = right,
+            Bottom = bottom,
+            Front = front,
+            Back = back,
+        };
+
+        CnaResult sizeResult = Native.cna_texture3d_get_data(
+            new CnaHandle(NativeHandleValue), in transfer, null, 0, out ulong required);
+        GC.KeepAlive(this);
+
+        if (sizeResult.IsFailure() && sizeResult != CnaResult.BufferTooSmall)
+        {
+            CnaException.ThrowIfFailed(sizeResult, nameof(GetData));
+        }
+
+        if (required == 0)
+        {
+            return [];
+        }
+
+        transfer.ElementCount = required;
+        var pixels = new CnaColor[required];
+        fixed (CnaColor* pixelsPtr = pixels)
+        {
+            CnaResult result = Native.cna_texture3d_get_data(
+                new CnaHandle(NativeHandleValue), in transfer, pixelsPtr, required, out ulong written);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(GetData));
+            return FromNativeColors(pixels, (int)written);
+        }
+    }
+
+    /// <summary>Shared by the 3D and cube transfer paths -- both take a <c>CNA_Color</c> array, so
+    /// the conversion is identical and lives in one place.</summary>
+    internal static CnaColor[] ToNativeColors(Color[] data)
+    {
+        var pixels = new CnaColor[data.Length];
+        for (int i = 0; i < pixels.Length; i++)
+        {
+            pixels[i] = data[i].ToNative();
+        }
+
+        return pixels;
+    }
+
+    internal static Color[] FromNativeColors(CnaColor[] pixels, int count)
+    {
+        var colors = new Color[Math.Min(count, pixels.Length)];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            colors[i] = Color.FromNative(pixels[i]);
+        }
+
+        return colors;
+    }
+
 }
