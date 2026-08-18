@@ -18,7 +18,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class RenderTarget2D : Texture2D
 {
     public RenderTarget2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(CNA.Graphics.RenderTarget2D.CreateNativeHandle(graphicsDevice, width, height))
+        : base(graphicsDevice, CNA.Graphics.RenderTarget2D.CreateNativeHandle(graphicsDevice, width, height))
     {
     }
 

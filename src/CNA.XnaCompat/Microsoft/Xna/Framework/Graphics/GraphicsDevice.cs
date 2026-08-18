@@ -89,6 +89,13 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     protected override CNA.Graphics.SamplerStateCollection CreateSamplerStateCollection(bool vertexStage) =>
         new SamplerStateCollection(this, vertexStage);
 
+    public new TextureCollection Textures => (TextureCollection)base.Textures;
+
+    public new TextureCollection VertexTextures => (TextureCollection)base.VertexTextures;
+
+    protected override CNA.Graphics.TextureCollection CreateTextureCollection(bool vertexStage) =>
+        new TextureCollection(this, vertexStage);
+
     /// <summary>Matches real XNA's <c>DrawUserPrimitives&lt;T&gt;</c>. Reimplements the
     /// type-to-<c>UserVertexSource</c> mapping for this namespace's own vertex structs rather than
     /// forwarding to <see cref="CNA.Graphics.GraphicsDevice.DrawUserPrimitives{T}"/> directly --

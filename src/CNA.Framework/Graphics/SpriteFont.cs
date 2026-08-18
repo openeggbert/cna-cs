@@ -23,7 +23,7 @@ public class SpriteFont
     private readonly Dictionary<char, int> _characterIndex;
 
     public SpriteFont(
-        Texture2D texture,
+        Texture texture,
         IReadOnlyList<Rectangle> glyphBounds,
         IReadOnlyList<Rectangle> cropping,
         IReadOnlyList<char> characters,
@@ -61,7 +61,7 @@ public class SpriteFont
         }
     }
 
-    public Texture2D Texture { get; }
+    public Texture Texture { get; }
 
     public IReadOnlyList<char> Characters => _characters;
 

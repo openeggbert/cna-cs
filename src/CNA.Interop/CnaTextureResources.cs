@@ -117,3 +117,27 @@ internal struct CnaRenderTargetInfo
         StructVersion = 1;
     }
 }
+
+/// <summary>
+/// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_TextureInfo</c> exactly
+/// (<c>texture.h:62-71</c>). Deliberately the *narrow* one: unlike <see cref="CnaTexture2DInfo"/>
+/// it carries no dimensions at all, only the two properties every texture kind shares -- which is
+/// exactly why it backs <c>CNA.Graphics.Texture</c>'s <c>LevelCount</c>/<c>Format</c> rather than
+/// any one concrete texture type's. Its native accessor is documented as accepting a "Texture2D,
+/// Texture3D, TextureCube or matching render-target handle" (<c>texture.h:126</c>), so the base
+/// class can read it without knowing which subclass it is on.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTextureInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint LevelCount;
+    public uint Format;
+
+    public unsafe CnaTextureInfo()
+    {
+        StructSize = (uint)sizeof(CnaTextureInfo);
+        StructVersion = 1;
+    }
+}

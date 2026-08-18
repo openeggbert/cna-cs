@@ -23,7 +23,7 @@ namespace CNA.Graphics;
 public class RenderTarget2D : Texture2D
 {
     public RenderTarget2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(CreateNativeHandle(graphicsDevice, width, height))
+        : base(graphicsDevice, CreateNativeHandle(graphicsDevice, width, height))
     {
     }
 

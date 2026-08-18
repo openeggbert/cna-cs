@@ -62,3 +62,13 @@ internal unsafe struct CnaUserPrimitives
         StructVersion = 1;
     }
 }
+
+/// <summary>Capacity of each of a device's two texture collections, matching
+/// <c>CNA_TEXTURE_COLLECTION_MAX_TEXTURES</c> (<c>graphics_device.h:584</c>). Deliberately a
+/// separate constant from <see cref="CnaSamplerState.MaxSamplers"/> even though both are 16
+/// today: the C API states them independently, so this project does too rather than assuming
+/// they must move together.</summary>
+internal static class CnaTextureCollectionLimits
+{
+    public const int MaxTextures = 16;
+}

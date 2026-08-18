@@ -74,14 +74,14 @@ public class ContentManager
     {
         if (typeof(T) == typeof(Texture2D))
         {
-            return (T)(object)new Texture2D(LoadNativeTexture2DHandle(assetName));
+            return (T)(object)new Texture2D(RequireGraphicsDevice<T>(assetName), LoadNativeTexture2DHandle(assetName));
         }
 
         if (typeof(T) == typeof(SpriteFont))
         {
             SpriteFontData data = LoadSpriteFontData(assetName);
             return (T)(object)new SpriteFont(
-                new Texture2D(data.TextureHandle),
+                new Texture2D(RequireGraphicsDevice<T>(assetName), data.TextureHandle),
                 data.GlyphBounds,
                 data.Cropping,
                 data.Characters,
@@ -181,6 +181,21 @@ public class ContentManager
     /// convenience with no precedent anywhere in this project's own <c>.xnb</c>-loading code, which
     /// always appends the extension itself), and runtime glTF (<c>.gltf</c>/<c>.glb</c>, hard out of
     /// scope -- see <c>CNA.Content.Cnj</c>'s own doc comments).</summary>
+    /// <summary>
+    /// The device every <see cref="GraphicsResource"/>-derived asset now needs, or a
+    /// <see cref="ContentLoadException"/> naming the asset if none has been assigned yet.
+    ///
+    /// Added by Phase 8 WP3, which reparented <see cref="Texture2D"/> onto
+    /// <see cref="GraphicsResource"/> and so made a device mandatory where texture loading
+    /// previously needed none. Deliberately the same failure shape <see cref="LoadModel"/> has used
+    /// since it was written -- a <see cref="ContentLoadException"/> naming the asset, not a bare
+    /// <see cref="NullReferenceException"/> from somewhere deeper -- since the cause is identical
+    /// (content loaded before <see cref="Game"/> assigns the device).
+    /// </summary>
+    private GraphicsDevice RequireGraphicsDevice<T>(string assetName) =>
+        GraphicsDevice ?? throw new ContentLoadException(
+            $"Cannot load {typeof(T).Name} '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
+
     protected Model LoadModel(string assetName)
     {
         ArgumentNullException.ThrowIfNull(assetName);

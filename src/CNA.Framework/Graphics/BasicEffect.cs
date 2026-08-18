@@ -32,7 +32,7 @@ namespace CNA.Graphics;
 public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     private readonly CnaHandle _handle;
-    private Texture2D? _texture;
+    private Texture? _texture;
     private bool _disposed;
 
     public BasicEffect(GraphicsDevice graphicsDevice)
@@ -212,7 +212,7 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
     /// not a <see cref="Texture2D"/> wrapper this project could safely reconstruct without risking
     /// a double-ownership bug over whichever wrapper actually owns that handle's disposal).
     /// </summary>
-    public Texture2D? Texture
+    public Texture? Texture
     {
         get => _texture;
         set

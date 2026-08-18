@@ -225,6 +225,20 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_rasterizer_state(CnaHandle device, in CnaRasterizerState state);
 
+    /// <summary>Matches <c>cna_texture_get_info</c> exactly (<c>texture.h:130</c>) -- documented
+    /// as accepting a "Texture2D, Texture3D, TextureCube or matching render-target handle", which
+    /// is what lets <c>CNA.Graphics.Texture</c> expose <c>LevelCount</c>/<c>Format</c> on the base
+    /// class instead of duplicating a per-subclass info call.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texture_get_info(CnaHandle texture, ref CnaTextureInfo info);
+
+    /// <summary>Matches <c>cna_graphics_device_set_texture</c> exactly
+    /// (<c>graphics_device.h:642</c>). <see cref="CnaHandle.Zero"/> empties the slot. Binding
+    /// stores no ownership native-side -- a destroyed texture unbinds itself.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_texture(
+        CnaHandle device, CnaShaderStage stage, uint slot, CnaHandle texture);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sampler_state_init(CnaSamplerStatePreset preset, out CnaSamplerState outState);
 

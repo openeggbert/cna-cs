@@ -18,7 +18,7 @@ public class SpriteFontTests
 {
     private static SpriteFont CreateTestFont(int lineSpacing = 12, float spacing = 2f)
     {
-        var texture = new Texture2D(nativeHandleValue: 0);
+        var texture = new Texture2D(new GraphicsDevice(nativeGameHandleValue: 0), nativeHandleValue: 0);
 
         return new SpriteFont(
             texture,
@@ -102,7 +102,7 @@ public class SpriteFontTests
     [Fact]
     public void MeasureString_UnknownCharacterWithDefault_FallsBackToDefaultCharacterMetrics()
     {
-        var texture = new Texture2D(nativeHandleValue: 0);
+        var texture = new Texture2D(new GraphicsDevice(nativeGameHandleValue: 0), nativeHandleValue: 0);
         var font = new SpriteFont(
             texture,
             glyphBounds: [new Rectangle(0, 0, 10, 10)],
@@ -122,7 +122,7 @@ public class SpriteFontTests
     [Fact]
     public void Constructor_MismatchedArrayLengths_Throws()
     {
-        var texture = new Texture2D(nativeHandleValue: 0);
+        var texture = new Texture2D(new GraphicsDevice(nativeGameHandleValue: 0), nativeHandleValue: 0);
 
         Assert.Throws<ArgumentException>(() => new SpriteFont(
             texture,

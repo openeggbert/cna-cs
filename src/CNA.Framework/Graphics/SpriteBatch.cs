@@ -63,20 +63,20 @@ public class SpriteBatch : IDisposable
         _hasBegun = true;
     }
 
-    public void Draw(Texture2D texture, Vector2 position, Color color) =>
+    public void Draw(Texture texture, Vector2 position, Color color) =>
         DrawEx(texture, position, null, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f, nameof(Draw));
 
-    public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color) =>
+    public void Draw(Texture texture, Vector2 position, Rectangle? sourceRectangle, Color color) =>
         DrawEx(texture, position, sourceRectangle, color, 0f, Vector2.Zero, Vector2.One, SpriteEffects.None, 0f, nameof(Draw));
 
-    public void Draw(Texture2D texture, Rectangle destinationRectangle, Color color) =>
+    public void Draw(Texture texture, Rectangle destinationRectangle, Color color) =>
         Draw(texture, destinationRectangle, null, color);
 
-    public void Draw(Texture2D texture, Rectangle destinationRectangle, Rectangle? sourceRectangle, Color color) =>
+    public void Draw(Texture texture, Rectangle destinationRectangle, Rectangle? sourceRectangle, Color color) =>
         DrawEx(texture, destinationRectangle, sourceRectangle, color, 0f, Vector2.Zero, SpriteEffects.None, 0f, nameof(Draw));
 
     public void Draw(
-        Texture2D texture,
+        Texture texture,
         Vector2 position,
         Rectangle? sourceRectangle,
         Color color,
@@ -88,7 +88,7 @@ public class SpriteBatch : IDisposable
         DrawEx(texture, position, sourceRectangle, color, rotation, origin, new Vector2(scale, scale), effects, layerDepth, nameof(Draw));
 
     public void Draw(
-        Texture2D texture,
+        Texture texture,
         Vector2 position,
         Rectangle? sourceRectangle,
         Color color,
@@ -100,7 +100,7 @@ public class SpriteBatch : IDisposable
         DrawEx(texture, position, sourceRectangle, color, rotation, origin, scale, effects, layerDepth, nameof(Draw));
 
     public void Draw(
-        Texture2D texture,
+        Texture texture,
         Rectangle destinationRectangle,
         Rectangle? sourceRectangle,
         Color color,
@@ -118,7 +118,7 @@ public class SpriteBatch : IDisposable
     /// through this same private method -- hardcoding one name here would misattribute a
     /// no-<c>Begin</c> failure from the other caller.</summary>
     private void DrawEx(
-        Texture2D texture,
+        Texture texture,
         Vector2 position,
         Rectangle? sourceRectangle,
         Color color,
@@ -132,7 +132,8 @@ public class SpriteBatch : IDisposable
         ArgumentNullException.ThrowIfNull(texture);
         EnsureHasBegun(caller);
 
-        Rectangle source = sourceRectangle ?? new Rectangle(0, 0, texture.Width, texture.Height);
+        (int textureWidth, int textureHeight) = Texture2D.GetTexture2DDimensions(texture.NativeHandleValue);
+        Rectangle source = sourceRectangle ?? new Rectangle(0, 0, textureWidth, textureHeight);
 
         _commandBuffer.Add(new CnaSpriteDrawCommand(
             new CnaHandle(texture.NativeHandleValue),
@@ -149,10 +150,10 @@ public class SpriteBatch : IDisposable
     /// <summary>The destination-rectangle overloads' primitive: XNA specifies these by the
     /// screen-space rectangle the sprite should fill rather than by position+scale, so this
     /// resolves that rectangle (and the source-vs-whole-texture size it is scaled against) down
-    /// to the position+scale form <see cref="DrawEx(Texture2D,Vector2,Rectangle?,Color,float,Vector2,Vector2,SpriteEffects,float,string)"/>
+    /// to the position+scale form <see cref="DrawEx(Texture,Vector2,Rectangle?,Color,float,Vector2,Vector2,SpriteEffects,float,string)"/>
     /// expects, then delegates to it -- the actual native call happens there, not here.</summary>
     private void DrawEx(
-        Texture2D texture,
+        Texture texture,
         Rectangle destinationRectangle,
         Rectangle? sourceRectangle,
         Color color,
@@ -164,8 +165,9 @@ public class SpriteBatch : IDisposable
     {
         ArgumentNullException.ThrowIfNull(texture);
 
-        int sourceWidth = sourceRectangle?.Width ?? texture.Width;
-        int sourceHeight = sourceRectangle?.Height ?? texture.Height;
+        (int textureWidth, int textureHeight) = Texture2D.GetTexture2DDimensions(texture.NativeHandleValue);
+        int sourceWidth = sourceRectangle?.Width ?? textureWidth;
+        int sourceHeight = sourceRectangle?.Height ?? textureHeight;
         var scale = new Vector2(
             sourceWidth == 0 ? 0f : destinationRectangle.Width / (float)sourceWidth,
             sourceHeight == 0 ? 0f : destinationRectangle.Height / (float)sourceHeight);

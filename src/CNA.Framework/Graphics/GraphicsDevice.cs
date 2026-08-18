@@ -294,6 +294,18 @@ public class GraphicsDevice
     /// CNA.XnaCompat overrides it to build its own compat-typed collection.</summary>
     protected virtual SamplerStateCollection CreateSamplerStateCollection(bool vertexStage) => new(this, vertexStage);
 
+    private TextureCollection? _textures;
+    private TextureCollection? _vertexTextures;
+
+    /// <summary>The pixel shader's texture bindings. Unlike <see cref="SamplerStates"/>, the
+    /// collection object here is genuinely stateful -- see <see cref="TextureCollection"/>'s own
+    /// doc comment for why native cannot answer its getter.</summary>
+    public TextureCollection Textures => _textures ??= CreateTextureCollection(vertexStage: false);
+
+    public TextureCollection VertexTextures => _vertexTextures ??= CreateTextureCollection(vertexStage: true);
+
+    protected virtual TextureCollection CreateTextureCollection(bool vertexStage) => new(this, vertexStage);
+
     private IndexBuffer? _indices;
 
     public IndexBuffer? Indices

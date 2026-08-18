@@ -20,18 +20,45 @@ public class ContentManager : CNA.Content.ContentManager
     {
     }
 
+    /// <summary>Re-typed so the compat-typed resources this class constructs (which now require a
+    /// device -- see Phase 8 WP3) get a compat-typed one. Holds no field of its own: a pure
+    /// pass-through to the base property, the same pattern as
+    /// <see cref="Graphics.GraphicsDevice.Indices"/> and for the same desync reason described
+    /// there.
+    ///
+    /// Reads as <see langword="null"/> rather than throwing when the base property holds a
+    /// *base-typed* device, exactly as <see cref="LoadCompatModel"/> already does -- see that
+    /// method's own doc comment for the code-review finding behind it: <c>GraphicsDevice</c> is a
+    /// publicly settable property on the base class, so "non-null but not compat-typed" is
+    /// reachable without going through <see cref="Game"/> at all, and must degrade to the same
+    /// clean <see cref="ContentLoadException"/> as "null" instead of an unhandled
+    /// <see cref="InvalidCastException"/>.</summary>
+    public new Graphics.GraphicsDevice? GraphicsDevice
+    {
+        get => base.GraphicsDevice as Graphics.GraphicsDevice;
+        set => base.GraphicsDevice = value;
+    }
+
+    /// <summary>Mirrors the base class's own <c>RequireGraphicsDevice</c> (see its doc comment for
+    /// why a device became mandatory), re-typed for this namespace. Kept here rather than reusing
+    /// the base's <see langword="private"/> one so the failure message names the compat type the
+    /// caller actually asked for, and so the not-compat-typed case above is covered too.</summary>
+    private Graphics.GraphicsDevice RequireGraphicsDevice<T>(string assetName) =>
+        GraphicsDevice ?? throw new ContentLoadException(
+            $"Cannot load {typeof(T).Name} '{assetName}': ContentManager.GraphicsDevice is null or not a compat-typed GraphicsDevice.");
+
     public override T Load<T>(string assetName)
     {
         if (typeof(T) == typeof(Graphics.Texture2D))
         {
-            return (T)(object)new Graphics.Texture2D(LoadNativeTexture2DHandle(assetName));
+            return (T)(object)new Graphics.Texture2D(RequireGraphicsDevice<T>(assetName), LoadNativeTexture2DHandle(assetName));
         }
 
         if (typeof(T) == typeof(Graphics.SpriteFont))
         {
             SpriteFontData data = LoadSpriteFontData(assetName);
             return (T)(object)new Graphics.SpriteFont(
-                new Graphics.Texture2D(data.TextureHandle),
+                new Graphics.Texture2D(RequireGraphicsDevice<T>(assetName), data.TextureHandle),
                 Convert(data.GlyphBounds),
                 Convert(data.Cropping),
                 data.Characters,
