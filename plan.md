@@ -83,9 +83,16 @@ anywhere in this project. `CnjCompatModelBuilder` (the `.cnj` path's
 `CNA.XnaCompat` mirror) now also links a document's own real bone
 hierarchy, closing that deferred follow-up -- previously it explicitly
 rejected such a document rather than silently producing a wrong bone
-structure. What remains: Phase 6 packaging/cross-platform validation,
-tracked below.
-**Date:** 2026-08-17 (see `NEXT.md` for the session-by-session history and
+structure.
+
+**Scope change, 2026-08-18 (supersedes every "out of scope" call above):**
+the user directed that `cna-cs` must cover **the complete XNA 4.0 API**, not
+a subset chosen by whatever the current sample happened to need. Phase 8
+below is now the primary outstanding work; the deferrals recorded in the
+paragraph above (`SkinnedEffect`, `.cnj` skinning, name-indexed effect
+parameters, and the rest) are **no longer deferrals** -- they are Phase 8
+line items. Phase 6 packaging/cross-platform validation still remains too.
+**Date:** 2026-08-18 (see `NEXT.md` for the session-by-session history and
 where to pick up)
 **Source analysis:** `../cnabinding/analysis_binding.md`,
 `../cnabinding/analysis_binding_sharp_runtime.md`,
@@ -123,6 +130,49 @@ CNA C++ core  →  Sharp Runtime, CNA subsystems, renderers
 
 See `docs/architecture.md` for the full picture and `docs/xna-compatibility.md`
 for what "XNA-compatible" does and does not mean here.
+
+## Scope mandate: the complete XNA 4.0 API
+
+**Directive (user, 2026-08-18): `cna-cs` must cover the whole XNA 4.0 API
+surface, not a narrow subset of it.**
+
+Up to and including 2026-08-17 this repository was built "vertical slice"
+style: a type was added when a sample or test actually needed it, and
+anything else was recorded as a documented, deliberate scope cut. That
+produced a solid but incomplete layer -- a concrete inventory taken
+2026-08-18 measured **94 of 201** public XNA 4.0 types present in
+`CNA.XnaCompat`, i.e. 47%. That inventory is the baseline Phase 8 works
+against; re-run it (see `Phase 8` below) rather than trusting this number
+once work starts landing.
+
+This mandate changes three standing rules:
+
+1. **"No caller needs it yet" is no longer a valid reason to omit a type.**
+   Real XNA 4.0 shipped it, so this project implements it. Coverage is
+   driven by the XNA 4.0 API reference, not by `samples/`.
+2. **A documented scope cut is no longer a terminal state.** Every
+   "deliberately out of scope" note already written in this file and in
+   `NEXT.md` is now a Phase 8 backlog item. Those notes stay valuable as
+   *why it was hard*, not as *why it will never exist*.
+3. **Fidelity still beats speed.** This mandate is about breadth, not about
+   lowering the bar. Every rule in "Design invariants" still holds, every
+   type is still grounded in the real, shipped `openeggbert/cna` C ABI
+   headers (never a guessed shape), and the existing build-clean +
+   tests-pass + `/code-review high` discipline still applies to each
+   increment. A wide layer of wrong bindings would be worse than the
+   narrow, correct one this replaces.
+
+What genuinely cannot be honored, and why that is a small list: a
+2026-08-18 survey of the real C ABI found upstream headers for essentially
+every remaining area -- `curve.h`, `input_touch.h`, `storage.h`,
+`runtime_components.h`, `texture_volume.h`, `texture.h`, `graphics_state.h`,
+`effects.h`, `video.h`, `xact.h`, `display.h`, `net.h`/`net_gamers.h`/
+`gamer_services.h`. Full coverage is therefore mostly *binding work against
+an ABI that already exists*, not inventing stubs for a nonexistent engine.
+Where a specific member still has no native counterpart, implement the type
+with real XNA signatures and make the unbacked member throw
+`NotSupportedException` with a message naming the missing native function --
+never silently no-op, and never fake a plausible return value.
 
 ## Hard dependency on `openeggbert/cna`
 
@@ -1209,7 +1259,9 @@ Split by whether the type needs the (still nonexistent) native ABI:
       nothing here for this optimization to apply to; it isn't a gap,
       it's a premise this project's `BasicEffect`-only design doesn't
       share. Revisit only if a future custom/name-indexed effect system
-      is ever added.
+      is ever added. **Superseded 2026-08-18:** Phase 8 WP4 adds exactly
+      that name-indexed effect-parameter system, so this reopens as real
+      work once WP4 lands — re-read §27 then.
 
 ### Phase 6 — Packaging and cross-platform validation
 
@@ -1219,6 +1271,141 @@ Split by whether the type needs the (still nonexistent) native ABI:
   than one CNA renderer, per §38 and §70.
 - CI: pure-C ABI compile/link smoke test lives in `cna`, not here; this
   repo's CI builds/tests the managed solution only.
+
+### Phase 8 — Complete XNA 4.0 API coverage (primary outstanding work)
+
+Driven by the "Scope mandate" section above. Baseline inventory taken
+2026-08-18: **94 of 201** tracked public XNA 4.0 types present in
+`CNA.XnaCompat` (47%); **107 missing**, of which **18 already exist in
+`CNA.Framework`** and need only a compat mirror, and **89 need building on
+both sides**.
+
+Reproduce the inventory (do this at the start of each work package rather
+than trusting the counts above once work lands):
+
+```bash
+# list every public type CNA.XnaCompat currently declares
+grep -rhoP '^\s*public\s+(?:sealed\s+|abstract\s+|static\s+|readonly\s+|partial\s+)*(?:class|struct|enum|interface|record)\s+\K\w+' \
+  src/CNA.XnaCompat --include=*.cs | sort -u
+```
+
+Ordering rationale: WP1–WP4 first because they unblock the most other
+types (the texture hierarchy and effect system are dependencies of several
+later packages); WP8/WP9 are self-contained and can be done any time;
+WP11–WP14 are the largest new subsystems and come last.
+
+- [ ] **WP1 — Graphics enums + `GraphicsResource` base.** Build:
+      `SurfaceFormat`, `DepthFormat`, `SetDataOptions`, `CubeMapFace`,
+      `RenderTargetUsage`, `PresentInterval`, `GraphicsDeviceStatus`,
+      `SpriteSortMode`, `TextureAddressMode`, `TextureFilter`,
+      `GraphicsResource`, `GamePadDeadZone`, `DisplayOrientation`.
+      Mirror-only into `CNA.XnaCompat`: `Blend`, `BlendFunction`,
+      `ColorWriteChannels`, `CompareFunction`, `CullMode`, `FillMode`,
+      `StencilOperation`, `ContentLoadException`. Ground the enums in
+      `graphics_state.h` / `graphics.h` / `display.h` `CNA_*` constants.
+- [ ] **WP2 — `SamplerState` + state collections.** `SamplerState` and its
+      seven presets, `SamplerStateCollection`, `TextureCollection`, and
+      `GraphicsDevice.SamplerStates`/`.Textures`/`.VertexSamplerStates`.
+      Native: `graphics_state.h` (`cna_sampler_state_init`,
+      `cna_graphics_device_get/set_sampler_state`, `CNA_MAX_SAMPLERS`,
+      `CNA_SHADER_STAGE_PIXEL`/`_VERTEX`) — fully specified already.
+- [ ] **WP3 — Texture hierarchy.** Introduce the real XNA `Texture` base
+      class and reparent `Texture2D`/`RenderTarget2D` onto it (a breaking
+      internal refactor — do it before more texture types exist, not
+      after), then `Texture3D` (`texture_volume.h`), `TextureCube`
+      (`texture.h`), `RenderTargetCube` (`render_target.h`, whose
+      `_set_render_target_cube` this project already noticed but never
+      used).
+- [ ] **WP4 — Full effect system.** Name-indexed `EffectParameter` /
+      `EffectParameterCollection` / `EffectParameterClass` /
+      `EffectParameterType`, `EffectAnnotation(Collection)`,
+      `EffectTechniqueCollection`, plus the four remaining stock effects
+      `AlphaTestEffect`, `DualTextureEffect`, `EnvironmentMapEffect`,
+      `SkinnedEffect`, and `EffectMaterial`. Native: `effects.h`. This
+      also retires the Phase 5 "`EffectParameter` handle caching — not
+      applicable" note, which was only true while no such collection
+      existed; once it does, §27's caching becomes real work again.
+- [ ] **WP5 — Display / adapter / presentation.** `GraphicsAdapter`,
+      `DisplayMode`, `DisplayModeCollection`, `PresentationParameters`,
+      `GraphicsDeviceInformation`, `PreparingDeviceSettingsEventArgs`,
+      `ResourceCreatedEventArgs`, `ResourceDestroyedEventArgs`. Native:
+      `display.h` (already read once for `CNA_GraphicsProfile`; the
+      adapter/display-mode half of that header is still unbound).
+- [ ] **WP6 — Real `GraphicsDeviceManager`.** Replace the placeholder
+      (currently only a `Game` property) with the real XNA surface:
+      `PreferredBackBufferWidth`/`Height`/`Format`,
+      `PreferredDepthStencilFormat`, `IsFullScreen`, `GraphicsProfile`,
+      `PreferMultiSampling`, `SynchronizeWithVerticalRetrace`,
+      `SupportedOrientations`, `ApplyChanges()`, `ToggleFullScreen()`,
+      and the `IGraphicsDeviceService`/`IGraphicsDeviceManager` contracts.
+      Native: `runtime_graphics_manager.h` — already fully surveyed
+      2026-08-18, every function confirmed to exist.
+- [ ] **WP7 — Game component / service model.** `IGameComponent`,
+      `IUpdateable`, `IDrawable`, `GameComponent`,
+      `DrawableGameComponent`, `GameComponentCollection`,
+      `GameServiceContainer`, `LaunchParameters`, `FrameworkDispatcher`,
+      and `Game.Components`/`.Services`/`.IsActive`/`.IsFixedTimeStep`/
+      `.TargetElapsedTime`/`.SuppressDraw()`/`.ResetElapsedTime()` plus
+      the `Activated`/`Deactivated`/`Exiting`/`Disposed` events. Native:
+      `runtime_components.h` + the unbound half of `runtime.h`. Note
+      `FrameworkDispatcher.Update()` finally gives `MediaPlayer.Update`
+      its real XNA home (today `Game.Update` calls it directly as a
+      documented stand-in — see that method's own doc comment).
+- [ ] **WP8 — `Curve` system.** `Curve`, `CurveKey`, `CurveKeyCollection`,
+      `CurveContinuity`, `CurveLoopType`, `CurveTangent`. Native:
+      `curve.h`, though this is pure math and may be better implemented
+      managed-side per design invariant #3 — decide by reading the header
+      first, and record the decision.
+- [ ] **WP9 — Touch input.** `TouchPanel`, `TouchPanelCapabilities`,
+      `TouchCollection`, `TouchLocation`, `TouchLocationState`,
+      `GestureSample`, `GestureType`. Native: `input_touch.h`.
+- [ ] **WP10 — Remaining buffer/query graphics types.**
+      `DynamicVertexBuffer`, `DynamicIndexBuffer`, `VertexBufferBinding`,
+      `OcclusionQuery`, and `GraphicsDevice.SetVertexBuffers(params
+      VertexBufferBinding[])` / `DrawUserIndexedPrimitives` /
+      `DrawInstancedPrimitives`. Native: `vertex_resources.h`,
+      `index_resources.h`, `graphics_ext.h`, and
+      `graphics_device.h`'s already-surveyed `cna_graphics_device_draw_user_
+      indexed_primitives` / `_draw_instanced_primitives` / `CNA_UserIndices`.
+- [ ] **WP11 — Full audio.** XACT (`AudioEngine`, `SoundBank`, `WaveBank`,
+      `Cue`, `AudioCategory`, `AudioStopOptions`) from `xact.h`; 3D audio
+      (`AudioEmitter`, `AudioListener`, `SoundEffect.Apply3D`) and
+      `DynamicSoundEffectInstance`, `Microphone`, `MicrophoneState` from
+      `audio.h`.
+- [ ] **WP12 — Video playback + media completion.** `Video`,
+      `VideoPlayer`, `VideoSoundtrackType` from `video.h`; mirror
+      `MediaQueue` into `CNA.XnaCompat` (it exists in `CNA.Framework`
+      already). Revisit the always-empty `MediaLibrary` collections from
+      the 2026-08-17 pass — `media_library.h` may now support more than
+      that scoping note assumed.
+- [ ] **WP13 — Storage.** `StorageDevice`, `StorageContainer`, and the
+      `IAsyncResult`-based `BeginOpenContainer`/`EndOpenContainer` API
+      shape. Native: `storage.h`.
+- [ ] **WP14 — Content pipeline reader API.** `ContentReader`,
+      `ContentTypeReader`/`ContentTypeReader<T>`,
+      `ContentTypeReaderManager`, `ContentSerializerAttribute`,
+      `ResourceContentManager`. Native: `content_readers.h`. This is the
+      extensibility half of the content system — the existing
+      `ContentManager.Load<T>` covers only the built-in types.
+- [ ] **WP15 — Close the pre-mandate deferrals.** `.cnj` skinning (vertex
+      strides 48/52/56/68, `"skeleton"`/`"animations"`), unblocked once
+      WP4 lands `SkinnedEffect`; `ModelEffectCollection`'s compat mirror,
+      previously called a "permanent gap" for want of an override seam —
+      re-solve it, since "no seam exists" is a fixable design problem now
+      that omitting it is no longer allowed; `.xnb` LZ4; runtime glTF.
+- [ ] **WP16 — Re-audit to 201/201.** Re-run the inventory command above,
+      drive the missing list to zero, then close out with a full
+      `/code-review high` pass over everything Phase 8 added.
+
+Explicitly still excluded from this mandate (not XNA 4.0 API surface, or
+genuinely unbackable): `Microsoft.Xna.Framework.Net` /
+`.GamerServices` (Xbox Live session/gamer services — `net.h`,
+`net_gamers.h`, `gamer_services.h` do exist upstream, so revisit if the
+user wants them, but they bind a live-service model that has no meaning
+outside Xbox Live and are not part of what "write an XNA game" means
+today), and the XNA *content pipeline build tooling*
+(`Microsoft.Xna.Framework.Content.Pipeline.*`, a build-time assembly that
+never shipped in the runtime profile).
 
 ### Phase 7+ — Out of scope for this repository
 
