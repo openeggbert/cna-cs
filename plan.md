@@ -1447,11 +1447,16 @@ WP11–WP14 are the largest new subsystems and come last.
       as `internal static` helpers and reparent the compat classes onto a compat
       `Effect` — which is a real refactor of already-reviewed code and wants its
       own increment. Also fold `BasicEffect` onto `StockEffect` while there.
-- [ ] **WP11 — Full audio.** XACT (`AudioEngine`, `SoundBank`, `WaveBank`,
+- [~] **WP11 — Full audio — WP11a done 2026-08-18.** Coverage →188/201.
+      XACT (`AudioEngine`, `AudioCategory`, `AudioStopOptions`, `WaveBank`,
+      `SoundBank`, `Cue`) plus 3D audio (`AudioListener`, `AudioEmitter`).
+      **WP11b outstanding:** `Microphone`, `MicrophoneState`,
+      `DynamicSoundEffectInstance`, and `SoundEffect.Apply3D`. Original scope:
+      <details>**WP11 — Full audio.** XACT (`AudioEngine`, `SoundBank`, `WaveBank`,
       `Cue`, `AudioCategory`, `AudioStopOptions`) from `xact.h`; 3D audio
       (`AudioEmitter`, `AudioListener`, `SoundEffect.Apply3D`) and
       `DynamicSoundEffectInstance`, `Microphone`, `MicrophoneState` from
-      `audio.h`.
+      `audio.h`.</details>
 - [x] **WP12 — Video playback + media completion — done 2026-08-18.** Coverage
       →167/201. `Video`/`VideoPlayer`/`VideoSoundtrackType` bound, `MediaQueue`
       mirrored. The always-empty `MediaLibrary` re-check is **still open** and

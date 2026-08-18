@@ -605,6 +605,135 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- XACT + 3D audio (real ABI, xact.h + audio.h -- Phase 8 WP11a) ------------------------
+    //
+    // XACT is the authored-audio half of XNA: an AudioEngine loads a project settings file, wave
+    // and sound banks load asset files against it, and cues are played by name. Everything here is
+    // handle-based except the listener/emitter, which are plain versioned value structs passed by
+    // pointer.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_create(CnaHandle game, CnaStringView settingsFile, out CnaHandle outEngine);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_destroy(CnaHandle engine);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_get_is_disposed(CnaHandle engine, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_update(CnaHandle engine);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_get_global_variable(CnaHandle engine, CnaStringView name, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_set_global_variable(CnaHandle engine, CnaStringView name, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_get_category(CnaHandle engine, CnaStringView name, out CnaHandle outCategory);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_destroy(CnaHandle category);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_get_name_size(CnaHandle category, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_audio_category_copy_name(CnaHandle category, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_pause(CnaHandle category);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_resume(CnaHandle category);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_set_volume(CnaHandle category, float volume);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_stop(CnaHandle category, uint options);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_equals(CnaHandle a, CnaHandle b, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_category_get_hash_code(CnaHandle category, out int outHashCode);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_wave_bank_create(CnaHandle engine, CnaStringView fileName, out CnaHandle outWaveBank);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_wave_bank_create_streaming(
+        CnaHandle engine, CnaStringView fileName, int offset, short packetSize, out CnaHandle outWaveBank);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_wave_bank_destroy(CnaHandle waveBank);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_wave_bank_get_is_disposed(CnaHandle waveBank, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_wave_bank_get_is_prepared(CnaHandle waveBank, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_wave_bank_get_is_in_use(CnaHandle waveBank, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_create(CnaHandle engine, CnaStringView fileName, out CnaHandle outSoundBank);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_destroy(CnaHandle soundBank);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_get_is_disposed(CnaHandle soundBank, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_get_is_in_use(CnaHandle soundBank, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_get_cue(CnaHandle soundBank, CnaStringView name, out CnaHandle outCue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_play_cue(CnaHandle soundBank, CnaStringView name);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_play_cue_3d(
+        CnaHandle soundBank, CnaStringView name, in CnaAudioListener listener, in CnaAudioEmitter emitter);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_destroy(CnaHandle cue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_get_info(CnaHandle cue, ref CnaCueInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_get_name_size(CnaHandle cue, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cue_copy_name(CnaHandle cue, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_apply_3d(CnaHandle cue, in CnaAudioListener listener, in CnaAudioEmitter emitter);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_get_variable(CnaHandle cue, CnaStringView name, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_set_variable(CnaHandle cue, CnaStringView name, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_play(CnaHandle cue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_pause(CnaHandle cue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_resume(CnaHandle cue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_stop(CnaHandle cue, uint options);
+
     // -- Storage (real ABI, storage.h -- Phase 8 WP13) ----------------------------------------
     //
     // The C API deliberately collapses XNA's fake-async BeginXxx/EndXxx pairs into one synchronous
