@@ -163,6 +163,11 @@ public class ContentManager : IDisposable
             return (T)(object)LoadModel(assetName);
         }
 
+        if (typeof(T) == typeof(Effect))
+        {
+            return (T)(object)new Effect(RequireGraphicsDevice<T>(assetName), LoadNativeEffectHandle(assetName));
+        }
+
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
     }
 
@@ -365,6 +370,30 @@ public class ContentManager : IDisposable
             assetName, view => Native.cna_content_manager_load_sound_effect(new CnaHandle(_nativeHandleValue), view, out soundEffect));
         CnaException.ThrowIfFailed(result, nameof(Load));
         return soundEffect.AsNint;
+    }
+
+    /// <summary>
+    /// The <c>Load&lt;Effect&gt;</c> route, added once <c>cna_content_manager_load_effect</c>
+    /// existed. It reads all three shapes CNA supports -- a compiled <c>.xnb</c> Effect asset, a
+    /// <c>.cnj</c> descriptor naming a stock effect, and a <c>.cnj</c> descriptor carrying custom
+    /// shader source -- so the caller does not choose between them; the asset does.
+    ///
+    /// This was the largest single functional blocker on the "will an XNA game run" list: without
+    /// it, every ported 3D game with a custom shader stopped at its first
+    /// <c>Content.Load&lt;Effect&gt;</c>. <c>internal</c> rather than <c>protected</c> because
+    /// Returns a raw <see cref="nint"/>, not a <c>CnaHandle</c>, and is <c>protected</c> like its
+    /// three sibling loaders: CNA.XnaCompat has no <c>InternalsVisibleTo</c> grant into CNA.Interop
+    /// and so can never name that type -- invariant 5. An <c>internal</c> member returning
+    /// <c>CnaHandle</c> compiles here and is unusable from compat, which is how the first draft of
+    /// this method failed.
+    /// </summary>
+    protected nint LoadNativeEffectHandle(string assetName)
+    {
+        CnaHandle effect = CnaHandle.Zero;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            assetName, view => Native.cna_content_manager_load_effect(new CnaHandle(_nativeHandleValue), view, out effect));
+        CnaException.ThrowIfFailed(result, nameof(Load));
+        return effect.AsNint;
     }
 
     /// <summary>

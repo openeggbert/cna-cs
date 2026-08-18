@@ -94,8 +94,8 @@ blockers. Not the same claim, and the difference matters:
 
 | Blocker | Effect on a ported game |
 | --- | --- |
-| `cna_effect_create_compiled` → `NOT_SUPPORTED` | `ContentManager.Load<Effect>` cannot work. Any 3D game with a custom `.fx` shader stops here. Stock effects are fine, so 2D and fixed-function 3D are not affected. |
-| No content-reader registration route | `Load<T>` for a game-defined type fails. |
+| ~~`cna_effect_create_compiled` → `NOT_SUPPORTED`~~ | **False, and now closed.** The route works; the claim came from a stale header sentence. `Effect(GraphicsDevice, byte[])` and `Load<Effect>` are both bound and exercised by integration tests. |
+| ~~No content-reader registration route~~ | Upstream added `cna_content_type_reader_manager_register`/`_unregister` and `cna_content_manager_load_foreign_ext`. Not yet bound here. |
 | Buffer transfers start at element zero | Nonzero `offsetInBytes` throws — breaks the "update one slice of a big dynamic buffer" pattern particle systems rely on. |
 | `PreparingDeviceSettings` cannot write back | MSAA / back-buffer format / adapter chosen before device creation is ignored. |
 | ~~Nothing has ever been executed~~ | **Done.** `tests/CNA.Integration.Tests`, 13 tests against the real library. |
@@ -141,6 +141,8 @@ list is where the current truth lives:
 | `ResourceContentManager`: "the C API has no resource-manager concept at all" | `cna_content_manager_create_resource` exists — but its embedded-resource stream is a declared placeholder that fails every load, so the managed implementation stays. |
 | `DualTextureEffect.Texture2` throws: "the C API has no second-layer function" | `cna_dual_texture_effect_set_texture` takes a layer index. Already fixed on the CNA side; the compat doc was stale. |
 | `GameComponentCollection`: "native owns the list and does not report modifications" | `cna_game_components_subscribe_added`/`_removed` exist. The snapshot enumerator is still right, for a different reason. |
+| `Effect`: "custom user-authored `.fx` shader loading is still not implemented"; recorded as the single largest functional blocker | `cna_effect_create_compiled` works. Fed malformed bytes it answers `InvalidArgument: ... does not contain a structurally valid XNA Direct3D 9 Effect Framework header` -- a live parser, not a stub. The claim traced to a header sentence ("NOT_SUPPORTED while native CNA bytecode loading is unavailable") that had outlived its implementation. `Effect` is now concrete with a real `Effect(GraphicsDevice, byte[])`, as in XNA. |
+| `ContentManager.Load<Effect>` fell through to "Unsupported content type" | `cna_content_manager_load_effect` exists and reads all three shapes (compiled `.xnb`, `.cnj` naming a stock effect, `.cnj` carrying shader source). Bound; a missing asset now fails as `Io`, not as an unsupported type. |
 
 Genuinely confirmed absent, re-checked in the same pass: managed content-reader
 registration (no factory entry point anywhere), service registration through

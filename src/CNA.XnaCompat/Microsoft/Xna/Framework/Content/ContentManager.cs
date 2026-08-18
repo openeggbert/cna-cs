@@ -84,6 +84,13 @@ public class ContentManager : CNA.Content.ContentManager
             return (T)(object)LoadCompatModel(assetName);
         }
 
+        if (typeof(T) == typeof(Graphics.Effect))
+        {
+            Graphics.GraphicsDevice device = RequireGraphicsDevice<T>(assetName);
+            return (T)(object)Graphics.Effect.Adopt(
+                device, new CNA.Graphics.Effect(device, LoadNativeEffectHandle(assetName)));
+        }
+
         throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
     }
 

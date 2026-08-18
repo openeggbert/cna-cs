@@ -19,13 +19,33 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// state -- the bug class this project has already fixed twice (see
 /// <c>GraphicsDevice.Indices</c> and <c>ModelEffectCollection</c>).
 /// </summary>
-public abstract class Effect : CNA.Graphics.Effect
+public class Effect : CNA.Graphics.Effect
 {
     private protected Effect(GraphicsDevice graphicsDevice, CNA.Graphics.Effect inner)
         : base(graphicsDevice)
     {
         Inner = inner;
     }
+
+    /// <summary>
+    /// Compiled Effect Framework bytecode -- real XNA's <c>Effect(GraphicsDevice, byte[])</c>.
+    ///
+    /// Concrete for the same reason the CNA base is: XNA's <c>Effect</c> is not abstract, and this
+    /// constructor is how a game loads a shader it read from disk itself. Composes a CNA effect
+    /// rather than deriving one, matching every other compat effect, so there is exactly one owner
+    /// of the native handle.
+    /// </summary>
+    public Effect(GraphicsDevice graphicsDevice, byte[] effectCode)
+        : this(graphicsDevice, new CNA.Graphics.Effect(graphicsDevice, effectCode))
+    {
+    }
+
+    /// <summary>Wraps an already-loaded CNA effect -- the compat <c>Load&lt;Effect&gt;</c> route's
+    /// landing point. A factory rather than a constructor because the constructor with this
+    /// signature is <c>private protected</c>, which the compat <c>ContentManager</c> cannot reach:
+    /// it is in this assembly but is not a subclass.</summary>
+    internal static Effect Adopt(GraphicsDevice graphicsDevice, CNA.Graphics.Effect inner) =>
+        new(graphicsDevice, inner);
 
     /// <summary>The CNA effect this one delegates to. Every forwarding member below reads it, and
     /// it is the single owner of the native effect -- see this class's own doc comment.

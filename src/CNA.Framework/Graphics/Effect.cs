@@ -3,9 +3,15 @@ using CNA.Interop;
 namespace CNA.Graphics;
 
 /// <summary>
-/// Base for stock/built-in shader effects. Custom user-authored <c>.fx</c> shader loading is still
-/// not implemented, matching the real openeggbert/cna C++ engine itself (its own bytecode
-/// <c>Effect</c> constructor throws <c>NotImplementedException</c> there too).
+/// A shader effect. Concrete, as in XNA -- it can be constructed directly from compiled Effect
+/// Framework bytecode, and it is also the base for the stock effects.
+///
+/// This said "custom user-authored <c>.fx</c> shader loading is still not implemented, matching the
+/// real openeggbert/cna C++ engine itself" until <c>cna_effect_create_compiled</c> was actually
+/// tried. It works. The claim traced back to a header sentence -- "NOT_SUPPORTED while native CNA
+/// bytecode loading is unavailable" -- that had outlived its implementation, and this comment
+/// repeated it as settled fact. It was recorded as this binding's single largest functional
+/// blocker on that basis. Eleventh entry in the same pattern; see plan.md's Corrections table.
 ///
 /// Phase 8 WP4a made the reflection surface real. <see cref="CurrentTechnique"/>,
 /// <see cref="Techniques"/> and <see cref="Parameters"/> now read the effect's actual native
@@ -19,12 +25,66 @@ namespace CNA.Graphics;
 /// <c>EffectPass.Apply()</c>) that this project's own C++ engine already makes -- both paths reach
 /// the same native code.
 /// </summary>
-public abstract class Effect : IDisposable
+public class Effect : IDisposable
 {
+    private readonly NativeResourceHandle? _ownedHandle;
+
     protected Effect(GraphicsDevice graphicsDevice)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         GraphicsDevice = graphicsDevice;
+    }
+
+    /// <summary>
+    /// Builds an effect from compiled Effect Framework bytecode -- real XNA's
+    /// <c>Effect(GraphicsDevice, byte[])</c>.
+    ///
+    /// This class was <see langword="abstract"/> until the bytecode route was bound, which was
+    /// itself an XNA divergence: XNA's <c>Effect</c> is concrete and this constructor is the usual
+    /// way a game loads a custom shader it read from disk itself. It could not be written while
+    /// <c>cna_effect_create_compiled</c> was believed to answer <c>NOT_SUPPORTED</c> -- a belief
+    /// that came from a header sentence which had outlived its implementation.
+    /// </summary>
+    /// <exception cref="CnaException">If the bytes are not a structurally valid Effect Framework
+    /// binary, or the active renderer reports <c>COMPILED_EFFECTS</c> as false. Branch on the
+    /// result rather than the file name: only the compiled shape depends on that capability.</exception>
+    public unsafe Effect(GraphicsDevice graphicsDevice, byte[] effectCode)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ArgumentNullException.ThrowIfNull(effectCode);
+
+        if (effectCode.Length == 0)
+        {
+            throw new ArgumentException("Effect bytecode is empty.", nameof(effectCode));
+        }
+
+        GraphicsDevice = graphicsDevice;
+
+        CnaHandle handle;
+        fixed (byte* code = effectCode)
+        {
+            CnaResult result = Native.cna_effect_create_compiled(
+                graphicsDevice.ResolveNativeDeviceHandle(), code, (ulong)effectCode.Length, out handle);
+            CnaException.ThrowIfFailed(result, nameof(Effect));
+        }
+
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)));
+    }
+
+    /// <summary>
+    /// Adopts an effect native already built -- the <c>Load&lt;Effect&gt;</c> route's landing point.
+    /// The handle is owned from here on, matching <c>cna_content_manager_load_effect</c>'s contract.
+    ///
+    /// Takes a raw <see cref="nint"/> rather than a <c>CnaHandle</c>, and is
+    /// <c>protected internal</c>, so CNA.XnaCompat can call it -- it has no
+    /// <c>InternalsVisibleTo</c> grant into CNA.Interop and can never name that type (invariant 5).
+    /// Same rule <c>Texture2D</c>'s handle constructor already follows.
+    /// </summary>
+    protected internal Effect(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        GraphicsDevice = graphicsDevice;
+        _ownedHandle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_effect_destroy(new CnaHandle(h)));
     }
 
     public GraphicsDevice GraphicsDevice { get; }
@@ -41,9 +101,10 @@ public abstract class Effect : IDisposable
     /// from outside -- which would break, among other things, the test doubles
     /// <c>CNA.Framework.Tests</c> builds to exercise <see cref="ModelMesh"/> without a real
     /// effect. Such a subclass simply has no reflection surface, which the message says plainly
-    /// instead of failing as a null handle deeper in native code.
-    /// </summary>
-    /// <summary>Typed <see cref="nint"/>, not <see cref="CnaHandle"/>, and
+    /// instead of failing as a null handle deeper in native code -- unless this instance owns a
+    /// handle of its own, which one built from bytecode or loaded through the content manager does.
+    ///
+    /// Typed <see cref="nint"/>, not <see cref="CnaHandle"/>, and
     /// <c>protected internal</c> rather than <c>private protected</c> -- both so CNA.XnaCompat can
     /// take part. Phase 8 WP4c made <c>Microsoft.Xna.Framework.Graphics.Effect</c> a real base
     /// class of the compat stock effects, which therefore hold a <c>CNA.Graphics</c> effect by
@@ -54,7 +115,9 @@ public abstract class Effect : IDisposable
     /// <c>GraphicsDevice.NativeGameHandleValue</c> and <c>Texture2D</c>'s handle constructor
     /// already follow -- see docs/architecture.md.</summary>
     protected internal virtual nint NativeEffectHandleValue =>
-        throw new NotSupportedException(
+        _ownedHandle is not null
+        ? _ownedHandle.DangerousGetHandle()
+        : throw new NotSupportedException(
             $"{GetType().Name} is not backed by a native CNA effect, so Parameters, Techniques and " +
             "CurrentTechnique are unavailable. Only this project's own stock effects (BasicEffect, " +
             "AlphaTestEffect, DualTextureEffect, EnvironmentMapEffect, SkinnedEffect, EffectMaterial) " +
@@ -127,7 +190,9 @@ public abstract class Effect : IDisposable
     /// The base throws rather than returning something of the wrong type.
     /// </summary>
     public virtual Effect Clone() =>
-        throw new NotSupportedException(
+        _ownedHandle is not null
+        ? new Effect(GraphicsDevice, CloneNativeHandle().AsNint)
+        : throw new NotSupportedException(
             $"{GetType().Name} does not implement Clone. The native clone route exists " +
             "(cna_effect_clone), but rewrapping its result requires the concrete effect type to " +
             "construct the matching managed class.");
@@ -142,11 +207,23 @@ public abstract class Effect : IDisposable
         return clone;
     }
 
-    protected abstract void OnApply();
+    /// <summary>
+    /// Selects this effect on its device. <see langword="virtual"/> with a working default rather
+    /// than <see langword="abstract"/>, since this class became concrete: an effect that owns a
+    /// handle -- one built from bytecode or loaded through the content manager -- applies through
+    /// the same <c>cna_effect_apply</c> every stock effect uses. One with no handle says so.
+    /// </summary>
+    protected virtual void OnApply()
+    {
+        CnaResult result = Native.cna_effect_apply(new CnaHandle(NativeEffectHandleValue));
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(Apply));
+    }
 
     public virtual void Dispose()
     {
         _parameters?.Dispose();
         _techniques?.Dispose();
+        _ownedHandle?.Dispose();
     }
 }

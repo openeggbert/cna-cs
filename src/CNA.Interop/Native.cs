@@ -2367,6 +2367,37 @@ internal static partial class Native
         CnaStringView assetName,
         out CnaHandle soundEffect);
 
+    /// <summary>
+    /// <c>effects.h:1262</c>. Maps the canonical <c>Load&lt;Effect&gt;</c> specialization, and reads
+    /// all three shapes CNA supports: a compiled <c>.xnb</c> Effect asset, a <c>.cnj</c> descriptor
+    /// naming a stock effect, and a <c>.cnj</c> descriptor carrying custom shader source. What comes
+    /// back is an ordinary owned effect handle, destroyed with <c>cna_effect_destroy</c>.
+    ///
+    /// Declared beside the other content loaders even though it lives in <c>effects.h</c> rather
+    /// than <c>content.h</c>, because that is where its callers are.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_load_effect(
+        CnaHandle contentManager,
+        CnaStringView assetName,
+        out CnaHandle effect);
+
+    /// <summary>
+    /// <c>effects.h:1234</c>. Builds an effect straight from compiled Effect Framework bytecode,
+    /// for a caller holding bytes rather than an asset name.
+    ///
+    /// This is the route whose doc once said it answered <c>NOT_SUPPORTED</c> "while native CNA
+    /// bytecode loading is unavailable", and that sentence outlived the implementation -- it works,
+    /// subject to the renderer's <c>COMPILED_EFFECTS</c> capability. It was listed as this
+    /// binding's single largest functional blocker on the strength of that stale sentence alone.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_effect_create_compiled(
+        CnaHandle graphicsDevice,
+        byte* effectCode,
+        ulong effectCodeCount,
+        out CnaHandle effect);
+
     // -- SoundEffect / SoundEffectInstance (real ABI, audio.h -- step 9 of the native-ABI --------
     // migration). Renamed throughout (cna_soundeffect_* -> cna_sound_effect_*,
     // cna_soundeffectinstance_* -> cna_sound_effect_instance_*) and every creation/instance call
