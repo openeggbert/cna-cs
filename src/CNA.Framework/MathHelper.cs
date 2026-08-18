@@ -94,4 +94,36 @@ public static class MathHelper
             (t1 * s) +
             v1);
     }
+
+    /// <summary>
+    /// The largest <see cref="float"/> that still compares equal to zero when added to one --
+    /// 2^-24, about 5.96e-8.
+    ///
+    /// Deliberately <b>not</b> <see cref="float.Epsilon"/>, which in .NET is the smallest
+    /// *denormal* (1.4e-45) and is roughly 37 orders of magnitude too small to be useful as a
+    /// comparison tolerance. Computed by the same halving loop the engine's own
+    /// <c>MathHelper::GetMachineEpsilonFloat</c> uses, rather than written as a literal, so the two
+    /// cannot drift and so the definition is visible rather than asserted.
+    /// </summary>
+    internal static readonly float MachineEpsilonFloat = ComputeMachineEpsilonFloat();
+
+    /// <summary>Matches the engine's own <c>WithinEpsilon</c>. Internal rather than public: real
+    /// XNA's <c>MathHelper</c> has no such member, and this repository's mandate is the XNA 4.0
+    /// surface, not a superset of it.</summary>
+    internal static bool WithinEpsilon(float a, float b) => MathF.Abs(a - b) < MachineEpsilonFloat;
+
+    private static float ComputeMachineEpsilonFloat()
+    {
+        float epsilon = 1f;
+        float comparison;
+
+        do
+        {
+            epsilon *= 0.5f;
+            comparison = 1f + epsilon;
+        }
+        while (comparison > 1f);
+
+        return epsilon;
+    }
 }
