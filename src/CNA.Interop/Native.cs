@@ -605,6 +605,77 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Microphone + DynamicSoundEffectInstance (real ABI, audio.h -- Phase 8 WP11b) ---------
+    //
+    // Microphones are addressed by index against the game handle, not by their own handle -- the
+    // same shape GraphicsAdapter has, and the reason CNA.Audio.Microphone holds an index rather
+    // than wrapping a resource.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_count(CnaHandle game, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_default_index_ext(CnaHandle game, out ulong outIndex, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_name_size_at(CnaHandle game, ulong index, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_microphone_copy_name_at(
+        CnaHandle game, ulong index, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_buffer_duration_ticks_at(CnaHandle game, ulong index, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_set_buffer_duration_ticks_at(CnaHandle game, ulong index, long ticks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_is_headset_at(CnaHandle game, ulong index, out byte outHeadset);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_sample_rate_at(CnaHandle game, ulong index, out int outSampleRate);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_state_at(CnaHandle game, ulong index, out uint outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_start_at(CnaHandle game, ulong index);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_stop_at(CnaHandle game, ulong index);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_microphone_get_data_at(
+        CnaHandle game, ulong index, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_sample_duration_ticks_at(
+        CnaHandle game, ulong index, int sizeInBytes, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_get_sample_size_in_bytes_at(
+        CnaHandle game, ulong index, long durationTicks, out int outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dynamic_sound_effect_instance_create(
+        CnaHandle game, int sampleRate, uint channels, out CnaHandle outInstance);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dynamic_sound_effect_instance_get_pending_buffer_count(CnaHandle instance, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_dynamic_sound_effect_instance_submit_buffer(
+        CnaHandle instance, byte* bytes, ulong byteCount, int offset, int count);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dynamic_sound_effect_instance_get_sample_duration_ticks(
+        CnaHandle instance, int sizeInBytes, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dynamic_sound_effect_instance_get_sample_size_in_bytes(
+        CnaHandle instance, long durationTicks, out int outBytes);
+
     // -- XACT + 3D audio (real ABI, xact.h + audio.h -- Phase 8 WP11a) ------------------------
     //
     // XACT is the authored-audio half of XNA: an AudioEngine loads a project settings file, wave

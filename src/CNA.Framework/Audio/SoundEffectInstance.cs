@@ -28,7 +28,10 @@ public class SoundEffectInstance : IDisposable
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_sound_effect_instance_destroy(new CnaHandle(h)));
     }
 
-    private nint NativeHandleValue => _handle.DangerousGetHandle();
+    /// <summary><c>private protected</c> rather than <c>private</c> since Phase 8 WP11b, so
+    /// <see cref="DynamicSoundEffectInstance"/> -- a real subclass in real XNA -- can reach its own
+    /// handle for the dynamic-only native calls.</summary>
+    private protected nint NativeHandleValue => _handle.DangerousGetHandle();
 
     public void Play()
     {
