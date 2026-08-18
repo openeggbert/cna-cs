@@ -10,13 +10,23 @@ namespace CNA.Graphics;
 /// for the ownership rule. Nothing is cached: <see cref="Count"/> and the indexers each round-trip
 /// to native, so the collection cannot go stale relative to the effect it belongs to.
 /// </summary>
-public class EffectPassCollection : IEnumerable<EffectPass>
+public class EffectPassCollection : IEnumerable<EffectPass>, IDisposable
 {
-    private readonly CnaHandle _handle;
+    private readonly NativeResourceHandle _ownedHandle;
 
     internal EffectPassCollection(CnaHandle handle)
     {
-        _handle = handle;
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_pass_collection_destroy(new CnaHandle(h)));
+    }
+
+    private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
+
+    /// <summary>See the element type's own doc comment: this collection view is an owned native
+    /// handle, released by its SafeHandle whether or not a caller disposes it.</summary>
+    public void Dispose()
+    {
+        _ownedHandle.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public int Count

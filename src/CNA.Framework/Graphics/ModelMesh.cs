@@ -66,16 +66,26 @@ public class ModelMesh
             _graphicsDevice.SetVertexBuffer(part.VertexBuffer);
             _graphicsDevice.Indices = part.IndexBuffer;
 
-            foreach (EffectPass pass in effect.CurrentTechnique.Passes)
+            // CurrentTechnique, its Passes collection, and every pass are OWNED native handles
+            // minted per call (see EffectPass's doc comment), so this per-frame path disposes them
+            // rather than leaving them to the SafeHandle finalizers -- otherwise a 60 fps draw
+            // queues hundreds of native handles per second for finalization.
+            using EffectTechnique technique = effect.CurrentTechnique;
+            using EffectPassCollection passes = technique.Passes;
+
+            foreach (EffectPass pass in passes)
             {
-                pass.Apply();
-                _graphicsDevice.DrawIndexedPrimitives(
-                    PrimitiveType.TriangleList,
-                    part.VertexOffset,
-                    0,
-                    part.NumVertices,
-                    part.StartIndex,
-                    part.PrimitiveCount);
+                using (pass)
+                {
+                    pass.Apply();
+                    _graphicsDevice.DrawIndexedPrimitives(
+                        PrimitiveType.TriangleList,
+                        part.VertexOffset,
+                        0,
+                        part.NumVertices,
+                        part.StartIndex,
+                        part.PrimitiveCount);
+                }
             }
         }
     }

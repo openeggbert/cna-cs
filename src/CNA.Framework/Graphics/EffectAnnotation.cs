@@ -3,17 +3,38 @@ using CNA.Interop;
 
 namespace CNA.Graphics;
 
+/// <summary>
+/// Owns its native handle. <c>effects.h</c> documents every handle the reflection API hands out as
+/// "Owned" -- a fresh registry slot per call, not an alias of something the effect owns -- and
+/// declares a matching <c>destroy</c> for each. An earlier revision of this binding asserted the
+/// opposite and destroyed none of them, which leaked on the per-frame
+/// <c>ModelMesh.Draw</c> path (one technique + one pass collection + N passes per draw). Found by a
+/// code-review pass.
+///
+/// Release runs through <see cref="NativeResourceHandle"/>, a <see cref="System.Runtime.InteropServices.SafeHandle"/>,
+/// so the GC reclaims these even though real XNA's equivalents are not <see cref="IDisposable"/>
+/// and callers never dispose them. <see cref="IDisposable"/> is offered too, for a caller that
+/// wants the handle back promptly.
+/// </summary>
 /// <summary>Matches real XNA's <c>EffectAnnotation</c>: a compile-time metadata value attached to
 /// a parameter, technique or pass. Read-only by definition -- annotations are baked into the
 /// effect, which is why every accessor here is a getter. A borrowed handle, same ownership rule as
 /// <see cref="EffectParameter"/>.</summary>
-public class EffectAnnotation
+public class EffectAnnotation : IDisposable
 {
-    private readonly CnaHandle _handle;
+    private readonly NativeResourceHandle _ownedHandle;
 
     internal EffectAnnotation(CnaHandle handle)
     {
-        _handle = handle;
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_annotation_destroy(new CnaHandle(h)));
+    }
+
+    private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
+
+    public void Dispose()
+    {
+        _ownedHandle.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public unsafe string Name => NativeStringReader.Read(

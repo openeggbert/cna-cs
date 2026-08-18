@@ -62,23 +62,40 @@ public abstract class Effect : IDisposable
 
     private CnaHandle NativeEffectHandle => new(NativeEffectHandleValue);
 
+    private EffectParameterCollection? _parameters;
+    private EffectTechniqueCollection? _techniques;
+
+    /// <summary>Cached: each read of the underlying native call mints a new owned handle (see
+    /// <see cref="EffectParameterCollection"/>), so re-resolving per access would churn native
+    /// handles for a collection whose identity never changes over an effect's life.</summary>
     public EffectParameterCollection Parameters
     {
         get
         {
-            CnaResult result = Native.cna_effect_get_parameters(NativeEffectHandle, out CnaHandle collection);
-            CnaException.ThrowIfFailed(result, nameof(Parameters));
-            return new EffectParameterCollection(collection);
+            if (_parameters is null)
+            {
+                CnaResult result = Native.cna_effect_get_parameters(NativeEffectHandle, out CnaHandle collection);
+                CnaException.ThrowIfFailed(result, nameof(Parameters));
+                _parameters = new EffectParameterCollection(collection);
+            }
+
+            return _parameters;
         }
     }
 
+    /// <summary>Cached for the same reason as <see cref="Parameters"/>.</summary>
     public EffectTechniqueCollection Techniques
     {
         get
         {
-            CnaResult result = Native.cna_effect_get_techniques(NativeEffectHandle, out CnaHandle collection);
-            CnaException.ThrowIfFailed(result, nameof(Techniques));
-            return new EffectTechniqueCollection(collection);
+            if (_techniques is null)
+            {
+                CnaResult result = Native.cna_effect_get_techniques(NativeEffectHandle, out CnaHandle collection);
+                CnaException.ThrowIfFailed(result, nameof(Techniques));
+                _techniques = new EffectTechniqueCollection(collection);
+            }
+
+            return _techniques;
         }
     }
 
@@ -104,5 +121,7 @@ public abstract class Effect : IDisposable
 
     public virtual void Dispose()
     {
+        _parameters?.Dispose();
+        _techniques?.Dispose();
     }
 }

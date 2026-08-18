@@ -1180,6 +1180,35 @@ internal static partial class Native
     // this project never calls) need destroying, which is why nothing here is wrapped in a
     // NativeResourceHandle.
 
+    // Every handle these hand out is documented "Owned" (effects.h:462-465, 809-818, 1252-1270,
+    // and every collection get_at/find_*), and each mints a fresh registry slot per call -- they
+    // are NOT views aliasing something the effect owns. An earlier revision of this binding claimed
+    // the opposite and destroyed none of them, leaking on the per-frame ModelMesh.Draw path.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_destroy(CnaHandle parameter);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_parameter_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_destroy(CnaHandle annotation);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_annotation_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_destroy(CnaHandle technique);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_technique_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_destroy(CnaHandle pass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_pass_collection_destroy(CnaHandle collection);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_effect_get_parameters(CnaHandle effect, out CnaHandle outCollection);
 

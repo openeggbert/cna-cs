@@ -6,17 +6,28 @@ namespace CNA.Graphics;
 /// <summary>
 /// Matches real XNA's <c>EffectParameterCollection</c>: the parameters of an effect, reached by index or by name.
 ///
-/// A borrowed view over a native collection the effect owns -- see <see cref="EffectParameter"/>
-/// for the ownership rule. Nothing is cached: <see cref="Count"/> and the indexers each round-trip
+/// An OWNED native collection view -- <c>effects.h</c> mints a fresh one per call rather than
+/// aliasing something the effect owns, so this releases it (see <see cref="EffectParameter"/>).
+/// Nothing is cached: <see cref="Count"/> and the indexers each round-trip
 /// to native, so the collection cannot go stale relative to the effect it belongs to.
 /// </summary>
-public class EffectParameterCollection : IEnumerable<EffectParameter>
+public class EffectParameterCollection : IEnumerable<EffectParameter>, IDisposable
 {
-    private readonly CnaHandle _handle;
+    private readonly NativeResourceHandle _ownedHandle;
 
     internal EffectParameterCollection(CnaHandle handle)
     {
-        _handle = handle;
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_parameter_collection_destroy(new CnaHandle(h)));
+    }
+
+    private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
+
+    /// <summary>See the element type's own doc comment: this collection view is an owned native
+    /// handle, released by its SafeHandle whether or not a caller disposes it.</summary>
+    public void Dispose()
+    {
+        _ownedHandle.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public int Count

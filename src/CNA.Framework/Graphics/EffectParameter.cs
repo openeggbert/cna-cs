@@ -17,13 +17,21 @@ namespace CNA.Graphics;
 /// supplying correctly-sized storage. The typed methods below are that contract made safe: each
 /// pins storage of exactly the right size for the tag it passes.
 /// </summary>
-public class EffectParameter
+public class EffectParameter : IDisposable
 {
-    private readonly CnaHandle _handle;
+    private readonly NativeResourceHandle _ownedHandle;
 
     internal EffectParameter(CnaHandle handle)
     {
-        _handle = handle;
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_parameter_destroy(new CnaHandle(h)));
+    }
+
+    private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
+
+    public void Dispose()
+    {
+        _ownedHandle.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public unsafe string Name => NativeStringReader.Read(
@@ -117,7 +125,20 @@ public class EffectParameter
         CnaException.ThrowIfFailed(result, nameof(SetValue));
     }
 
-    /// <summary>Matches real XNA's <c>SetValue(Texture)</c>. The texture-type tag is derived from
+    /// <summary>
+/// Owns its native handle. <c>effects.h</c> documents every handle the reflection API hands out as
+/// "Owned" -- a fresh registry slot per call, not an alias of something the effect owns -- and
+/// declares a matching <c>destroy</c> for each. An earlier revision of this binding asserted the
+/// opposite and destroyed none of them, which leaked on the per-frame
+/// <c>ModelMesh.Draw</c> path (one technique + one pass collection + N passes per draw). Found by a
+/// code-review pass.
+///
+/// Release runs through <see cref="NativeResourceHandle"/>, a <see cref="System.Runtime.InteropServices.SafeHandle"/>,
+/// so the GC reclaims these even though real XNA's equivalents are not <see cref="IDisposable"/>
+/// and callers never dispose them. <see cref="IDisposable"/> is offered too, for a caller that
+/// wants the handle back promptly.
+/// </summary>
+/// <summary>Matches real XNA's <c>SetValue(Texture)</c>. The texture-type tag is derived from
     /// the managed type rather than asked for, so a caller cannot pair a
     /// <see cref="TextureCube"/> with the 2D tag.</summary>
     public void SetValue(Texture? value)

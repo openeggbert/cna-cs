@@ -51,8 +51,11 @@ public class StorageContainer : IDisposable
     public bool FileExists(string file) => WithPathQuery(Native.cna_storage_container_file_exists, file, nameof(FileExists));
 
     /// <summary>Matches real XNA's parameterless <c>GetFileNames()</c>, which lists everything.
-    /// The C API always takes a search pattern, so this passes <c>"*"</c>.</summary>
-    public string[] GetFileNames() => GetFileNames("*");
+    /// Passes an empty pattern, which <c>storage.h:459</c> documents as the "every name" sentinel
+    /// ("a zero-length view for every name") -- not <c>"*"</c>, which would be run through the
+    /// native glob and, in most glob implementations, skip dot-prefixed names. A code-review pass
+    /// caught that.</summary>
+    public string[] GetFileNames() => GetFileNames(string.Empty);
 
     public unsafe string[] GetFileNames(string searchPattern) => CopyNames(
         Native.cna_storage_container_get_file_name_count,
@@ -60,7 +63,8 @@ public class StorageContainer : IDisposable
         searchPattern,
         nameof(GetFileNames));
 
-    public string[] GetDirectoryNames() => GetDirectoryNames("*");
+    /// <summary>Empty pattern means "every name" -- see <see cref="GetFileNames()"/>.</summary>
+    public string[] GetDirectoryNames() => GetDirectoryNames(string.Empty);
 
     public unsafe string[] GetDirectoryNames(string searchPattern) => CopyNames(
         Native.cna_storage_container_get_directory_name_count,
@@ -93,9 +97,22 @@ public class StorageContainer : IDisposable
         return new StorageStream(stream.AsNint);
     }
 
+    private bool _disposed;
+
+    /// <summary>Guarded: <see cref="System.Runtime.InteropServices.SafeHandle.DangerousGetHandle"/>
+    /// keeps returning the stale value after close, so an unguarded second call would pass a
+    /// released handle to <c>cna_storage_container_dispose</c>. Found by a code-review
+    /// pass.</summary>
     public void Dispose()
     {
-        Native.cna_storage_container_dispose(NativeHandle);
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        CnaResult result = Native.cna_storage_container_dispose(NativeHandle);
+        CnaException.ThrowIfFailed(result, nameof(Dispose));
         _handle.Dispose();
         GC.SuppressFinalize(this);
     }
