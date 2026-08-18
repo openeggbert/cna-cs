@@ -21,18 +21,17 @@ internal static partial class Native
 {
     private const string LibraryName = "cna-native";
 
-    // -- ABI versioning (§14) --------------------------------------------------------------
+    // -- ABI versioning (abi.h:114) ----------------------------------------------------------
 
     [LibraryImport(LibraryName)]
     internal static partial uint cna_get_abi_version();
 
-    // -- Runtime lifecycle (§70) -------------------------------------------------------------
-
-    [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_runtime_initialize();
-
-    [LibraryImport(LibraryName)]
-    internal static partial void cna_runtime_shutdown();
+    // There is deliberately no cna_runtime_initialize / cna_runtime_shutdown here. Both were
+    // declared, neither exists in any header, and nothing ever called them -- so unlike
+    // cna_content_load_spritefont (which was reachable and would have crashed) these were merely
+    // dead fabrications. Found by sweeping every declaration in this file against the headers;
+    // 713 of 715 matched. The C API has no explicit runtime lifecycle: a game handle is created
+    // and destroyed, and that is the whole of it.
 
     // -- Error retrieval (real ABI, core.h:154-178, caller-owned two-call size-then-copy) ----
 
@@ -188,7 +187,7 @@ internal static partial class Native
     // DepthStencilState/RasterizerState were guessed-and-never-built during the original
     // migration since the old HelloGame smoke test never touched them. The preset init functions
     // take no device handle at all -- pure value computation, safe to call at any time, including
-    // before cna_runtime_initialize -- which is why CNA.Graphics.BlendState/DepthStencilState/
+    // before any game exists -- which is why CNA.Graphics.BlendState/DepthStencilState/
     // RasterizerState's static presets can be plain `static readonly` fields instead of needing
     // lazy/deferred initialization.
 

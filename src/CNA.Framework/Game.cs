@@ -68,6 +68,11 @@ public abstract class Game : IDisposable
             Callbacks = &callbacks,
         };
 
+        // Before the first real native call, and cheap after the first game: a library from a
+        // different ABI generation would otherwise be used anyway and fail later as a garbled
+        // struct or a wrong handle, rather than as a message naming the mismatch.
+        CnaAbi.EnsureCompatible();
+
         CnaResult result = Native.cna_game_create(in createInfo, out _nativeHandle);
         if (result.IsFailure())
         {
