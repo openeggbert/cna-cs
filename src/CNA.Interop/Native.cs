@@ -1235,6 +1235,35 @@ internal static partial class Native
     internal static partial CnaResult cna_storage_container_open_file(
         CnaHandle container, CnaStringView file, uint fileMode, out CnaHandle outStream);
 
+    /// <summary>The access- and share-taking <c>OpenFile</c> overloads
+    /// (<c>storage.h</c>). <c>CNA_FileMode</c>/<c>CNA_FileAccess</c>/<c>CNA_FileShare</c> match
+    /// <see cref="System.IO"/>'s own enums value for value, which is why nothing is translated.
+    /// Found unbound by the header sweep.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_open_file_access(
+        CnaHandle container, CnaStringView file, uint fileMode, uint fileAccess, out CnaHandle outStream);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_open_file_share(
+        CnaHandle container, CnaStringView file, uint fileMode, uint fileAccess, uint fileShare,
+        out CnaHandle outStream);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_get_storage_device(
+        CnaHandle container, out CnaHandle outDevice);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_show_selector_for_player(
+        uint player, nint callback, nint context, out CnaHandle outDevice);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_show_selector_with_space(
+        int sizeInBytes, int directoryCount, nint callback, nint context, out CnaHandle outDevice);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_show_selector_for_player_with_space(
+        uint player, int sizeInBytes, int directoryCount, nint callback, nint context, out CnaHandle outDevice);
+
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_storage_stream_read(CnaHandle stream, byte* destination, ulong capacity, out ulong outRead);
 

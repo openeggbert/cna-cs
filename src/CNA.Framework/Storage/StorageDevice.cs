@@ -79,6 +79,71 @@ public class StorageDevice
         return new StorageDevice(device.AsNint);
     }
 
+    /// <summary>Shows the selector for one player. Real XNA's per-player overload -- the ABI takes
+    /// a <c>CNA_PlayerIndex</c>, which is what makes this a distinct route rather than an argument
+    /// this layer could drop.</summary>
+    public static StorageDevice ShowSelector(PlayerIndex player)
+    {
+        CnaResult result = Native.cna_storage_device_show_selector_for_player(
+            (uint)player, 0, 0, out CnaHandle device);
+        CnaException.ThrowIfFailed(result, nameof(ShowSelector));
+        return new StorageDevice(device.AsNint);
+    }
+
+    /// <summary>Shows the selector, requiring the device to have room for
+    /// <paramref name="sizeInBytes"/> across <paramref name="directoryCount"/> directories.</summary>
+    public static StorageDevice ShowSelector(int sizeInBytes, int directoryCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(sizeInBytes);
+        ArgumentOutOfRangeException.ThrowIfNegative(directoryCount);
+
+        CnaResult result = Native.cna_storage_device_show_selector_with_space(
+            sizeInBytes, directoryCount, 0, 0, out CnaHandle device);
+        CnaException.ThrowIfFailed(result, nameof(ShowSelector));
+        return new StorageDevice(device.AsNint);
+    }
+
+    /// <summary>Both of the above at once.</summary>
+    public static StorageDevice ShowSelector(PlayerIndex player, int sizeInBytes, int directoryCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(sizeInBytes);
+        ArgumentOutOfRangeException.ThrowIfNegative(directoryCount);
+
+        CnaResult result = Native.cna_storage_device_show_selector_for_player_with_space(
+            (uint)player, sizeInBytes, directoryCount, 0, 0, out CnaHandle device);
+        CnaException.ThrowIfFailed(result, nameof(ShowSelector));
+        return new StorageDevice(device.AsNint);
+    }
+
+    /// <summary>Matches real XNA's <c>BeginShowSelector(PlayerIndex, AsyncCallback, object)</c>.
+    /// Completes before returning, like every other selector route here.</summary>
+    public static IAsyncResult BeginShowSelector(PlayerIndex player, AsyncCallback? callback, object? state)
+    {
+        var asyncResult = new CompletedAsyncResult<StorageDevice>(ShowSelector(player), state);
+        callback?.Invoke(asyncResult);
+        return asyncResult;
+    }
+
+    /// <summary>Matches real XNA's <c>BeginShowSelector(int, int, AsyncCallback, object)</c>.</summary>
+    public static IAsyncResult BeginShowSelector(
+        int sizeInBytes, int directoryCount, AsyncCallback? callback, object? state)
+    {
+        var asyncResult = new CompletedAsyncResult<StorageDevice>(
+            ShowSelector(sizeInBytes, directoryCount), state);
+        callback?.Invoke(asyncResult);
+        return asyncResult;
+    }
+
+    /// <summary>Matches real XNA's four-argument <c>BeginShowSelector</c>.</summary>
+    public static IAsyncResult BeginShowSelector(
+        PlayerIndex player, int sizeInBytes, int directoryCount, AsyncCallback? callback, object? state)
+    {
+        var asyncResult = new CompletedAsyncResult<StorageDevice>(
+            ShowSelector(player, sizeInBytes, directoryCount), state);
+        callback?.Invoke(asyncResult);
+        return asyncResult;
+    }
+
     /// <summary>Matches real XNA's <c>BeginShowSelector</c>. Completes before returning; the
     /// callback (when supplied) is invoked synchronously, and
     /// <see cref="IAsyncResult.CompletedSynchronously"/> is <see langword="true"/> so a caller can

@@ -3,7 +3,7 @@ using CNA.Interop;
 namespace CNA.Storage;
 
 /// <summary>
-/// The <see cref="Stream"/> <see cref="StorageContainer.OpenFile"/> and
+/// The <see cref="Stream"/> <see cref="StorageContainer.OpenFile(string,System.IO.FileMode)"/> and
 /// <see cref="StorageContainer.CreateFile"/> hand back, over a native
 /// <c>CNA_StorageStreamHandle</c>.
 ///

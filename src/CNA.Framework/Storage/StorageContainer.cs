@@ -117,6 +117,40 @@ public class StorageContainer : IDisposable
         return new StorageStream(stream.AsNint);
     }
 
+    /// <summary>Matches real XNA's <c>OpenFile(string, FileMode, FileAccess)</c>. Sharing defaults
+    /// to read/write, which is what the ABI's own three-argument route does.</summary>
+    public Stream OpenFile(string file, FileMode fileMode, FileAccess fileAccess)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        CnaHandle stream = default;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            file,
+            view => Native.cna_storage_container_open_file_access(
+                NativeHandle, view, (uint)fileMode, (uint)fileAccess, out stream));
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(OpenFile));
+        return new StorageStream(stream.AsNint);
+    }
+
+    /// <summary>Matches real XNA's <c>OpenFile(string, FileMode, FileAccess, FileShare)</c>. All
+    /// three enums are <see cref="System.IO"/>'s own -- <c>CNA_FileMode</c>/<c>CNA_FileAccess</c>/
+    /// <c>CNA_FileShare</c> match them value for value, so a CNA-flavoured duplicate would violate
+    /// design invariant #7 for no gain.</summary>
+    public Stream OpenFile(string file, FileMode fileMode, FileAccess fileAccess, FileShare fileShare)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        CnaHandle stream = default;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            file,
+            view => Native.cna_storage_container_open_file_share(
+                NativeHandle, view, (uint)fileMode, (uint)fileAccess, (uint)fileShare, out stream));
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(OpenFile));
+        return new StorageStream(stream.AsNint);
+    }
+
     private bool _disposed;
 
     /// <summary>Guarded: <see cref="System.Runtime.InteropServices.SafeHandle.DangerousGetHandle"/>
