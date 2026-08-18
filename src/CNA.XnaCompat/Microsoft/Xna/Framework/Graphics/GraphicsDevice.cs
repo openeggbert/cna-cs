@@ -42,4 +42,93 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         PrimitiveType primitiveType, int baseVertex, int minVertexIndex, int numVertices, int startIndex, int primitiveCount) =>
         base.DrawIndexedPrimitives(
             (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex, numVertices, startIndex, primitiveCount);
+
+    public void Clear(ClearOptions options, Color color, float depth, int stencil) =>
+        base.Clear((CNA.Graphics.ClearOptions)(int)options, color, depth, stencil);
+
+    public new Viewport Viewport
+    {
+        get => Viewport.FromNative(base.Viewport);
+        set => base.Viewport = value.ToNative();
+    }
+
+    public new GraphicsProfile GraphicsProfile => (GraphicsProfile)base.GraphicsProfile;
+
+    /// <summary>Same downcast pass-through pattern as <see cref="Indices"/>, but for a property
+    /// whose base default is a real, non-null value -- see the base <c>BlendState</c> property's
+    /// own doc comment for why <see cref="QueryBlendState"/> needs its own override here rather
+    /// than relying on the downcast alone.</summary>
+    public new BlendState BlendState
+    {
+        get => (BlendState)base.BlendState;
+        set => base.BlendState = value;
+    }
+
+    protected override CNA.Graphics.BlendState QueryBlendState() => new BlendState(base.QueryBlendState());
+
+    public new DepthStencilState DepthStencilState
+    {
+        get => (DepthStencilState)base.DepthStencilState;
+        set => base.DepthStencilState = value;
+    }
+
+    protected override CNA.Graphics.DepthStencilState QueryDepthStencilState() => new DepthStencilState(base.QueryDepthStencilState());
+
+    public new RasterizerState RasterizerState
+    {
+        get => (RasterizerState)base.RasterizerState;
+        set => base.RasterizerState = value;
+    }
+
+    protected override CNA.Graphics.RasterizerState QueryRasterizerState() => new RasterizerState(base.QueryRasterizerState());
+
+    /// <summary>Matches real XNA's <c>DrawUserPrimitives&lt;T&gt;</c>. Reimplements the
+    /// type-to-<c>UserVertexSource</c> mapping for this namespace's own vertex structs rather than
+    /// forwarding to <see cref="CNA.Graphics.GraphicsDevice.DrawUserPrimitives{T}"/> directly --
+    /// compat vertex structs (e.g. <see cref="VertexPositionTexture"/>) are separate types from
+    /// their CNA.Graphics counterparts (structs can't be subclassed to share one), so the base
+    /// generic method's own <c>typeof(T) ==</c> checks would never match. Goes through
+    /// <see cref="CNA.Graphics.GraphicsDevice.DrawUserPrimitivesRaw"/> instead, the shared
+    /// pointer-and-identity level both namespaces build on.</summary>
+    public unsafe void DrawUserPrimitives<T>(PrimitiveType primitiveType, T[] vertexData, int vertexOffset, int primitiveCount)
+        where T : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(vertexData);
+
+        CNA.Graphics.UserVertexSource vertexSource = VertexSourceFor<T>();
+
+        fixed (T* vertexDataPtr = vertexData)
+        {
+            DrawUserPrimitivesRaw(
+                (CNA.Graphics.PrimitiveType)(int)primitiveType, vertexDataPtr, vertexSource, vertexOffset, primitiveCount);
+        }
+    }
+
+    private static CNA.Graphics.UserVertexSource VertexSourceFor<T>() where T : unmanaged
+    {
+        if (typeof(T) == typeof(VertexPositionColor))
+        {
+            return CNA.Graphics.UserVertexSource.PositionColor;
+        }
+
+        if (typeof(T) == typeof(VertexPositionColorTexture))
+        {
+            return CNA.Graphics.UserVertexSource.PositionColorTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionTexture))
+        {
+            return CNA.Graphics.UserVertexSource.PositionTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionNormalTexture))
+        {
+            return CNA.Graphics.UserVertexSource.PositionNormalTexture;
+        }
+
+        throw new NotSupportedException(
+            $"DrawUserPrimitives<{typeof(T).Name}> is not supported -- only VertexPositionColor, " +
+            "VertexPositionColorTexture, VertexPositionTexture, and VertexPositionNormalTexture match a real " +
+            "CNA_USER_VERTEX_SOURCE_* identity.");
+    }
 }

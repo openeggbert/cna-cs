@@ -105,59 +105,72 @@ public class GraphicsDevice
     /// <see cref="VertexPositionColorTexture"/>, <see cref="VertexPositionTexture"/>,
     /// <see cref="VertexPositionNormalTexture"/> -- are supported; any other <typeparamref name="T"/>
     /// would need the raw-stream route with a native vertex-declaration resource this project
-    /// doesn't have (see <see cref="CnaUserVertexSource"/>'s own doc comment).</summary>
+    /// doesn't have (see <see cref="UserVertexSource"/>'s own doc comment).</summary>
     public unsafe void DrawUserPrimitives<T>(PrimitiveType primitiveType, T[] vertexData, int vertexOffset, int primitiveCount)
         where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(vertexData);
-        ArgumentOutOfRangeException.ThrowIfNegative(vertexOffset);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
 
-        CnaUserVertexSource vertexSource = VertexSourceFor<T>();
+        UserVertexSource vertexSource = VertexSourceFor<T>();
 
         fixed (T* vertexDataPtr = vertexData)
         {
-            var primitives = new CnaUserPrimitives
-            {
-                PrimitiveType = (int)primitiveType,
-                VertexSource = vertexSource,
-                VertexData = vertexDataPtr,
-                VertexDeclaration = CnaHandle.Zero,
-                VertexOffset = vertexOffset,
-                PrimitiveCount = primitiveCount,
-            };
-
-            CnaResult result = Native.cna_graphics_device_draw_user_primitives(ResolveNativeDeviceHandle(), in primitives);
-            CnaException.ThrowIfFailed(result, nameof(DrawUserPrimitives));
+            DrawUserPrimitivesRaw(primitiveType, vertexDataPtr, vertexSource, vertexOffset, primitiveCount);
         }
     }
 
-    private static CnaUserVertexSource VertexSourceFor<T>() where T : unmanaged
+    private static UserVertexSource VertexSourceFor<T>() where T : unmanaged
     {
         if (typeof(T) == typeof(VertexPositionColor))
         {
-            return CnaUserVertexSource.PositionColor;
+            return UserVertexSource.PositionColor;
         }
 
         if (typeof(T) == typeof(VertexPositionColorTexture))
         {
-            return CnaUserVertexSource.PositionColorTexture;
+            return UserVertexSource.PositionColorTexture;
         }
 
         if (typeof(T) == typeof(VertexPositionTexture))
         {
-            return CnaUserVertexSource.PositionTexture;
+            return UserVertexSource.PositionTexture;
         }
 
         if (typeof(T) == typeof(VertexPositionNormalTexture))
         {
-            return CnaUserVertexSource.PositionNormalTexture;
+            return UserVertexSource.PositionNormalTexture;
         }
 
         throw new NotSupportedException(
             $"DrawUserPrimitives<{typeof(T).Name}> is not supported -- only VertexPositionColor, " +
             "VertexPositionColorTexture, VertexPositionTexture, and VertexPositionNormalTexture match a real " +
             "CNA_USER_VERTEX_SOURCE_* identity.");
+    }
+
+    /// <summary>The pointer-and-identity level <see cref="DrawUserPrimitives{T}"/> builds on --
+    /// <c>protected</c>, not <c>private</c>, so CNA.XnaCompat's <c>GraphicsDevice</c> override can
+    /// reach it for its own, separately-typed compat vertex structs (structs can't share a type
+    /// across the CNA/XnaCompat boundary the way <see cref="RenderTarget2D"/>-style reference types
+    /// do -- see <see cref="Graphics.UserVertexSource"/>'s own doc comment) without ever naming a
+    /// <c>CNA.Interop</c> type.</summary>
+    protected unsafe void DrawUserPrimitivesRaw(
+        PrimitiveType primitiveType, void* vertexData, UserVertexSource vertexSource, int vertexOffset, int primitiveCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(vertexOffset);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
+
+        var primitives = new CnaUserPrimitives
+        {
+            PrimitiveType = (int)primitiveType,
+            VertexSource = (CnaUserVertexSource)vertexSource,
+            VertexData = vertexData,
+            VertexDeclaration = CnaHandle.Zero,
+            VertexOffset = vertexOffset,
+            PrimitiveCount = primitiveCount,
+        };
+
+        CnaResult result = Native.cna_graphics_device_draw_user_primitives(ResolveNativeDeviceHandle(), in primitives);
+        CnaException.ThrowIfFailed(result, nameof(DrawUserPrimitives));
     }
 
     /// <summary>
@@ -193,20 +206,17 @@ public class GraphicsDevice
     /// <summary>Lazily queries the device's current state on first read (via
     /// <c>cna_graphics_device_get_blend_state</c>) rather than defaulting to
     /// <see cref="Graphics.BlendState.Opaque"/> locally -- the real ABI is the source of truth for
-    /// what a freshly created device actually starts with, not an assumption made here.</summary>
+    /// what a freshly created device actually starts with, not an assumption made here. The query
+    /// itself is split into <see cref="QueryBlendState"/>, a <see langword="protected virtual"/>
+    /// hook -- CNA.XnaCompat's <c>GraphicsDevice</c> overrides it to return a compat-typed
+    /// <c>BlendState</c> instead, so <c>this.GraphicsDevice.BlendState</c> never throws
+    /// <see cref="InvalidCastException"/> on a first read that happens before any explicit
+    /// <see langword="set"/> -- the same class of bug <see cref="Indices"/>'s own doc comment
+    /// describes, but for a property whose base default is a real, non-null constructed value
+    /// rather than <see langword="null"/>.</summary>
     public BlendState BlendState
     {
-        get
-        {
-            if (_blendState is null)
-            {
-                CnaResult queryResult = Native.cna_graphics_device_get_blend_state(ResolveNativeDeviceHandle(), out CnaBlendState native);
-                CnaException.ThrowIfFailed(queryResult, nameof(BlendState));
-                _blendState = BlendState.FromNative(native);
-            }
-
-            return _blendState;
-        }
+        get => _blendState ??= QueryBlendState();
         set
         {
             ArgumentNullException.ThrowIfNull(value);
@@ -216,21 +226,20 @@ public class GraphicsDevice
         }
     }
 
+    protected virtual BlendState QueryBlendState()
+    {
+        CnaResult queryResult = Native.cna_graphics_device_get_blend_state(ResolveNativeDeviceHandle(), out CnaBlendState native);
+        CnaException.ThrowIfFailed(queryResult, nameof(BlendState));
+        return BlendState.FromNative(native);
+    }
+
     private DepthStencilState? _depthStencilState;
 
+    /// <summary>See <see cref="BlendState"/>'s own doc comment for why the default-construction
+    /// path is a separate, overridable <see cref="QueryDepthStencilState"/> hook.</summary>
     public DepthStencilState DepthStencilState
     {
-        get
-        {
-            if (_depthStencilState is null)
-            {
-                CnaResult queryResult = Native.cna_graphics_device_get_depth_stencil_state(ResolveNativeDeviceHandle(), out CnaDepthStencilState native);
-                CnaException.ThrowIfFailed(queryResult, nameof(DepthStencilState));
-                _depthStencilState = DepthStencilState.FromNative(native);
-            }
-
-            return _depthStencilState;
-        }
+        get => _depthStencilState ??= QueryDepthStencilState();
         set
         {
             ArgumentNullException.ThrowIfNull(value);
@@ -240,21 +249,20 @@ public class GraphicsDevice
         }
     }
 
+    protected virtual DepthStencilState QueryDepthStencilState()
+    {
+        CnaResult queryResult = Native.cna_graphics_device_get_depth_stencil_state(ResolveNativeDeviceHandle(), out CnaDepthStencilState native);
+        CnaException.ThrowIfFailed(queryResult, nameof(DepthStencilState));
+        return DepthStencilState.FromNative(native);
+    }
+
     private RasterizerState? _rasterizerState;
 
+    /// <summary>See <see cref="BlendState"/>'s own doc comment for why the default-construction
+    /// path is a separate, overridable <see cref="QueryRasterizerState"/> hook.</summary>
     public RasterizerState RasterizerState
     {
-        get
-        {
-            if (_rasterizerState is null)
-            {
-                CnaResult queryResult = Native.cna_graphics_device_get_rasterizer_state(ResolveNativeDeviceHandle(), out CnaRasterizerState native);
-                CnaException.ThrowIfFailed(queryResult, nameof(RasterizerState));
-                _rasterizerState = RasterizerState.FromNative(native);
-            }
-
-            return _rasterizerState;
-        }
+        get => _rasterizerState ??= QueryRasterizerState();
         set
         {
             ArgumentNullException.ThrowIfNull(value);
@@ -262,6 +270,13 @@ public class GraphicsDevice
             CnaException.ThrowIfFailed(result, nameof(RasterizerState));
             _rasterizerState = value;
         }
+    }
+
+    protected virtual RasterizerState QueryRasterizerState()
+    {
+        CnaResult queryResult = Native.cna_graphics_device_get_rasterizer_state(ResolveNativeDeviceHandle(), out CnaRasterizerState native);
+        CnaException.ThrowIfFailed(queryResult, nameof(RasterizerState));
+        return RasterizerState.FromNative(native);
     }
 
     private IndexBuffer? _indices;

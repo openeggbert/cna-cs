@@ -17,11 +17,15 @@ public abstract class Game : CNA.Game
 
     public new Graphics.GraphicsDevice GraphicsDevice => (Graphics.GraphicsDevice)base.GraphicsDevice;
 
+    public new GameWindow Window => (GameWindow)base.Window;
+
     protected override Content.ContentManager CreateContentManager() =>
         new Content.ContentManager(GetNativeContentHandle());
 
     protected override Graphics.GraphicsDevice CreateGraphicsDevice() =>
         new Graphics.GraphicsDevice(GetNativeGraphicsDeviceHandle());
+
+    protected override CNA.GameWindow CreateWindow() => new GameWindow(NativeHandle);
 
     protected sealed override void Update(CNA.GameTime gameTime) => Update(GameTime.FromFramework(gameTime));
 

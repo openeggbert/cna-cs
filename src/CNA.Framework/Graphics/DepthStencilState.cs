@@ -4,8 +4,9 @@ namespace CNA.Graphics;
 
 /// <summary>Matches real XNA's <c>DepthStencilState</c> surface. See <see cref="BlendState"/>'s
 /// own doc comment for why the static presets are seeded from
-/// <see cref="Native.cna_depth_stencil_state_init"/> rather than hardcoded by hand.</summary>
-public sealed class DepthStencilState
+/// <see cref="Native.cna_depth_stencil_state_init"/> rather than hardcoded by hand, and for why
+/// this isn't sealed.</summary>
+public class DepthStencilState
 {
     private CnaDepthStencilState _native;
 
@@ -23,6 +24,12 @@ public sealed class DepthStencilState
     private DepthStencilState(CnaDepthStencilState native)
     {
         _native = native;
+    }
+
+    protected DepthStencilState(DepthStencilState copyFrom)
+    {
+        ArgumentNullException.ThrowIfNull(copyFrom);
+        _native = copyFrom._native;
     }
 
     public static DepthStencilState Default { get; } = new(CnaDepthStencilStatePreset.Default);

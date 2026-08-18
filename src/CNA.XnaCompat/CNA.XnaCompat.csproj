@@ -7,6 +7,7 @@
       See docs/xna-compatibility.md for what "compatible" does and does not mean here.
       Never references CNA.Interop directly -- see docs/architecture.md.
     </Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 

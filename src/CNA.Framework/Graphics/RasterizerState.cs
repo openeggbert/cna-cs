@@ -4,8 +4,9 @@ namespace CNA.Graphics;
 
 /// <summary>Matches real XNA's <c>RasterizerState</c> surface. See <see cref="BlendState"/>'s own
 /// doc comment for why the static presets are seeded from
-/// <see cref="Native.cna_rasterizer_state_init"/> rather than hardcoded by hand.</summary>
-public sealed class RasterizerState
+/// <see cref="Native.cna_rasterizer_state_init"/> rather than hardcoded by hand, and for why this
+/// isn't sealed.</summary>
+public class RasterizerState
 {
     private CnaRasterizerState _native;
 
@@ -23,6 +24,12 @@ public sealed class RasterizerState
     private RasterizerState(CnaRasterizerState native)
     {
         _native = native;
+    }
+
+    protected RasterizerState(RasterizerState copyFrom)
+    {
+        ArgumentNullException.ThrowIfNull(copyFrom);
+        _native = copyFrom._native;
     }
 
     public static RasterizerState CullClockwise { get; } = new(CnaRasterizerStatePreset.CullClockwise);

@@ -7,9 +7,13 @@ namespace CNA.Graphics;
 /// presets below -- is seeded by <see cref="Native.cna_blend_state_init"/>, the real ABI's own
 /// preset-descriptor initializer (<c>graphics_state.h:349</c>), rather than by hardcoding XNA's
 /// well-known field values by hand: the native call takes no device handle at all, so it is safe
-/// to run at static-field-init time, before any game or graphics device exists.
+/// to run at static-field-init time, before any game or graphics device exists. Not sealed --
+/// CNA.XnaCompat's <c>BlendState</c> subclasses it via the <see cref="BlendState(BlendState)"/>
+/// copy constructor, which (unlike the two below) names no <c>CNA.Interop</c> type, so it stays
+/// reachable across the assembly boundary with no <c>InternalsVisibleTo</c> grant into
+/// <c>CNA.Interop</c> needed.
 /// </summary>
-public sealed class BlendState
+public class BlendState
 {
     private CnaBlendState _native;
 
@@ -27,6 +31,12 @@ public sealed class BlendState
     private BlendState(CnaBlendState native)
     {
         _native = native;
+    }
+
+    protected BlendState(BlendState copyFrom)
+    {
+        ArgumentNullException.ThrowIfNull(copyFrom);
+        _native = copyFrom._native;
     }
 
     public static BlendState Opaque { get; } = new(CnaBlendStatePreset.Opaque);
