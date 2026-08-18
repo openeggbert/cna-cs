@@ -121,6 +121,39 @@ public class ContentManager
     /// own accessibility for the identical reason.</summary>
     internal XnbModelData LoadXnbModelData(string assetName)
     {
+        object? root = ReadXnbRootObject(assetName);
+
+        if (root is not XnbModelData modelData)
+        {
+            throw new ContentLoadException(
+                $"'{assetName}' is not a Model asset (its .xnb root object's type reader was not ModelReader).");
+        }
+
+        return modelData;
+    }
+
+    /// <summary>Parses a real <c>.xnb</c> <c>SpriteFont</c> asset into a native-free
+    /// <see cref="XnbSpriteFontData"/>. Same split, and same <c>internal</c> accessibility, as
+    /// <see cref="LoadXnbModelData"/> -- see its doc comment for both.</summary>
+    internal XnbSpriteFontData LoadXnbSpriteFontData(string assetName)
+    {
+        object? root = ReadXnbRootObject(assetName);
+
+        if (root is not XnbSpriteFontData spriteFontData)
+        {
+            throw new ContentLoadException(
+                $"'{assetName}' is not a SpriteFont asset (its .xnb root object's type reader was not SpriteFontReader).");
+        }
+
+        return spriteFontData;
+    }
+
+    /// <summary>Opens a <c>.xnb</c> file, decompresses it when the header says so, and reads its
+    /// root object. Extracted when the <c>SpriteFont</c> reader landed: the container half is
+    /// identical for every asset type and only the root-object type check differs, so duplicating
+    /// it would have meant two copies of the LZX handling below.</summary>
+    private object? ReadXnbRootObject(string assetName)
+    {
         ArgumentNullException.ThrowIfNull(assetName);
 
         string path = ResolveXnbAssetPath(assetName);
@@ -159,15 +192,7 @@ public class ContentManager
             contentReader = XnbContentReader.Create(reader);
         }
 
-        object? root = contentReader.ReadRootObjectAndResolveSharedResources();
-
-        if (root is not XnbModelData modelData)
-        {
-            throw new ContentLoadException(
-                $"'{assetName}' is not a Model asset (its .xnb root object's type reader was not ModelReader).");
-        }
-
-        return modelData;
+        return contentReader.ReadRootObjectAndResolveSharedResources();
     }
 
     /// <summary>Builds the final, real, native-backed <see cref="Model"/> -- see this type's own doc
@@ -287,60 +312,58 @@ public class ContentManager
         char? DefaultCharacter);
 
     /// <summary>
-    /// No ABI shape for <c>SpriteFont</c> content loading exists upstream -- self-designed for
-    /// this repository (see <c>CnaSpriteFontData</c> in CNA.Interop). Deliberately caps a font at
-    /// <c>CnaGlyphBuffer.MaxGlyphs</c> (256) glyphs -- generous for XNA's default ASCII-range
-    /// content-pipeline output, but a real, documented limitation, not a silent truncation: the
-    /// native call is expected to fail with a <see cref="CnaResult"/> error for a font with more
-    /// glyphs than that. <see cref="CnaGlyphMetrics.Character"/> crosses the ABI as a full Unicode
-    /// code point specifically so it isn't ambiguous for astral-plane characters, but
-    /// <see cref="Graphics.SpriteFont"/>'s glyph table is <c>char</c>-keyed (matching real XNA,
-    /// which has the same limitation) -- a code point that doesn't fit in one UTF-16 code unit is
-    /// rejected here with a clear exception rather than silently truncated into a wrong,
-    /// possibly-colliding <c>char</c>.
+    /// Parses a <c>SpriteFont</c> asset and uploads its atlas.
+    ///
+    /// This used to call <c>cna_content_load_spritefont</c>, a P/Invoke that names a function
+    /// present in no header -- so every <c>Load&lt;SpriteFont&gt;</c> would have died with an
+    /// <c>EntryPointNotFoundException</c>, and the doc comment above it asserted "there is nothing
+    /// real to match" while <c>sprite_font.h</c> shipped an eight-function SpriteFont resource. A
+    /// header audit found it.
+    ///
+    /// What the C API genuinely lacks is a font *loader*: <c>content.h</c> has
+    /// <c>cna_content_manager_load_texture2d</c>, <c>_load_sound_effect</c> and
+    /// <c>_load_texture_cube</c>, and nothing for fonts. So the container is parsed here -- exactly
+    /// what this project already does for <c>Model</c> -- and the atlas is uploaded through the
+    /// ordinary <see cref="Texture2D"/> path. The 256-glyph cap the old native shape imposed is
+    /// gone with it; a real <c>.xnb</c> font is limited only by the file.
     /// </summary>
     protected SpriteFontData LoadSpriteFontData(string assetName)
     {
-        CnaResult result = Native.cna_content_load_spritefont(new CnaHandle(_nativeHandleValue), assetName, out CnaSpriteFontData native);
-        CnaException.ThrowIfFailed(result, nameof(LoadSpriteFontData));
-
-        int glyphCount = native.GlyphCount;
-        if (glyphCount < 0 || glyphCount > CnaGlyphBuffer.MaxGlyphs)
-        {
-            throw new CnaException(
-                $"{nameof(LoadSpriteFontData)} received an out-of-range glyph count ({glyphCount}) from the native call " +
-                $"-- expected 0..{CnaGlyphBuffer.MaxGlyphs}. This indicates a native/managed ABI mismatch, not a font-content problem.");
-        }
-
-        var glyphBounds = new Rectangle[glyphCount];
-        var cropping = new Rectangle[glyphCount];
-        var characters = new char[glyphCount];
-        var kerning = new Vector3[glyphCount];
-
-        for (int i = 0; i < glyphCount; i++)
-        {
-            CnaGlyphMetrics glyph = native.Glyphs[i];
-            glyphBounds[i] = new Rectangle(glyph.Bounds.X, glyph.Bounds.Y, glyph.Bounds.Width, glyph.Bounds.Height);
-            cropping[i] = new Rectangle(glyph.Cropping.X, glyph.Cropping.Y, glyph.Cropping.Width, glyph.Cropping.Height);
-            characters[i] = ToChar(glyph.Character);
-            kerning[i] = new Vector3(glyph.LeftSideBearing, glyph.Width, glyph.RightSideBearing);
-        }
-
-        char? defaultCharacter = native.HasDefaultCharacter != 0 ? ToChar(native.DefaultCharacter) : null;
+        XnbSpriteFontData data = LoadXnbSpriteFontData(assetName);
+        Texture2D texture = BuildAtlas(assetName, data.Texture);
 
         return new SpriteFontData(
-            native.Texture.AsNint, glyphBounds, cropping, characters, native.LineSpacing, native.Spacing, kerning, defaultCharacter);
+            texture.NativeHandleValue,
+            data.GlyphBounds,
+            data.Cropping,
+            data.Characters,
+            data.LineSpacing,
+            data.Spacing,
+            data.Kerning,
+            data.DefaultCharacter);
+    }
 
-        static char ToChar(int codePoint)
+    /// <summary>
+    /// Uploads a parsed atlas as a real <see cref="Texture2D"/>.
+    ///
+    /// Only mip level 0 is uploaded. <see cref="Texture2D"/> has no per-level <c>SetData</c>
+    /// overload in this binding, and a font atlas is sampled at its native size by
+    /// <c>SpriteBatch.DrawString</c>, so the lower levels would never be read. Stated here rather
+    /// than silently dropped, because a font compiled with mipmaps is a real input.
+    /// </summary>
+    private Texture2D BuildAtlas(string assetName, XnbTextureData data)
+    {
+        GraphicsDevice device = RequireGraphicsDevice<Graphics.SpriteFont>(assetName);
+
+        if (data.Format != SurfaceFormat.Color)
         {
-            if (codePoint is < 0 or > char.MaxValue || char.IsSurrogate((char)codePoint))
-            {
-                throw new CnaException(
-                    $"SpriteFont glyph code point U+{codePoint:X} does not fit in a single UTF-16 char " +
-                    "(SpriteFont's glyph table is char-keyed, matching real XNA's own limitation).");
-            }
-
-            return (char)codePoint;
+            throw new ContentLoadException(
+                $"'{assetName}' has a {data.Format} font atlas. Only {SurfaceFormat.Color} is supported here, " +
+                "because that is the only format this binding can upload through Texture2D.SetData.");
         }
+
+        var texture = new Texture2D(device, data.Width, data.Height);
+        texture.SetData(data.MipLevels[0]);
+        return texture;
     }
 }

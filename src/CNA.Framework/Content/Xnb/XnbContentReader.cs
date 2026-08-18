@@ -30,13 +30,32 @@ namespace CNA.Content.Xnb;
 /// </summary>
 internal sealed class XnbContentReader
 {
-    private static readonly Dictionary<string, Func<XnbContentReader, object>> Readers = new()
+    private static readonly Dictionary<string, Func<XnbContentReader, object?>> Readers = new()
     {
         ["Microsoft.Xna.Framework.Content.StringReader"] = r => r._reader.ReadString(),
         ["Microsoft.Xna.Framework.Content.ModelReader"] = XnbModelReader.Read,
         ["Microsoft.Xna.Framework.Content.VertexBufferReader"] = XnbVertexBufferReader.Read,
         ["Microsoft.Xna.Framework.Content.IndexBufferReader"] = XnbIndexBufferReader.Read,
         ["Microsoft.Xna.Framework.Content.BasicEffectReader"] = XnbBasicEffectReader.Read,
+        ["Microsoft.Xna.Framework.Content.Texture2DReader"] = XnbTexture2DReader.Read,
+        ["Microsoft.Xna.Framework.Content.SpriteFontReader"] = XnbSpriteFontReader.Read,
+
+        // The generic readers a SpriteFont needs. Keyed by the full generic name including the
+        // element type, because that is what the file's own type-reader table spells and because
+        // the element type is what decides how each entry is read -- there is no runtime generic
+        // instantiation happening here, just four concrete formats.
+        ["Microsoft.Xna.Framework.Content.ListReader`1[[Microsoft.Xna.Framework.Rectangle]]"] =
+            r => r.ReadInlineList(static x => x.ReadRectangle()),
+        ["Microsoft.Xna.Framework.Content.ListReader`1[[System.Char]]"] =
+            r => r.ReadInlineList(static x => x.ReadChar()),
+        ["Microsoft.Xna.Framework.Content.ListReader`1[[Microsoft.Xna.Framework.Vector3]]"] =
+            r => r.ReadInlineList(static x => x.ReadVector3()),
+        // A NullableReader with no value answers null, which ReadObject already uses for "the
+        // stream said type index 0". Collapsing the two is right here rather than sloppy: for a
+        // Nullable<char>, "the nullable is empty" and "there was no object" are the same answer to
+        // the only question a caller asks.
+        ["Microsoft.Xna.Framework.Content.NullableReader`1[[System.Char]]"] =
+            r => r.ReadBoolean() ? r.ReadChar() : null,
     };
 
     private readonly BinaryReader _reader;
@@ -76,8 +95,7 @@ internal sealed class XnbContentReader
             // which is the one case a fuller name parse would actually matter for).
             string rawName = reader.ReadString();
             _ = reader.ReadInt32(); // reader version -- always 0 for every built-in reader in practice
-            int commaIndex = rawName.IndexOf(',');
-            typeReaderNames.Add(commaIndex < 0 ? rawName : rawName[..commaIndex]);
+            typeReaderNames.Add(NormalizeTypeReaderName(rawName));
         }
 
         int sharedResourceCount = reader.Read7BitEncodedInt();
@@ -129,7 +147,7 @@ internal sealed class XnbContentReader
         }
 
         string name = _typeReaderNames[index - 1];
-        if (!Readers.TryGetValue(name, out Func<XnbContentReader, object>? read))
+        if (!Readers.TryGetValue(name, out Func<XnbContentReader, object?>? read))
         {
             throw new ContentLoadException($"This .xnb file uses content type reader '{name}', which this project's .xnb reader does not (yet) support.");
         }
@@ -178,7 +196,116 @@ internal sealed class XnbContentReader
         _sharedResourceFixups[index - 1].Add(fixup);
     }
 
+    /// <summary>
+    /// Reduces an assembly-qualified <c>.xnb</c> type-reader name to the canonical name this
+    /// project keys its reader table by.
+    ///
+    /// Trimming at the first comma is what this used to do, and it is wrong for a generic reader:
+    /// <c>ListReader`1[[Microsoft.Xna.Framework.Rectangle, Microsoft.Xna.Framework, Version=...]]</c>
+    /// would be cut down to <c>ListReader`1[[Microsoft.Xna.Framework.Rectangle</c>. That never
+    /// mattered while <c>Model</c> was the only asset read here (none of its readers are generic),
+    /// and the old comment said so -- <c>SpriteFont</c> is the case it warned about. Assembly
+    /// qualification is stripped at every bracket depth instead, so both the outer reader name and
+    /// each element type keep their identity and lose their assembly.
+    /// </summary>
+    internal static string NormalizeTypeReaderName(string rawName)
+    {
+        ArgumentNullException.ThrowIfNull(rawName);
+
+        var result = new System.Text.StringBuilder(rawName.Length);
+        int depth = 0;
+        bool skipping = false;
+
+        foreach (char c in rawName)
+        {
+            if (c == '[')
+            {
+                depth++;
+                skipping = false;
+                result.Append(c);
+                continue;
+            }
+
+            if (c == ']')
+            {
+                depth--;
+                skipping = false;
+                result.Append(c);
+                continue;
+            }
+
+            if (c == ',')
+            {
+                // Everything from here to the end of this bracket level is assembly qualification.
+                // At depth zero that means the rest of the string.
+                if (depth == 0)
+                {
+                    break;
+                }
+
+                skipping = true;
+                continue;
+            }
+
+            if (!skipping)
+            {
+                result.Append(c);
+            }
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>Reads a <c>ListReader</c> body: a 32-bit count followed by that many inline
+    /// elements. Inline, not object-dispatched -- XNA writes a value-type list's elements directly,
+    /// with no per-element type-reader index.</summary>
+    private List<T> ReadInlineList<T>(Func<XnbContentReader, T> readElement)
+    {
+        int count = _reader.ReadInt32();
+        if (count is < 0 or > 1_000_000)
+        {
+            throw new ContentLoadException($"Corrupt .xnb file: implausible list length {count}.");
+        }
+
+        var items = new List<T>(Math.Min(count, 1024));
+        for (int i = 0; i < count; i++)
+        {
+            items.Add(readElement(this));
+        }
+
+        return items;
+    }
+
+    /// <summary>Reads a list written by one of the registered <c>ListReader</c> entries, with a
+    /// message naming what was being read when the type does not match.</summary>
+    internal IReadOnlyList<T> ReadList<T>(string what)
+    {
+        object? value = ReadObject();
+        if (value is List<T> list)
+        {
+            return list;
+        }
+
+        throw new ContentLoadException(
+            $"Corrupt .xnb file: expected a list of {typeof(T).Name} for {what}, got {value?.GetType().Name ?? "null"}.");
+    }
+
     internal string ReadString() => _reader.ReadString();
+
+    /// <summary>
+    /// Reads one <c>char</c> the way the format writes it: UTF-8 encoded and therefore *variable
+    /// width*, one to three bytes, not a fixed 16-bit code unit.
+    ///
+    /// <see cref="BinaryReader.ReadChar"/> is what does the decoding, because XNA's own
+    /// <c>ContentReader</c> is a <see cref="BinaryReader"/> over UTF-8 and its <c>ReadChar</c> is
+    /// this one. Reading a fixed <see cref="ushort"/> instead parses a font's ASCII character map
+    /// at double width and desynchronises everything after it -- which is exactly what happened,
+    /// and what the fixture-backed tests caught.
+    /// </summary>
+    internal char ReadChar() => _reader.ReadChar();
+
+    internal Rectangle ReadRectangle() =>
+        new(_reader.ReadInt32(), _reader.ReadInt32(), _reader.ReadInt32(), _reader.ReadInt32());
 
     internal int ReadInt32() => _reader.ReadInt32();
 

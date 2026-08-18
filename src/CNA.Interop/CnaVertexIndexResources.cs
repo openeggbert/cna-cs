@@ -108,7 +108,7 @@ internal struct CnaIndexBufferTransfer
 }
 
 /// <summary>Three reserved padding bytes, matching <c>CNA_IndexBufferCreateInfo::reserved</c>
-/// (<c>index_resources.h:48</c>) byte-for-byte -- see <see cref="CnaGlyphBuffer"/> for why this
+/// (<c>index_resources.h:48</c>) byte-for-byte -- see <see cref="CnaFloatBuffer256"/> for why this
 /// project uses the C# 12 <c>InlineArray</c> feature for fixed-size inline buffers like this
 /// one.</summary>
 [InlineArray(3)]

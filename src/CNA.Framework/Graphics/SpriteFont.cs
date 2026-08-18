@@ -1,18 +1,29 @@
 namespace CNA.Graphics;
 
 /// <summary>
-/// A bitmap font: a <see cref="Texture2D"/> atlas plus a per-character glyph table. Unlike every
-/// other Phase 4 native-backed type, this needs **no new native ABI surface at all** -- real XNA
-/// 4.0 exposes a public constructor taking raw glyph arrays (for third-party font-building tools,
-/// not just its content pipeline), and that constructor is reproduced here field-for-field. That
-/// makes <see cref="MeasureString(string)"/> pure managed code, fully real and testable today,
-/// same as the math value types -- see plan.md Phase 4. <c>SpriteBatch.DrawString</c> still
-/// goes through the native-backed <c>Draw</c> primitive (once per glyph), so it inherits the same
-/// "compiles, blocked on the native ABI" status as the rest of <c>SpriteBatch</c>.
+/// A bitmap font: a <see cref="Texture2D"/> atlas plus a per-character glyph table. Real XNA 4.0
+/// exposes a public constructor taking raw glyph arrays (for third-party font-building tools, not
+/// just its content pipeline), and that constructor is reproduced here field-for-field. That makes
+/// <see cref="MeasureString(string)"/> pure managed code, fully real and testable today, same as
+/// the math value types. <c>SpriteBatch.DrawString</c> goes through the native-backed <c>Draw</c>
+/// primitive once per glyph, so it inherits <c>SpriteBatch</c>'s status.
 ///
-/// <c>ContentManager.Load&lt;SpriteFont&gt;</c> is also supported (see
-/// <c>ContentManager.LoadSpriteFontData</c>), via a self-designed native call with no upstream
-/// ABI shape to match against -- see that method's doc comment and NEXT.md.
+/// <b>Deliberately managed, and this needed correcting.</b> The doc comment here used to claim this
+/// type "needs no new native ABI surface at all"; a header audit found <c>sprite_font.h</c>, an
+/// eight-function SpriteFont resource that has been shipping all along
+/// (<c>cna_sprite_font_create</c> from a glyph table, <c>_get_info</c>, <c>_copy_characters</c>,
+/// the three setters, <c>_measure_utf8</c>, <c>_destroy</c>).
+///
+/// It is still managed, on purpose rather than by accident: that resource can be *built* from a
+/// glyph table and can *measure* text, but exposes no per-glyph readback -- no bounds, no cropping,
+/// no kerning. <c>SpriteBatch.DrawString</c> needs exactly those to place each glyph
+/// (<see cref="AppendGlyphPlacements"/>), so a native-owned font could be measured and never drawn.
+/// Holding the table here keeps one source of truth; mirroring it into a native font as well would
+/// mean two, with no reader for the native copy.
+///
+/// <c>ContentManager.Load&lt;SpriteFont&gt;</c> parses the <c>.xnb</c> container managed-side, the
+/// same as <c>Model</c> -- see <c>ContentManager.LoadSpriteFontData</c> for why, and for the
+/// fabricated P/Invoke it replaced.
 /// </summary>
 public class SpriteFont
 {

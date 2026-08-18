@@ -97,7 +97,7 @@ internal unsafe struct CnaGameCreateInfo
 }
 
 /// <summary>Seven reserved padding bytes, matching <c>CNA_GameCreateInfo::reserved</c>
-/// (<c>runtime.h:180</c>) byte-for-byte -- see <see cref="CnaGlyphBuffer"/> for why this project
+/// (<c>runtime.h:180</c>) byte-for-byte -- see <see cref="CnaFloatBuffer256"/> for why this project
 /// uses the C# 12 <c>InlineArray</c> feature for fixed-size inline buffers like this one.</summary>
 [InlineArray(7)]
 internal struct CnaReservedBytes7

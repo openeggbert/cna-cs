@@ -1908,17 +1908,11 @@ internal static partial class Native
         CnaStringView assetName,
         out CnaHandle texture);
 
-    /// <summary>No ABI shape for this exists upstream -- self-designed for this repository, see
-    /// <see cref="CnaSpriteFontData"/>. Fails with <see cref="CnaResult"/> (not a silent
-    /// truncation) if the asset has more than <see cref="CnaGlyphBuffer.MaxGlyphs"/> glyphs. Not
-    /// renamed to the real <c>cna_content_manager_*</c> convention -- there is nothing real to
-    /// match, so keeping the old name avoids implying a confirmed shape that doesn't exist.
-    /// </summary>
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial CnaResult cna_content_load_spritefont(
-        CnaHandle content,
-        string assetName,
-        out CnaSpriteFontData data);
+    // There is deliberately no `cna_content_load_spritefont` here. One used to be declared, and it
+    // named a function that exists in no header -- every Load<SpriteFont> would have died with an
+    // EntryPointNotFoundException. content.h loads textures, sound effects and texture cubes and
+    // nothing else, so the .xnb SpriteFont container is parsed managed-side instead
+    // (CNA.Content.Xnb.XnbSpriteFontReader).
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_content_manager_load_sound_effect(

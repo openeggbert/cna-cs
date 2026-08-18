@@ -28,8 +28,9 @@ internal struct CnaVisualizationData
 }
 
 /// <summary>A fixed-capacity inline array of 256 floats, matching
-/// <c>CNA_VISUALIZATION_DATA_SIZE</c> -- see <see cref="CnaGlyphBuffer"/> for why this project uses
-/// the C# 12 <c>InlineArray</c> feature for fixed-size inline buffers like this one.</summary>
+/// <c>CNA_VISUALIZATION_DATA_SIZE</c>. Uses the C# 12 <c>InlineArray</c> feature so the whole
+/// buffer marshals as one flat, contiguous block, with no separate pointer/length two-call dance --
+/// the ABI declares it as a fixed-size member, so a fixed-size member is what it maps to.</summary>
 [InlineArray(256)]
 internal struct CnaFloatBuffer256
 {
