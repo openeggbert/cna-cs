@@ -312,6 +312,15 @@ public abstract class Game : IDisposable
         {
         }
 
+        // Same reason again: the window's event registrations name this game.
+        try
+        {
+            _window?.ReleaseSubscriptions();
+        }
+        catch (Exception)
+        {
+        }
+
         Native.cna_game_destroy(_nativeHandle);
 
         if (CnaAmbientGame.Current == _nativeHandle)

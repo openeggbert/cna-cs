@@ -112,6 +112,41 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_game_window_copy_title(CnaHandle game, byte* destination, ulong capacity, out ulong outBytes);
 
+    // The rest of runtime_window.h, added when a sweep of unbound header functions showed
+    // GameWindow had exactly one member bound out of a real XNA surface of eight.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_get_allow_user_resizing(CnaHandle game, out byte outAllowed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_set_allow_user_resizing(CnaHandle game, byte allowed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_get_client_bounds(CnaHandle game, out CnaRect outBounds);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_get_current_orientation(CnaHandle game, out uint outOrientation);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_get_screen_device_name_size(CnaHandle game, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_game_window_copy_screen_device_name(
+        CnaHandle game, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_begin_screen_device_change(CnaHandle game, byte willBeFullScreen);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_end_screen_device_change(
+        CnaHandle game, CnaStringView screenDeviceName, int clientWidth, int clientHeight);
+
+    /// <summary>Subscribes to one <c>CNA_GAME_WINDOW_EVENT_*</c>. Released with
+    /// <c>cna_game_unsubscribe</c>, like every other runtime registration.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_subscribe(
+        CnaHandle game, uint eventId, nint callback, nint context, out CnaHandle outRegistration);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_game_get_is_mouse_visible(CnaHandle game, out byte outVisible);
 

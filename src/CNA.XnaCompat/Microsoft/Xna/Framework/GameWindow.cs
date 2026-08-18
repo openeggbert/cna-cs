@@ -1,9 +1,11 @@
 namespace Microsoft.Xna.Framework;
 
-/// <summary>XNA 4.0-compatible <c>GameWindow</c>. A pure subclass -- <c>Title</c> is inherited
-/// unchanged from <see cref="CNA.GameWindow"/> (a plain <see cref="string"/>, no type divergence
-/// between namespaces), same as <see cref="Graphics.IndexBuffer"/>'s <c>SetData</c>/<c>GetData</c>.
-/// Exists purely for the covariant-return factory override on <see cref="Game.Window"/> -- see
+/// <summary>XNA 4.0-compatible <c>GameWindow</c>. Subclasses <see cref="CNA.GameWindow"/>, so
+/// everything whose type does not diverge between namespaces -- <c>Title</c>,
+/// <c>AllowUserResizing</c>, the screen-device-change pair, the three events -- is inherited
+/// unchanged. Only <see cref="ClientBounds"/> and <see cref="CurrentOrientation"/> need re-typing,
+/// because <c>Rectangle</c> and <c>DisplayOrientation</c> are separate types per namespace.
+/// Exists primarily for the covariant-return factory override on <see cref="Game.Window"/> -- see
 /// that property's own doc comment.</summary>
 public class GameWindow : CNA.GameWindow
 {
@@ -11,4 +13,8 @@ public class GameWindow : CNA.GameWindow
         : base(nativeGameHandleValue)
     {
     }
+
+    public new Rectangle ClientBounds => base.ClientBounds;
+
+    public new DisplayOrientation CurrentOrientation => (DisplayOrientation)(int)base.CurrentOrientation;
 }
