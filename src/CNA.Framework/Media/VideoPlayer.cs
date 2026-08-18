@@ -134,8 +134,12 @@ public class VideoPlayer : IDisposable
     /// stopped, but a null is the more useful shape for a per-frame draw loop and cannot be
     /// mistaken for a valid texture.
     ///
-    /// The returned texture wraps a handle the *player* owns, so it must not be disposed by the
-    /// caller and must not be cached across frames.
+    /// The returned texture wraps a handle the *player* owns. The C API states it is "valid only
+    /// until the next call on this player", so it must not be cached across frames -- and, more
+    /// importantly, the wrapper is deliberately <em>non-owning</em>: an owning
+    /// <see cref="Texture2D"/> here would let <see cref="System.Runtime.InteropServices.SafeHandle"/>'s
+    /// critical finalizer destroy the player's own frame texture on the next GC, whether or not the
+    /// caller disposed it. A code-review pass caught exactly that.
     ///
     /// Returns the <see cref="Texture"/> base rather than <see cref="Texture2D"/>, unlike real
     /// XNA. That is forced by WP3's texture reparenting: <c>CNA.Graphics.Texture2D</c> and
@@ -165,7 +169,7 @@ public class VideoPlayer : IDisposable
     /// <summary>Covariant-return factory hook so CNA.XnaCompat can hand back its own
     /// <c>Texture2D</c> -- same pattern as <c>GraphicsDevice.QueryBlendState</c>.</summary>
     protected virtual Texture CreateFrameTexture(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
-        new Texture2D(graphicsDevice, nativeHandleValue);
+        Texture2D.CreateBorrowed(graphicsDevice, nativeHandleValue);
 
     public void Dispose()
     {

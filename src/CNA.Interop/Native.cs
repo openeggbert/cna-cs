@@ -762,7 +762,7 @@ internal static partial class Native
     internal static partial CnaResult cna_game_components_contains(CnaHandle game, CnaHandle component, out byte outContains);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_game_components_index_of(CnaHandle game, CnaHandle component, out long outIndex);
+    internal static partial CnaResult cna_game_components_index_of(CnaHandle game, CnaHandle component, out int outIndex);
 
     // -- Microphone + DynamicSoundEffectInstance (real ABI, audio.h -- Phase 8 WP11b) ---------
     //
@@ -1435,11 +1435,16 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_dual_texture_effect_set_alpha(CnaHandle effect, float value);
 
+    /// <summary>Matches <c>cna_dual_texture_effect_get_texture</c> exactly
+    /// (<c>effects.h:1851</c>). <paramref name="textureIndex"/> selects the layer -- "zero or one"
+    /// per the header, which is what makes <c>DualTextureEffect.Texture2</c> bindable at all; an
+    /// earlier declaration omitted it, shifting every later argument by one slot.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_dual_texture_effect_get_texture(CnaHandle effect, out byte outHasTexture, out CnaHandle outTexture);
+    internal static partial CnaResult cna_dual_texture_effect_get_texture(
+        CnaHandle effect, uint textureIndex, out byte outHasTexture, out CnaHandle outTexture);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_dual_texture_effect_set_texture(CnaHandle effect, CnaHandle texture);
+    internal static partial CnaResult cna_dual_texture_effect_set_texture(CnaHandle effect, uint textureIndex, CnaHandle texture);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_dual_texture_effect_get_vertex_color_enabled(CnaHandle effect, out byte outValue);
@@ -1706,17 +1711,25 @@ internal static partial class Native
     internal static unsafe partial CnaResult cna_graphics_adapter_copy_device_name(
         CnaHandle device, uint adapterIndex, byte* destination, ulong capacity, out ulong outBytes);
 
+    /// <summary><c>ref</c>, not <c>out</c>: the header documents <c>out_mode</c> as a
+    /// "Caller-initialized versioned output structure", so its
+    /// <c>struct_size</c>/<c>struct_version</c> must already be filled in -- which <c>out</c> would
+    /// zero, since it does not run the struct's parameterless constructor.</summary>
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_adapter_get_current_display_mode(
-        CnaHandle device, uint adapterIndex, out CnaDisplayMode outMode);
+        CnaHandle device, uint adapterIndex, ref CnaDisplayMode mode);
 
+    /// <summary>Matches <c>cna_graphics_adapter_get_display_mode_count</c> exactly
+    /// (<c>display.h:255</c>) -- including <paramref name="filterByFormat"/>/<paramref name="format"/>,
+    /// which an earlier declaration omitted, shifting <c>out_count</c> into the filter slot.</summary>
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_adapter_get_display_mode_count(
-        CnaHandle device, uint adapterIndex, out ulong outCount);
+        CnaHandle device, uint adapterIndex, byte filterByFormat, uint format, out ulong outCount);
 
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_graphics_adapter_copy_display_modes(
-        CnaHandle device, uint adapterIndex, CnaDisplayMode* destination, ulong capacity, out ulong outCount);
+        CnaHandle device, uint adapterIndex, byte filterByFormat, uint format,
+        CnaDisplayMode* destination, ulong capacity, out ulong outCount);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_adapter_is_profile_supported(
@@ -1736,8 +1749,10 @@ internal static partial class Native
     internal static partial CnaResult cna_graphics_device_set_presentation_parameters(
         CnaHandle device, in CnaPresentationParameters parameters);
 
+    /// <summary><c>ref</c> for the same caller-initialized reason as
+    /// <see cref="cna_graphics_adapter_get_current_display_mode"/>.</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_get_display_mode(CnaHandle device, out CnaDisplayMode outMode);
+    internal static partial CnaResult cna_graphics_device_get_display_mode(CnaHandle device, ref CnaDisplayMode mode);
 
     // -- TouchPanel (real ABI, input.h + input_touch.h -- Phase 8 WP9) ------------------------
     //

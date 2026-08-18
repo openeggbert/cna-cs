@@ -27,13 +27,13 @@ public class EffectMaterial : StockEffect
     {
         ArgumentNullException.ThrowIfNull(cloneSource);
 
-        if (cloneSource is not StockEffect stockEffect)
-        {
-            throw new NotSupportedException(
-                $"EffectMaterial can only clone an effect backed by a native CNA effect; {cloneSource.GetType().Name} is not one.");
-        }
-
-        CnaResult result = Native.cna_effect_material_create(stockEffect.NativeEffectHandleForCloning, out CnaHandle effect);
+        // Reads the handle through Effect's own accessor rather than requiring a StockEffect:
+        // CNA.XnaCompat's effects are natively backed but reach their handle by overriding that
+        // accessor rather than by deriving from StockEffect, so a type test here would reject them
+        // with a message claiming they have no native effect -- which a code-review pass caught.
+        // A genuinely unbacked effect still fails, from the accessor's own NotSupportedException.
+        CnaResult result = Native.cna_effect_material_create(
+            new CnaHandle(cloneSource.NativeEffectHandleValue), out CnaHandle effect);
         CnaException.ThrowIfFailed(result, nameof(EffectMaterial));
         return effect;
     }

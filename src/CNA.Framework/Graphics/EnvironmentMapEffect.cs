@@ -28,7 +28,7 @@ public class EnvironmentMapEffect : StockEffect, IEffectMatrices, IEffectFog, IE
 
     /// <summary>Each light handle is independently owned and outlives the effect, so each needs its
     /// own destroy call -- confirmed for <see cref="BasicEffect"/> during the native-ABI migration
-    /// and equally true here, which is why <see cref="Dispose"/> is overridden.</summary>
+    /// and equally true here, which is why <c>ReleaseAdditionalNativeResources</c> is overridden.</summary>
     private DirectionalLight FetchDirectionalLight(uint index)
     {
         CnaResult result = Native.cna_effect_lights_get_directional_light(Handle, index, out CnaHandle light);
@@ -159,13 +159,13 @@ public class EnvironmentMapEffect : StockEffect, IEffectMatrices, IEffectFog, IE
     }
 
     /// <summary>Destroys the three directional lights before the effect itself -- they are
-    /// independently owned handles, not freed implicitly with the effect. Same ordering
-    /// <see cref="BasicEffect"/> uses, for the same confirmed reason.</summary>
-    public override void Dispose()
+    /// independently owned handles, not freed implicitly with the effect. Runs inside
+    /// <see cref="StockEffect"/>'s disposal guard (see that hook's doc comment); overriding
+    /// <c>Dispose</c> instead would double-free them on a second <c>Dispose()</c>.</summary>
+    private protected override void ReleaseAdditionalNativeResources()
     {
         Native.cna_directional_light_destroy(DirectionalLight0.NativeHandle);
         Native.cna_directional_light_destroy(DirectionalLight1.NativeHandle);
         Native.cna_directional_light_destroy(DirectionalLight2.NativeHandle);
-        base.Dispose();
     }
 }

@@ -27,13 +27,6 @@ public abstract class StockEffect : Effect
 
     private protected CnaHandle Handle { get; }
 
-    /// <summary>The same handle, reachable from a sibling <see cref="StockEffect"/> rather than
-    /// only from <see langword="this"/>. <see cref="Handle"/> is <c>private protected</c>, which
-    /// C# only lets a subclass read through its *own* type -- so
-    /// <see cref="EffectMaterial"/>, which must clone another effect's handle, needs this
-    /// assembly-internal accessor instead.</summary>
-    internal CnaHandle NativeEffectHandleForCloning => Handle;
-
     protected internal override nint NativeEffectHandleValue => Handle.AsNint;
 
     /// <summary>Selects this effect on its owning device. Every stock effect shares
@@ -44,6 +37,20 @@ public abstract class StockEffect : Effect
         CnaException.ThrowIfFailed(result, nameof(Apply));
     }
 
+    /// <summary>Releases handles a subclass owns *besides* the effect itself -- the three
+    /// independently-owned <see cref="DirectionalLight"/>s the lit effects fetch, which are not
+    /// freed implicitly with the effect.
+    ///
+    /// A hook rather than a <see cref="Dispose"/> override on purpose: overriding <c>Dispose</c>
+    /// puts the subclass's cleanup *before* this class's <c>_disposed</c> guard, so a second
+    /// <c>Dispose()</c> double-frees those handles while the effect handle itself stays correctly
+    /// guarded. <see cref="EnvironmentMapEffect"/> and <see cref="SkinnedEffect"/> both had exactly
+    /// that bug until a code-review pass found it; this hook makes it unrepresentable rather than
+    /// something each subclass has to remember.</summary>
+    private protected virtual void ReleaseAdditionalNativeResources()
+    {
+    }
+
     public override void Dispose()
     {
         if (_disposed)
@@ -52,6 +59,7 @@ public abstract class StockEffect : Effect
         }
 
         _disposed = true;
+        ReleaseAdditionalNativeResources();
         Native.cna_effect_destroy(Handle);
         GC.SuppressFinalize(this);
     }

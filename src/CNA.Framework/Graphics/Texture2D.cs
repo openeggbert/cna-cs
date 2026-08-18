@@ -73,6 +73,19 @@ public class Texture2D : Texture
     {
     }
 
+    /// <summary>Wraps a borrowed handle -- see <see cref="Texture"/>'s equivalent
+    /// constructor.</summary>
+    private protected Texture2D(GraphicsDevice graphicsDevice, nint nativeHandleValue, bool ownsHandle)
+        : base(graphicsDevice, nativeHandleValue, ownsHandle)
+    {
+    }
+
+    /// <summary>Builds a non-owning wrapper over a texture handle whose real owner is something
+    /// else. <c>internal</c> because only this assembly knows which native calls hand out borrowed
+    /// handles -- see <c>VideoPlayer.GetTexture</c>.</summary>
+    internal static Texture2D CreateBorrowed(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
+        new(graphicsDevice, nativeHandleValue, ownsHandle: false);
+
     /// <summary>Matches <c>cna_texture2d_destroy</c> exactly (<c>graphics.h:702</c>) -- confirmed
     /// real (an earlier, name-only <c>nm -D</c> pass had guessed this correctly by coincidence, but
     /// a later, more careful pass reading <c>texture.h</c> alone could not find it there and flagged

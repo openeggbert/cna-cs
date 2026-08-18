@@ -6,16 +6,13 @@ namespace CNA.Graphics;
 /// Matches real XNA's <c>DualTextureEffect</c>: unlit two-layer texturing, classically a base map
 /// plus a baked lightmap.
 ///
-/// <see cref="Texture2"/> is the one member with no native counterpart. The C API exposes a single
-/// <c>cna_dual_texture_effect_get/set_texture</c> pair and nothing for the second layer, so
-/// <see cref="Texture2"/> throws <see cref="NotSupportedException"/> naming the missing function
-/// rather than silently no-opping (which would make a two-layer effect render as one layer with no
-/// diagnostic) or being omitted (which would break XNA source that assigns it). This is the rule
-/// <c>plan.md</c>'s scope mandate sets for exactly this situation.
+/// Both layers are real. <c>cna_dual_texture_effect_get/set_texture</c> take a layer index, so
+/// <see cref="Texture"/> is layer 0 and <see cref="Texture2"/> layer 1.
 /// </summary>
 public class DualTextureEffect : StockEffect, IEffectMatrices, IEffectFog
 {
     private Texture? _texture;
+    private Texture? _texture2;
 
     public DualTextureEffect(GraphicsDevice graphicsDevice)
         : base(graphicsDevice, CreateNative(graphicsDevice))
@@ -53,22 +50,31 @@ public class DualTextureEffect : StockEffect, IEffectMatrices, IEffectFog
         get => _texture;
         set
         {
-            SetTexture(Native.cna_dual_texture_effect_set_texture, value, nameof(Texture));
+            SetLayerTexture(0, value, nameof(Texture));
             _texture = value;
         }
     }
 
-    /// <summary>Not supported -- see this class's own doc comment.</summary>
+    /// <summary>The second texture layer. Real, not a stub: <c>cna_dual_texture_effect_set_texture</c>
+    /// takes a layer index ("zero or one" per <c>effects.h:1846</c>). An earlier version of this
+    /// binding omitted that parameter and concluded the second layer had no native route, so this
+    /// property threw -- a code-review pass found the missing parameter.</summary>
     public Texture? Texture2
     {
-        get => throw NotSupported();
-        set => throw NotSupported();
+        get => _texture2;
+        set
+        {
+            SetLayerTexture(1, value, nameof(Texture2));
+            _texture2 = value;
+        }
     }
 
-    private static NotSupportedException NotSupported() =>
-        new("DualTextureEffect.Texture2 has no counterpart in the CNA C API: effects.h exposes only " +
-            "cna_dual_texture_effect_get/set_texture for the first layer, with no second-layer function. " +
-            "Set the second layer through GraphicsDevice.Textures[1] instead if the renderer supports it.");
+    private void SetLayerTexture(uint layer, Texture? value, string propertyName)
+    {
+        CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
+        CnaResult result = Native.cna_dual_texture_effect_set_texture(Handle, layer, handle);
+        CnaException.ThrowIfFailed(result, propertyName);
+    }
 
     public Matrix World
     {

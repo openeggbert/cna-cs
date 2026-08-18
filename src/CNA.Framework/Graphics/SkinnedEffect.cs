@@ -218,11 +218,10 @@ public class SkinnedEffect : StockEffect, IEffectMatrices, IEffectFog, IEffectLi
         set => SetFloat(Native.cna_effect_fog_set_end, value, nameof(FogEnd));
     }
 
-    public override void Dispose()
+    private protected override void ReleaseAdditionalNativeResources()
     {
         Native.cna_directional_light_destroy(DirectionalLight0.NativeHandle);
         Native.cna_directional_light_destroy(DirectionalLight1.NativeHandle);
         Native.cna_directional_light_destroy(DirectionalLight2.NativeHandle);
-        base.Dispose();
     }
 }

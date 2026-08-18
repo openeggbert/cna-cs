@@ -30,9 +30,18 @@ public abstract class Texture : GraphicsResource
     private readonly NativeResourceHandle _handle;
 
     protected Texture(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+        : this(graphicsDevice, nativeHandleValue, ownsHandle: true)
+    {
+    }
+
+    /// <summary>Wraps a handle whose lifetime someone else controls when
+    /// <paramref name="ownsHandle"/> is <see langword="false"/> -- see
+    /// <see cref="NativeResourceHandle"/>'s own doc comment. Used by
+    /// <c>VideoPlayer.GetTexture</c>, whose frame texture the *player* owns and replaces.</summary>
+    private protected Texture(GraphicsDevice graphicsDevice, nint nativeHandleValue, bool ownsHandle)
         : base(graphicsDevice)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, ReleaseNative);
+        _handle = new NativeResourceHandle(nativeHandleValue, ReleaseNative, ownsHandle);
     }
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();

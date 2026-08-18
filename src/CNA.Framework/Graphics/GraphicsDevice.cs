@@ -144,7 +144,8 @@ public class GraphicsDevice
     {
         get
         {
-            CnaResult result = Native.cna_graphics_device_get_display_mode(ResolveNativeDeviceHandle(), out CnaDisplayMode native);
+            var native = new CnaDisplayMode();
+            CnaResult result = Native.cna_graphics_device_get_display_mode(ResolveNativeDeviceHandle(), ref native);
             CnaException.ThrowIfFailed(result, nameof(DisplayMode));
             return Graphics.DisplayMode.FromNative(in native);
         }

@@ -51,8 +51,9 @@ public class GraphicsAdapter
     {
         get
         {
+            var native = new CnaDisplayMode();
             CnaResult result = Native.cna_graphics_adapter_get_current_display_mode(
-                _graphicsDevice.ResolveNativeDeviceHandle(), AdapterIndex, out CnaDisplayMode native);
+                _graphicsDevice.ResolveNativeDeviceHandle(), AdapterIndex, ref native);
             CnaException.ThrowIfFailed(result, nameof(CurrentDisplayMode));
             return DisplayMode.FromNative(in native);
         }
@@ -67,7 +68,7 @@ public class GraphicsAdapter
         {
             CnaHandle device = _graphicsDevice.ResolveNativeDeviceHandle();
 
-            CnaResult countResult = Native.cna_graphics_adapter_get_display_mode_count(device, AdapterIndex, out ulong count);
+            CnaResult countResult = Native.cna_graphics_adapter_get_display_mode_count(device, AdapterIndex, 0, 0, out ulong count);
             CnaException.ThrowIfFailed(countResult, nameof(SupportedDisplayModes));
 
             if (count == 0)
@@ -78,8 +79,10 @@ public class GraphicsAdapter
             var native = new CnaDisplayMode[count];
             fixed (CnaDisplayMode* nativePtr = native)
             {
+                // filterByFormat: 0 -- XNA's SupportedDisplayModes is the unfiltered list; the
+                // per-format view is the collection's own format indexer, applied managed-side.
                 CnaResult copyResult = Native.cna_graphics_adapter_copy_display_modes(
-                    device, AdapterIndex, nativePtr, count, out ulong written);
+                    device, AdapterIndex, 0, 0, nativePtr, count, out ulong written);
                 CnaException.ThrowIfFailed(copyResult, nameof(SupportedDisplayModes));
 
                 var modes = new DisplayMode[written];

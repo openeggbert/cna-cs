@@ -104,9 +104,9 @@ public class GameComponentCollection : ICollection<GameComponent>
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        CnaResult result = Native.cna_game_components_index_of(GameHandle, item.NativeHandle, out long index);
+        CnaResult result = Native.cna_game_components_index_of(GameHandle, item.NativeHandle, out int index);
         CnaException.ThrowIfFailed(result, nameof(IndexOf));
-        return (int)index;
+        return index;
     }
 
     public void CopyTo(GameComponent[] array, int arrayIndex)
