@@ -861,6 +861,14 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_audio_unsubscribe_ext(CnaHandle registration);
 
+    /// <summary>Matches <c>cna_microphone_subscribe_buffer_ready_at</c> (<c>audio.h:1017</c>).
+    /// Indexed like every other microphone route, because microphones are entries in a runtime list
+    /// rather than resources a caller owns. See the sibling manager subscribe for why
+    /// <paramref name="callback"/> is <see cref="nint"/>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_microphone_subscribe_buffer_ready_at(
+        CnaHandle game, ulong index, nint callback, nint context, out CnaHandle outRegistration);
+
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_dynamic_sound_effect_instance_submit_buffer(
         CnaHandle instance, byte* bytes, ulong byteCount, int offset, int count);

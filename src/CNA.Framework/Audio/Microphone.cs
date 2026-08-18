@@ -15,15 +15,148 @@ namespace CNA.Audio;
 /// <c>Microphone.Default</c> are static there, but enumerating needs the game handle, so
 /// <see cref="All"/> and <see cref="Default"/> read the ambient game the way
 /// <c>Keyboard</c>/<c>Mouse</c>/<c>TouchPanel</c> do -- which keeps them static after all.
+///
+/// Instances are cached per index rather than built fresh on every read of <see cref="All"/>. That
+/// is not an optimisation: <see cref="BufferReady"/> holds a native subscription, and a transient
+/// wrapper would make <c>Microphone.Default.BufferReady += h</c> subscribe an object that is
+/// garbage the next statement, leaking the registration and never raising anything the caller could
+/// observe. Caching also gives the reference equality XNA callers already assume when they compare
+/// a stored microphone against <see cref="Default"/>.
 /// </summary>
 public class Microphone
 {
+    /// <summary>The per-index instance cache -- see this class's own doc comment for why it exists.
+    /// Guarded by itself; the microphone list is read from whichever thread asks.</summary>
+    private static readonly Dictionary<ulong, Microphone> Instances = [];
+
+    /// <summary>Guards this instance's subscription state. Deliberately *not* the
+    /// <see cref="Instances"/> lock: the native subscribe call happens under it, and the header says
+    /// the callback comes from whichever thread advances capture -- so holding the cache lock across
+    /// that call would let a handler that reads <see cref="Default"/> deadlock against the thread
+    /// subscribing.</summary>
+    private readonly object _bufferReadyLock = new();
+
+    private NativeEventBridge? _bufferReadyBridge;
+    private EventHandler<EventArgs>? _bufferReady;
+
     private Microphone(ulong index)
     {
         Index = index;
     }
 
     public ulong Index { get; }
+
+    /// <summary>Returns the cached instance for <paramref name="index"/>, creating it on first
+    /// ask.</summary>
+    private static Microphone Get(ulong index)
+    {
+        lock (Instances)
+        {
+            if (!Instances.TryGetValue(index, out Microphone? microphone))
+            {
+                microphone = new Microphone(index);
+                Instances[index] = microphone;
+            }
+
+            return microphone;
+        }
+    }
+
+    /// <summary>
+    /// Raised when captured audio is ready to read with <see cref="GetData(byte[])"/>. Matches real
+    /// XNA's <c>BufferReady</c>, and is an alternative to polling, not a replacement -- XNA offers
+    /// both and so does this.
+    ///
+    /// Subscribing takes a native registration on first <c>+=</c> and holds it until the game is
+    /// disposed. It cannot be released on the last <c>-=</c>, because a microphone is not a
+    /// disposable resource in XNA's API and there is no other moment a caller could hand back.
+    /// <see cref="ReleaseAllSubscriptions"/> is what actually ends it, driven by
+    /// <see cref="Game"/> disposal, since a registration outliving its game would leave native able
+    /// to call into a freed context.
+    ///
+    /// Raised from the capture thread, not necessarily the game thread. This binding does not
+    /// marshal it, for the reason <see cref="DynamicSoundEffectInstance"/> records.
+    /// </summary>
+    public event EventHandler<EventArgs>? BufferReady
+    {
+        add
+        {
+            EnsureBufferReadySubscribed();
+            _bufferReady += value;
+        }
+        remove => _bufferReady -= value;
+    }
+
+    private void EnsureBufferReadySubscribed()
+    {
+        lock (_bufferReadyLock)
+        {
+            if (_bufferReadyBridge is not null)
+            {
+                return;
+            }
+
+            _bufferReadyBridge = NativeEventBridge.Subscribe(
+                () => _bufferReady?.Invoke(this, EventArgs.Empty),
+                (callback, context) =>
+                {
+                    CnaResult result = Native.cna_microphone_subscribe_buffer_ready_at(
+                        CnaAmbientGame.Current, Index, callback, context, out CnaHandle registration);
+                    CnaException.ThrowIfFailed(result, nameof(BufferReady));
+                    return registration;
+                },
+                registration => Native.cna_audio_unsubscribe_ext(registration));
+        }
+    }
+
+    /// <summary>Releases every <see cref="BufferReady"/> registration and drops the instance cache.
+    /// Called from <see cref="Game"/>'s disposal: registrations are taken against that game, so
+    /// leaving one alive past it would leave native holding a context pointer into a freed
+    /// <see cref="System.Runtime.InteropServices.GCHandle"/>. Handler failures captured but never
+    /// surfaced are rethrown afterwards -- the first one, with the rest counted -- rather than lost
+    /// with the cache.</summary>
+    internal static void ReleaseAllSubscriptions()
+    {
+        Microphone[] cached;
+        lock (Instances)
+        {
+            cached = [.. Instances.Values];
+            Instances.Clear();
+        }
+
+        Exception? pending = null;
+        foreach (Microphone microphone in cached)
+        {
+            NativeEventBridge? bridge;
+            lock (microphone._bufferReadyLock)
+            {
+                bridge = microphone._bufferReadyBridge;
+                microphone._bufferReadyBridge = null;
+                microphone._bufferReady = null;
+            }
+
+            if (bridge is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                bridge.ThrowPendingException();
+            }
+            catch (Exception ex)
+            {
+                pending ??= ex;
+            }
+
+            bridge.Dispose();
+        }
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
+    }
 
     public unsafe string Name => NativeStringReader.ReadIndexed(
         Native.cna_microphone_get_name_size_at, Native.cna_microphone_copy_name_at, CnaAmbientGame.Current, Index, nameof(Name));
@@ -86,7 +219,7 @@ public class Microphone
             var microphones = new Microphone[count];
             for (ulong i = 0; i < count; i++)
             {
-                microphones[i] = new Microphone(i);
+                microphones[i] = Get(i);
             }
 
             return microphones;
@@ -102,7 +235,7 @@ public class Microphone
         {
             CnaResult result = Native.cna_microphone_get_default_index_ext(CnaAmbientGame.Current, out ulong index, out byte available);
             CnaException.ThrowIfFailed(result, nameof(Default));
-            return available != 0 ? new Microphone(index) : null;
+            return available != 0 ? Get(index) : null;
         }
     }
 

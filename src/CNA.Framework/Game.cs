@@ -284,6 +284,19 @@ public abstract class Game : IDisposable
         // callback context is a strong GCHandle, so it is permanently reachable and unfinalizable.
         _components?.DisposeAllKnownComponents();
 
+        // Same reason, different subsystem: a Microphone.BufferReady registration is taken against
+        // this game, so one left alive would leave native holding a context pointer into a freed
+        // GCHandle. Swallowed rather than surfaced, for the reason in this method's doc comment --
+        // it must not throw.
+        try
+        {
+            Audio.Microphone.ReleaseAllSubscriptions();
+        }
+        catch (Exception)
+        {
+            // A handler that threw and was never observed. Nothing can be reported from disposal.
+        }
+
         Native.cna_game_destroy(_nativeHandle);
 
         if (CnaAmbientGame.Current == _nativeHandle)
