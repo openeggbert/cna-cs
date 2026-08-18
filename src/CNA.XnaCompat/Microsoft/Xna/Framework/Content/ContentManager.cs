@@ -68,6 +68,12 @@ public class ContentManager : CNA.Content.ContentManager
                 data.DefaultCharacter);
         }
 
+        if (typeof(T) == typeof(Graphics.TextureCube))
+        {
+            return (T)(object)new Graphics.TextureCube(
+                RequireGraphicsDevice<T>(assetName), LoadNativeTextureCubeHandle(assetName));
+        }
+
         if (typeof(T) == typeof(Audio.SoundEffect))
         {
             return (T)(object)new Audio.SoundEffect(LoadNativeSoundEffectHandle(assetName));

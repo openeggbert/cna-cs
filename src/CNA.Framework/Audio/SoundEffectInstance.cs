@@ -151,6 +151,20 @@ public class SoundEffectInstance : IDisposable
         }
     }
 
+    /// <summary>Whether this instance has been disposed. Real XNA API, read from native rather
+    /// than tracked here.</summary>
+    public bool IsDisposed
+    {
+        get
+        {
+            CnaResult result = Native.cna_sound_effect_instance_get_is_disposed(
+                new CnaHandle(NativeHandleValue), out byte disposed);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(IsDisposed));
+            return disposed != 0;
+        }
+    }
+
     public void Dispose()
     {
         Dispose(true);

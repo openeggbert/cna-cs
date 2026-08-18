@@ -79,6 +79,48 @@ public class SoundEffect : IDisposable
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
 
+    /// <summary>
+    /// A caller-set label. Real XNA's <c>SoundEffect.Name</c>, and unlike
+    /// <c>GraphicsResource.Name</c> this one really does cross the ABI --
+    /// <c>cna_sound_effect_set_name</c> exists and this type holds its own handle, so there is
+    /// nothing in the way.
+    /// </summary>
+    public unsafe string Name
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_sound_effect_get_name_size,
+                Native.cna_sound_effect_copy_name,
+                new CnaHandle(NativeHandleValue),
+                nameof(Name));
+            GC.KeepAlive(this);
+            return value;
+        }
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+
+            CnaResult result = CnaStringMarshal.WithStringView(
+                value, view => Native.cna_sound_effect_set_name(new CnaHandle(NativeHandleValue), view));
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(Name));
+        }
+    }
+
+    /// <summary>Whether this effect has been disposed. Read from native rather than tracked here,
+    /// so it stays true when something else disposed the underlying effect.</summary>
+    public bool IsDisposed
+    {
+        get
+        {
+            CnaResult result = Native.cna_sound_effect_get_is_disposed(new CnaHandle(NativeHandleValue), out byte disposed);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(IsDisposed));
+            return disposed != 0;
+        }
+    }
+
     public TimeSpan Duration
     {
         get

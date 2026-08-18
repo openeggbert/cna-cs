@@ -2162,6 +2162,41 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_content_manager_set_root_directory(CnaHandle contentManager, CnaStringView rootDirectory);
 
+    // Found unbound by the header sweep: the real RootDirectory query (the managed side was
+    // answering from a cached field), Unload, and the texture-cube loader.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_get_root_directory_size(
+        CnaHandle contentManager, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_content_manager_copy_root_directory(
+        CnaHandle contentManager, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_unload(CnaHandle contentManager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_load_texture_cube(
+        CnaHandle contentManager, CnaStringView assetName, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_get_is_disposed(CnaHandle soundEffect, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_get_name_size(CnaHandle soundEffect, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sound_effect_copy_name(
+        CnaHandle soundEffect, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_set_name(CnaHandle soundEffect, CnaStringView name);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_instance_get_is_disposed(
+        CnaHandle instance, out byte outDisposed);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_content_manager_load_texture2d(
         CnaHandle contentManager,

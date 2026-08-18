@@ -38,7 +38,6 @@ namespace CNA.Content;
 public class ContentManager
 {
     private readonly nint _nativeHandleValue;
-    private string _rootDirectory = string.Empty;
 
     /// <summary>
     /// <c>protected internal</c> so CNA.XnaCompat's <c>ContentManager</c> subclass constructor
@@ -57,17 +56,36 @@ public class ContentManager
     /// needs this today.</summary>
     public GraphicsDevice? GraphicsDevice { get; set; }
 
-    public string RootDirectory
+    /// <summary>
+    /// Where assets are loaded from, relative to the title.
+    ///
+    /// The getter asks native rather than answering from the value last set, which it used to do.
+    /// That cache was wrong in one reachable case and right by accident otherwise: a manager whose
+    /// root was set by something other than this property -- native's own default, or another
+    /// wrapper over the same handle -- reported an empty string.
+    /// </summary>
+    public unsafe string RootDirectory
     {
-        get => _rootDirectory;
+        get => NativeStringReader.Read(
+            Native.cna_content_manager_get_root_directory_size,
+            Native.cna_content_manager_copy_root_directory,
+            new CnaHandle(_nativeHandleValue),
+            nameof(RootDirectory));
         set
         {
             ArgumentNullException.ThrowIfNull(value);
             CnaResult result = CnaStringMarshal.WithStringView(
                 value, view => Native.cna_content_manager_set_root_directory(new CnaHandle(_nativeHandleValue), view));
             CnaException.ThrowIfFailed(result, nameof(RootDirectory));
-            _rootDirectory = value;
         }
+    }
+
+    /// <summary>Releases every asset this manager loaded. Matches real XNA's <c>Unload</c>: the
+    /// manager stays usable and can load again afterwards.</summary>
+    public void Unload()
+    {
+        CnaResult result = Native.cna_content_manager_unload(new CnaHandle(_nativeHandleValue));
+        CnaException.ThrowIfFailed(result, nameof(Unload));
     }
 
     public virtual T Load<T>(string assetName)
@@ -89,6 +107,11 @@ public class ContentManager
                 data.Spacing,
                 data.Kerning,
                 data.DefaultCharacter);
+        }
+
+        if (typeof(T) == typeof(TextureCube))
+        {
+            return (T)(object)new TextureCube(RequireGraphicsDevice<T>(assetName), LoadNativeTextureCubeHandle(assetName));
         }
 
         if (typeof(T) == typeof(SoundEffect))
@@ -280,6 +303,18 @@ public class ContentManager
         CnaHandle texture = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
             assetName, view => Native.cna_content_manager_load_texture2d(new CnaHandle(_nativeHandleValue), view, out texture));
+        CnaException.ThrowIfFailed(result, nameof(Load));
+        return texture.AsNint;
+    }
+
+    /// <summary>The texture-cube loader. <c>cna_content_manager_load_texture_cube</c> was unbound
+    /// until a sweep of unbound header functions found it, so <c>Load&lt;TextureCube&gt;</c> threw
+    /// "unsupported content type" for an asset the C API could load all along.</summary>
+    protected nint LoadNativeTextureCubeHandle(string assetName)
+    {
+        CnaHandle texture = CnaHandle.Zero;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            assetName, view => Native.cna_content_manager_load_texture_cube(new CnaHandle(_nativeHandleValue), view, out texture));
         CnaException.ThrowIfFailed(result, nameof(Load));
         return texture.AsNint;
     }

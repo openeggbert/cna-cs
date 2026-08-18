@@ -16,7 +16,7 @@ public class TextureCube : CNA.Graphics.TextureCube
 
     /// <summary>Forwards an already-created handle, for <see cref="RenderTargetCube"/> -- see the
     /// base class's own equivalent constructor.</summary>
-    protected TextureCube(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+    protected internal TextureCube(GraphicsDevice graphicsDevice, nint nativeHandleValue)
         : base(graphicsDevice, nativeHandleValue)
     {
     }

@@ -23,11 +23,13 @@ public class TextureCube : Texture
     {
     }
 
-    /// <summary>Wraps an already-created native handle. <c>protected</c> so
-    /// <see cref="RenderTargetCube"/> -- which creates its handle through an entirely different
-    /// native route (<c>cna_render_target_cube_create</c>) -- can still reuse this type's
-    /// accessors, matching real XNA's <c>RenderTargetCube : TextureCube</c>.</summary>
-    protected TextureCube(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+    /// <summary>Wraps an already-created native handle. <c>protected internal</c> rather than
+    /// <c>protected</c>: <see cref="RenderTargetCube"/> -- which creates its handle through an
+    /// entirely different native route (<c>cna_render_target_cube_create</c>) -- reuses it, and so
+    /// does <c>ContentManager.Load&lt;TextureCube&gt;</c>, which is in this assembly rather than in
+    /// a subclass. The same shape <see cref="Texture2D"/>'s raw-handle constructor already
+    /// has.</summary>
+    protected internal TextureCube(GraphicsDevice graphicsDevice, nint nativeHandleValue)
         : base(graphicsDevice, nativeHandleValue)
     {
     }
