@@ -1,0 +1,133 @@
+using CNA.Interop;
+
+namespace CNA.Storage;
+
+/// <summary>
+/// Matches real XNA's <c>StorageDevice</c>: a place saved games can live, selected by the player.
+///
+/// XNA's API here is <c>BeginShowSelector</c>/<c>EndShowSelector</c> and
+/// <c>BeginOpenContainer</c>/<c>EndOpenContainer</c> -- an async shape inherited from the Xbox 360,
+/// where showing a storage selector really did block on a system UI. CNA completes both
+/// synchronously and says so explicitly ("no operation handle is invented for work that never
+/// pends", <c>storage.h:125-127</c>).
+///
+/// Both shapes are offered rather than picking one: the <c>Begin</c>/<c>End</c> pairs exist so XNA
+/// source compiles unchanged (returning an already-completed
+/// <see cref="CompletedAsyncResult{T}"/>), and the plain synchronous methods exist because that is
+/// what the operation actually is, and forcing new code through a fake async dance would be
+/// theatre.
+/// </summary>
+public class StorageDevice
+{
+    private readonly NativeResourceHandle _handle;
+
+    private StorageDevice(nint nativeHandleValue)
+    {
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_storage_device_destroy(new CnaHandle(h)));
+    }
+
+    private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
+
+    public bool IsConnected
+    {
+        get
+        {
+            CnaResult result = Native.cna_storage_device_get_is_connected(NativeHandle, out byte value);
+            CnaException.ThrowIfFailed(result, nameof(IsConnected));
+            return value != 0;
+        }
+    }
+
+    public long FreeSpace
+    {
+        get
+        {
+            CnaResult result = Native.cna_storage_device_get_free_space(NativeHandle, out long value);
+            CnaException.ThrowIfFailed(result, nameof(FreeSpace));
+            return value;
+        }
+    }
+
+    public long TotalSpace
+    {
+        get
+        {
+            CnaResult result = Native.cna_storage_device_get_total_space(NativeHandle, out long value);
+            CnaException.ThrowIfFailed(result, nameof(TotalSpace));
+            return value;
+        }
+    }
+
+    /// <summary>Shows the storage selector and returns the chosen device. The synchronous form --
+    /// see this class's own doc comment for why both exist.</summary>
+    public static StorageDevice ShowSelector()
+    {
+        CnaResult result = Native.cna_storage_device_show_selector(0, 0, out CnaHandle device);
+        CnaException.ThrowIfFailed(result, nameof(ShowSelector));
+        return new StorageDevice(device.AsNint);
+    }
+
+    /// <summary>Matches real XNA's <c>BeginShowSelector</c>. Completes before returning; the
+    /// callback (when supplied) is invoked synchronously, and
+    /// <see cref="IAsyncResult.CompletedSynchronously"/> is <see langword="true"/> so a caller can
+    /// tell.</summary>
+    public static IAsyncResult BeginShowSelector(AsyncCallback? callback, object? state)
+    {
+        var asyncResult = new CompletedAsyncResult<StorageDevice>(ShowSelector(), state);
+        callback?.Invoke(asyncResult);
+        return asyncResult;
+    }
+
+    public static StorageDevice EndShowSelector(IAsyncResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result is not CompletedAsyncResult<StorageDevice> completed)
+        {
+            throw new ArgumentException(
+                "The IAsyncResult did not come from StorageDevice.BeginShowSelector.", nameof(result));
+        }
+
+        return completed.Result;
+    }
+
+    public StorageContainer OpenContainer(string displayName)
+    {
+        ArgumentNullException.ThrowIfNull(displayName);
+
+        CnaHandle container = default;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            displayName, view => Native.cna_storage_container_open(NativeHandle, view, 0, 0, out container));
+        CnaException.ThrowIfFailed(result, nameof(OpenContainer));
+        return new StorageContainer(container.AsNint, this);
+    }
+
+    public IAsyncResult BeginOpenContainer(string displayName, AsyncCallback? callback, object? state)
+    {
+        var asyncResult = new CompletedAsyncResult<StorageContainer>(OpenContainer(displayName), state);
+        callback?.Invoke(asyncResult);
+        return asyncResult;
+    }
+
+    public StorageContainer EndOpenContainer(IAsyncResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (result is not CompletedAsyncResult<StorageContainer> completed)
+        {
+            throw new ArgumentException(
+                "The IAsyncResult did not come from StorageDevice.BeginOpenContainer.", nameof(result));
+        }
+
+        return completed.Result;
+    }
+
+    public void DeleteContainer(string titleName)
+    {
+        ArgumentNullException.ThrowIfNull(titleName);
+
+        CnaResult result = CnaStringMarshal.WithStringView(
+            titleName, view => Native.cna_storage_device_delete_container(NativeHandle, view));
+        CnaException.ThrowIfFailed(result, nameof(DeleteContainer));
+    }
+}

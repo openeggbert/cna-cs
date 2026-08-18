@@ -605,6 +605,127 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Storage (real ABI, storage.h -- Phase 8 WP13) ----------------------------------------
+    //
+    // The C API deliberately collapses XNA's fake-async BeginXxx/EndXxx pairs into one synchronous
+    // call each, invoking CNA_StorageCompletionCallback before returning "so the canonical
+    // completion contract is preserved" (storage.h:76-78). CNA.Storage therefore implements
+    // Begin/End over an already-completed IAsyncResult rather than inventing real async, and never
+    // passes a callback here -- the managed side owns the completion contract.
+    //
+    // CNA_FileMode and CNA_SeekOrigin map one-to-one onto System.IO.FileMode/SeekOrigin, so those
+    // BCL enums cross the boundary by cast rather than getting CNA-flavoured duplicates (design
+    // invariant #7).
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_storage_device_show_selector(nint callback, nint context, out CnaHandle outDevice);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_destroy(CnaHandle device);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_get_free_space(CnaHandle device, out long outFreeSpace);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_get_total_space(CnaHandle device, out long outTotalSpace);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_get_is_connected(CnaHandle device, out byte outIsConnected);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_delete_container(CnaHandle device, CnaStringView titleName);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_storage_container_open(
+        CnaHandle device, CnaStringView displayName, nint callback, nint context, out CnaHandle outContainer);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_destroy(CnaHandle container);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_dispose(CnaHandle container);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_get_is_disposed(CnaHandle container, out byte outIsDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_get_display_name_size(CnaHandle container, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_storage_container_copy_display_name(
+        CnaHandle container, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_create_directory(CnaHandle container, CnaStringView directory);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_directory_exists(CnaHandle container, CnaStringView directory, out byte outExists);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_delete_directory(CnaHandle container, CnaStringView directory);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_file_exists(CnaHandle container, CnaStringView file, out byte outExists);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_delete_file(CnaHandle container, CnaStringView file);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_get_file_name_count(
+        CnaHandle container, CnaStringView searchPattern, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_storage_container_copy_file_name(
+        CnaHandle container, CnaStringView searchPattern, ulong index, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_get_directory_name_count(
+        CnaHandle container, CnaStringView searchPattern, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_storage_container_copy_directory_name(
+        CnaHandle container, CnaStringView searchPattern, ulong index, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_create_file(CnaHandle container, CnaStringView file, out CnaHandle outStream);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_open_file(
+        CnaHandle container, CnaStringView file, uint fileMode, out CnaHandle outStream);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_storage_stream_read(CnaHandle stream, byte* destination, ulong capacity, out ulong outRead);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_storage_stream_write(CnaHandle stream, byte* data, ulong count);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_seek(CnaHandle stream, long offset, uint origin, out long outPosition);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_get_position(CnaHandle stream, out long outPosition);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_get_length(CnaHandle stream, out long outLength);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_set_length(CnaHandle stream, long length);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_get_can_read(CnaHandle stream, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_get_can_write(CnaHandle stream, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_get_can_seek(CnaHandle stream, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_flush(CnaHandle stream);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_stream_close(CnaHandle stream);
+
     // -- Video / VideoPlayer (real ABI, video.h -- Phase 8 WP12) ------------------------------
     //
     // A Video is created against a graphics device (it decodes into a texture); a VideoPlayer is

@@ -1442,9 +1442,13 @@ WP11–WP14 are the largest new subsystems and come last.
       already). Revisit the always-empty `MediaLibrary` collections from
       the 2026-08-17 pass — `media_library.h` may now support more than
       that scoping note assumed.</details>
-- [ ] **WP13 — Storage.** `StorageDevice`, `StorageContainer`, and the
+- [x] **WP13 — Storage — done 2026-08-18.** Coverage →169/201.
+      `StorageDevice`/`StorageContainer` plus an internal `StorageStream :
+      System.IO.Stream`. Both the `Begin`/`End` pairs and plain synchronous
+      methods are offered — see below. Original scope:
+      <details>**WP13 — Storage.** `StorageDevice`, `StorageContainer`, and the
       `IAsyncResult`-based `BeginOpenContainer`/`EndOpenContainer` API
-      shape. Native: `storage.h`.
+      shape. Native: `storage.h`.</details>
 - [ ] **WP14 — Content pipeline reader API.** `ContentReader`,
       `ContentTypeReader`/`ContentTypeReader<T>`,
       `ContentTypeReaderManager`, `ContentSerializerAttribute`,
