@@ -1,68 +1,68 @@
+using CNA.Interop;
+
 namespace CNA.Media;
 
 /// <summary>
-/// A music album in a <see cref="MediaLibrary"/>. Same "no CNAEXT deviation, MediaLibrary-only
-/// construction" reasoning as <see cref="Artist"/>'s own doc comment. <see cref="HasArt"/> is
-/// hardcoded <see langword="false"/> and <see cref="GetAlbumArt"/>/<see cref="GetThumbnail"/>
-/// always throw, matching real XNA's own documented contract for an album with no art -- correct
-/// here specifically because no <see cref="Album"/> in this project is ever backed by a real
-/// scanned audio file with real embedded/folder art to report in the first place (see
-/// <see cref="MediaLibrary"/>'s own doc comment), not a stub standing in for unwritten logic.
+/// A music album in a <see cref="MediaLibrary"/>. Real XNA's own constructor is
+/// <c>MediaLibrary</c>-only, matching the real C++ engine's <c>private</c>, friended constructor
+/// exactly -- kept <c>internal</c> here too, since an album only exists as part of a library scan.
+///
+/// Every member is a live native round trip over <c>media_library.h</c>. Before the media-library
+/// rebinding this was a managed record whose <see cref="HasArt"/> was hardcoded
+/// <see langword="false"/>, on the stated grounds that no C ABI existed to scan a real library --
+/// which the shipped header contradicts in its first paragraph ("Opening scans the device's music
+/// and picture locations").
 /// </summary>
-public class Album : IDisposable, IEquatable<Album>
+public class Album : MediaLibraryObject, IEquatable<Album>
 {
-    internal Album(string name, Artist? artist, Genre? genre, TimeSpan duration, SongCollection songs)
+    internal Album(CnaHandle handle)
+        : base(handle, Native.cna_album_dispose, Native.cna_album_get_is_disposed,
+               h => Native.cna_album_destroy(h))
     {
-        Name = name;
-        Artist = artist;
-        Genre = genre;
-        Duration = duration;
-        Songs = songs;
     }
 
-    public Artist? Artist { get; }
+    public unsafe string Name => ReadName(Native.cna_album_get_name_size, Native.cna_album_copy_name, nameof(Name));
 
-    public TimeSpan Duration { get; }
+    /// <summary><see langword="null"/> for an album whose files name no artist -- the ABI reports
+    /// that as an ordinary "not available" answer, not a failure.</summary>
+    public Artist? Artist => ReadOptional(Native.cna_album_get_artist, h => new Artist(h), nameof(Artist));
 
-    public Genre? Genre { get; }
+    public Genre? Genre => ReadOptional(Native.cna_album_get_genre, h => new Genre(h), nameof(Genre));
 
-    public bool HasArt => false;
+    public TimeSpan Duration => TimeSpan.FromTicks(ReadTicks(Native.cna_album_get_duration, nameof(Duration)));
 
-    public bool IsDisposed { get; private set; }
+    public bool HasArt => ReadBool(Native.cna_album_get_has_art, nameof(HasArt));
 
-    public string Name { get; }
+    public SongCollection Songs => ReadRequired(Native.cna_album_get_songs, h => new SongCollection(h), nameof(Songs));
 
-    public SongCollection Songs { get; }
+    /// <summary>The album's cover art as an image stream. Throws for an album with no art, matching
+    /// real XNA's documented contract -- <see cref="HasArt"/> is how a caller asks first.</summary>
+    public unsafe Stream GetAlbumArt() => OpenBlob(
+        Native.cna_album_get_art_size, Native.cna_album_copy_art, nameof(GetAlbumArt));
 
-    public Stream GetAlbumArt() =>
-        throw new InvalidOperationException("This album does not have any album art.");
+    public unsafe Stream GetThumbnail() => OpenBlob(
+        Native.cna_album_get_thumbnail_size, Native.cna_album_copy_thumbnail, nameof(GetThumbnail));
 
-    public Stream GetThumbnail() =>
-        throw new InvalidOperationException("This album does not have any album art.");
-
-    public void Dispose() => IsDisposed = true;
-
-    /// <summary>By (<see cref="Name"/>, <see cref="Artist"/>), not <see cref="Name"/> alone --
-    /// matches the real C++ engine's own <c>Album::Equals</c> exactly (album names can collide
-    /// across different artists).</summary>
-    public bool Equals(Album? other)
+    private unsafe Stream OpenBlob(NativeBlobReader.SizeFunc size, NativeBlobReader.CopyFunc copy, string context)
     {
-        if (other is null || Name != other.Name)
+        byte[]? bytes = ReadBlob(size, copy, context);
+        if (bytes is null)
         {
-            return false;
+            throw new InvalidOperationException("This album does not have any album art.");
         }
 
-        if (ReferenceEquals(Artist, other.Artist))
-        {
-            return true;
-        }
-
-        return Artist is not null && other.Artist is not null && Artist.Equals(other.Artist);
+        // Writable: false so a caller cannot mutate the copy and expect it to mean anything.
+        return new MemoryStream(bytes, writable: false);
     }
+
+    /// <summary>By (name, artist), not name alone -- album names collide across artists. Delegated
+    /// to <c>cna_album_equals</c> rather than reimplemented; see
+    /// <see cref="MediaLibraryObject"/>.</summary>
+    public bool Equals(Album? other) => NativeEquals(Native.cna_album_equals, other);
 
     public override bool Equals(object? obj) => Equals(obj as Album);
 
-    public override int GetHashCode() => HashCode.Combine(Name, Artist);
+    public override int GetHashCode() => ReadInt(Native.cna_album_get_hash_code, nameof(GetHashCode));
 
     public override string ToString() => Name;
 

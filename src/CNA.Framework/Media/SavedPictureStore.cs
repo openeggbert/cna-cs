@@ -1,15 +1,21 @@
 namespace CNA.Media;
 
 /// <summary>
-/// Backs <see cref="MediaLibrary.SavePicture(string,byte[])"/> with a real "Saved Pictures"
-/// subfolder under the pictures root -- reproduced from the real openeggbert/cna C++ engine's own
+/// A real "Saved Pictures" subfolder under the pictures root -- reproduced from the real
+/// openeggbert/cna C++ engine's own
 /// <c>CNA::Internal::Media::SavedPictureStore</c> exactly, including its security-relevant
 /// filename sanitization (<see cref="SanitizePictureName"/> below): the picture name is
 /// caller-supplied and untrusted, so it must be reduced to a single, safe path *segment* (no
 /// directory traversal, no absolute-path escape) before it's ever used to build a real filesystem
 /// path -- a caller passing <c>"../../etc/passwd"</c> or an absolute path must not be able to
-/// write outside the Saved Pictures directory. <c>internal</c>: this is <see cref="MediaLibrary"/>'s
-/// own implementation detail, not standalone public API.
+/// write outside the Saved Pictures directory.
+///
+/// No longer backs <see cref="MediaLibrary.SavePicture(string,byte[])"/>, which goes to native
+/// (<c>cna_media_library_save_picture</c>) since the media-library rebinding. It is kept because
+/// its sanitization is used elsewhere -- <c>ContentManager</c> and the model builders reach for the
+/// same "reduce an untrusted name to one safe path segment" rule, and that is exactly the kind of
+/// logic that must exist once rather than be reimplemented per caller. <c>internal</c>: an
+/// implementation detail, not standalone public API.
 /// </summary>
 internal static class SavedPictureStore
 {

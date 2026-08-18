@@ -1,62 +1,40 @@
+using CNA.Interop;
+
 namespace CNA.Media;
 
 /// <summary>
-/// A hierarchical album of pictures in a <see cref="MediaLibrary"/>. Real XNA's own constructor is
-/// <c>MediaLibrary</c>-only, same reasoning as <c>Album</c>'s own doc comment. Two-phase
-/// construction (<see cref="SetChildAlbumsAndPictures"/> runs immediately after the constructor,
-/// both <c>internal</c> and both only ever called from <see cref="MediaLibrary"/>) matches the
-/// real C++ engine's own <c>PictureAlbum</c>/<c>SetChildAlbumsAndPictures</c> shape exactly --
-/// kept even though this project's own picture library never actually needs the recursive
-/// tree-building the two-phase split exists to support (see <see cref="MediaLibrary"/>'s own doc
-/// comment for why), so a future real scan implementation can drop into the same shape without
-/// restructuring this type.
+/// One node in a <see cref="MediaLibrary"/>'s picture-album tree: a folder of
+/// <see cref="Pictures"/> plus its child <see cref="Albums"/>.
 ///
-/// CNA.XnaCompat's own <c>PictureAlbum</c> does not downcast <see cref="Albums"/>/<see cref="Pictures"/>
-/// via a covariant-return factory hook the way <c>CNA.Game.CreateGraphicsDevice</c> downcasts
-/// <c>GraphicsDevice</c> -- that pattern was tried and doesn't fit here, since
-/// <c>Microsoft.Xna.Framework.Media.PictureAlbumCollection</c>/<c>PictureCollection</c> are
-/// independent reimplementations of these types, not subclasses (see <c>CNA.Media.MediaLibrary</c>'s
-/// own doc comment for the full reasoning). CNA.XnaCompat's <c>MediaLibrary</c> instead maintains
-/// its own independently-tracked, compat-typed picture-album tree.
+/// <see cref="Parent"/> is <see langword="null"/> for the root, which is how a caller walks up.
+/// The ABI reports that as an ordinary "not available" answer, matching real XNA's own nullable
+/// <c>Parent</c>.
 /// </summary>
-public class PictureAlbum : IDisposable, IEquatable<PictureAlbum>
+public class PictureAlbum : MediaLibraryObject, IEquatable<PictureAlbum>
 {
-    internal PictureAlbum(string name, PictureAlbum? parent, string path)
+    internal PictureAlbum(CnaHandle handle)
+        : base(handle, Native.cna_picture_album_dispose, Native.cna_picture_album_get_is_disposed,
+               h => Native.cna_picture_album_destroy(h))
     {
-        Name = name;
-        Parent = parent;
-        Path = path;
     }
 
-    internal void SetChildAlbumsAndPictures()
-    {
-        Albums = new PictureAlbumCollection([]);
-        Pictures = new PictureCollection([]);
-    }
+    public unsafe string Name => ReadName(
+        Native.cna_picture_album_get_name_size, Native.cna_picture_album_copy_name, nameof(Name));
 
-    public PictureAlbumCollection Albums { get; private set; } = null!;
+    public PictureAlbum? Parent =>
+        ReadOptional(Native.cna_picture_album_get_parent, h => new PictureAlbum(h), nameof(Parent));
 
-    public bool IsDisposed { get; private set; }
+    public PictureAlbumCollection Albums => ReadRequired(
+        Native.cna_picture_album_get_albums, h => new PictureAlbumCollection(h), nameof(Albums));
 
-    public string Name { get; }
+    public PictureCollection Pictures => ReadRequired(
+        Native.cna_picture_album_get_pictures, h => new PictureCollection(h), nameof(Pictures));
 
-    public PictureAlbum? Parent { get; }
-
-    public PictureCollection Pictures { get; private set; } = null!;
-
-    internal string Path { get; }
-
-    public void Dispose() => IsDisposed = true;
-
-    /// <summary>By <see cref="Path"/> (an internal identity key, never publicly exposed on this
-    /// type -- unlike <see cref="Picture.Token"/>, real XNA's own <c>PictureAlbum</c> has no
-    /// public path/token accessor) -- matches the real C++ engine's own
-    /// <c>PictureAlbum::Equals</c> exactly.</summary>
-    public bool Equals(PictureAlbum? other) => other is not null && Path == other.Path;
+    public bool Equals(PictureAlbum? other) => NativeEquals(Native.cna_picture_album_equals, other);
 
     public override bool Equals(object? obj) => Equals(obj as PictureAlbum);
 
-    public override int GetHashCode() => Path.GetHashCode();
+    public override int GetHashCode() => ReadInt(Native.cna_picture_album_get_hash_code, nameof(GetHashCode));
 
     public override string ToString() => Name;
 

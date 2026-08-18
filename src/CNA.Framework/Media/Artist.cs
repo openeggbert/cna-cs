@@ -1,41 +1,32 @@
+using CNA.Interop;
+
 namespace CNA.Media;
 
-/// <summary>
-/// A music artist in a <see cref="MediaLibrary"/>. Real XNA's own constructor is
-/// <c>MediaLibrary</c>-only, matching the real C++ engine's <c>private</c>, friended constructor
-/// exactly -- kept <c>internal</c> here too (not a <c>CNAEXT</c> public deviation the way
-/// <see cref="Song"/>'s own constructor needed to be): unlike <c>Song</c>, an <see cref="Artist"/>
-/// only makes sense as part of a coherent library scan (cross-referenced with its
-/// <see cref="Albums"/>/<see cref="Songs"/>), which this project doesn't implement (see
-/// <see cref="MediaLibrary"/>'s own doc comment) -- so nothing here would ever have a real reason
-/// to hand-build one.
-/// </summary>
-public class Artist : IDisposable, IEquatable<Artist>
+/// <summary>A music artist in a <see cref="MediaLibrary"/>. Construction is <c>internal</c>, and
+/// every member a live native round trip -- see <see cref="Album"/> for both.</summary>
+public class Artist : MediaLibraryObject, IEquatable<Artist>
 {
-    internal Artist(string name, AlbumCollection albums, SongCollection songs)
+    internal Artist(CnaHandle handle)
+        : base(handle, Native.cna_artist_dispose, Native.cna_artist_get_is_disposed,
+               h => Native.cna_artist_destroy(h))
     {
-        Name = name;
-        Albums = albums;
-        Songs = songs;
     }
 
-    public AlbumCollection Albums { get; }
+    public unsafe string Name => ReadName(Native.cna_artist_get_name_size, Native.cna_artist_copy_name, nameof(Name));
 
-    public bool IsDisposed { get; private set; }
+    public AlbumCollection Albums =>
+        ReadRequired(Native.cna_artist_get_albums, h => new AlbumCollection(h), nameof(Albums));
 
-    public string Name { get; }
+    public SongCollection Songs =>
+        ReadRequired(Native.cna_artist_get_songs, h => new SongCollection(h), nameof(Songs));
 
-    public SongCollection Songs { get; }
-
-    public void Dispose() => IsDisposed = true;
-
-    /// <summary>By name only -- matches the real C++ engine's own <c>Artist::Equals</c>
-    /// exactly.</summary>
-    public bool Equals(Artist? other) => other is not null && Name == other.Name;
+    /// <summary>By name -- delegated to <c>cna_artist_equals</c>, see
+    /// <see cref="MediaLibraryObject"/>.</summary>
+    public bool Equals(Artist? other) => NativeEquals(Native.cna_artist_equals, other);
 
     public override bool Equals(object? obj) => Equals(obj as Artist);
 
-    public override int GetHashCode() => Name.GetHashCode();
+    public override int GetHashCode() => ReadInt(Native.cna_artist_get_hash_code, nameof(GetHashCode));
 
     public override string ToString() => Name;
 

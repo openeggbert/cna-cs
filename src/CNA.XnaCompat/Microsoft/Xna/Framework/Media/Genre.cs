@@ -1,17 +1,27 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>Genre</c>. Same reasoning as <see cref="Artist"/>'s own doc
-/// comment.</summary>
-public class Genre : CNA.Media.Genre
+/// <summary>XNA 4.0-compatible <c>Genre</c>. Same shape as <see cref="Album"/>.</summary>
+public class Genre : MediaLibraryObject<CNA.Media.Genre>, IEquatable<Genre>
 {
-    internal Genre(string name, AlbumCollection albums, SongCollection songs)
-        : base(name, MediaCollectionConversion.ToBase(albums), MediaCollectionConversion.ToBase(songs))
+    internal Genre(CNA.Media.Genre inner)
+        : base(inner)
     {
-        Albums = albums;
-        Songs = songs;
     }
 
-    public new AlbumCollection Albums { get; }
+    public string Name => Inner.Name;
 
-    public new SongCollection Songs { get; }
+    public AlbumCollection Albums => new(Inner.Albums);
+
+    public SongCollection Songs => new(Inner.Songs);
+
+    public bool Equals(Genre? other) => other is not null && Inner.Equals(other.Inner);
+
+    public override bool Equals(object? obj) => Equals(obj as Genre);
+
+    public override int GetHashCode() => base.GetHashCode();
+
+    public static bool operator ==(Genre? left, Genre? right) =>
+        left is null ? right is null : left.Equals(right);
+
+    public static bool operator !=(Genre? left, Genre? right) => !(left == right);
 }

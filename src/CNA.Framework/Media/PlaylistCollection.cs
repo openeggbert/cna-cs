@@ -1,12 +1,12 @@
+using CNA.Interop;
+
 namespace CNA.Media;
 
-/// <summary>An ordered, read-only collection of <see cref="Playlist"/> objects. Same
-/// <c>internal</c>-constructor reasoning as <see cref="AlbumCollection"/>'s own doc
-/// comment.</summary>
+/// <summary>An ordered, read-only collection of <see cref="Playlist"/> objects. Same shape as <see cref="AlbumCollection"/>.</summary>
 public sealed class PlaylistCollection : ReadOnlyMediaCollection<Playlist>
 {
-    internal PlaylistCollection(IReadOnlyList<Playlist> playlists)
-        : base(playlists)
+    internal PlaylistCollection(CnaHandle handle)
+        : base(handle, Native.cna_playlist_collection_get_count, Native.cna_playlist_collection_get_at, h => Native.cna_playlist_collection_destroy(h), h => new Playlist(h))
     {
     }
 }

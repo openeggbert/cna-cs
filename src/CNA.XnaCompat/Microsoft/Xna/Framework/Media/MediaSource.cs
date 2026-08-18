@@ -1,18 +1,35 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>MediaSource</c>. Extends <c>CNA.Media.MediaSource</c> directly
-/// (safe here -- see <c>MediaLibrary</c>'s own doc comment for why the downcast-pass-through
-/// pattern this session has used carefully elsewhere is unconditionally safe throughout this
-/// feature).</summary>
-public class MediaSource : CNA.Media.MediaSource
+/// <summary>XNA 4.0-compatible <c>MediaSource</c>: a compat-typed view over
+/// <c>CNA.Media.MediaSource</c>, wrapping for the same reason the rest of this namespace's media
+/// family does.</summary>
+public class MediaSource
 {
-    internal MediaSource(MediaSourceType mediaSourceType, string name)
-        : base((CNA.Media.MediaSourceType)(int)mediaSourceType, name)
+    internal MediaSource(CNA.Media.MediaSource inner)
     {
+        ArgumentNullException.ThrowIfNull(inner);
+        Inner = inner;
     }
 
-    public new MediaSourceType MediaSourceType => (MediaSourceType)(int)base.MediaSourceType;
+    internal CNA.Media.MediaSource Inner { get; }
 
-    public static new IReadOnlyList<MediaSource> GetAvailableMediaSources() =>
-        [new MediaSource(MediaSourceType.LocalDevice, "Local Device")];
+    public MediaSourceType MediaSourceType => (MediaSourceType)(int)Inner.MediaSourceType;
+
+    public string Name => Inner.Name;
+
+    public override string ToString() => Name;
+
+    /// <summary>Enumerates the device's real media sources. It used to return a hardcoded
+    /// local-device entry; <c>CNA.Media.MediaSource</c> now asks native, and this forwards.</summary>
+    public static IReadOnlyList<MediaSource> GetAvailableMediaSources()
+    {
+        IReadOnlyList<CNA.Media.MediaSource> sources = CNA.Media.MediaSource.GetAvailableMediaSources();
+        var wrapped = new MediaSource[sources.Count];
+        for (int i = 0; i < wrapped.Length; i++)
+        {
+            wrapped[i] = new MediaSource(sources[i]);
+        }
+
+        return wrapped;
+    }
 }

@@ -4,25 +4,15 @@ namespace Microsoft.Xna.Framework.Media;
 /// Thin forwarding static class over <c>CNA.Media.MediaPlayer</c>, same pattern this compat
 /// layer's other static subsystems (<c>Mouse</c>, <c>Keyboard</c>) already use.
 ///
-/// <c>Play(SongCollection, ...)</c> is supported (added once a compat <see cref="SongCollection"/>
-/// existed for the `MediaLibrary` pass to build one from -- see <c>NEXT.md</c>): calling it doesn't
-/// need a compat downcast of anything, just an upcast of the input songs, so the blocker below
-/// never applied to it in the first place.
-///
-/// <c>Queue</c> itself is still deliberately missing -- a real, structural blocker, not an
-/// oversight. <c>CNA.Media.MediaPlayer.LoadSong</c> always constructs a base <c>CNA.Media.Song</c>
-/// defensive copy internally (matching the real C++ engine's own <c>LoadSong</c> exactly),
-/// regardless of the actual runtime type of the <see cref="Song"/> passed to <c>Play</c> -- so
-/// <c>CNA.Media.MediaPlayer.Queue</c>'s songs are *never* actually compat-typed, even when this
-/// compat layer's own <c>Play(Song)</c>/<c>Play(SongCollection)</c> was called with compat-typed
-/// songs. Every other compat type this session built solved an equivalent problem by extending its
-/// base type directly (<c>BasicEffect</c>, <c>Song</c> itself) -- but <c>MediaPlayer</c> is a
-/// <c>static</c> class, which C# does not allow subclassing at all, so there is no seam here to
-/// override <c>LoadSong</c>'s copy-construction the way inheritance solved it everywhere else. A
-/// compat <c>Queue</c> property would therefore return songs that silently fail an explicit
-/// compat-typed downcast -- unsafe to ship, not just imperfect. Follow-up only if this ever
-/// matters enough to justify the compat layer maintaining its own parallel queue mirror instead of
-/// forwarding to the base one.
+/// Every member forwards, including <c>Queue</c>, which was deliberately absent before the
+/// media-library rebinding. The blocker recorded then was real: compat <see cref="Song"/> extended
+/// <c>CNA.Media.Song</c>, while <c>CNA.Media.MediaPlayer.LoadSong</c> always builds a base-typed
+/// defensive copy (matching the real C++ engine), so the queue's songs were never compat-typed and
+/// a downcasting <c>Queue</c> would have thrown on first use. <c>MediaPlayer</c> is <c>static</c>,
+/// so there was no seam to override that copy-construction either. The rebinding moved the whole
+/// compat media family from inheritance to composition, which dissolves the problem rather than
+/// working around it: a wrapper re-types whatever the base queue holds, so no downcast is involved
+/// anywhere.
 /// </summary>
 public static class MediaPlayer
 {
@@ -66,23 +56,33 @@ public static class MediaPlayer
 
     public static TimeSpan PlayPosition => CNA.Media.MediaPlayer.PlayPosition;
 
-    public static void Play(Song song) => CNA.Media.MediaPlayer.Play(song);
+    public static void Play(Song song)
+    {
+        ArgumentNullException.ThrowIfNull(song);
+        CNA.Media.MediaPlayer.Play(song.Inner);
+    }
 
-    /// <summary>Converts <paramref name="songs"/> to a base-typed <c>CNA.Media.SongCollection</c>
-    /// via <see cref="IReadOnlyList{T}"/>'s own covariance (a compat <see cref="Song"/> already
-    /// *is* a <c>CNA.Media.Song</c>, so no per-element conversion is needed, just an upcast) --
-    /// this is an input parameter, not <c>Queue</c>'s output, so the class-level doc comment's
-    /// downcast concern doesn't apply here.</summary>
-    public static void Play(SongCollection songs) => CNA.Media.MediaPlayer.Play(ToBaseSongs(songs));
-
-    public static void Play(SongCollection songs, int index) =>
-        CNA.Media.MediaPlayer.Play(ToBaseSongs(songs), index);
-
-    private static CNA.Media.SongCollection ToBaseSongs(SongCollection songs)
+    /// <summary>Hands the underlying native collection straight through -- no per-element
+    /// conversion and no copy, because a compat <see cref="SongCollection"/> is a view over exactly
+    /// the <c>CNA.Media.SongCollection</c> this route wants.</summary>
+    public static void Play(SongCollection songs)
     {
         ArgumentNullException.ThrowIfNull(songs);
-        return MediaCollectionConversion.ToBase(songs);
+        CNA.Media.MediaPlayer.Play(songs.Inner);
     }
+
+    public static void Play(SongCollection songs, int index)
+    {
+        ArgumentNullException.ThrowIfNull(songs);
+        CNA.Media.MediaPlayer.Play(songs.Inner, index);
+    }
+
+    /// <summary>Real now. It was deliberately absent while compat <see cref="Song"/> was a subclass
+    /// of <c>CNA.Media.Song</c>: <c>LoadSong</c> always builds a base-typed defensive copy, so the
+    /// queue's songs were never compat-typed and a downcasting <c>Queue</c> would have thrown on
+    /// first use. Compat <see cref="Song"/> wraps rather than extends since the media-library
+    /// rebinding, and a wrapper does not care what the base queue holds.</summary>
+    public static MediaQueue Queue => new(CNA.Media.MediaPlayer.Queue);
 
     public static void Pause() => CNA.Media.MediaPlayer.Pause();
 

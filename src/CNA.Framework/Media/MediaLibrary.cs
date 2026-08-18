@@ -1,90 +1,66 @@
+using CNA.Interop;
+
 namespace CNA.Media;
 
 /// <summary>
-/// Provides access to the media library catalog on the current device.
+/// The media library catalog on the current device: the device's music
+/// (<see cref="Songs"/>/<see cref="Albums"/>/<see cref="Artists"/>/<see cref="Genres"/>/
+/// <see cref="Playlists"/>) and its pictures (<see cref="Pictures"/>/<see cref="SavedPictures"/>/
+/// <see cref="RootPictureAlbum"/>).
 ///
-/// **Object model only -- always empty. This is a deliberate, documented scope decision, not an
-/// oversight or a "compiles but blocked on the native ABI" placeholder like most of this
-/// project's other native-backed types.** The real openeggbert/cna C++ engine's own
-/// <c>MediaLibrary::BuildFromRoots</c> depends on infrastructure that has no equivalent anywhere
-/// in this binding and no C ABI exposure to build one against: real ID3v2/Vorbis/FLAC tag parsing
-/// (<c>CNA::Internal::Media::AudioTagParser</c>), FFmpeg-based audio duration probing
-/// (<c>AudioDurationProbe::ProbeDurationMS</c>, built on <c>avformat_find_stream_info</c>), a
-/// native directory-scanning index, and a native image loader for cover art. None of this is a
-/// "shaped to match a real implementation, just needs porting" situation the way
-/// <c>BasicEffect</c>/<c>Model</c>/<c>Song</c> were this session -- the real implementation's
-/// actual logic is bound to native media-decoding libraries with no reachable equivalent on
-/// either side of this binding today. Reproducing it would mean either a large new native ABI
-/// surface upstream (itself needing FFmpeg-equivalent decoding exposed through a C API, a
-/// substantial design problem in its own right) or reimplementing binary audio-tag/container
-/// parsing from scratch in pure C# -- neither is a reasonable scope for this pass.
+/// <b>Genuinely native-backed.</b> This type and its whole object family used to be an always-empty
+/// managed model, on the documented grounds that the real scan depends on ID3/Vorbis tag parsing,
+/// FFmpeg duration probing and a native image loader with "no C ABI exposure to build one against".
+/// That conclusion was wrong: <c>media_library.h</c> ships the entire surface -- 148 functions --
+/// and states in its first paragraph that "opening scans the device's music and picture locations".
+/// Everything here now goes through it, including the album art, thumbnails and picture dimensions
+/// the old note called irreducibly unreachable.
 ///
-/// What's implemented instead: the real XNA public API surface -- every type
-/// (<see cref="Album"/>/<see cref="Artist"/>/<see cref="Genre"/>/<see cref="Playlist"/>/
-/// <see cref="MediaSource"/> and their collections), every property, and this constructor's real
-/// validation (<see cref="ArgumentNullException"/> for a null <see cref="MediaSource"/>,
-/// <see cref="NotSupportedException"/> for a non-<see cref="MediaSourceType.LocalDevice"/> one,
-/// both matching the real C++ engine's own checks) -- so ported game code that references these
-/// types compiles and runs, but every collection this type exposes is always empty, since nothing
-/// ever scans anything. None of <see cref="Album"/>/<see cref="Artist"/>/<see cref="Genre"/>/
-/// <see cref="Playlist"/>'s constructors are <c>CNAEXT</c>-public the way <see cref="Song"/>'s own
-/// is, matching real XNA's own choice to keep them <c>MediaLibrary</c>-only (see each type's own
-/// doc comment) -- unlike <c>Song</c>, they only make sense as part of a coherent scan this
-/// project can't perform, so there's no real reason to hand-build one here either.
+/// Construction really does open (and therefore scan) the library, matching real XNA. An empty
+/// result is an ordinary answer rather than a failure -- a device with no music reports counts of
+/// zero, and one with no readable picture location has no <see cref="RootPictureAlbum"/> at all,
+/// which is why that property is nullable.
 ///
-/// The picture-library surface (<c>Picture</c>/<c>PictureAlbum</c>/<c>PictureCollection</c>/
-/// <c>PictureAlbumCollection</c>, <see cref="GetPictureFromToken"/>/<see cref="SavePicture(string,byte[])"/>)
-/// is genuinely real, not scoped to always-empty the way the music side above is: unlike scanning
-/// for pre-existing songs (irreducibly bound to native tag-parsing/FFmpeg), *saving* a picture
-/// needs nothing the real C++ engine's own logic doesn't already have a real fallback for --
-/// confirmed by reading <c>MediaLibrary::SavePicture</c>'s own source, not assumed. Writing the
-/// image bytes to a real "Saved Pictures" folder needs only plain file I/O
-/// (<see cref="SavedPictureStore"/>, a faithful port of the real C++ engine's own
-/// <c>SavedPictureStore</c>, including its security-relevant filename sanitization). Real image
-/// dimension detection needs native decoding this project doesn't have -- but the real C++ engine
-/// *already* falls back to <c>width=0, height=0</c> on a decode failure rather than throwing (its
-/// own <c>SavePicture</c> catches the decode exception and continues), so this project's own
-/// always-0 dimensions are that same real fallback path taken unconditionally, not an invented
-/// shortcut. <see cref="Picture.GetThumbnail"/> similarly always takes the real engine's own
-/// thumbnail-generation-failure fallback (return the full-size image) rather than performing real
-/// PNG downscaling this project has no library for. <see cref="RootPictureAlbum"/> starts as a
-/// single, empty root node (no pre-existing-photo scan, for the same reason the music side has
-/// none) rather than <see langword="null"/> -- real XNA's own <c>RootPictureAlbum</c> is documented
-/// to always return a valid album, even an empty one, so a fresh/never-scanned library is exactly
-/// that case, not a special case to work around.
+/// The <c>Begin</c>/<c>End</c> async shape real XNA inherited from the Xbox 360 is not reproduced,
+/// because XNA's own <c>MediaLibrary</c> never had one -- unlike <see cref="Storage.StorageDevice"/>,
+/// which does and therefore gets both forms.
 ///
 /// Not sealed here (unlike real XNA's actual <c>sealed class MediaLibrary</c>) specifically so
-/// <c>Microsoft.Xna.Framework.Media.MediaLibrary</c> can extend this directly -- the same
-/// "preserve the real logic's lineage over namespace purity" trade-off <c>Song</c>/<c>BasicEffect</c>
-/// already made; the compat type itself is sealed, matching real XNA.
-///
-/// CNA.XnaCompat's own <c>MediaLibrary</c> does **not** downcast <see cref="RootPictureAlbum"/>/
-/// <see cref="Pictures"/>/<see cref="SavedPictures"/> the way it downcasts <see cref="MediaSource"/>:
-/// a covariant-return factory-hook design (the same pattern <c>CNA.Game.CreateGraphicsDevice</c>
-/// uses) was tried and does not fit here, because <c>Microsoft.Xna.Framework.Media.PictureCollection</c>/
-/// <c>PictureAlbumCollection</c> are -- like <c>SongCollection</c>/<c>AlbumCollection</c> --
-/// independent reimplementations of their <c>CNA.Media</c> counterparts, not subclasses (extending
-/// directly would inherit an indexer typed to this namespace's <see cref="Picture"/>/
-/// <see cref="PictureAlbum"/>, not the compat one). A covariant-return override requires the
-/// override's return type to actually be a subtype of the declared return type, which an
-/// independent reimplementation by definition is not -- so this class stays a plain, non-virtual
-/// implementation, and CNA.XnaCompat's own <c>MediaLibrary</c> instead maintains its own
-/// independently-tracked, compat-typed picture state, built directly on <see cref="SavedPictureStore"/>
-/// (the shared low-level file-I/O helper) rather than on this class's own bookkeeping -- see that
-/// type's own doc comment.
+/// <c>Microsoft.Xna.Framework.Media.MediaLibrary</c> can extend this directly -- the same "preserve
+/// the real logic's lineage over namespace purity" trade-off <c>Song</c>/<c>BasicEffect</c> already
+/// made; the compat type itself is sealed, matching real XNA.
 /// </summary>
 public class MediaLibrary : IDisposable
 {
-    private readonly string _pictureRoot;
-    private readonly List<Picture> _ownedPictures = [];
-    private PictureAlbum? _savedPicturesAlbum;
+    private readonly NativeResourceHandle _handle;
 
     public MediaLibrary()
-        : this(new MediaSource(MediaSourceType.LocalDevice, "Local Device"))
+        : this(CreateDefault())
     {
     }
 
+    /// <summary>Opens the library for one enumerated <see cref="MediaSource"/>. Real XNA restricts
+    /// this to <see cref="MediaSourceType.LocalDevice"/>, and the check is kept here rather than
+    /// left to native: XNA callers expect a <see cref="NotSupportedException"/>, not a native
+    /// result code.</summary>
     public MediaLibrary(MediaSource mediaSource)
+        : this(CreateFromSource(mediaSource))
+    {
+    }
+
+    private MediaLibrary(CnaHandle handle)
+    {
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_media_library_destroy(new CnaHandle(h)));
+    }
+
+    private static CnaHandle CreateDefault()
+    {
+        CnaResult result = Native.cna_media_library_create(CnaAmbientGame.Current, out CnaHandle library);
+        CnaException.ThrowIfFailed(result, nameof(MediaLibrary));
+        return library;
+    }
+
+    private static CnaHandle CreateFromSource(MediaSource mediaSource)
     {
         ArgumentNullException.ThrowIfNull(mediaSource);
 
@@ -93,107 +69,156 @@ public class MediaLibrary : IDisposable
             throw new NotSupportedException("Only MediaSourceType.LocalDevice is supported.");
         }
 
-        MediaSource = mediaSource;
-        Songs = new SongCollection([]);
-        Albums = new AlbumCollection([]);
-        Artists = new ArtistCollection([]);
-        Genres = new GenreCollection([]);
-        Playlists = new PlaylistCollection([]);
-
-        // Environment.GetFolderPath is the exact real BCL equivalent of the real C++ engine's own
-        // native MediaLibraryPaths::GetPictureRoot() (design invariant #7) -- returns "" if the
-        // platform has no such concept, matching the C++ side's own possibly-empty pictureRoot_.
-        _pictureRoot = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-        RootPictureAlbum = new PictureAlbum(Path.GetFileName(_pictureRoot), null, _pictureRoot);
-        RootPictureAlbum.SetChildAlbumsAndPictures();
-        Pictures = new PictureCollection([]);
-        SavedPictures = new PictureCollection([]);
+        CnaResult result = Native.cna_media_library_create_from_source(
+            CnaAmbientGame.Current, mediaSource.Index, out CnaHandle library);
+        CnaException.ThrowIfFailed(result, nameof(MediaLibrary));
+        return library;
     }
 
-    public AlbumCollection Albums { get; }
+    /// <summary>
+    /// Read out of the owning <see cref="NativeResourceHandle"/>. Every caller pairs it with
+    /// <see cref="GC.KeepAlive(object)"/>: once the handle value has been read this object can be
+    /// unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight -- see <c>plan.md</c> WP17.
+    /// </summary>
+    private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
-    public ArtistCollection Artists { get; }
+    public bool IsDisposed
+    {
+        get
+        {
+            if (_handle.IsClosed || _handle.IsInvalid)
+            {
+                return true;
+            }
 
-    public GenreCollection Genres { get; }
+            CnaResult result = Native.cna_media_library_get_is_disposed(NativeHandle, out byte disposed);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(IsDisposed));
+            return disposed != 0;
+        }
+    }
 
-    public bool IsDisposed { get; private set; }
+    /// <summary>The source this library was opened for. Rebuilt from what native reports rather
+    /// than echoing the constructor argument, so the default-constructed case has a real answer
+    /// too.</summary>
+    public unsafe MediaSource MediaSource
+    {
+        get
+        {
+            CnaResult result = Native.cna_media_library_get_media_source_type(NativeHandle, out uint type);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(MediaSource));
 
-    public MediaSource MediaSource { get; }
+            string name = NativeStringReader.Read(
+                Native.cna_media_library_get_media_source_name_size,
+                Native.cna_media_library_copy_media_source_name,
+                NativeHandle,
+                nameof(MediaSource));
+            GC.KeepAlive(this);
+            return new MediaSource((MediaSourceType)type, name);
+        }
+    }
 
-    public PictureCollection Pictures { get; }
+    public SongCollection Songs => Read(Native.cna_media_library_get_songs, h => new SongCollection(h), nameof(Songs));
 
-    public PlaylistCollection Playlists { get; }
+    public AlbumCollection Albums =>
+        Read(Native.cna_media_library_get_albums, h => new AlbumCollection(h), nameof(Albums));
 
-    public PictureAlbum RootPictureAlbum { get; }
+    public ArtistCollection Artists =>
+        Read(Native.cna_media_library_get_artists, h => new ArtistCollection(h), nameof(Artists));
 
-    public PictureCollection SavedPictures { get; }
+    public GenreCollection Genres =>
+        Read(Native.cna_media_library_get_genres, h => new GenreCollection(h), nameof(Genres));
 
-    public SongCollection Songs { get; }
+    public PlaylistCollection Playlists =>
+        Read(Native.cna_media_library_get_playlists, h => new PlaylistCollection(h), nameof(Playlists));
 
-    /// <summary>Matches the real C++ engine's own <c>GetPictureFromToken</c> exactly: a linear
-    /// search by <see cref="Picture.Token"/> over every picture this library actually owns (only
-    /// ever ones saved via <see cref="SavePicture(string,byte[])"/> in this project, since nothing
-    /// scans for pre-existing pictures), returning <see langword="null"/> for no match rather than
-    /// throwing.</summary>
+    public PictureCollection Pictures =>
+        Read(Native.cna_media_library_get_pictures, h => new PictureCollection(h), nameof(Pictures));
+
+    public PictureCollection SavedPictures =>
+        Read(Native.cna_media_library_get_saved_pictures, h => new PictureCollection(h), nameof(SavedPictures));
+
+    /// <summary><see langword="null"/> on a device with no readable picture location, which the ABI
+    /// reports as an ordinary answer rather than a failure. Real XNA documents this as always
+    /// returning a valid album, but real XNA also always has a picture location to return one for;
+    /// inventing an empty root for a device that has none would report a directory that does not
+    /// exist.</summary>
+    public PictureAlbum? RootPictureAlbum
+    {
+        get
+        {
+            CnaResult result = Native.cna_media_library_get_root_picture_album(
+                NativeHandle, out CnaHandle album, out byte available);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(RootPictureAlbum));
+            return available != 0 ? new PictureAlbum(album) : null;
+        }
+    }
+
+    /// <summary>Finds a picture by its <see cref="Picture.Token"/>. An unknown token answers
+    /// <see langword="null"/> rather than throwing, matching both the canonical lookup and real
+    /// XNA.</summary>
     public Picture? GetPictureFromToken(string token)
     {
         ArgumentNullException.ThrowIfNull(token);
 
-        foreach (Picture picture in _ownedPictures)
-        {
-            if (picture.Token == token)
-            {
-                return picture;
-            }
-        }
-
-        return null;
+        CnaHandle picture = default;
+        byte available = 0;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            token, view => Native.cna_media_library_get_picture_from_token(
+                NativeHandle, view, out picture, out available));
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(GetPictureFromToken));
+        return available != 0 ? new Picture(picture) : null;
     }
 
-    /// <summary>Matches the real C++ engine's own <c>SavePicture</c> exactly: write the bytes to a
-    /// real "Saved Pictures" file, create a <see cref="Picture"/> for it (width/height 0 -- see
-    /// this type's own doc comment for why that's a real fallback, not an invented one), and
-    /// register it in every collection it's genuinely a member of
-    /// (<see cref="Pictures"/>/<see cref="SavedPictures"/>/the "Saved Pictures"
-    /// <see cref="PictureAlbum"/>'s own <see cref="PictureAlbum.Pictures"/>). Guards
-    /// <see cref="IsDisposed"/> first -- unlike every other <c>Dispose()</c> in this feature (which
-    /// only flips a flag on an always-empty or no-longer-reachable collection), this method has a
-    /// real, irreversible side effect (a real file write) and mutates collections
-    /// <see cref="Dispose"/> already cleared, so allowing it to run after disposal would silently
-    /// resurrect state a caller just tore down -- a code-review finding, not something the always-
-    /// empty music-side collections ever needed (see <c>MediaPlayer.Play</c>'s own
-    /// <c>ObjectDisposedException.ThrowIf(song.IsDisposed, song)</c> for this codebase's existing
-    /// precedent, there guarding an argument's disposal rather than <see langword="this"/>'s own).</summary>
-    public Picture SavePicture(string name, byte[] imageBuffer)
+    /// <summary>Writes <paramref name="imageBuffer"/> into the device's picture location and adds
+    /// the result to <see cref="SavedPictures"/>. An image the loader cannot measure is still
+    /// saved, with width and height zero -- canonical behaviour, not a fallback invented
+    /// here.</summary>
+    public unsafe Picture SavePicture(string name, byte[] imageBuffer)
     {
-        ThrowIfInvalidForSavePicture(name);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(imageBuffer);
 
-        string? savedPath = SavedPictureStore.SavePicture(_pictureRoot, name, imageBuffer);
-        if (savedPath is null)
+        CnaHandle picture = default;
+
+        // `fixed` has to be *inside* the lambda: C# forbids a fixed local from being captured by
+        // one, and the string view has to outlive the call the same way the pinned buffer does.
+        // An empty array pins to null, which the ABI accepts precisely when the count is zero.
+        CnaResult result = CnaStringMarshal.WithStringView(name, view =>
         {
-            throw new IOException($"Failed to save picture '{name}'.");
-        }
+            fixed (byte* imagePtr = imageBuffer)
+            {
+                return Native.cna_media_library_save_picture(
+                    NativeHandle, view, imagePtr, (ulong)imageBuffer.Length, out picture);
+            }
+        });
 
-        PictureAlbum parentAlbum = EnsureSavedPicturesAlbum();
-        var picture = new Picture(name, parentAlbum, width: 0, height: 0, DateTime.Now, savedPath);
-        _ownedPictures.Add(picture);
-
-        Pictures.Add(picture);
-        SavedPictures.Add(picture);
-        parentAlbum.Pictures.Add(picture);
-
-        return picture;
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(SavePicture));
+        return new Picture(picture);
     }
 
-    /// <summary>Validates itself, before ever draining <paramref name="source"/> -- a code-review
-    /// finding: the previous version left both checks to the <c>byte[]</c> overload it delegates
-    /// to, so a disposed instance or a null <paramref name="name"/> only failed *after* fully
-    /// copying <paramref name="source"/> into memory, wastefully (and destructively, for a
-    /// non-seekable/network stream) consuming it for a call that was always going to fail.</summary>
+    /// <summary>
+    /// Validates before draining <paramref name="source"/>: a disposed library or a null
+    /// <paramref name="name"/> must not cost the caller a fully-consumed stream for a call that was
+    /// always going to fail (destructively so, for a non-seekable or network stream). A code-review
+    /// finding on the earlier managed implementation, kept.
+    ///
+    /// The ABI's own <c>cna_media_library_save_picture_from_stream</c> is deliberately not used:
+    /// it takes a <c>CNA_Handle</c> storage stream, "the only byte source this ABI owns", and a
+    /// <see cref="Stream"/> here is an arbitrary BCL stream that has no such handle. Reading it into
+    /// a buffer and taking the byte-array route is the honest translation.
+    /// </summary>
     public Picture SavePicture(string name, Stream source)
     {
-        ThrowIfInvalidForSavePicture(name);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(source);
 
         using var buffer = new MemoryStream();
@@ -201,58 +226,38 @@ public class MediaLibrary : IDisposable
         return SavePicture(name, buffer.ToArray());
     }
 
-    /// <summary>Shared by both <c>SavePicture</c> overloads -- a follow-up code-review finding on
-    /// the fix that first introduced these checks: each overload originally repeated the identical
-    /// two lines directly (needed so the <see cref="Stream"/> overload fails before ever draining
-    /// its argument, not after delegating), which worked but meant the same guard existed
-    /// twice with no compiler-enforced reason to keep the two copies in sync. Extracted here so
-    /// there is exactly one place that defines what "invalid to save a picture" means.</summary>
-    private void ThrowIfInvalidForSavePicture(string name)
-    {
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-        ArgumentNullException.ThrowIfNull(name);
-    }
-
-    /// <summary>Lazily creates the real "Saved Pictures" <see cref="PictureAlbum"/> tree node (and
-    /// registers it as a real child of <see cref="RootPictureAlbum"/>) the first time a picture is
-    /// actually saved. Idempotent -- a no-op returning the existing album on later calls. Simpler
-    /// than the real C++ engine's own <c>EnsureSavedPicturesAlbum</c>: that version also has to
-    /// handle <c>rootPictureAlbum_</c> itself being null (when the initial scan never found a
-    /// pictures root to build a tree from) -- this project's own <see cref="RootPictureAlbum"/> is
-    /// never null in the first place (constructed unconditionally, see this type's own doc
-    /// comment), so that whole fallback branch is genuinely dead code here, not omitted by
-    /// oversight.</summary>
-    private PictureAlbum EnsureSavedPicturesAlbum()
-    {
-        if (_savedPicturesAlbum is not null)
-        {
-            return _savedPicturesAlbum;
-        }
-
-        string path = Path.Combine(_pictureRoot, "Saved Pictures");
-        var album = new PictureAlbum("Saved Pictures", RootPictureAlbum, path);
-        album.SetChildAlbumsAndPictures();
-        RootPictureAlbum.Albums.Add(album);
-
-        _savedPicturesAlbum = album;
-        return album;
-    }
-
+    /// <summary>Canonical disposal (a flag native keeps) followed by the handle release. Neither
+    /// result is checked, for the reason <c>Game.Dispose</c> documents: disposal must not
+    /// throw.</summary>
     public void Dispose()
     {
-        if (IsDisposed)
+        if (_handle.IsClosed || _handle.IsInvalid)
         {
             return;
         }
 
-        Songs.Dispose();
-        Albums.Dispose();
-        Artists.Dispose();
-        Genres.Dispose();
-        Playlists.Dispose();
-        Pictures.Dispose();
-        SavedPictures.Dispose();
-        RootPictureAlbum.Dispose();
-        IsDisposed = true;
+        Native.cna_media_library_dispose(NativeHandle);
+        GC.KeepAlive(this);
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
     }
+
+    /// <summary>
+    /// Reads one of the library's collections.
+    ///
+    /// Deliberately builds a fresh wrapper on every property read rather than caching one, and the
+    /// caller owns disposing it. Each read takes a new native collection handle, and a cached
+    /// wrapper would have to outlive reads that no longer want it while still holding element
+    /// handles from earlier ones. Callers that enumerate in a loop should hold the collection in a
+    /// local, which is what XNA code does anyway.
+    /// </summary>
+    private TCollection Read<TCollection>(CollectionFunc getter, Func<CnaHandle, TCollection> wrap, string context)
+    {
+        CnaResult result = getter(NativeHandle, out CnaHandle collection);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, context);
+        return wrap(collection);
+    }
+
+    private delegate CnaResult CollectionFunc(CnaHandle library, out CnaHandle outCollection);
 }

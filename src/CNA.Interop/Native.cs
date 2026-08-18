@@ -2110,6 +2110,77 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_song_get_track_number(CnaHandle song, out int outTrackNumber);
 
+    // The rest of media.h's song surface, added with the media-library rebinding: a song reached
+    // through a library collection has no client-side name or path for the managed wrapper to have
+    // kept, so both have to come from native.
+
+    /// <summary>Media-source enumeration (<c>media.h:128-178</c>). Index-addressed rather than
+    /// handle-based, and the header is explicit that the list is "a point-in-time snapshot -- an
+    /// index is valid only until the device set changes", which is why nothing here caches
+    /// one.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_source_get_available_count(CnaHandle game, out uint outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_source_get_type_at(CnaHandle game, uint index, out uint outType);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_source_get_name_size_at(CnaHandle game, uint index, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_media_source_copy_name_at(
+        CnaHandle game, uint index, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_name_size(CnaHandle song, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_song_copy_name(
+        CnaHandle song, byte* destination, ulong capacity, out ulong outBytes);
+
+    /// <summary>The file path or handle a song plays from -- "the string song equality and hashing
+    /// are computed from, not the display name" (<c>media.h:319</c>).</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_handle_text_size_ext(CnaHandle song, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_song_copy_handle_text_ext(
+        CnaHandle song, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_is_disposed(CnaHandle song, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_dispose(CnaHandle song);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_equals(CnaHandle left, CnaHandle right, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_hash_code(CnaHandle song, out int outHash);
+
+    /// <summary>Builds a collection over existing songs. The collection keeps every song it was
+    /// given alive, so a caller may release its own handles immediately afterwards
+    /// (<c>media.h:525-528</c>).</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_song_collection_create(
+        CnaHandle game, CnaHandle* songs, ulong count, out CnaHandle outCollection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_collection_get_at(CnaHandle collection, int index, out CnaHandle outSong);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_collection_get_count(CnaHandle collection, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_collection_get_is_disposed(CnaHandle collection, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_collection_dispose(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_collection_destroy(CnaHandle collection);
+
     // -- MediaPlayer (real ABI, media_player.h -- step 10) -------------------------------------
     //
     // Renamed throughout (cna_mediaplayer_* -> cna_media_player_*). The single biggest shape
@@ -2155,4 +2226,432 @@ internal static partial class Native
     /// arguments.</summary>
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_media_player_get_visualization_data(CnaHandle game, ref CnaVisualizationData data);
+
+    // ---- Media library (media_library.h) ----
+    //
+    // Generated straight from the header's own declarations rather than hand-typed, then read back
+    // against it -- 148 functions is more than hand-transcription stays honest across.
+    //
+    // The 26 `*_get_type_name_size`/`*_copy_type_name` routes are deliberately not bound. They
+    // report a .NET type's fully-qualified name for hosts that have no reflection; C# has
+    // `GetType().FullName` natively, so binding them would add a native round trip that answers a
+    // question the runtime already answers, and none of it is XNA 4.0 API surface.
+    //
+    // Handle ownership, from the header: the library handle is OWNED, and every album/artist/genre/
+    // playlist/picture/picture-album/collection handle reached through it is a borrowed *view of a
+    // library-owned object* whose HANDLE the caller still has to release with its own `_destroy`
+    // ("Releases an album handle. The album itself belongs to its media library and is untouched").
+    // Holding any of them keeps the library alive, so releasing the library first is safe.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_create(CnaHandle game, out CnaHandle outLibrary);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_create_from_source(
+        CnaHandle game, uint sourceIndex, out CnaHandle outLibrary);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_is_disposed(
+        CnaHandle library, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_dispose(CnaHandle library);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_destroy(CnaHandle library);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_media_source_type(
+        CnaHandle library, out uint outType);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_media_source_name_size(
+        CnaHandle library, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_media_library_copy_media_source_name(
+        CnaHandle library, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_songs(CnaHandle library, out CnaHandle outSongs);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_albums(CnaHandle library, out CnaHandle outAlbums);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_artists(
+        CnaHandle library, out CnaHandle outArtists);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_genres(CnaHandle library, out CnaHandle outGenres);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_playlists(
+        CnaHandle library, out CnaHandle outPlaylists);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_name_size(CnaHandle album, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_album_copy_name(
+        CnaHandle album, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_is_disposed(CnaHandle album, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_dispose(CnaHandle album);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_destroy(CnaHandle album);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_hash_code(CnaHandle album, out int outHash);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_songs(CnaHandle album, out CnaHandle outSongs);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_collection_get_count(CnaHandle collection, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_collection_get_at(
+        CnaHandle collection, int index, out CnaHandle outAlbum);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_collection_get_is_disposed(
+        CnaHandle collection, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_collection_dispose(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_get_name_size(CnaHandle artist, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_artist_copy_name(
+        CnaHandle artist, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_get_is_disposed(CnaHandle artist, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_dispose(CnaHandle artist);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_destroy(CnaHandle artist);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_get_hash_code(CnaHandle artist, out int outHash);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_get_songs(CnaHandle artist, out CnaHandle outSongs);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_collection_get_count(CnaHandle collection, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_collection_get_at(
+        CnaHandle collection, int index, out CnaHandle outArtist);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_collection_get_is_disposed(
+        CnaHandle collection, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_collection_dispose(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_get_name_size(CnaHandle genre, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_genre_copy_name(
+        CnaHandle genre, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_get_is_disposed(CnaHandle genre, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_dispose(CnaHandle genre);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_destroy(CnaHandle genre);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_get_hash_code(CnaHandle genre, out int outHash);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_get_songs(CnaHandle genre, out CnaHandle outSongs);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_collection_get_count(CnaHandle collection, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_collection_get_at(
+        CnaHandle collection, int index, out CnaHandle outGenre);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_collection_get_is_disposed(
+        CnaHandle collection, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_collection_dispose(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_get_name_size(CnaHandle playlist, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_playlist_copy_name(
+        CnaHandle playlist, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_get_is_disposed(CnaHandle playlist, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_dispose(CnaHandle playlist);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_destroy(CnaHandle playlist);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_get_hash_code(CnaHandle playlist, out int outHash);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_get_songs(CnaHandle playlist, out CnaHandle outSongs);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_collection_get_count(CnaHandle collection, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_collection_get_at(
+        CnaHandle collection, int index, out CnaHandle outPlaylist);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_collection_get_is_disposed(
+        CnaHandle collection, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_collection_dispose(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_equals(CnaHandle left, CnaHandle right, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_equals(CnaHandle left, CnaHandle right, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_equals(CnaHandle left, CnaHandle right, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_equals(CnaHandle left, CnaHandle right, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_artist(
+        CnaHandle album, out CnaHandle outArtist, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_genre(
+        CnaHandle album, out CnaHandle outGenre, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_duration(CnaHandle album, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_has_art(CnaHandle album, out byte outHasArt);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_art_size(CnaHandle album, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_album_copy_art(
+        CnaHandle album, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_album_get_thumbnail_size(CnaHandle album, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_album_copy_thumbnail(
+        CnaHandle album, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_artist_get_albums(CnaHandle artist, out CnaHandle outAlbums);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_genre_get_albums(CnaHandle genre, out CnaHandle outAlbums);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_playlist_get_duration(CnaHandle playlist, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_album(
+        CnaHandle song, out CnaHandle outAlbum, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_artist(
+        CnaHandle song, out CnaHandle outArtist, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_song_get_genre(
+        CnaHandle song, out CnaHandle outGenre, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_name_size(CnaHandle picture, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_picture_copy_name(
+        CnaHandle picture, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_token_size_ext(CnaHandle picture, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_picture_copy_token_ext(
+        CnaHandle picture, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_album(
+        CnaHandle picture, out CnaHandle outAlbum, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_date_unix_ticks(CnaHandle picture, out long outUnixTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_width(CnaHandle picture, out int outWidth);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_height(CnaHandle picture, out int outHeight);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_image_size(CnaHandle picture, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_picture_copy_image(
+        CnaHandle picture, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_thumbnail_size(CnaHandle picture, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_picture_copy_thumbnail(
+        CnaHandle picture, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_is_disposed(CnaHandle picture, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_dispose(CnaHandle picture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_destroy(CnaHandle picture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_equals(CnaHandle left, CnaHandle right, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_get_hash_code(CnaHandle picture, out int outHash);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_get_name_size(CnaHandle album, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_picture_album_copy_name(
+        CnaHandle album, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_get_parent(
+        CnaHandle album, out CnaHandle outParent, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_get_albums(CnaHandle album, out CnaHandle outAlbums);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_get_pictures(
+        CnaHandle album, out CnaHandle outPictures);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_get_is_disposed(CnaHandle album, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_dispose(CnaHandle album);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_destroy(CnaHandle album);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_equals(
+        CnaHandle left, CnaHandle right, out byte outEqual);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_get_hash_code(CnaHandle album, out int outHash);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_pictures(
+        CnaHandle library, out CnaHandle outPictures);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_saved_pictures(
+        CnaHandle library, out CnaHandle outPictures);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_root_picture_album(
+        CnaHandle library, out CnaHandle outAlbum, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_get_picture_from_token(
+        CnaHandle library, CnaStringView token, out CnaHandle outPicture, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_media_library_save_picture(
+        CnaHandle library, CnaStringView name, byte* imageData, ulong imageByteCount, out CnaHandle outPicture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_library_save_picture_from_stream(
+        CnaHandle library, CnaStringView name, CnaHandle source, out CnaHandle outPicture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_collection_get_count(CnaHandle collection, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_collection_get_at(
+        CnaHandle collection, int index, out CnaHandle outPicture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_collection_get_is_disposed(
+        CnaHandle collection, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_collection_dispose(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_collection_destroy(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_collection_get_count(
+        CnaHandle collection, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_collection_get_at(
+        CnaHandle collection, int index, out CnaHandle outAlbum);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_collection_get_is_disposed(
+        CnaHandle collection, out byte outDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_collection_dispose(CnaHandle collection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_picture_album_collection_destroy(CnaHandle collection);
 }

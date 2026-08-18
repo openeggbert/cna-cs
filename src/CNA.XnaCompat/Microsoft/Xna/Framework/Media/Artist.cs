@@ -1,23 +1,27 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>Artist</c>. Extends <c>CNA.Media.Artist</c> directly.
-/// <c>Equals</c>/<c>GetHashCode</c>/<c>ToString</c>/<c>==</c>/<c>!=</c> are inherited unchanged --
-/// all name-based, no compat-type crossing needed, same "only override what actually needs a
-/// different type" precedent <c>Song</c> already established. <see cref="Albums"/>/<see cref="Songs"/>
-/// need <c>new</c> overrides; the constructor takes compat-typed collections directly (not
-/// <c>CNA.Media</c>-namespaced ones) so those overrides genuinely reflect what was passed rather
-/// than silently discarding it -- a real code-review finding, fixed here rather than left as a
-/// documented gap.</summary>
-public class Artist : CNA.Media.Artist
+/// <summary>XNA 4.0-compatible <c>Artist</c>. Same shape as <see cref="Album"/>.</summary>
+public class Artist : MediaLibraryObject<CNA.Media.Artist>, IEquatable<Artist>
 {
-    internal Artist(string name, AlbumCollection albums, SongCollection songs)
-        : base(name, MediaCollectionConversion.ToBase(albums), MediaCollectionConversion.ToBase(songs))
+    internal Artist(CNA.Media.Artist inner)
+        : base(inner)
     {
-        Albums = albums;
-        Songs = songs;
     }
 
-    public new AlbumCollection Albums { get; }
+    public string Name => Inner.Name;
 
-    public new SongCollection Songs { get; }
+    public AlbumCollection Albums => new(Inner.Albums);
+
+    public SongCollection Songs => new(Inner.Songs);
+
+    public bool Equals(Artist? other) => other is not null && Inner.Equals(other.Inner);
+
+    public override bool Equals(object? obj) => Equals(obj as Artist);
+
+    public override int GetHashCode() => base.GetHashCode();
+
+    public static bool operator ==(Artist? left, Artist? right) =>
+        left is null ? right is null : left.Equals(right);
+
+    public static bool operator !=(Artist? left, Artist? right) => !(left == right);
 }

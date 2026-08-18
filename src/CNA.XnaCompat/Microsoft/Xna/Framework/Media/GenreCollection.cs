@@ -1,11 +1,11 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>GenreCollection</c>. Same reasoning as
-/// <see cref="AlbumCollection"/>'s own doc comment.</summary>
-public sealed class GenreCollection : ReadOnlyMediaCollection<Genre>
+/// <summary>XNA 4.0-compatible <c>GenreCollection</c>: a compat-typed view over <c>CNA.Media.GenreCollection</c>. See
+/// <see cref="ReadOnlyMediaCollection{TCompat,TBase}"/> for how the re-typing works.</summary>
+public sealed class GenreCollection : ReadOnlyMediaCollection<Genre, CNA.Media.Genre>
 {
-    internal GenreCollection(IReadOnlyList<Genre> genres)
-        : base(genres)
+    internal GenreCollection(CNA.Media.GenreCollection inner)
+        : base(inner, item => new Genre(item))
     {
     }
 }

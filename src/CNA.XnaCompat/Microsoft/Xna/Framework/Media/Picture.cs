@@ -1,53 +1,39 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>Picture</c>. Independent reimplementation, not a subclass of
-/// <c>CNA.Media.Picture</c> -- see <see cref="MediaLibrary"/>'s own doc comment for why: this
-/// namespace's <see cref="MediaLibrary"/> maintains its own independently-tracked picture state,
-/// so there is no base-constructed instance to safely downcast in the first place. Internal
-/// constructor, reachable only from this namespace's own <see cref="MediaLibrary"/>, matching real
-/// XNA's own <c>MediaLibrary</c>-only construction.</summary>
-public sealed class Picture : IDisposable, IEquatable<Picture>
+/// <summary>XNA 4.0-compatible <c>Picture</c>. Same shape as <see cref="Album"/>.
+/// <see cref="GetThumbnail"/> returns the same image as <see cref="GetImage"/> -- canonical
+/// behaviour, see <c>CNA.Media.Picture</c>.</summary>
+public class Picture : MediaLibraryObject<CNA.Media.Picture>, IEquatable<Picture>
 {
-    internal Picture(string name, PictureAlbum? album, int width, int height, DateTime date, string path)
+    internal Picture(CNA.Media.Picture inner)
+        : base(inner)
     {
-        Name = name;
-        Album = album;
-        Width = width;
-        Height = height;
-        Date = date;
-        Path = path;
     }
 
-    public PictureAlbum? Album { get; }
+    public string Name => Inner.Name;
 
-    public DateTime Date { get; }
+    public PictureAlbum? Album => Inner.Album is { } album ? new PictureAlbum(album) : null;
 
-    public int Height { get; }
+    public DateTime Date => Inner.Date;
 
-    public bool IsDisposed { get; private set; }
+    public int Width => Inner.Width;
 
-    public string Name { get; }
+    public int Height => Inner.Height;
 
-    public int Width { get; }
+    public Stream GetImage() => Inner.GetImage();
 
-    /// <summary>Same rationale as <c>CNA.Media.Picture.Token</c>'s own doc comment.</summary>
-    public string Token => Path;
+    public Stream GetThumbnail() => Inner.GetThumbnail();
 
-    internal string Path { get; }
+    /// <summary>Not part of real XNA's <c>Picture</c>, which identifies one by object identity.
+    /// Exposed because <see cref="MediaLibrary.GetPictureFromToken"/> is real XNA API and needs
+    /// something to accept -- see <c>CNA.Media.Picture.Token</c>.</summary>
+    public string Token => Inner.Token;
 
-    public Stream GetImage() => File.OpenRead(Path);
-
-    public Stream GetThumbnail() => GetImage();
-
-    public void Dispose() => IsDisposed = true;
-
-    public bool Equals(Picture? other) => other is not null && Path == other.Path;
+    public bool Equals(Picture? other) => other is not null && Inner.Equals(other.Inner);
 
     public override bool Equals(object? obj) => Equals(obj as Picture);
 
-    public override int GetHashCode() => Path.GetHashCode();
-
-    public override string ToString() => Name;
+    public override int GetHashCode() => base.GetHashCode();
 
     public static bool operator ==(Picture? left, Picture? right) =>
         left is null ? right is null : left.Equals(right);

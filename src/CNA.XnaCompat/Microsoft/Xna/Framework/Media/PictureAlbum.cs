@@ -1,46 +1,27 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>PictureAlbum</c>. Independent reimplementation, not a subclass
-/// of <c>CNA.Media.PictureAlbum</c> -- see <see cref="MediaLibrary"/>'s own doc comment for why.
-/// Internal constructor/<see cref="SetChildAlbumsAndPictures"/>, reachable only from this
-/// namespace's own <see cref="MediaLibrary"/>, matching real XNA's own <c>MediaLibrary</c>-only
-/// construction and the base type's own two-phase construction shape.</summary>
-public sealed class PictureAlbum : IDisposable, IEquatable<PictureAlbum>
+/// <summary>XNA 4.0-compatible <c>PictureAlbum</c>. Same shape as <see cref="Album"/>;
+/// <see cref="Parent"/> is <see langword="null"/> at the root of the tree.</summary>
+public class PictureAlbum : MediaLibraryObject<CNA.Media.PictureAlbum>, IEquatable<PictureAlbum>
 {
-    internal PictureAlbum(string name, PictureAlbum? parent, string path)
+    internal PictureAlbum(CNA.Media.PictureAlbum inner)
+        : base(inner)
     {
-        Name = name;
-        Parent = parent;
-        Path = path;
     }
 
-    internal void SetChildAlbumsAndPictures()
-    {
-        Albums = new PictureAlbumCollection([]);
-        Pictures = new PictureCollection([]);
-    }
+    public string Name => Inner.Name;
 
-    public PictureAlbumCollection Albums { get; private set; } = null!;
+    public PictureAlbum? Parent => Inner.Parent is { } parent ? new PictureAlbum(parent) : null;
 
-    public bool IsDisposed { get; private set; }
+    public PictureAlbumCollection Albums => new(Inner.Albums);
 
-    public string Name { get; }
+    public PictureCollection Pictures => new(Inner.Pictures);
 
-    public PictureAlbum? Parent { get; }
-
-    public PictureCollection Pictures { get; private set; } = null!;
-
-    internal string Path { get; }
-
-    public void Dispose() => IsDisposed = true;
-
-    public bool Equals(PictureAlbum? other) => other is not null && Path == other.Path;
+    public bool Equals(PictureAlbum? other) => other is not null && Inner.Equals(other.Inner);
 
     public override bool Equals(object? obj) => Equals(obj as PictureAlbum);
 
-    public override int GetHashCode() => Path.GetHashCode();
-
-    public override string ToString() => Name;
+    public override int GetHashCode() => base.GetHashCode();
 
     public static bool operator ==(PictureAlbum? left, PictureAlbum? right) =>
         left is null ? right is null : left.Equals(right);

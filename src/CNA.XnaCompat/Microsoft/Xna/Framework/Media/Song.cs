@@ -1,64 +1,89 @@
 namespace Microsoft.Xna.Framework.Media;
 
 /// <summary>
-/// XNA 4.0-compatible <c>Song</c>. Extends <c>CNA.Media.Song</c> directly rather than wrapping it
-/// -- unlike most native-backed compat types, <c>Song</c> has no native handle to worry about
-/// double-wrapping (construction is pure managed logic, see <c>CNA.Media.Song</c>'s own doc
-/// comment), so there's no reason not to inherit unchanged. Sealed here, matching real XNA's own
-/// <c>sealed class Song</c> exactly -- <c>CNA.Media.Song</c> itself is deliberately left unsealed
-/// so this class can extend it.
+/// XNA 4.0-compatible <c>Song</c>: a compat-typed view over <c>CNA.Media.Song</c>.
 ///
-/// <see cref="Album"/>/<see cref="Artist"/>/<see cref="Genre"/> need <c>new</c> overrides (a real
-/// gap a code review caught -- every other new compat type added alongside these got one, this
-/// file was simply missed). The downcast getters are safe in *practice* today (nothing in this
-/// project ever sets these to anything but <see langword="null"/> -- no <c>MediaLibrary</c> scan
-/// exists, see that type's own doc comment), but not *provably* safe by construction the way
-/// <c>MediaLibrary.MediaSource</c>'s own downcast is: <see cref="CNA.Media.Song.Album"/>/etc. have
-/// an <c>internal set</c>, so a hypothetical future caller within this project's own
-/// <c>InternalsVisibleTo</c> boundary could set a compat <see cref="Song"/>'s underlying field to
-/// a base-typed instance directly. Flagged here so a future real <c>MediaLibrary</c> scan
-/// implementation knows to always construct compat-typed <see cref="Album"/>/<see cref="Artist"/>/
-/// <see cref="Genre"/> when populating a compat <see cref="Song"/>'s fields.
+/// Wraps rather than extends, since the media-library rebinding. It used to extend, which worked
+/// only while <c>Album</c>/<c>Artist</c>/<c>Genre</c> were always <see langword="null"/> and could
+/// be downcast vacuously. They are real native reads now, and a song reached through
+/// <see cref="MediaLibrary.Songs"/> is a <c>CNA.Media.Song</c> that no subclass can retroactively
+/// become -- so the whole media family moved to composition together, and <see cref="MediaPlayer"/>
+/// unwraps at its own call sites instead of relying on an upcast.
+///
+/// Sealed, matching real XNA's own <c>sealed class Song</c>.
 /// </summary>
-public sealed class Song : CNA.Media.Song
+public sealed class Song : IDisposable, IEquatable<Song>
 {
     public Song(string fileName, string name = "")
-        : base(fileName, name)
+        : this(new CNA.Media.Song(fileName, name))
     {
     }
 
     public Song(string fileName, string assetName, int durationMS)
-        : base(fileName, assetName, durationMS)
+        : this(new CNA.Media.Song(fileName, assetName, durationMS))
     {
     }
 
-    public new Album? Album
+    internal Song(CNA.Media.Song inner)
     {
-        get => (Album?)base.Album;
-        internal set => base.Album = value;
+        ArgumentNullException.ThrowIfNull(inner);
+        Inner = inner;
     }
 
-    public new Artist? Artist
+    internal CNA.Media.Song Inner { get; }
+
+    public string Name => Inner.Name;
+
+    public Album? Album => Inner.Album is { } album ? new Album(album) : null;
+
+    public Artist? Artist => Inner.Artist is { } artist ? new Artist(artist) : null;
+
+    public Genre? Genre => Inner.Genre is { } genre ? new Genre(genre) : null;
+
+    public TimeSpan Duration
     {
-        get => (Artist?)base.Artist;
-        internal set => base.Artist = value;
+        get => Inner.Duration;
+        set => Inner.Duration = value;
     }
 
-    public new Genre? Genre
+    public bool IsProtected => Inner.IsProtected;
+
+    public bool IsRated => Inner.IsRated;
+
+    public int PlayCount
     {
-        get => (Genre?)base.Genre;
-        internal set => base.Genre = value;
+        get => Inner.PlayCount;
+        set => Inner.PlayCount = value;
     }
 
-    /// <summary>
-    /// Resolves <paramref name="uri"/> via <c>CNA.Media.Song.ResolvePathFromUri</c> (shared with
-    /// <c>CNA.Media.Song.FromUri</c> so the two can't drift apart), but constructs this namespace's
-    /// own <see cref="Song"/> directly instead of delegating to the base <c>FromUri</c> and
-    /// re-wrapping -- delegating to the base overload would construct (and file-existence-check) a
-    /// throwaway <c>CNA.Media.Song</c> only to immediately discard it for this one, checking the
-    /// same file twice for no benefit.
-    /// </summary>
-    public static new Song FromUri(string name, string uri)
+    public int Rating => Inner.Rating;
+
+    public int TrackNumber => Inner.TrackNumber;
+
+    public bool IsDisposed => Inner.IsDisposed;
+
+    public void Dispose()
+    {
+        Inner.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public bool Equals(Song? other) => other is not null && Inner.Equals(other.Inner);
+
+    public override bool Equals(object? obj) => Equals(obj as Song);
+
+    public override int GetHashCode() => Inner.GetHashCode();
+
+    public override string ToString() => Name;
+
+    public static bool operator ==(Song? left, Song? right) =>
+        left is null ? right is null : left.Equals(right);
+
+    public static bool operator !=(Song? left, Song? right) => !(left == right);
+
+    /// <summary>Resolves a file URI (or plain path) via <c>CNA.Media.Song.ResolvePathFromUri</c>,
+    /// shared with <c>CNA.Media.Song.FromUri</c> so the two cannot drift apart.</summary>
+    public static Song FromUri(string name, string uri)
     {
         ArgumentNullException.ThrowIfNull(name);
 

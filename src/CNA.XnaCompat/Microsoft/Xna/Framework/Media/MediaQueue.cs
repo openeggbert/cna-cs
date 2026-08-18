@@ -1,10 +1,46 @@
+using System.Collections;
+
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>MediaQueue</c>. A pure subclass -- <c>Count</c>/
-/// <c>ActiveSongIndex</c>/enumeration are inherited unchanged from
-/// <see cref="CNA.Media.MediaQueue"/>; only <see cref="ActiveSong"/> needs re-typing, since
-/// <see cref="Song"/> is this namespace's own type.</summary>
-public class MediaQueue : CNA.Media.MediaQueue
+/// <summary>
+/// XNA 4.0-compatible <c>MediaQueue</c>: a compat-typed view over <c>CNA.Media.MediaQueue</c>.
+///
+/// A wrapper now, rather than the subclass it used to be -- compat <see cref="Song"/> moved to
+/// composition with the media-library rebinding, so its elements have to be re-typed rather than
+/// downcast. That also closes the gap the compat <see cref="MediaPlayer"/> used to document as a
+/// structural blocker: <c>CNA.Media.MediaPlayer.LoadSong</c> always builds a base-typed defensive
+/// copy, so a downcast queue could only ever have failed. Wrapping does not care what the base
+/// queue holds.
+/// </summary>
+public class MediaQueue : IEnumerable<Song>
 {
-    public new Song? ActiveSong => (Song?)base.ActiveSong;
+    private readonly CNA.Media.MediaQueue _inner;
+
+    internal MediaQueue(CNA.Media.MediaQueue inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
+    }
+
+    public int Count => _inner.Count;
+
+    public int ActiveSongIndex
+    {
+        get => _inner.ActiveSongIndex;
+        set => _inner.ActiveSongIndex = value;
+    }
+
+    public Song? ActiveSong => _inner.ActiveSong is { } song ? new Song(song) : null;
+
+    public Song this[int index] => new(_inner[index]);
+
+    public IEnumerator<Song> GetEnumerator()
+    {
+        foreach (CNA.Media.Song song in _inner)
+        {
+            yield return new Song(song);
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

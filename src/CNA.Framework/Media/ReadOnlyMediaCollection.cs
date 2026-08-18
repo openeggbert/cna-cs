@@ -1,60 +1,131 @@
 using System.Collections;
+using CNA.Interop;
 
 namespace CNA.Media;
 
 /// <summary>
 /// Shared indexer/<c>Count</c>/<c>Dispose</c>/enumerator implementation for this namespace's
-/// several simple read-only collections (<see cref="SongCollection"/>/<see cref="AlbumCollection"/>/
-/// <see cref="ArtistCollection"/>/<see cref="GenreCollection"/>/<see cref="PlaylistCollection"/>).
-/// Extracted after a code review flagged the same ~30 lines duplicated five times with no shared
-/// base -- exactly the kind of small, mechanical, no-real-variation duplication this project's own
-/// <c>BufferRangeValidation</c> precedent already established is worth extracting once it recurs
-/// this many times. Necessarily <c>public</c> (a <c>public sealed class SongCollection</c> cannot
-/// derive from an <c>internal</c> base -- C# CS0060), in the same spirit as the BCL's own
+/// read-only media collections (<see cref="SongCollection"/>/<see cref="AlbumCollection"/>/
+/// <see cref="ArtistCollection"/>/<see cref="GenreCollection"/>/<see cref="PlaylistCollection"/>/
+/// <see cref="PictureCollection"/>/<see cref="PictureAlbumCollection"/>).
+///
+/// Native-backed since the media-library rebinding: it holds the collection's own
+/// <c>CNA_*CollectionHandle</c> and asks native for the count and for each element, instead of the
+/// managed <c>List&lt;T&gt;</c> it used to wrap. Every one of these collections has the same three
+/// ABI routes -- <c>_get_count</c>, <c>_get_at</c>, <c>_destroy</c> -- so they are passed in rather
+/// than reimplemented seven times.
+///
+/// <b>Element wrappers are cached per index.</b> Two reasons, both load-bearing. Each
+/// <c>_get_at</c> hands back a fresh handle the caller must release, so re-reading the same index
+/// in a loop would leak one handle per read until finalization; and XNA callers compare collection
+/// elements by reference (<c>if (song == library.Songs[0])</c>), which a fresh wrapper per read
+/// would break. The cache is what makes both work, and disposing the collection is what releases
+/// the element handles it accumulated.
+///
+/// Necessarily <c>public</c> (a <c>public sealed class SongCollection</c> cannot derive from an
+/// <c>internal</c> base -- C# CS0060), in the same spirit as the BCL's own
 /// <c>System.Collections.ObjectModel.ReadOnlyCollection&lt;T&gt;</c>: the named collection types
 /// above are the real public API surface real XNA specifies, and this is their shared
-/// implementation detail, not something a caller would typically reference directly, but there's
-/// no harm if one does.
+/// implementation detail.
 /// </summary>
 public class ReadOnlyMediaCollection<T> : IDisposable, IEnumerable<T>
+    where T : class
 {
-    private readonly List<T> _items;
+    private readonly NativeResourceHandle _handle;
+    private readonly CountFunc _getCount;
+    private readonly ElementFunc _getAt;
+    private readonly Func<CnaHandle, T> _wrap;
+    private readonly Dictionary<int, T> _cache = [];
 
-    public ReadOnlyMediaCollection(IReadOnlyList<T> items)
+    private protected ReadOnlyMediaCollection(
+        CnaHandle handle,
+        CountFunc getCount,
+        ElementFunc getAt,
+        Action<CnaHandle> destroy,
+        Func<CnaHandle, T> wrap)
     {
-        ArgumentNullException.ThrowIfNull(items);
-
-        _items = new List<T>(items);
+        _getCount = getCount;
+        _getAt = getAt;
+        _wrap = wrap;
+        _handle = new NativeResourceHandle(handle.AsNint, h => destroy(new CnaHandle(h)));
     }
 
-    public T this[int index] => _items[index];
+    private protected delegate CnaResult CountFunc(CnaHandle collection, out int outCount);
 
-    public int Count => _items.Count;
+    private protected delegate CnaResult ElementFunc(CnaHandle collection, int index, out CnaHandle outElement);
+
+    /// <summary>See <see cref="MediaLibrary"/> for why every handle read is paired with
+    /// <see cref="GC.KeepAlive(object)"/>.</summary>
+    private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
+
+    public int Count
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
+            CnaResult result = _getCount(NativeHandle, out int count);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(Count));
+            return count;
+        }
+    }
 
     public bool IsDisposed { get; private set; }
 
-    public void Dispose()
+    public T this[int index]
     {
-        _items.Clear();
-        IsDisposed = true;
+        get
+        {
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
+            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Count);
+
+            if (_cache.TryGetValue(index, out T? cached))
+            {
+                return cached;
+            }
+
+            CnaResult result = _getAt(NativeHandle, index, out CnaHandle element);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, "MediaCollection indexer");
+
+            T wrapped = _wrap(element);
+            _cache[index] = wrapped;
+            return wrapped;
+        }
     }
 
-    /// <summary>
-    /// Appends an item after construction -- <c>internal</c>, used only by <see cref="MediaLibrary"/>'s
-    /// own <c>SavePicture</c> (the one collection-growth case this feature actually needs: unlike
-    /// <see cref="AlbumCollection"/>/<see cref="ArtistCollection"/>/<see cref="GenreCollection"/>/
-    /// <see cref="PlaylistCollection"/>, which stay permanently empty because nothing scans the
-    /// music library, <see cref="PictureCollection"/>/<see cref="PictureAlbumCollection"/> grow for
-    /// real as pictures are saved -- matches the real C++ engine's own pattern of granting
-    /// <c>MediaLibrary</c> friend access to each collection's private backing store for exactly
-    /// this runtime append, which its own read-only public API deliberately doesn't expose more
-    /// broadly.
-    /// </summary>
-    internal void Add(T item) => _items.Add(item);
+    /// <summary>Releases every element handle this collection handed out, then its own. Element
+    /// wrappers are released here rather than left to their finalizers because they are this
+    /// collection's to account for -- it is the only thing that knows the full set, and each one
+    /// holds the library alive until released.</summary>
+    public void Dispose()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
 
-    public List<T>.Enumerator GetEnumerator() => _items.GetEnumerator();
+        IsDisposed = true;
 
-    IEnumerator<T> IEnumerable<T>.GetEnumerator() => _items.GetEnumerator();
+        foreach (T element in _cache.Values)
+        {
+            (element as IDisposable)?.Dispose();
+        }
 
-    IEnumerator IEnumerable.GetEnumerator() => _items.GetEnumerator();
+        _cache.Clear();
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public IEnumerator<T> GetEnumerator()
+    {
+        int count = Count;
+        for (int i = 0; i < count; i++)
+        {
+            yield return this[i];
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

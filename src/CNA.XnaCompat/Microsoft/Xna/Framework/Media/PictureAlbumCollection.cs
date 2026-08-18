@@ -1,12 +1,11 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>PictureAlbumCollection</c>. Independent reimplementation, not a
-/// subclass of <c>CNA.Media.PictureAlbumCollection</c> -- same reasoning as <see cref="SongCollection"/>'s
-/// own doc comment.</summary>
-public sealed class PictureAlbumCollection : ReadOnlyMediaCollection<PictureAlbum>
+/// <summary>XNA 4.0-compatible <c>PictureAlbumCollection</c>: a compat-typed view over <c>CNA.Media.PictureAlbumCollection</c>. See
+/// <see cref="ReadOnlyMediaCollection{TCompat,TBase}"/> for how the re-typing works.</summary>
+public sealed class PictureAlbumCollection : ReadOnlyMediaCollection<PictureAlbum, CNA.Media.PictureAlbum>
 {
-    internal PictureAlbumCollection(IReadOnlyList<PictureAlbum> albums)
-        : base(albums)
+    internal PictureAlbumCollection(CNA.Media.PictureAlbumCollection inner)
+        : base(inner, item => new PictureAlbum(item))
     {
     }
 }

@@ -1,66 +1,68 @@
+using CNA.Interop;
+
 namespace CNA.Media;
 
 /// <summary>
-/// A picture in a <see cref="MediaLibrary"/>. Real XNA's own constructor is
-/// <c>MediaLibrary</c>-only, matching the real C++ engine's own <c>private</c>, friended
-/// constructor exactly -- same reasoning as <c>Album</c>'s own doc comment.
+/// One picture in a <see cref="MediaLibrary"/>'s picture tree. Construction is <c>internal</c> --
+/// pictures come from a scan or from <see cref="MediaLibrary.SavePicture(string,byte[])"/>.
 ///
-/// <see cref="GetImage"/> is real, not a stub: unlike <see cref="MediaLibrary"/>'s music-library
-/// scanning (irreducibly bound to native tag-parsing/FFmpeg infrastructure), opening a plain file
-/// stream over an already-known image path needs nothing beyond the .NET BCL. <see cref="GetThumbnail"/>
-/// always falls back to <see cref="GetImage"/> -- this matches the real C++ engine's own actual
-/// fallback path (its <c>ThumbnailGenerator</c> falls back to returning the full-size image
-/// whenever real PNG-downscaling thumbnail generation fails), reproduced here as the only path
-/// taken rather than invented, since this project has no image-decoding library to generate a real
-/// downscaled thumbnail with.
+/// <see cref="GetThumbnail"/> returns the same image as <see cref="GetImage"/>: the C API states
+/// that CNA generates no separate thumbnail, and calls that canonical behaviour rather than a C
+/// limitation. <see cref="Width"/>/<see cref="Height"/> can be zero for an image the loader could
+/// not measure -- also canonical, and the reason a caller should not treat zero as an error.
 /// </summary>
-public class Picture : IDisposable, IEquatable<Picture>
+public class Picture : MediaLibraryObject, IEquatable<Picture>
 {
-    internal Picture(string name, PictureAlbum? album, int width, int height, DateTime date, string path)
+    internal Picture(CnaHandle handle)
+        : base(handle, Native.cna_picture_dispose, Native.cna_picture_get_is_disposed,
+               h => Native.cna_picture_destroy(h))
     {
-        Name = name;
-        Album = album;
-        Width = width;
-        Height = height;
-        Date = date;
-        Path = path;
     }
 
-    public PictureAlbum? Album { get; }
+    public unsafe string Name => ReadName(Native.cna_picture_get_name_size, Native.cna_picture_copy_name, nameof(Name));
 
-    public DateTime Date { get; }
+    /// <summary>The key <see cref="MediaLibrary.GetPictureFromToken"/> accepts. CNA uses the
+    /// picture's resolved file path, which is also its equality key.</summary>
+    public unsafe string Token => ReadName(
+        Native.cna_picture_get_token_size_ext, Native.cna_picture_copy_token_ext, nameof(Token));
 
-    public int Height { get; }
+    public PictureAlbum? Album => ReadOptional(Native.cna_picture_get_album, h => new PictureAlbum(h), nameof(Album));
 
-    public bool IsDisposed { get; private set; }
+    /// <summary>When the picture was taken. The ABI reports this as ticks from the Unix epoch --
+    /// a point in time, not a duration -- so it is converted here rather than handed over as a raw
+    /// <see cref="TimeSpan"/>. A file carrying no timestamp reports whatever the scan recorded,
+    /// which may be the epoch itself.</summary>
+    public DateTime Date =>
+        DateTime.UnixEpoch.AddTicks(ReadTicks(Native.cna_picture_get_date_unix_ticks, nameof(Date)));
 
-    public string Name { get; }
+    public int Width => ReadInt(Native.cna_picture_get_width, nameof(Width));
 
-    public int Width { get; }
+    public int Height => ReadInt(Native.cna_picture_get_height, nameof(Height));
 
-    /// <summary>This picture's resolved file path, usable as the token
-    /// <see cref="MediaLibrary.GetPictureFromToken"/> accepts. <c>CNAEXT</c>: real XNA's own
-    /// "opaque library token" has no real equivalent source on desktop (it historically came from
-    /// a native Zune/Xbox picture-picker UI); the resolved file path is used as a simple, real,
-    /// stable token instead, matching the real C++ engine's own <c>getTokenEXT()</c> exactly, so
-    /// the token API is actually usable end-to-end rather than merely present.</summary>
-    public string Token => Path;
+    public unsafe Stream GetImage() => OpenBlob(
+        Native.cna_picture_get_image_size, Native.cna_picture_copy_image, nameof(GetImage));
 
-    internal string Path { get; }
+    /// <summary>The same bytes as <see cref="GetImage"/> -- see this type's own doc comment for why
+    /// that is the canonical answer rather than a shortcut.</summary>
+    public unsafe Stream GetThumbnail() => OpenBlob(
+        Native.cna_picture_get_thumbnail_size, Native.cna_picture_copy_thumbnail, nameof(GetThumbnail));
 
-    public Stream GetImage() => File.OpenRead(Path);
+    private unsafe Stream OpenBlob(NativeBlobReader.SizeFunc size, NativeBlobReader.CopyFunc copy, string context)
+    {
+        byte[]? bytes = ReadBlob(size, copy, context);
 
-    public Stream GetThumbnail() => GetImage();
+        // An unreadable or zero-byte image is an empty stream, not an exception: unlike an album
+        // with no art (where XNA documents a throw), a picture always has an image by definition --
+        // "no bytes" here means the file could not be read back, and a caller copying it into a
+        // texture wants that as an empty read rather than as a failure mid-enumeration.
+        return new MemoryStream(bytes ?? [], writable: false);
+    }
 
-    public void Dispose() => IsDisposed = true;
-
-    /// <summary>By <see cref="Path"/> -- matches the real C++ engine's own <c>Picture::Equals</c>
-    /// exactly.</summary>
-    public bool Equals(Picture? other) => other is not null && Path == other.Path;
+    public bool Equals(Picture? other) => NativeEquals(Native.cna_picture_equals, other);
 
     public override bool Equals(object? obj) => Equals(obj as Picture);
 
-    public override int GetHashCode() => Path.GetHashCode();
+    public override int GetHashCode() => ReadInt(Native.cna_picture_get_hash_code, nameof(GetHashCode));
 
     public override string ToString() => Name;
 
