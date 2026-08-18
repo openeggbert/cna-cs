@@ -4,7 +4,7 @@ namespace CNA.Graphics;
 
 /// <summary>
 /// A texture that can be set as the active render target via
-/// <see cref="GraphicsDevice.SetRenderTarget"/>. Subclasses <see cref="Texture2D"/> (matching
+/// <see cref="GraphicsDevice.SetRenderTarget(Texture2D?)"/>. Subclasses <see cref="Texture2D"/> (matching
 /// real XNA's <c>RenderTarget2D : Texture2D</c>), but -- now that the real, shipped
 /// openeggbert/cna C API confirms <c>RenderTarget2D</c> is its own real resource type upstream
 /// (<c>render_target.h</c>: its own <c>create</c>/<c>get_info</c>/<c>destroy</c> routes, none of

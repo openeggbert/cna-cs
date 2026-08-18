@@ -141,3 +141,107 @@ internal struct CnaTextureInfo
         StructVersion = 1;
     }
 }
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_Texture3DCreateInfo</c>
+/// exactly (<c>texture_volume.h:19-38</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTexture3DCreateInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Width;
+    public uint Height;
+    public uint Depth;
+    public byte MipMap;
+    public CnaReservedBytes3 Reserved0;
+    public uint Format;
+    public uint Reserved1;
+
+    public unsafe CnaTexture3DCreateInfo()
+    {
+        StructSize = (uint)sizeof(CnaTexture3DCreateInfo);
+        StructVersion = 1;
+    }
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_Texture3DInfo</c> exactly
+/// (<c>texture_volume.h:41-58</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTexture3DInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Width;
+    public uint Height;
+    public uint Depth;
+    public uint LevelCount;
+    public uint Format;
+    public uint Reserved;
+
+    public unsafe CnaTexture3DInfo()
+    {
+        StructSize = (uint)sizeof(CnaTexture3DInfo);
+        StructVersion = 1;
+    }
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_TextureCubeCreateInfo</c>
+/// exactly (<c>texture_volume.h:89-104</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTextureCubeCreateInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Size;
+    public byte MipMap;
+    public CnaReservedBytes3 Reserved0;
+    public uint Format;
+    public uint Reserved1;
+
+    public unsafe CnaTextureCubeCreateInfo()
+    {
+        StructSize = (uint)sizeof(CnaTextureCubeCreateInfo);
+        StructVersion = 1;
+    }
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_TextureCubeInfo</c>
+/// exactly (<c>texture_volume.h:107-120</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTextureCubeInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Size;
+    public uint LevelCount;
+    public uint Format;
+    public uint Reserved;
+
+    public unsafe CnaTextureCubeInfo()
+    {
+        StructSize = (uint)sizeof(CnaTextureCubeInfo);
+        StructVersion = 1;
+    }
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own
+/// <c>CNA_RenderTargetCubeCreateInfo</c> exactly (<c>render_target.h:86-105</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaRenderTargetCubeCreateInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Size;
+    public byte MipMap;
+    public CnaReservedBytes3 Reserved;
+    public uint Format;
+    public uint DepthFormat;
+    public int MultiSampleCount;
+    public uint Usage;
+
+    public unsafe CnaRenderTargetCubeCreateInfo()
+    {
+        StructSize = (uint)sizeof(CnaRenderTargetCubeCreateInfo);
+        StructVersion = 1;
+    }
+}

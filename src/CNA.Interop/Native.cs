@@ -225,6 +225,45 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_rasterizer_state(CnaHandle device, in CnaRasterizerState state);
 
+    // -- Texture3D / TextureCube / RenderTargetCube (real ABI, texture_volume.h + render_target.h,
+    // Phase 8 WP3b). Each kind has its own create/get_info/destroy triple -- there is no shared
+    // texture create or destroy -- which is why CNA.Graphics.Texture leaves ReleaseNative abstract.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texture3d_create(CnaHandle device, in CnaTexture3DCreateInfo createInfo, out CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texture3d_get_info(CnaHandle texture, ref CnaTexture3DInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texture3d_destroy(CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texturecube_create(CnaHandle device, in CnaTextureCubeCreateInfo createInfo, out CnaHandle texture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texturecube_get_info(CnaHandle texture, ref CnaTextureCubeInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texturecube_destroy(CnaHandle texture);
+
+    /// <summary>Matches <c>cna_render_target_cube_create</c> exactly
+    /// (<c>render_target.h:187</c>). Released through the shared
+    /// <see cref="cna_render_target_destroy"/>, same as the 2D form -- render targets are the one
+    /// family whose destroy route *is* shared across shapes.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_cube_create(
+        CnaHandle device, in CnaRenderTargetCubeCreateInfo createInfo, out CnaHandle renderTarget);
+
+    /// <summary>Matches <c>cna_graphics_device_set_render_target_cube</c> exactly
+    /// (<c>render_target.h</c>) -- the cube counterpart of
+    /// <see cref="cna_graphics_device_set_render_target2d"/>, which this project noticed existed
+    /// during the native-ABI migration but had no cube render target to call it with until
+    /// now.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_render_target_cube(
+        CnaHandle device, CnaHandle renderTarget, uint cubeMapFace);
+
     /// <summary>Matches <c>cna_texture_get_info</c> exactly (<c>texture.h:130</c>) -- documented
     /// as accepting a "Texture2D, Texture3D, TextureCube or matching render-target handle", which
     /// is what lets <c>CNA.Graphics.Texture</c> expose <c>LevelCount</c>/<c>Format</c> on the base

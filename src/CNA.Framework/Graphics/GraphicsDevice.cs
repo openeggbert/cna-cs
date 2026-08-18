@@ -194,6 +194,19 @@ public class GraphicsDevice
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
     }
 
+    /// <summary>Matches real XNA's <c>SetRenderTarget(RenderTargetCube, CubeMapFace)</c>. A
+    /// separate method from <see cref="SetRenderTarget(Texture2D?)"/> because the real ABI's
+    /// render-target binding is shape-specific: <c>cna_graphics_device_set_render_target_cube</c>
+    /// takes the face to render into, which has no 2D equivalent. Passing <see langword="null"/>
+    /// restores the back buffer, same sentinel as the 2D overload.</summary>
+    public void SetRenderTarget(RenderTargetCube? renderTarget, CubeMapFace cubeMapFace)
+    {
+        CnaHandle handle = renderTarget is null ? CnaHandle.Zero : new CnaHandle(renderTarget.NativeHandleValue);
+        CnaResult result = Native.cna_graphics_device_set_render_target_cube(
+            ResolveNativeDeviceHandle(), handle, (uint)cubeMapFace);
+        CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
+    }
+
     public void SetVertexBuffer(VertexBuffer? vertexBuffer)
     {
         CnaHandle handle = vertexBuffer is null ? CnaHandle.Zero : new CnaHandle(vertexBuffer.NativeHandleValue);
