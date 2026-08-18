@@ -1601,9 +1601,35 @@ WP11–WP14 are the largest new subsystems and come last.
       GC-reclaimable one (`StockEffect` now holds its handle in a
       `NativeResourceHandle`), but a loaded model still owns native resources
       with no way to release them deterministically.</details>
-- [ ] **WP16 — Re-audit to 201/201.** Re-run the inventory command above,
-      drive the missing list to zero, then close out with a full
-      `/code-review high` pass over everything Phase 8 added.
+- [x] **WP16 — Re-audit — done 2026-08-18.** The headline finding is that
+      **"201/201" was never a measurement of XNA 4.0.** It was measured against
+      an enumeration of XNA 4.0 written from memory, which is a different thing,
+      and the difference was 31 types.
+
+      The audit was redone against evidence instead: diff the compat assembly's
+      public types against the C++ engine's own
+      `Microsoft/Xna/Framework/**` headers, which are an authoritative
+      XNA-shaped list. That surfaced, and this work package landed:
+      - the entire `Microsoft.Xna.Framework.Graphics.PackedVector` namespace —
+        19 types, none of which had ever been counted;
+      - `RenderTargetBinding` and the multiple-render-target route it exists
+        for;
+      - `KeyState`, the `KeyboardState` indexer, `GetPressedKeys`;
+      - seven exception types XNA source catches by name;
+      - `RendererDetail` / `AudioEngine.RendererDetails`;
+      - `TitleContainer`;
+      - the compat `GameComponentCollectionEventArgs`, and the two events on the
+        compat collection that had no way to report which component changed;
+      - `IGraphicsDeviceService`, which was in the wrong namespace.
+
+      Coverage now: 237 public compat types. Everything the diff still reports
+      missing is non-XNA — CNAEXT effect/vertex/glTF types, MonoGame's
+      `MouseCursor`, FNA's `TextInputEXT`, CNA's own content-manifest types, and
+      `HalfTypeHelper`, which is internal in XNA too.
+
+      The header audit that ran alongside it is recorded in the Corrections
+      table at the top of this file. A full `/code-review high` pass over
+      Phase 8 remains, and is the one thing left in this work package.
 
 Explicitly still excluded from this mandate (not XNA 4.0 API surface, or
 genuinely unbackable): `Microsoft.Xna.Framework.Net` /

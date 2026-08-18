@@ -11,6 +11,86 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## The audit: ten "the C API cannot do this" claims, all false (2026-08-18, same session)
+
+The single most useful thing done this session was not writing code. It was
+sweeping the repository for every claim that some capability was **absent from
+the C API**, and checking each one against the shipped headers.
+
+It started by accident. `MediaLibrary`'s doc comment explained at length that
+its music collections were always empty by design, because the real scan depends
+on ID3/Vorbis tag parsing, FFmpeg duration probing and a native image loader
+with "no C ABI exposure to build one against". Opening `media_library.h` to
+confirm the shape of something unrelated showed 148 functions and, in the first
+paragraph, "opening scans the device's music and picture locations".
+
+That one wrong note had cost real work: an always-empty managed object model, a
+compat layer built on inheritance that only worked *because* the collections
+were empty, and 47 tests that passed precisely because the code under them did
+nothing. So the obvious question was how many others there were.
+
+**Ten.** Ranked by what they cost:
+
+1. **`SpriteFont` loading called a function that exists in no header.**
+   `cna_content_load_spritefont` -- every `Load<SpriteFont>` would have died with
+   `EntryPointNotFoundException`. The P/Invoke's own comment said "there is
+   nothing real to match" while `sprite_font.h` shipped an eight-function
+   SpriteFont resource. This is the one that would have been a crash.
+2. **`MediaPlayer`** bound 8 of 41 functions and reimplemented the queue, the
+   shuffle order, the state machine and the playback clock in C#. None of which
+   native consulted, while native's own were driving the audio device.
+3. **`MediaLibrary`** -- the one that started it.
+4. **`SoundEffect.Play()`** was absent because fire-and-forget playback "relies
+   on XNA's internal instance pool ... which this repository has no equivalent
+   for". `audio.h:483` *is* that pool, `out_played` flag and all.
+5. **`DrawUserPrimitives<T>`** threw for every vertex type but four, because the
+   raw route "would need a native vertex-declaration resource this project
+   doesn't have" -- which this repository had bound and was using one file over.
+6. **`ContentLost`** was hardcoded `false` and inert, called "a Direct3D 9-era
+   concept the C API has no counterpart for". It has both a flag and a
+   subscription route.
+7. **`VertexBuffer.GetData<T>`** threw for everything; the raw-bytes half of the
+   claim was true, the typed readback was real and unbound.
+8. **`ResourceContentManager`**: "the C API has no resource-manager concept at
+   all". It has one -- documented as a placeholder that fails every load, so the
+   managed implementation stays, but for a better reason than the false one.
+9. **The compat `DualTextureEffect`** still said `Texture2` throws, three
+   commits after the CNA side fixed it.
+10. **`GameComponentCollection`** justified snapshot enumeration with "native
+    owns the list and does not report modifications". It reports both.
+
+Four claims were re-checked and **confirmed**: managed content-reader
+registration (no factory entry point anywhere -- and that one had been recorded
+as pending *here*, which was wrong in the opposite direction), service
+registration, nonzero buffer transfer offsets, and custom `.fx` effects.
+
+### What generalizes
+
+A documented scope cut reads exactly like a settled fact. Nothing in the prose
+distinguishes "I read the header and it is not there" from "I assumed it was not
+there and wrote a paragraph explaining why". Both are long, both cite
+plausible-sounding infrastructure reasons, and the more carefully written one is
+*more* convincing regardless of which it is.
+
+Two things made these findable, and both are worth keeping:
+
+- **The claims were written down at all.** A vague sense that media was
+  unsupported would not have been checkable. "No C ABI exposure to build one
+  against" is a specific, falsifiable statement about a specific header.
+- **The headers are the authority, and they are right there.** Every check was
+  one `grep` over `modules/c-api/include/CNA/C/*.h`.
+
+The corrections table at the top of `plan.md` is where the current truth lives.
+The historical entries in this file are left as they were written -- rewriting
+them would erase the thing worth learning from.
+
+### The same method, applied to coverage
+
+"201/201 XNA 4.0 types" turned out to be measured against an enumeration of XNA
+4.0 written from memory. Diffing instead against the C++ engine's own
+`Microsoft/Xna/Framework/**` headers found 31 real types missing, including the
+whole `PackedVector` namespace. See `plan.md` WP16.
+
 ## Phase 8 code review: 20 real defects in the new surface, four of them memory-unsafe (2026-08-18, same session)
 
 Ran a four-axis review over the 20 Phase 8 commits -- interop struct layouts and P/Invoke
