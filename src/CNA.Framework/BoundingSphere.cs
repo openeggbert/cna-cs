@@ -111,6 +111,111 @@ public struct BoundingSphere : IEquatable<BoundingSphere>
         return new BoundingSphere(center, radius);
     }
 
+    /// <summary>
+    /// The smallest sphere this algorithm finds around <paramref name="points"/>.
+    ///
+    /// Ritter's approximation, ported from the engine's own <c>BoundingSphere.cpp</c>: pick the pair
+    /// of points furthest apart along whichever axis spreads widest, take that as the initial
+    /// diameter, then grow the sphere over any point still outside it. Deliberately <em>not</em> the
+    /// minimal enclosing sphere -- that is a different, more expensive algorithm, and matching XNA
+    /// here means matching the approximation, since a caller comparing radii against XNA's own
+    /// output would otherwise see them differ.
+    /// </summary>
+    public static BoundingSphere CreateFromPoints(IEnumerable<Vector3> points)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+
+        Vector3 minX = new(float.MaxValue, float.MaxValue, float.MaxValue);
+        Vector3 maxX = -minX;
+        Vector3 minY = minX, maxY = maxX, minZ = minX, maxZ = maxX;
+
+        // Materialised because the algorithm needs two passes and the argument is an enumerable.
+        var all = points as IReadOnlyList<Vector3> ?? [.. points];
+        if (all.Count == 0)
+        {
+            throw new ArgumentException("points must contain at least one point.", nameof(points));
+        }
+
+        foreach (Vector3 point in all)
+        {
+            if (point.X < minX.X) minX = point;
+            if (point.X > maxX.X) maxX = point;
+            if (point.Y < minY.Y) minY = point;
+            if (point.Y > maxY.Y) maxY = point;
+            if (point.Z < minZ.Z) minZ = point;
+            if (point.Z > maxZ.Z) maxZ = point;
+        }
+
+        float spreadX = Vector3.DistanceSquared(maxX, minX);
+        float spreadY = Vector3.DistanceSquared(maxY, minY);
+        float spreadZ = Vector3.DistanceSquared(maxZ, minZ);
+
+        Vector3 min = minX, max = maxX;
+        if (spreadY > spreadX && spreadY > spreadZ)
+        {
+            min = minY;
+            max = maxY;
+        }
+
+        if (spreadZ > spreadX && spreadZ > spreadY)
+        {
+            min = minZ;
+            max = maxZ;
+        }
+
+        Vector3 center = (min + max) * 0.5f;
+        float radius = Vector3.Distance(max, center);
+        float squaredRadius = radius * radius;
+
+        foreach (Vector3 point in all)
+        {
+            Vector3 offset = point - center;
+            float squaredDistance = offset.LengthSquared();
+            if (squaredDistance <= squaredRadius)
+            {
+                continue;
+            }
+
+            float distance = MathF.Sqrt(squaredDistance);
+            Vector3 direction = offset / distance;
+
+            // Grow just enough to reach `point` while keeping the far side where it was, rather
+            // than re-centring on the mean -- that is what keeps every earlier point enclosed.
+            Vector3 far = center - (radius * direction);
+            center = (far + point) / 2f;
+            radius = Vector3.Distance(point, center);
+            squaredRadius = radius * radius;
+        }
+
+        return new BoundingSphere(center, radius);
+    }
+
+    /// <summary>The sphere around a frustum's eight corners.</summary>
+    public static BoundingSphere CreateFromFrustum(BoundingFrustum frustum)
+    {
+        ArgumentNullException.ThrowIfNull(frustum);
+
+        return CreateFromPoints(frustum.GetCorners());
+    }
+
+    /// <summary>
+    /// This sphere moved and scaled by <paramref name="matrix"/>.
+    ///
+    /// The radius scales by the largest of the three basis-row lengths, not by the matrix
+    /// determinant or by an average: a non-uniform scale has to grow the sphere enough to still
+    /// enclose everything it did before, which means the worst axis wins.
+    /// </summary>
+    public readonly BoundingSphere Transform(Matrix matrix)
+    {
+        float rowX = (matrix.M11 * matrix.M11) + (matrix.M12 * matrix.M12) + (matrix.M13 * matrix.M13);
+        float rowY = (matrix.M21 * matrix.M21) + (matrix.M22 * matrix.M22) + (matrix.M23 * matrix.M23);
+        float rowZ = (matrix.M31 * matrix.M31) + (matrix.M32 * matrix.M32) + (matrix.M33 * matrix.M33);
+
+        return new BoundingSphere(
+            Vector3.Transform(Center, matrix),
+            Radius * MathF.Sqrt(MathF.Max(rowX, MathF.Max(rowY, rowZ))));
+    }
+
     public static bool operator ==(BoundingSphere a, BoundingSphere b) => a.Equals(b);
     public static bool operator !=(BoundingSphere a, BoundingSphere b) => !a.Equals(b);
 

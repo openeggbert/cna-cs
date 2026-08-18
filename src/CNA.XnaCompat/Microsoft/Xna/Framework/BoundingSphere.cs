@@ -45,4 +45,23 @@ public struct BoundingSphere : IEquatable<BoundingSphere>
 
     public static implicit operator CNA.BoundingSphere(BoundingSphere value) => new(value.Center, value.Radius);
     public static implicit operator BoundingSphere(CNA.BoundingSphere value) => new(value.Center, value.Radius);
+
+    /// <summary>Matches real XNA's <c>CreateFromPoints</c>. Delegates rather than repeating the
+    /// algorithm -- see <see cref="CNA.BoundingSphere.CreateFromPoints"/> for why it is an
+    /// approximation and not the minimal enclosing sphere.</summary>
+    public static BoundingSphere CreateFromPoints(IEnumerable<Vector3> points)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+        return CNA.BoundingSphere.CreateFromPoints(points.Select(p => (CNA.Vector3)p));
+    }
+
+    /// <summary>Matches real XNA's <c>CreateFromFrustum</c>.</summary>
+    public static BoundingSphere CreateFromFrustum(BoundingFrustum frustum)
+    {
+        ArgumentNullException.ThrowIfNull(frustum);
+        return CNA.BoundingSphere.CreateFromPoints(frustum.GetCorners().Select(c => (CNA.Vector3)c));
+    }
+
+    /// <summary>Matches real XNA's <c>Transform</c>.</summary>
+    public readonly BoundingSphere Transform(Matrix matrix) => ((CNA.BoundingSphere)this).Transform(matrix);
 }
