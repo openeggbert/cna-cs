@@ -101,8 +101,48 @@ internal sealed class NativeEventBridge : IDisposable
         return bridge;
     }
 
+    /// <summary>
+    /// The <c>void(sender, context)</c> variant. A few event families
+    /// (<c>CNA_VertexBufferContentLostCallback</c>, <c>CNA_IndexBufferContentLostCallback</c>) pass
+    /// the resource handle alongside the context; it is ignored here, because the managed handler
+    /// is already bound to the one object that resource belongs to. Everything else -- the
+    /// <see cref="GCHandle"/> root, the totality, the unsubscribe ordering -- is shared with
+    /// <see cref="Subscribe"/>.
+    /// </summary>
+    internal static unsafe NativeEventBridge SubscribeWithSender(
+        Action handler,
+        Func<nint, nint, CnaHandle> subscribe,
+        Action<CnaHandle> unsubscribe)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+
+        var bridge = new NativeEventBridge(handler, unsubscribe);
+        try
+        {
+            bridge._registration = subscribe(
+                (nint)(delegate* unmanaged[Cdecl]<nint, nint, void>)&OnNativeEventWithSender,
+                GCHandle.ToIntPtr(bridge._selfHandle));
+        }
+        catch
+        {
+            bridge.Dispose();
+            throw;
+        }
+
+        return bridge;
+    }
+
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnNativeEvent(nint context)
+    private static void OnNativeEventWithSender(nint sender, nint context) => Dispatch(context);
+
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+    private static void OnNativeEvent(nint context) => Dispatch(context);
+
+    /// <summary>The shared body of both entry points. Separate from them because a method carrying
+    /// <see cref="UnmanagedCallersOnlyAttribute"/> cannot be called directly -- only through a
+    /// function pointer -- so the two-argument shim needs something ordinary to forward
+    /// to.</summary>
+    private static void Dispatch(nint context)
     {
         NativeEventBridge? bridge = null;
         try

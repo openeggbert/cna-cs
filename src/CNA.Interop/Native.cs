@@ -2052,6 +2052,32 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_vertex_declaration_destroy(CnaHandle declaration);
 
+    /// <summary>Caller-initialized versioned output, so <c>ref</c> over a <c>new</c>-constructed
+    /// local rather than <c>out</c> -- <c>out</c> skips the parameterless constructor that fills
+    /// the struct header.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_vertex_buffer_get_info(CnaHandle vertexBuffer, ref CnaVertexBufferInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_index_buffer_get_info(CnaHandle indexBuffer, ref CnaIndexBufferInfo info);
+
+    /// <summary>The ContentLost callback is <c>void(handle, void* context)</c> -- two arguments,
+    /// unlike the game/audio families -- so it goes through
+    /// <c>NativeEventBridge.SubscribeWithSender</c>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_vertex_buffer_subscribe_content_lost(
+        CnaHandle vertexBuffer, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_vertex_buffer_unsubscribe_content_lost(CnaHandle registration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_index_buffer_subscribe_content_lost(
+        CnaHandle indexBuffer, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_index_buffer_unsubscribe_content_lost(CnaHandle registration);
+
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_vertex_buffer_create(
         CnaHandle graphicsDevice,

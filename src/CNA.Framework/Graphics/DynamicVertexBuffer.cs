@@ -1,3 +1,5 @@
+using CNA.Interop;
+
 namespace CNA.Graphics;
 
 /// <summary>
@@ -10,10 +12,14 @@ namespace CNA.Graphics;
 /// set -- not a separate type. Everything else (<c>SetData</c>, <c>GetData</c>, disposal) is
 /// inherited unchanged and needs no override.
 ///
-/// <see cref="IsContentLost"/> is always <see langword="false"/> here. Real XNA raises
-/// <c>ContentLost</c> when a device reset discards buffer contents, a Direct3D 9-era concept the
-/// C API has no counterpart for -- rather than omit the member (XNA source reads it) or invent a
-/// value, it reports the honest answer for a backend that never loses content this way.
+/// The two exceptions are <see cref="IsContentLost"/> and <see cref="ContentLost"/>, which were a
+/// hardcoded <see langword="false"/> and an inert <c>add { } remove { }</c> pair, on the
+/// recorded grounds that device-reset content loss is "a Direct3D 9-era concept the C API has no
+/// counterpart for". It has both: <c>CNA_VertexBufferInfo.is_content_lost</c>
+/// (<c>vertex_resources.h:67</c>) and <c>cna_vertex_buffer_subscribe_content_lost</c>
+/// (<c>:365</c>). The header does say CNA never raises it today -- a fact about this renderer, not
+/// about the ABI, and reading it means a renderer that starts reporting loss is reported here with
+/// no change to this file.
 /// </summary>
 public class DynamicVertexBuffer : VertexBuffer
 {
@@ -27,16 +33,107 @@ public class DynamicVertexBuffer : VertexBuffer
     {
     }
 
-    /// <summary>See this class's own doc comment: no device-reset content loss exists in this
-    /// backend, so this is always <see langword="false"/> rather than absent or
-    /// guessed.</summary>
-    public bool IsContentLost => false;
+    private NativeEventBridge? _contentLostBridge;
+    private EventHandler<EventArgs>? _contentLost;
+    private bool _contentLostDisposed;
+    private readonly object _contentLostLock = new();
 
-    /// <summary>Never raised -- see <see cref="IsContentLost"/>. Present so XNA source that
-    /// subscribes still compiles.</summary>
+    /// <summary>
+    /// Whether a device reset has discarded this buffer's contents. Read from native, not a
+    /// hardcoded <see langword="false"/>.
+    ///
+    /// The header says CNA currently never raises ContentLost -- a fact about this renderer today,
+    /// not the absence of the concept, which is what the previous "the C API has no counterpart
+    /// for it" note claimed while `CNA_VertexBufferInfo` had carried an `is_content_lost` field and
+    /// `cna_vertex_buffer_subscribe_content_lost` had existed all along. Reading it means a renderer that
+    /// starts reporting loss is reported here without a change to this file.
+    /// </summary>
+    public bool IsContentLost
+    {
+        get
+        {
+            var info = new CnaVertexBufferInfo();
+            CnaResult result = Native.cna_vertex_buffer_get_info(new CnaHandle(NativeHandleValue), ref info);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(IsContentLost));
+            return info.IsContentLost != 0;
+        }
+    }
+
+    /// <summary>
+    /// Raised when a device reset discards this buffer's contents. A real native subscription now,
+    /// not an inert <c>add { } remove { }</c> pair.
+    ///
+    /// Taken on the first <c>+=</c> and held until <see cref="Dispose"/>, for the reason
+    /// <see cref="GraphicsDeviceManager.DeviceCreated"/> records. The native callback carries the
+    /// buffer handle alongside the context; it is ignored, because the handler is already bound to
+    /// this object.
+    /// </summary>
     public event EventHandler<EventArgs>? ContentLost
     {
-        add { }
-        remove { }
+        add
+        {
+            lock (_contentLostLock)
+            {
+                ObjectDisposedException.ThrowIf(_contentLostDisposed, this);
+
+                _contentLostBridge ??= NativeEventBridge.SubscribeWithSender(
+                    () => _contentLost?.Invoke(this, EventArgs.Empty),
+                    (callback, context) =>
+                    {
+                        CnaResult result = Native.cna_vertex_buffer_subscribe_content_lost(
+                            new CnaHandle(NativeHandleValue), callback, context, out CnaHandle registration);
+                        GC.KeepAlive(this);
+                        CnaException.ThrowIfFailed(result, nameof(ContentLost));
+                        return registration;
+                    },
+                    registration => Native.cna_vertex_buffer_unsubscribe_content_lost(registration));
+
+                _contentLost += value;
+            }
+        }
+        remove
+        {
+            lock (_contentLostLock)
+            {
+                _contentLost -= value;
+            }
+        }
+    }
+
+    /// <summary>Releases the subscription before the base releases the buffer handle it is
+    /// registered against. Any handler failure captured but never surfaced is rethrown last.</summary>
+    protected override void Dispose(bool disposing)
+    {
+        NativeEventBridge? bridge;
+        lock (_contentLostLock)
+        {
+            _contentLostDisposed = true;
+            bridge = _contentLostBridge;
+            _contentLostBridge = null;
+            _contentLost = null;
+        }
+
+        Exception? pending = null;
+        if (bridge is not null)
+        {
+            try
+            {
+                bridge.ThrowPendingException();
+            }
+            catch (Exception ex)
+            {
+                pending = ex;
+            }
+
+            bridge.Dispose();
+        }
+
+        base.Dispose(disposing);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
     }
 }

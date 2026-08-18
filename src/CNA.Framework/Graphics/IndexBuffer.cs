@@ -185,7 +185,12 @@ public class IndexBuffer : IDisposable
 
     public void Dispose()
     {
-        _handle.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>The overridable half of disposal, so <see cref="DynamicIndexBuffer"/> can release its
+    /// <c>ContentLost</c> subscription before the buffer handle that subscription is registered
+    /// against goes away.</summary>
+    protected virtual void Dispose(bool disposing) => _handle.Dispose();
 }

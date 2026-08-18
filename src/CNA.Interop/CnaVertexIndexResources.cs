@@ -128,3 +128,49 @@ internal struct CnaVertexBufferBinding
     public int VertexOffset;
     public int InstanceFrequency;
 }
+
+/// <summary>
+/// Mirrors <c>CNA_VertexBufferInfo</c> exactly (<c>vertex_resources.h:55-76</c>). Caller-initialized
+/// and versioned, so it self-populates its header the way the other versioned structs here do.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaVertexBufferInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public int VertexCount;
+    public uint BufferUsage;
+    public byte Dynamic;
+    public byte IsContentLost;
+    public byte HasRenderer;
+    public byte Reserved0;
+    public int VertexStride;
+    public ulong VertexElementCount;
+
+    public unsafe CnaVertexBufferInfo()
+    {
+        StructSize = (uint)sizeof(CnaVertexBufferInfo);
+        StructVersion = 1;
+    }
+}
+
+/// <summary>Mirrors <c>CNA_IndexBufferInfo</c> exactly (<c>index_resources.h:52-72</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaIndexBufferInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public int IndexCount;
+    public uint IndexElementSize;
+    public uint BufferUsage;
+    public byte Dynamic;
+    public byte IsContentLost;
+    public byte HasRenderer;
+    public byte Reserved;
+
+    public unsafe CnaIndexBufferInfo()
+    {
+        StructSize = (uint)sizeof(CnaIndexBufferInfo);
+        StructVersion = 1;
+    }
+}
