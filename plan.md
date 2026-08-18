@@ -1503,6 +1503,21 @@ WP11–WP14 are the largest new subsystems and come last.
       previously called a "permanent gap" for want of an override seam —
       re-solve it, since "no seam exists" is a fixable design problem now
       that omitting it is no longer allowed; `.xnb` LZ4; runtime glTF.
+- [ ] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
+      review; pre-existing, not introduced by it).** Every native-backed type
+      reads its handle via `SafeHandle.DangerousGetHandle()` with no
+      `DangerousAddRef`/`DangerousRelease` pair. Nothing keeps the wrapper alive
+      across the native call, so the JIT may treat it as dead once the handle
+      value has been read and let the finalizer run `ReleaseHandle` while native
+      is still using it. Defeating exactly that is why `SafeHandle` exists, and
+      design invariant #4 assumes it works. The fix is mechanical but touches
+      every call site; it wants its own increment and its own review.
+- [ ] **WP18 — `Model`/`ModelMesh`/`ModelMeshPart` have no `Dispose`.** The
+      model builders create one `BasicEffect` per mesh part and nothing ever
+      releases it. Phase 8 reduced this from an unbounded leak to a
+      GC-reclaimable one (`StockEffect` now holds its handle in a
+      `NativeResourceHandle`), but a loaded model still owns native resources
+      with no way to release them deterministically.
 - [ ] **WP16 — Re-audit to 201/201.** Re-run the inventory command above,
       drive the missing list to zero, then close out with a full
       `/code-review high` pass over everything Phase 8 added.

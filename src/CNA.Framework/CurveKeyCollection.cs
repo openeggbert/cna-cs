@@ -69,8 +69,13 @@ public class CurveKeyCollection : ICollection<CurveKey>
     public void RemoveAt(int index) => _keys.RemoveAt(index);
 
     /// <summary>A deep copy: every <see cref="CurveKey"/> is cloned too, so mutating a key of the
-    /// clone cannot reach back into the original. Matches real XNA, and matters because
-    /// <see cref="Curve.ComputeTangents(CurveTangent)"/> mutates keys in place.</summary>
+    /// clone cannot reach back into the original.
+    ///
+    /// A deliberate deviation, not parity: real XNA/MonoGame re-add the *same* key instances, so
+    /// their clone shares mutable keys with the original -- which combined with
+    /// <see cref="Curve.ComputeTangents(CurveTangent)"/> mutating keys in place means computing
+    /// tangents on a clone silently rewrites the original's. A code-review pass flagged the old
+    /// doc comment, which claimed to match XNA here.</summary>
     public CurveKeyCollection Clone()
     {
         var clone = new CurveKeyCollection();

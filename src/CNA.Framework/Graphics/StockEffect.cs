@@ -17,15 +17,25 @@ namespace CNA.Graphics;
 /// </summary>
 public abstract class StockEffect : Effect
 {
+    private readonly NativeResourceHandle _ownedHandle;
     private bool _disposed;
 
     private protected StockEffect(GraphicsDevice graphicsDevice, CnaHandle handle)
         : base(graphicsDevice)
     {
-        Handle = handle;
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)));
     }
 
-    private protected CnaHandle Handle { get; }
+    /// <summary>
+    /// Held in a <see cref="NativeResourceHandle"/> rather than as a bare <see cref="CnaHandle"/>,
+    /// so a <see cref="System.Runtime.InteropServices.SafeHandle"/> finalizer reclaims the effect
+    /// even when nothing disposes it. That matters concretely: the model builders create one
+    /// <see cref="BasicEffect"/> per mesh part, and <c>Model</c>/<c>ModelMesh</c> have no
+    /// <c>Dispose</c> at all, so before this every loaded model leaked an effect (plus its three
+    /// directional lights) per part for the process lifetime. Found by a code-review pass; a real
+    /// <c>Model.Dispose</c> is the proper fix and is tracked in <c>plan.md</c> WP15.
+    /// </summary>
+    private protected CnaHandle Handle => new(_ownedHandle.DangerousGetHandle());
 
     protected internal override nint NativeEffectHandleValue => Handle.AsNint;
 
@@ -60,7 +70,7 @@ public abstract class StockEffect : Effect
 
         _disposed = true;
         ReleaseAdditionalNativeResources();
-        Native.cna_effect_destroy(Handle);
+        _ownedHandle.Dispose();
         GC.SuppressFinalize(this);
     }
 

@@ -11,6 +11,93 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Phase 8 code review: 20 real defects in the new surface, four of them memory-unsafe (2026-08-18, same session)
+
+Ran a four-axis review over the 20 Phase 8 commits -- interop struct layouts and P/Invoke
+signatures against the headers, compat inheritance/composition for state desync, handle lifetime,
+and callback/algorithm correctness. It found **20 real defects**, all introduced the same day, and
+was unambiguously worth the cost. Fixed across five commits; two items are deliberately deferred
+(see `plan.md` WP17/WP18).
+
+The struct layouts were clean -- all ~20 mirrored structs matched field-for-field. Everything else
+was not.
+
+### Memory-unsafe (the four that mattered most)
+
+- **Three P/Invoke declarations were missing parameters**, which shifts every later argument by a
+  slot -- native then writes through a register that never held a pointer.
+  `cna_dual_texture_effect_get/set_texture` omitted `texture_index`;
+  `cna_graphics_adapter_get_display_mode_count`/`_copy_display_modes` omitted `filter_by_format`
+  and `format`. This is the one class of defect a struct-layout audit cannot catch and a compiler
+  never will.
+- **A self-inflicted false conclusion.** `DualTextureEffect.Texture2` had been implemented as a
+  `NotSupportedException` "naming the missing native function" -- exactly as the scope mandate
+  prescribes -- on the strength of my own incomplete declaration. `texture_index` is documented as
+  "zero or one": it *is* the second-layer route. The mandate's rule is sound; applying it on top of
+  an unverified reading of the ABI is not.
+- **`VideoPlayer.GetTexture` wrapped a borrowed handle in an owning `SafeHandle`.** `video.h` says
+  plainly the frame texture is "valid only until the next call on this player" and the player owns
+  it. `SafeHandle`'s critical finalizer would have destroyed it on the next GC regardless of what
+  any caller did -- a doc comment saying "do not dispose this" cannot prevent a finalizer.
+  `NativeResourceHandle` gained a non-owning mode.
+- **`GameComponent.TryResolve` ran outside every callback's `try`.** `GCHandle.Target` throws on a
+  freed handle, so a stale callback unwound a managed exception into native code -- undefined
+  behaviour, CoreCLR fails fast. Related: the native dispose callback called
+  `cna_game_component_destroy`, but the header documents that handler as running "before its handle
+  is released", so managed code was releasing a handle native was about to use.
+
+### The doc-comment that was the opposite of the header
+
+`effects.h` marks every handle its reflection API returns as **"Owned"**, mints a fresh registry
+slot per call, and declares a `destroy` for each. WP4a's types asserted they were *borrowed* and
+destroyed none of them -- an assumption written without opening the header, and the header said the
+reverse. `ModelMesh.Draw`'s `foreach (pass in effect.CurrentTechnique.Passes)` therefore leaked one
+technique view, one pass-collection view and N pass views **per mesh part per frame**. Fixed on
+three levels: `NativeResourceHandle` on all eight types so the GC reclaims them without callers
+disposing anything, caching of `Parameters`/`Techniques` (whose identity never changes), and
+explicit disposal on the per-frame draw path rather than queueing finalizer work at 60 fps.
+
+### The tests that did not test what they claimed
+
+The `Curve` tests -- the one place Phase 8 had *good* coverage, and whose commit message said they
+"pin the Hermite basis, all five loop modes, step continuity, and the asymmetric in/out tangent
+formulas" -- pinned none of it. Verified empirically by breaking `Curve.cs` four ways and
+re-running: swapping `TangentIn`/`TangentOut` in the basis, rescaling both tangent terms by the
+segment duration, replacing the binary search with `return 0;`, and dropping the `rangeStart`
+offset each passed **20/20**.
+
+One cause for all four: every in-range evaluation used a two-key curve spanning `[0,1]` with both
+tangents zero. Zero tangents erase the tangent terms; two keys mean the search loop never runs; a
+range starting at zero makes the offset a no-op. 14 tests added -- a hand-computed Hermite value on
+a segment with asymmetric non-zero tangents and duration 2, a five-key curve, each loop mode on a
+`[5,7]` range, and the oscillate case placed where oscillate and cycle actually disagree. The same
+four mutations now fail 1, 1, 6 and 2 tests.
+
+### Everything else
+
+`StockEffect` gained a `ReleaseAdditionalNativeResources` hook so subclass cleanup runs *inside*
+the disposal guard -- `EnvironmentMapEffect`/`SkinnedEffect` had overridden `Dispose` and put three
+`cna_directional_light_destroy` calls before it, a double free on any second `Dispose()`.
+`EffectMaterial` rejected every compat effect with a message claiming it had no native effect.
+`ThrowPendingException` rethrew a fresh wrapper each time, growing one `InnerException` layer per
+frame without bound. Five `GameComponentCollection` defects (double-add desync, `Clear` raising no
+events, unvalidated `CopyTo`, a live-indexing enumerator, registration ordered after the native call
+that can invoke `Initialize`). `Game.Dispose` destroyed the game without releasing its components,
+which the component ABI forbids outright. `StorageContainer.Dispose` was not idempotent and
+`GetFileNames()` passed `"*"` where the header documents a zero-length view as the "everything"
+sentinel.
+
+Tests 659 → 673.
+
+### Deferred, with reasons
+
+`plan.md` WP17: every native-backed type calls `DangerousGetHandle()` without an
+`AddRef`/`Release` pair, so nothing keeps the wrapper alive across the native call -- the JIT may
+let the finalizer run mid-call. Pre-existing, project-wide, and defeating precisely what
+`SafeHandle` is for; mechanical to fix but touches every call site.
+`plan.md` WP18: `Model`/`ModelMesh`/`ModelMeshPart` have no `Dispose`, so a loaded model's
+per-mesh-part effects are only reclaimable by GC.
+
 ## Phase 8: complete XNA 4.0 API coverage -- 94/201 → 201/201 in 20 increments (2026-08-18, session 7 continued; user directive "cna-cs musi pokryvat cele xna 4.0")
 
 The user rejected the vertical-slice scoping this project had used until now ("zadne jenom uzka
