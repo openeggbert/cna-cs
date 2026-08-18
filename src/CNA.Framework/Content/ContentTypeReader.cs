@@ -11,8 +11,15 @@ namespace CNA.Content;
 /// creates readers from a registry keyed by canonical type name
 /// (<c>cna_content_type_reader_manager_create_reader</c>) and has no route for registering a
 /// managed one, so a derivable base class would look extensible while nothing could ever call a
-/// subclass. Registering managed readers needs the same callback-table machinery
-/// <see cref="GameComponent"/> uses; tracked in <c>plan.md</c> WP15.
+/// subclass.
+///
+/// This is blocked upstream, not pending here. It was recorded as needing "the same callback-table
+/// machinery <c>GameComponent</c> uses" -- which is wrong, and re-checking the header is what
+/// showed it: <c>content_readers.h</c> exposes only <c>_clear_type_creators</c>,
+/// <c>_get_is_registered</c>, <c>_create_reader</c> and
+/// <c>cna_content_register_known_unsupported_xnb_readers</c>. There is no entry point that accepts
+/// a caller-supplied factory at all, so no amount of callback machinery on this side can reach the
+/// registry. Closing it needs a new registration route in the C API.
 /// </summary>
 public class ContentTypeReader : IDisposable
 {

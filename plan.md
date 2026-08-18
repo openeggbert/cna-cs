@@ -1525,8 +1525,22 @@ WP11–WP14 are the largest new subsystems and come last.
       `ModelEffectCollection`'s compat mirror, previously called a "permanent
       gap" for want of an override seam — re-solve it, since "no seam exists" is
       a fixable design problem now that omitting it is no longer allowed;
-      `.xnb` LZ4; runtime glTF; managed content-reader registration;
-      `MediaLibrary`'s always-empty collections against `media_library.h`.
+      `.xnb` LZ4; runtime glTF.
+
+      Closed by discovery rather than by code:
+      - **`MediaLibrary`'s always-empty collections — done 2026-08-18.** Not a
+        scope cut after all. `media_library.h` ships all 148 functions and
+        scans on open; the whole family is a real binding now, and the compat
+        mirror moved from inheritance to composition because a real library
+        hands back base-typed objects no subclass can retroactively become.
+      - **Managed content-reader registration — blocked upstream, not
+        deferred.** `ContentTypeReader` recorded this as needing the callback
+        machinery `GameComponent` uses. Re-reading `content_readers.h` shows
+        that is wrong: the registry exposes only `_clear_type_creators`,
+        `_get_is_registered`, `_create_reader` and
+        `cna_content_register_known_unsupported_xnb_readers` — there is no
+        entry point taking a caller-supplied factory, so nothing on this side
+        can reach it. Needs a new C API route.
 - [x] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
       review; pre-existing, not introduced by it) — done 2026-08-18. Slice 1:**
       every type whose handle accessor is *private* now pairs each native call
