@@ -411,6 +411,11 @@ public class GraphicsDevice
         CnaResult result = Native.cna_graphics_device_set_render_target2d(ResolveNativeDeviceHandle(), handle);
         GC.KeepAlive(renderTarget);
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
+
+        // Load-bearing, not bookkeeping: GetRenderTargets cross-checks its cached array against
+        // native's own count, so a single-target bind that left a stale multi-target array behind
+        // would make the next GetRenderTargets throw on a perfectly legitimate sequence.
+        _boundRenderTargets = renderTarget is null ? [] : [new RenderTargetBinding(renderTarget)];
     }
 
     /// <summary>Matches real XNA's <c>SetRenderTarget(RenderTargetCube, CubeMapFace)</c>. A
@@ -425,6 +430,9 @@ public class GraphicsDevice
             ResolveNativeDeviceHandle(), handle, (uint)cubeMapFace);
         GC.KeepAlive(renderTarget);
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
+
+        // See the 2D overload for why this is not optional.
+        _boundRenderTargets = renderTarget is null ? [] : [new RenderTargetBinding(renderTarget, cubeMapFace)];
     }
 
     /// <summary>

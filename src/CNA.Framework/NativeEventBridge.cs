@@ -159,6 +159,15 @@ internal sealed class NativeEventBridge : IDisposable
             }
 
             bridge = resolved;
+
+            // A disposed bridge stops dispatching even if its registration outlived it -- which is
+            // exactly the case Dispose's finally block leaves behind when unsubscription fails.
+            // Without this the comment there would be wrong: the handler would still run.
+            if (bridge._disposed)
+            {
+                return;
+            }
+
             bridge._handler();
         }
         catch (Exception ex)
@@ -194,17 +203,27 @@ internal sealed class NativeEventBridge : IDisposable
 
         _disposed = true;
 
-        // Unsubscribe BEFORE freeing the root: the other order leaves native holding a context
-        // pointer into a freed GCHandle for as long as the registration lives.
-        if (_registration.Value != 0)
+        try
         {
-            _unsubscribe(_registration);
-            _registration = CnaHandle.Zero;
+            // Unsubscribe BEFORE freeing the root: the other order leaves native holding a context
+            // pointer into a freed GCHandle for as long as the registration lives.
+            if (_registration.Value != 0)
+            {
+                _unsubscribe(_registration);
+                _registration = CnaHandle.Zero;
+            }
         }
-
-        if (_selfHandle.IsAllocated)
+        finally
         {
-            _selfHandle.Free();
+            // In a finally because a throwing unsubscribe would otherwise leak the GC root
+            // permanently -- a GCHandle nothing else holds a reference to can never be freed, so it
+            // pins its target for the process. Losing the root is strictly worse than losing the
+            // unsubscribe: native calling a stale context is a crash, but native calling a context
+            // that is still alive and whose bridge is marked disposed is a no-op.
+            if (_selfHandle.IsAllocated)
+            {
+                _selfHandle.Free();
+            }
         }
     }
 }

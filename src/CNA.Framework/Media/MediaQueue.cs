@@ -17,7 +17,7 @@ namespace CNA.Media;
 /// encapsulation is kept exactly, and needs no deviation here, because nothing outside
 /// <see cref="MediaPlayer"/> ever builds one.
 /// </summary>
-public class MediaQueue : IEnumerable<Song>
+public class MediaQueue : IEnumerable<Song>, IDisposable
 {
     private readonly NativeResourceHandle _handle;
 
@@ -100,6 +100,16 @@ public class MediaQueue : IEnumerable<Song>
         CnaResult result = Native.cna_media_queue_clear(NativeHandle);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Clear));
+    }
+
+    /// <summary>Releases this view's handle. The queue itself belongs to the player and is
+    /// untouched -- <c>cna_media_queue_destroy</c> releases the handle, not the queue. Internal in
+    /// spirit: real XNA's <c>MediaQueue</c> is not disposable, and the only caller is
+    /// <see cref="MediaPlayer"/> dropping its cache when the game goes away.</summary>
+    public void Dispose()
+    {
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>Snapshots the count once, then reads each entry. A song appended while an

@@ -297,6 +297,16 @@ public abstract class Game : IDisposable
             // A handler that threw and was never observed. Nothing can be reported from disposal.
         }
 
+        // MediaPlayer's queue handle was taken against this game. Its two events are static and
+        // deliberately survive -- see ReleaseGameScopedState.
+        try
+        {
+            Media.MediaPlayer.ReleaseGameScopedState();
+        }
+        catch (Exception)
+        {
+        }
+
         Native.cna_game_destroy(_nativeHandle);
 
         if (CnaAmbientGame.Current == _nativeHandle)

@@ -185,6 +185,11 @@ public static class MediaPlayer
     /// one queue, so every read would otherwise take another handle that only a finalizer would
     /// give back. The queue behind it is the same object either way, and XNA callers compare
     /// <c>MediaPlayer.Queue</c> by reference.
+    ///
+    /// The cache is dropped when the game it was taken against is disposed
+    /// (<see cref="ReleaseGameScopedState"/>). The queue itself is process-wide, but the *handle*
+    /// came from <c>cna_media_player_get_queue(game, ...)</c>, and holding one past its game is the
+    /// kind of assumption that is cheap to avoid and expensive to be wrong about.
     /// </summary>
     public static MediaQueue Queue
     {
@@ -298,6 +303,25 @@ public static class MediaPlayer
         {
             data.Frequencies[i] = native.Frequencies[i];
             data.Samples[i] = native.Samples[i];
+        }
+    }
+
+    /// <summary>
+    /// Drops the cached <see cref="Queue"/>, so the next read takes a fresh handle against whatever
+    /// game is current. Called from <see cref="Game"/>'s disposal, the same hook
+    /// <see cref="Audio.Microphone"/> uses for its subscriptions.
+    ///
+    /// The two event subscriptions are deliberately *not* released here. The header is explicit
+    /// that those events are static -- "the subscription belongs to the process rather than to a
+    /// game and takes no game handle" -- so tearing them down with a game would silently
+    /// unsubscribe handlers the caller never removed.
+    /// </summary>
+    internal static void ReleaseGameScopedState()
+    {
+        lock (SubscriptionLock)
+        {
+            _queue?.Dispose();
+            _queue = null;
         }
     }
 
