@@ -2058,6 +2058,17 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_vertex_buffer_get_info(CnaHandle vertexBuffer, ref CnaVertexBufferInfo info);
 
+    /// <summary>Typed readback for the built-in vertex layouts (<c>vertex_resources.h:329</c>).
+    /// There is no raw-bytes equivalent, which is why <c>VertexBuffer.GetData</c> is limited to
+    /// the types <see cref="CnaVertexType"/> names.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertex_buffer_get_data(
+        CnaHandle vertexBuffer,
+        in CnaVertexBufferTransfer transfer,
+        void* destination,
+        ulong capacity,
+        out ulong outElementCount);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_index_buffer_get_info(CnaHandle indexBuffer, ref CnaIndexBufferInfo info);
 

@@ -12,15 +12,18 @@ namespace CNA.Graphics;
 /// is convenience sugar over the former via <see cref="VertexDeclaration.FromType"/>'s reflection,
 /// not a second native call.
 ///
-/// <see cref="GetData{T}(T[])"/> always throws -- confirmed directly with <c>cnabinding</c> rather
-/// than assumed: the real ABI has no raw-bytes vertex readback route at all (only a typed transfer
-/// for the 7 built-in <c>CNA_VertexType</c> values), and CNA's own C++ <c>VertexBuffer</c> has no
-/// generic <c>GetData&lt;T&gt;()</c> either -- 14 concrete typed overloads and nothing else. This
-/// is not a gap the C binding introduced; a fix would need to start in CNA's C++
-/// <c>VertexBuffer</c>, not here. <see cref="SetData{T}(int,T[],int,int,int)"/> is more fortunate --
-/// <c>cna_vertex_buffer_set_data_raw</c> is a real, confirmed raw-upload route -- but it has no
-/// offset parameter at all (always writes starting at native vertex zero), so a nonzero
-/// <c>offsetInBytes</c>-equivalent throws too.
+/// <see cref="GetData{T}(T[])"/> works for the vertex types the ABI's typed readback names, and
+/// throws for the rest. There is genuinely no raw-bytes vertex readback route -- only
+/// <c>cna_vertex_buffer_get_data</c> over the seven built-in <c>CNA_VertexType</c> layouts, four of
+/// which are real XNA types. It used to throw for every element type, and a header audit found the
+/// typed route unbound; the "no readback at all" half of the old note was correct only about raw
+/// bytes.
+///
+/// <see cref="SetData{T}(int,T[],int,int,int)"/> uses <c>cna_vertex_buffer_set_data_raw</c>, a real
+/// raw-upload route, but one with no offset parameter at all (it always writes from native vertex
+/// zero), so a nonzero <c>offsetInBytes</c> throws. The same asymmetry applies to readback: the
+/// header states that native readback begins at vertex zero and <c>start_index</c> selects the
+/// *caller's* array window, so a nonzero <c>offsetInBytes</c> throws there too.
 /// </summary>
 public class VertexBuffer : IDisposable
 {
@@ -128,16 +131,85 @@ public class VertexBuffer : IDisposable
     public void GetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
         GetData(0, data, startIndex, elementCount, VertexDeclaration.VertexStride);
 
-    /// <summary>Always throws <see cref="NotSupportedException"/> -- see this class's own doc
-    /// comment for why (confirmed with <c>cnabinding</c>, not assumed: CNA's own C++
-    /// <c>VertexBuffer</c> has no generic readback for this migration to expose).</summary>
-    public void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride) where T : unmanaged
+    /// <summary>
+    /// Reads vertices back into <paramref name="data"/>.
+    ///
+    /// <paramref name="offsetInBytes"/> must be zero and <paramref name="vertexStride"/> must match
+    /// the declaration's own: the ABI reads from native vertex zero at the type's natural stride,
+    /// and quietly ignoring either argument would return the wrong vertices rather than failing.
+    /// </summary>
+    public unsafe void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride)
+        where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        if (offsetInBytes != 0)
+        {
+            throw new NotSupportedException(
+                $"{nameof(VertexBuffer)}.{nameof(GetData)} cannot start at a nonzero offsetInBytes -- the C API's " +
+                "typed readback always begins at native vertex zero (its own start_index selects the caller's array " +
+                "window instead).");
+        }
+
+        if (vertexStride != VertexDeclaration.VertexStride)
+        {
+            throw new NotSupportedException(
+                $"{nameof(VertexBuffer)}.{nameof(GetData)} cannot read at a vertexStride ({vertexStride}) other than " +
+                $"the buffer's own ({VertexDeclaration.VertexStride}) -- the C API reads whole vertices of a built-in " +
+                "type, with no stride override.");
+        }
+
+        CnaVertexType vertexType = VertexTypeFor<T>();
+        var transfer = new CnaVertexBufferTransfer
+        {
+            VertexType = vertexType,
+            Options = 0,
+            StartIndex = (ulong)startIndex,
+            ElementCount = (ulong)elementCount,
+        };
+
+        fixed (T* destination = data)
+        {
+            CnaResult result = Native.cna_vertex_buffer_get_data(
+                new CnaHandle(NativeHandleValue), in transfer, destination, (ulong)data.Length, out _);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
+    }
+
+    /// <summary>Maps <typeparamref name="T"/> to the <c>CNA_VertexType</c> the typed readback
+    /// needs. Only the four built-in layouts that are also real XNA vertex types are reachable --
+    /// the other three <c>CNA_VertexType</c> values (tangent and skinned variants) are CNAEXT and
+    /// have no XNA counterpart to name here.</summary>
+    private static CnaVertexType VertexTypeFor<T>() where T : unmanaged
+    {
+        if (typeof(T) == typeof(VertexPositionColor))
+        {
+            return CnaVertexType.PositionColor;
+        }
+
+        if (typeof(T) == typeof(VertexPositionColorTexture))
+        {
+            return CnaVertexType.PositionColorTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionNormalTexture))
+        {
+            return CnaVertexType.PositionNormalTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionTexture))
+        {
+            return CnaVertexType.PositionTexture;
+        }
+
         throw new NotSupportedException(
-            $"{nameof(VertexBuffer)}.{nameof(GetData)} is not supported by the real cna C API -- no raw-bytes vertex " +
-            "readback route exists (CNA's own C++ VertexBuffer has no generic GetData<T>() either, only 14 concrete " +
-            "typed overloads for its 7 built-in vertex types).");
+            $"{nameof(VertexBuffer)}.{nameof(GetData)}<{typeof(T).Name}> is not supported -- the C API has no " +
+            "raw-bytes vertex readback, only a typed one over its built-in layouts, so only VertexPositionColor, " +
+            "VertexPositionColorTexture, VertexPositionNormalTexture and VertexPositionTexture can be read back.");
     }
 
     public void Dispose()

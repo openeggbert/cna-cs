@@ -191,9 +191,14 @@ public class GameComponentCollection : ICollection<GameComponent>
     /// silently skipped the next component and then failed with a native out-of-range error
     /// instead of the <see cref="InvalidOperationException"/> a <c>foreach</c> caller expects.
     ///
-    /// A snapshot rather than a version counter because this collection holds no version to count:
-    /// native owns the list and does not report modifications. Enumerating a copy is the honest
-    /// option -- mutations during the loop are simply not observed by it.
+    /// A snapshot rather than a version counter, and the reason needed correcting: this used to say
+    /// "native owns the list and does not report modifications", which
+    /// <c>cna_game_components_subscribe_added</c>/<c>_removed</c> (<c>runtime_components.h:546</c>,
+    /// <c>:561</c>) contradict. Those exist, and a header audit found them. A version counter built
+    /// on them would still be the wrong shape here: a component's own callback can mutate the
+    /// collection mid-enumeration, and turning that into an <see cref="InvalidOperationException"/>
+    /// would make a legitimate pattern throw. Enumerating a copy leaves it simply unobserved by the
+    /// loop, which is what a caller can actually work with.
     /// </summary>
     public IEnumerator<GameComponent> GetEnumerator()
     {

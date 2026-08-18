@@ -5,10 +5,16 @@ namespace CNA.Content;
 /// assets embedded in a .NET <see cref="System.Resources.ResourceManager"/> rather than from
 /// files on disk.
 ///
-/// Implemented managed-side rather than bound, because that is what it is: the C API has no
-/// resource-manager concept at all (it knows only files), and .NET resource lookup is entirely a
-/// BCL concern -- design invariant #7. Asset bytes are pulled from the resource manager and the
-/// base class's own loading path takes over from there.
+/// Implemented managed-side rather than bound, and deliberately so -- but not for the reason this
+/// comment used to give. It claimed "the C API has no resource-manager concept at all (it knows
+/// only files)". A header audit found <c>cna_content_manager_create_resource</c>
+/// (<c>content.h:130</c>), documented as mapping exactly this type.
+///
+/// The route is still not used, because the same header says what it does: "the canonical
+/// embedded-resource stream is a declared placeholder in CNA, so an embedded asset load fails
+/// rather than returning data". Binding it would replace a working managed implementation with one
+/// that fails every load. .NET resource lookup is a BCL concern anyway (design invariant #7), so
+/// asset bytes come from the resource manager and the base class's loading path takes over.
 /// </summary>
 public class ResourceContentManager : ContentManager
 {

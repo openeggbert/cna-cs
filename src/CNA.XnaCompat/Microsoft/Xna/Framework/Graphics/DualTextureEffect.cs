@@ -2,7 +2,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>XNA 4.0-compatible <c>DualTextureEffect</c>. Derives from this namespace's <see cref="Effect"/>
 /// -- see that type's doc comment for why these forward to an inner <c>CNA.Graphics</c> effect
-/// rather than inheriting from it, and how the two stay one native effect. <c>Texture2</c> throws, as on the CNA side -- the C API has no second-layer function.</summary>
+/// rather than inheriting from it, and how the two stay one native effect.</summary>
 public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog, CNA.Graphics.IEffectMatrices, CNA.Graphics.IEffectFog
 {
     public DualTextureEffect(GraphicsDevice graphicsDevice)

@@ -174,3 +174,43 @@ internal struct CnaIndexBufferInfo
         StructVersion = 1;
     }
 }
+
+/// <summary>
+/// Mirrors <c>CNA_VertexType</c> exactly (<c>vertex_values.h:16-28</c>): the built-in vertex
+/// layouts the typed transfer routes understand.
+///
+/// Three of the seven are CNAEXT (tangent and skinned variants), which real XNA has no equivalent
+/// for. They are listed so the numeric identities stay correct for the four that do map.
+/// </summary>
+internal enum CnaVertexType : uint
+{
+    PositionColor = 0,
+    PositionColorTexture = 1,
+    PositionNormalTangentTexture = 2,
+    PositionNormalTangentTextureSkinned = 3,
+    PositionNormalTexture = 4,
+    PositionNormalTextureSkinned = 5,
+    PositionTexture = 6,
+}
+
+/// <summary>
+/// Mirrors <c>CNA_VertexBufferTransfer</c> exactly (<c>vertex_resources.h:78-91</c>).
+/// <see cref="StartIndex"/> is an index into the <em>caller's</em> array, not into the buffer --
+/// the header is explicit that native readback always begins at vertex zero.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaVertexBufferTransfer
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaVertexType VertexType;
+    public uint Options;
+    public ulong StartIndex;
+    public ulong ElementCount;
+
+    public unsafe CnaVertexBufferTransfer()
+    {
+        StructSize = (uint)sizeof(CnaVertexBufferTransfer);
+        StructVersion = 1;
+    }
+}
