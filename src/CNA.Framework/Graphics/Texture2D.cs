@@ -100,6 +100,29 @@ public class Texture2D : IDisposable
         }
     }
 
+    /// <summary>Convenience overload matching real XNA's common <c>SetData&lt;Color&gt;</c> usage
+    /// (the general <c>SetData&lt;T&gt;</c> generic itself isn't implemented -- no caller in this
+    /// project needs any other <c>T</c>). Goes straight through
+    /// <c>cna_texture2d_set_data_rgba8</c>'s own <c>const CNA_Color*</c> pixel-array shape rather
+    /// than routing through <see cref="SetData(byte[])"/>, since a <see cref="Color"/> array is
+    /// already exactly that layout.</summary>
+    public unsafe void SetData(Color[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        var pixels = new CnaColor[data.Length];
+        for (int i = 0; i < data.Length; i++)
+        {
+            pixels[i] = data[i].ToNative();
+        }
+
+        fixed (CnaColor* dataPtr = pixels)
+        {
+            CnaResult result = Native.cna_texture2d_set_data_rgba8(new CnaHandle(NativeHandleValue), dataPtr, (ulong)pixels.Length);
+            CnaException.ThrowIfFailed(result, nameof(SetData));
+        }
+    }
+
     public void Dispose()
     {
         _handle.Dispose();

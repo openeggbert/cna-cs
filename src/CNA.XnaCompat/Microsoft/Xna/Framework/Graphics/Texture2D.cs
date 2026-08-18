@@ -14,4 +14,22 @@ public class Texture2D : CNA.Graphics.Texture2D
         : base(nativeHandleValue)
     {
     }
+
+    /// <summary>A distinct overload, not an override -- <see cref="Color"/> here is this
+    /// namespace's own type, which has no implicit array-to-array conversion to
+    /// <c>CNA.Color[]</c> even though individual elements convert (see that struct's own
+    /// conversion operators), so the base <see cref="CNA.Graphics.Texture2D.SetData(CNA.Color[])"/>
+    /// overload can't bind directly the way <c>SetData(byte[])</c> does.</summary>
+    public void SetData(Color[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        var converted = new CNA.Color[data.Length];
+        for (int i = 0; i < data.Length; i++)
+        {
+            converted[i] = data[i];
+        }
+
+        base.SetData(converted);
+    }
 }
