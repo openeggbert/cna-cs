@@ -1,7 +1,7 @@
 using System.Text;
 using CNA.Interop;
 
-namespace CNA.Graphics;
+namespace CNA;
 
 /// <summary>
 /// The ABI's two-call size-then-copy string pattern, in one place.
@@ -11,6 +11,10 @@ namespace CNA.Graphics;
 /// "ask for the byte count, allocate, copy, decode UTF-8" shape -- see
 /// <c>CnaError.GetLastErrorMessage</c> and <c>GameWindow.Title</c>, which each hand-rolled it
 /// before this existed.
+///
+/// Lives in the root <c>CNA</c> namespace rather than <c>CNA.Graphics</c> where it was first
+/// written: the pattern is an ABI-wide convention, not a graphics one, and <c>CNA.Media</c>'s
+/// <c>Video</c> needs it too.
 /// </summary>
 internal static class NativeStringReader
 {

@@ -605,6 +605,92 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Video / VideoPlayer (real ABI, video.h -- Phase 8 WP12) ------------------------------
+    //
+    // A Video is created against a graphics device (it decodes into a texture); a VideoPlayer is
+    // created against the *game*, not the device -- confirmed from the header, and the reason
+    // VideoPlayer's managed constructor takes no argument and uses the ambient game handle the way
+    // Keyboard/Mouse/TouchPanel already do.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_create(CnaHandle device, CnaStringView fileName, out CnaHandle outVideo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_destroy(CnaHandle video);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_get_width(CnaHandle video, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_get_height(CnaHandle video, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_get_frames_per_second(CnaHandle video, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_get_duration(CnaHandle video, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_get_soundtrack_type(CnaHandle video, out uint outType);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_get_file_name_size(CnaHandle video, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_video_copy_file_name(CnaHandle video, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_create(CnaHandle game, out CnaHandle outPlayer);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_destroy(CnaHandle player);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_play(CnaHandle player, CnaHandle video);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_stop(CnaHandle player);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_pause(CnaHandle player);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_resume(CnaHandle player);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_state(CnaHandle player, out uint outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_is_looped(CnaHandle player, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_set_is_looped(CnaHandle player, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_is_muted(CnaHandle player, out byte outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_set_is_muted(CnaHandle player, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_volume(CnaHandle player, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_set_volume(CnaHandle player, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_play_position_ticks(CnaHandle player, out long outTicks);
+
+    /// <summary>Reports availability separately from the handle: between frames, or before
+    /// playback starts, there is genuinely no texture yet -- which is why
+    /// <c>CNA.Media.VideoPlayer.GetTexture</c> can return <see langword="null"/> rather than
+    /// failing.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_texture(CnaHandle player, out CnaHandle outTexture, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_video(CnaHandle player, out CnaHandle outVideo, out byte outAvailable);
+
     // -- Effect reflection surface (real ABI, effects.h -- Phase 8 WP4a) ----------------------
     //
     // Parameters, techniques, passes and annotations are all real native objects reachable from an

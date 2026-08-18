@@ -1432,12 +1432,16 @@ WP11–WP14 are the largest new subsystems and come last.
       (`AudioEmitter`, `AudioListener`, `SoundEffect.Apply3D`) and
       `DynamicSoundEffectInstance`, `Microphone`, `MicrophoneState` from
       `audio.h`.
-- [ ] **WP12 — Video playback + media completion.** `Video`,
+- [x] **WP12 — Video playback + media completion — done 2026-08-18.** Coverage
+      →167/201. `Video`/`VideoPlayer`/`VideoSoundtrackType` bound, `MediaQueue`
+      mirrored. The always-empty `MediaLibrary` re-check is **still open** and
+      moves to WP15. Original scope:
+      <details>**WP12 — Video playback + media completion.** `Video`,
       `VideoPlayer`, `VideoSoundtrackType` from `video.h`; mirror
       `MediaQueue` into `CNA.XnaCompat` (it exists in `CNA.Framework`
       already). Revisit the always-empty `MediaLibrary` collections from
       the 2026-08-17 pass — `media_library.h` may now support more than
-      that scoping note assumed.
+      that scoping note assumed.</details>
 - [ ] **WP13 — Storage.** `StorageDevice`, `StorageContainer`, and the
       `IAsyncResult`-based `BeginOpenContainer`/`EndOpenContainer` API
       shape. Native: `storage.h`.
