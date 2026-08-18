@@ -1294,7 +1294,16 @@ types (the texture hierarchy and effect system are dependencies of several
 later packages); WP8/WP9 are self-contained and can be done any time;
 WP11–WP14 are the largest new subsystems and come last.
 
-- [ ] **WP1 — Graphics enums + `GraphicsResource` base.** Build:
+- [x] **WP1 — Graphics enums + `GraphicsResource` base — done 2026-08-18.**
+      Coverage 94/201 → 115/201. `GraphicsResource` landed but nothing
+      derives from it yet (WP3's job, see its own doc comment).
+      `SurfaceFormat` deliberately carries CNA's seven `_EXT` values beyond
+      XNA's 20 so a native value never casts to an undefined member. The
+      compat side gained a reflection-driven enum-parity test that pairs
+      every `Microsoft.Xna.Framework` enum with its `CNA.*` counterpart and
+      compares members + `[Flags]`, so later enums are covered with no test
+      edit. Tests 440 → 591. Original scope, for reference:
+      <details>Build:
       `SurfaceFormat`, `DepthFormat`, `SetDataOptions`, `CubeMapFace`,
       `RenderTargetUsage`, `PresentInterval`, `GraphicsDeviceStatus`,
       `SpriteSortMode`, `TextureAddressMode`, `TextureFilter`,
@@ -1302,20 +1311,28 @@ WP11–WP14 are the largest new subsystems and come last.
       Mirror-only into `CNA.XnaCompat`: `Blend`, `BlendFunction`,
       `ColorWriteChannels`, `CompareFunction`, `CullMode`, `FillMode`,
       `StencilOperation`, `ContentLoadException`. Ground the enums in
-      `graphics_state.h` / `graphics.h` / `display.h` `CNA_*` constants.
-- [ ] **WP2 — `SamplerState` + state collections.** `SamplerState` and its
-      seven presets, `SamplerStateCollection`, `TextureCollection`, and
-      `GraphicsDevice.SamplerStates`/`.Textures`/`.VertexSamplerStates`.
-      Native: `graphics_state.h` (`cna_sampler_state_init`,
-      `cna_graphics_device_get/set_sampler_state`, `CNA_MAX_SAMPLERS`,
-      `CNA_SHADER_STAGE_PIXEL`/`_VERTEX`) — fully specified already.
+      `graphics_state.h` / `graphics.h` / `display.h` `CNA_*` constants.</details>
+- [x] **WP2 — `SamplerState` + sampler collections — done 2026-08-18.**
+      `SamplerState` (six XNA presets, all native-seeded via
+      `cna_sampler_state_init`), `SamplerStateCollection`, and
+      `GraphicsDevice.SamplerStates`/`.VertexSamplerStates`, both stages,
+      16 slots each. The collection is deliberately stateless — every read
+      and write goes through to `cna_graphics_device_get/set_sampler_state`
+      rather than caching per slot, unlike the single-valued
+      `BlendState`/`DepthStencilState`/`RasterizerState` properties.
+      `TextureCollection` and `GraphicsDevice.Textures` **moved to WP3**:
+      the indexer's element type is XNA's `Texture` base class, which does
+      not exist until WP3 introduces it, and a collection typed on
+      `Texture2D` today would need re-typing immediately afterwards.
 - [ ] **WP3 — Texture hierarchy.** Introduce the real XNA `Texture` base
       class and reparent `Texture2D`/`RenderTarget2D` onto it (a breaking
       internal refactor — do it before more texture types exist, not
       after), then `Texture3D` (`texture_volume.h`), `TextureCube`
       (`texture.h`), `RenderTargetCube` (`render_target.h`, whose
       `_set_render_target_cube` this project already noticed but never
-      used).
+      used). Also carries `TextureCollection` and
+      `GraphicsDevice.Textures`/`.VertexTextures`, moved here from WP2 —
+      the indexer is typed on the `Texture` base this package introduces.
 - [ ] **WP4 — Full effect system.** Name-indexed `EffectParameter` /
       `EffectParameterCollection` / `EffectParameterClass` /
       `EffectParameterType`, `EffectAnnotation(Collection)`,

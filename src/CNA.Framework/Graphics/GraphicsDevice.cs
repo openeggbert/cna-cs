@@ -279,6 +279,21 @@ public class GraphicsDevice
         return RasterizerState.FromNative(native);
     }
 
+    private SamplerStateCollection? _samplerStates;
+    private SamplerStateCollection? _vertexSamplerStates;
+
+    /// <summary>The pixel shader's sampler collection. Unlike
+    /// <see cref="BlendState"/>/<see cref="DepthStencilState"/>/<see cref="RasterizerState"/>,
+    /// what is cached here is the *collection object*, not any state value -- the collection
+    /// itself reads and writes through to native on every access (see its own doc comment).</summary>
+    public SamplerStateCollection SamplerStates => _samplerStates ??= CreateSamplerStateCollection(vertexStage: false);
+
+    public SamplerStateCollection VertexSamplerStates => _vertexSamplerStates ??= CreateSamplerStateCollection(vertexStage: true);
+
+    /// <summary>Covariant-return factory hook, same pattern as <see cref="QueryBlendState"/> --
+    /// CNA.XnaCompat overrides it to build its own compat-typed collection.</summary>
+    protected virtual SamplerStateCollection CreateSamplerStateCollection(bool vertexStage) => new(this, vertexStage);
+
     private IndexBuffer? _indices;
 
     public IndexBuffer? Indices

@@ -225,6 +225,22 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_rasterizer_state(CnaHandle device, in CnaRasterizerState state);
 
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sampler_state_init(CnaSamplerStatePreset preset, out CnaSamplerState outState);
+
+    /// <summary>Matches <c>cna_graphics_device_get_sampler_state</c> exactly
+    /// (<c>graphics_state.h:461</c>) -- unlike the blend/depth/rasterizer trio, a device has two
+    /// whole *collections* of these (<paramref name="stage"/>) of
+    /// <see cref="CnaSamplerState.MaxSamplers"/> entries each (<paramref name="slot"/>), rather
+    /// than one current value.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_sampler_state(
+        CnaHandle device, CnaShaderStage stage, uint slot, out CnaSamplerState outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_sampler_state(
+        CnaHandle device, CnaShaderStage stage, uint slot, in CnaSamplerState state);
+
     /// <summary>Matches <c>cna_graphics_device_get_graphics_profile</c> exactly
     /// (<c>graphics_device.h:368</c>).</summary>
     [LibraryImport(LibraryName)]

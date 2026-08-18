@@ -86,6 +86,49 @@ internal struct CnaDepthStencilState
     public uint Reserved;
 }
 
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_SamplerStatePreset</c>
+/// exactly (<c>graphics_state.h:196-211</c>).</summary>
+internal enum CnaSamplerStatePreset : uint
+{
+    Default = 0,
+    AnisotropicClamp = 1,
+    AnisotropicWrap = 2,
+    LinearClamp = 3,
+    LinearWrap = 4,
+    PointClamp = 5,
+    PointWrap = 6,
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_ShaderStage</c> exactly
+/// (<c>graphics_state.h:213-218</c>) -- selects which of a device's two sampler collections
+/// <see cref="Native.cna_graphics_device_get_sampler_state"/> addresses.</summary>
+internal enum CnaShaderStage : uint
+{
+    Pixel = 0,
+    Vertex = 1,
+}
+
+/// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_SamplerState</c> exactly
+/// (<c>graphics_state.h:319-340</c>).</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaSamplerState
+{
+    /// <summary>Matches <c>CNA_MAX_SAMPLERS</c> (<c>graphics_state.h:220</c>) -- the entry count of
+    /// each of a device's sampler collections.</summary>
+    public const int MaxSamplers = 16;
+
+    public uint StructSize;
+    public uint StructVersion;
+    public uint AddressU;
+    public uint AddressV;
+    public uint AddressW;
+    public uint Filter;
+    public int MaxAnisotropy;
+    public int MaxMipLevel;
+    public float MipMapLevelOfDetailBias;
+    public uint Reserved;
+}
+
 /// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_RasterizerState</c>
 /// exactly (<c>graphics_state.h:297-316</c>).</summary>
 [StructLayout(LayoutKind.Sequential)]
