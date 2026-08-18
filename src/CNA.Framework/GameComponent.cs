@@ -23,7 +23,7 @@ namespace CNA;
 /// next managed-initiated call on this component. That is the closest thing to propagation this
 /// ABI shape allows.
 /// </summary>
-public class GameComponent : IGameComponent, IUpdateable, IDisposable
+public class GameComponent : IGameComponent, IUpdateable, IComparable<GameComponent>, IDisposable
 {
     private readonly CnaHandle _handle;
     private GCHandle _selfHandle;
@@ -140,6 +140,15 @@ public class GameComponent : IGameComponent, IUpdateable, IDisposable
     public event EventHandler<EventArgs>? EnabledChanged;
 
     public event EventHandler<EventArgs>? UpdateOrderChanged;
+
+    /// <summary>
+    /// Orders by <see cref="UpdateOrder"/>, matching real XNA -- which is how a
+    /// <see cref="GameComponentCollection"/> can be sorted into the order the game updates in.
+    ///
+    /// A null <paramref name="other"/> sorts first, following
+    /// <see cref="IComparable{T}"/>'s own convention that any instance is greater than nothing.
+    /// </summary>
+    public int CompareTo(GameComponent? other) => other is null ? 1 : UpdateOrder.CompareTo(other.UpdateOrder);
 
     public virtual void Initialize()
     {

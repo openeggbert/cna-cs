@@ -86,6 +86,31 @@ public class GameComponentCollection : ICollection<GameComponent>
         ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
     }
 
+    /// <summary>
+    /// Inserts at a position rather than appending. Real XNA's collection is a
+    /// <c>Collection&lt;IGameComponent&gt;</c>, so it has this through <see cref="System.Collections.IList"/>.
+    ///
+    /// Registers before the native call for the reason <see cref="Add"/> documents at length: the
+    /// component's own <c>Initialize</c> can run inside the insert, and a component that inspects
+    /// <c>Game.Components</c> from there would otherwise not find itself.
+    /// </summary>
+    public void Insert(int index, GameComponent item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+
+        _known[item.NativeHandle.Value] = item;
+
+        CnaResult result = Native.cna_game_components_insert(GameHandle, index, item.NativeHandle);
+        if (result.IsFailure())
+        {
+            _known.Remove(item.NativeHandle.Value);
+            CnaException.ThrowIfFailed(result, nameof(Insert));
+        }
+
+        ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
+    }
+
     public bool Remove(GameComponent item)
     {
         ArgumentNullException.ThrowIfNull(item);

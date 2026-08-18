@@ -193,6 +193,19 @@ public class VideoPlayer : IDisposable
     protected virtual Texture CreateFrameTexture(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
         Texture2D.CreateBorrowed(graphicsDevice, nativeHandleValue);
 
+    /// <summary>Whether this player has been disposed. Read from native rather than tracked here,
+    /// so it stays true when something else disposed the underlying player.</summary>
+    public bool IsDisposed
+    {
+        get
+        {
+            CnaResult result = Native.cna_video_player_get_is_disposed(NativeHandle, out byte disposed);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(IsDisposed));
+            return disposed != 0;
+        }
+    }
+
     public void Dispose()
     {
         _handle.Dispose();

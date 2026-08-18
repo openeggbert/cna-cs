@@ -38,6 +38,8 @@ public class GameComponentCollection : System.Collections.Generic.ICollection<CN
 
     public bool Remove(CNA.GameComponent item) => _components.Remove(item);
 
+    public void Insert(int index, CNA.GameComponent item) => _components.Insert(index, item);
+
     public void Clear() => _components.Clear();
 
     public bool Contains(CNA.GameComponent item) => _components.Contains(item);

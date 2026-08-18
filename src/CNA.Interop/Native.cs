@@ -885,6 +885,9 @@ internal static partial class Native
     internal static partial CnaResult cna_game_components_add(CnaHandle game, CnaHandle component);
 
     [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_insert(CnaHandle game, int index, CnaHandle component);
+
+    [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_game_components_remove(CnaHandle game, CnaHandle component, out byte outRemoved);
 
     [LibraryImport(LibraryName)]
@@ -1336,6 +1339,9 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_video_player_destroy(CnaHandle player);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_is_disposed(CnaHandle player, out byte outDisposed);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_video_player_play(CnaHandle player, CnaHandle video);
