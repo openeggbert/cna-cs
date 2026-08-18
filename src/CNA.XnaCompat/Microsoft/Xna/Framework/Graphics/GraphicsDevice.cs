@@ -145,6 +145,29 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         set => base.BlendFactor = value;
     }
 
+    /// <summary>Re-typed: <c>Color</c> and <c>Rectangle</c> are separate structs per
+    /// namespace.</summary>
+    public void GetBackBufferData(Color[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        GetBackBufferData(null, data, 0, data.Length);
+    }
+
+    /// <summary>See <see cref="GetBackBufferData(Color[])"/>.</summary>
+    public void GetBackBufferData(Rectangle? rect, Color[] data, int startIndex, int elementCount)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        var converted = new CNA.Color[data.Length];
+        base.GetBackBufferData(
+            rect is { } r ? (CNA.Rectangle)r : null, converted, startIndex, elementCount);
+
+        for (int i = 0; i < data.Length; i++)
+        {
+            data[i] = converted[i];
+        }
+    }
+
     /// <summary>Re-typed: <c>GraphicsDeviceStatus</c> is a separate enum per namespace.</summary>
     public new GraphicsDeviceStatus GraphicsDeviceStatus => (GraphicsDeviceStatus)(int)base.GraphicsDeviceStatus;
 

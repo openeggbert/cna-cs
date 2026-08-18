@@ -354,6 +354,130 @@ public class GraphicsDevice
             registration => Native.cna_graphics_device_unsubscribe(registration));
     }
 
+    /// <summary>
+    /// Copies the back buffer's pixels. Matches real XNA's <c>GetBackBufferData</c>.
+    ///
+    /// Constrained to <see cref="Color"/> rather than an open <c>T</c>: the ABI reads into a
+    /// <c>CNA_Color*</c>, so any other element type would be a reinterpretation this binding cannot
+    /// verify. XNA's own signature is generic, which is why the constraint is stated here rather
+    /// than silently accepted.
+    /// </summary>
+    public unsafe void GetBackBufferData(Color[] data) => GetBackBufferData(null, data, 0, data?.Length ?? 0);
+
+    /// <summary>See <see cref="GetBackBufferData(Color[])"/>.</summary>
+    public unsafe void GetBackBufferData(Rectangle? rect, Color[] data, int startIndex, int elementCount)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        var readback = new CnaBackBufferReadback
+        {
+            HasSourceRectangle = rect is null ? (byte)0 : (byte)1,
+            SourceRectangle = rect is { } r ? new CnaRect(r.X, r.Y, r.Width, r.Height) : default,
+            StartIndex = (ulong)startIndex,
+            ElementCount = (ulong)elementCount,
+        };
+
+        fixed (Color* destination = data)
+        {
+            CnaResult result = Native.cna_graphics_device_get_backbuffer_data_window(
+                ResolveNativeDeviceHandle(), in readback, (CnaColor*)destination, (ulong)data.Length);
+            CnaException.ThrowIfFailed(result, nameof(GetBackBufferData));
+        }
+    }
+
+    /// <summary>How many vertex buffers are currently bound. Real XNA's <c>GetVertexBuffers</c>
+    /// returns the bindings themselves; native answers only a count and bare handles, which cannot
+    /// be mapped back to their managed wrappers -- the limitation
+    /// <see cref="TextureCollection"/> documents. The count is the part that is honestly
+    /// answerable.</summary>
+    public int VertexBufferCount
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_vertex_buffer_count(
+                ResolveNativeDeviceHandle(), out ulong count);
+            CnaException.ThrowIfFailed(result, nameof(VertexBufferCount));
+            return (int)count;
+        }
+    }
+
+    /// <summary>
+    /// Matches real XNA's <c>GetVertexBuffers</c>. Throws.
+    ///
+    /// <c>cna_graphics_device_copy_vertex_buffers</c> answers bare handles, and this binding has no
+    /// way to map one back to the managed <see cref="VertexBuffer"/> that owns it -- so the
+    /// bindings it returned would carry null buffers, which is worse than saying so.
+    /// <see cref="VertexBufferCount"/> is the part that can be answered.
+    /// </summary>
+    public VertexBufferBinding[] GetVertexBuffers() =>
+        throw new NotSupportedException(
+            "GraphicsDevice.GetVertexBuffers cannot be answered: native reports bare handles and " +
+            "this binding cannot map one back to the managed VertexBuffer that owns it. Use " +
+            "VertexBufferCount, or track the bindings you set.");
+
+    /// <summary>Raised when a graphics resource is created on this device. The native callback
+    /// carries the resource handle; it is not surfaced, because a bare handle cannot be mapped back
+    /// to its managed wrapper -- real XNA's <c>ResourceCreatedEventArgs.Resource</c> therefore
+    /// reports <see langword="null"/> here rather than a wrong object.</summary>
+    public event EventHandler<ResourceCreatedEventArgs>? ResourceCreated
+    {
+        add
+        {
+            EnsureResourceSubscribed(created: true);
+            _resourceCreated += value;
+        }
+        remove => _resourceCreated -= value;
+    }
+
+    /// <summary>Raised when a graphics resource is destroyed. See
+    /// <see cref="ResourceCreated"/>.</summary>
+    public event EventHandler<ResourceDestroyedEventArgs>? ResourceDestroyed
+    {
+        add
+        {
+            EnsureResourceSubscribed(created: false);
+            _resourceDestroyed += value;
+        }
+        remove => _resourceDestroyed -= value;
+    }
+
+    private EventHandler<ResourceCreatedEventArgs>? _resourceCreated;
+    private EventHandler<ResourceDestroyedEventArgs>? _resourceDestroyed;
+    private NativeEventBridge? _resourceCreatedBridge;
+    private NativeEventBridge? _resourceDestroyedBridge;
+
+    private void EnsureResourceSubscribed(bool created)
+    {
+        if (created)
+        {
+            _resourceCreatedBridge ??= NativeEventBridge.SubscribeWithSender(
+                () => _resourceCreated?.Invoke(this, new ResourceCreatedEventArgs(null)),
+                (callback, context) =>
+                {
+                    CnaResult result = Native.cna_graphics_device_subscribe_resource_created(
+                        ResolveNativeDeviceHandle(), callback, context, out CnaHandle registration);
+                    CnaException.ThrowIfFailed(result, nameof(ResourceCreated));
+                    return registration;
+                },
+                registration => Native.cna_graphics_device_unsubscribe(registration));
+            return;
+        }
+
+        _resourceDestroyedBridge ??= NativeEventBridge.SubscribeWithSender(
+            () => _resourceDestroyed?.Invoke(this, new ResourceDestroyedEventArgs(null, null)),
+            (callback, context) =>
+            {
+                CnaResult result = Native.cna_graphics_device_subscribe_resource_destroyed(
+                    ResolveNativeDeviceHandle(), callback, context, out CnaHandle registration);
+                CnaException.ThrowIfFailed(result, nameof(ResourceDestroyed));
+                return registration;
+            },
+            registration => Native.cna_graphics_device_unsubscribe(registration));
+    }
+
     private void RaiseDeviceEvent(CnaGraphicsDeviceEvent which)
     {
         EventHandler<EventArgs>? handler = which switch

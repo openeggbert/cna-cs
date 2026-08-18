@@ -2139,6 +2139,48 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_unsubscribe(CnaHandle registration);
 
+    // The last of the member-level gaps: back-buffer readback, the two resource events, the bound
+    // vertex-buffer count, adapter preferences and format queries, encoded sound-effect decoding,
+    // the storage device-changed event, and the two native window handles.
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_get_backbuffer_data_window(
+        CnaHandle device, in CnaBackBufferReadback readback, CnaColor* destination, ulong capacity);
+
+    /// <summary>The resource events carry the resource handle alongside the context, so they go
+    /// through <c>NativeEventBridge.SubscribeWithSender</c> like the ContentLost pair.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_subscribe_resource_created(
+        CnaHandle device, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_subscribe_resource_destroyed(
+        CnaHandle device, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_vertex_buffer_count(CnaHandle device, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_set_device_preferences(
+        CnaHandle device, uint adapterIndex, byte useNullDevice, byte useReferenceDevice);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sound_effect_create_from_encoded_ext(
+        CnaHandle game, byte* bytes, ulong byteCount, out CnaHandle outSoundEffect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_subscribe_device_changed(
+        nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_device_unsubscribe_device_changed(CnaHandle registration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_window_get_native_handle_ext(CnaHandle game, out ulong outHandle);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_get_window_handle(CnaHandle game, out ulong outWindow);
+
     /// <summary><c>ref</c> for the same caller-initialized reason as
     /// <see cref="cna_graphics_adapter_get_current_display_mode"/>.</summary>
     [LibraryImport(LibraryName)]

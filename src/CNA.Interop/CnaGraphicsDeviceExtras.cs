@@ -96,3 +96,28 @@ internal static class CnaTextureCollectionLimits
 {
     public const int MaxTextures = 16;
 }
+
+/// <summary>
+/// Mirrors <c>CNA_BackBufferReadback</c> exactly (<c>graphics_device.h:663</c>): the optional
+/// source window for <c>cna_graphics_device_get_backbuffer_data_window</c>. Caller-initialised and
+/// versioned, so it self-populates its header.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaBackBufferReadback
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public byte HasSourceRectangle;
+    public byte Reserved0;
+    public byte Reserved1;
+    public byte Reserved2;
+    public CnaRect SourceRectangle;
+    public ulong StartIndex;
+    public ulong ElementCount;
+
+    public unsafe CnaBackBufferReadback()
+    {
+        StructSize = (uint)sizeof(CnaBackBufferReadback);
+        StructVersion = 1;
+    }
+}
