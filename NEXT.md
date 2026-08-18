@@ -11,6 +11,85 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## "Missing XNA surface" push for cna-cs-template: BlendState/DepthStencilState/RasterizerState, Viewport, GraphicsProfile, DrawUserPrimitives, Game.Window/IsMouseVisible (2026-08-18, session 7 continued autonomously; user asked to finish `../cna-cs-template`, chose "add the missing XNA surface to cna-cs first" over simplifying the demo)
+
+`cna-cs-template`'s `HelloGame.cs` (an adaptive 3D-cube/2D-logo demo, unchanged since before this
+session, kept exactly as written per the user's own choice) used seven XNA subsystems
+`CNA.XnaCompat` didn't implement at all: a real `GraphicsDeviceManager`, `Game.Window`/`.Title`,
+`Game.IsMouseVisible`, `GraphicsDevice.Viewport`/`.GraphicsProfile`, `BlendState`/
+`DepthStencilState`/`RasterizerState`, a `Clear(ClearOptions, Color, float, int)` overload, and
+`DrawUserPrimitives<T>`. Re-reading the file precisely (rather than working from the earlier
+scoping pass's summary) found the actual surface needed was narrower than first estimated --
+`GraphicsDeviceManager` itself needed no new members at all, since the file only ever constructs
+one and never touches it again.
+
+Every new type is grounded directly in the real, shipped `openeggbert/cna` C API headers
+(`graphics_state.h`, `graphics_device.h`, `display.h`, `runtime.h`, `runtime_window.h`), added to
+both `CNA.Framework` and its `CNA.XnaCompat` mirror:
+
+- `BlendState`/`DepthStencilState`/`RasterizerState`: new `CNA.Interop` structs matching
+  `CNA_BlendState`/`CNA_DepthStencilState`/`CNA_RasterizerState` field-for-field, seven supporting
+  enums matching the real `CNA_*` constants, and static presets (`Opaque`/`AlphaBlend`/`Additive`/
+  `NonPremultiplied`, `Default`/`DepthRead`/`None`, `CullClockwise`/`CullCounterClockwise`/
+  `CullNone`) seeded from the real `cna_*_state_init` preset calls rather than hardcoded -- those
+  calls take no device handle, so they're safe to run at static-field-init time.
+- `GraphicsDevice.BlendState`/`DepthStencilState`/`RasterizerState`: lazily query current device
+  state via `cna_graphics_device_get_*_state` on first read. The XnaCompat override needed more
+  than a plain downcast pass-through (the `Indices` property's own established pattern): that
+  property's base default is `null`, safe to downcast unconditionally, but these three properties'
+  base default is a real, non-null constructed value -- a naive downcast would throw
+  `InvalidCastException` on a first read that happens before any explicit `set`. Fixed by
+  extracting the default-construction path into `protected virtual QueryBlendState`/
+  `QueryDepthStencilState`/`QueryRasterizerState` hooks the compat override overrides.
+- `Viewport`/`GraphicsProfile`/`ClearOptions`: `Viewport` mirrors `CNA_Viewport` (a plain fixed
+  struct, no `struct_size`/`struct_version` header, unlike this project's other interop structs).
+  Both get struct/enum duplication into `CNA.XnaCompat`'s own namespace, matching the existing
+  `Color`/`PrimitiveType`/`SpriteEffects` precedent (structs can't be subclassed; enums need an
+  explicit cast across the boundary).
+- `DrawUserPrimitives<T>`: only the four vertex types the real `CNA_UserVertexSource` names
+  (`VertexPositionColor`/`VertexPositionColorTexture`/`VertexPositionTexture`/
+  `VertexPositionNormalTexture`) are supported. The `CNA.XnaCompat` override can't forward to the
+  base generic method at all -- compat vertex structs are separate types from their `CNA.Graphics`
+  counterparts (structs can't share a type across the boundary), so the base's own `typeof(T) ==`
+  checks would never match a compat type. Both sides now build on a new shared `protected
+  DrawUserPrimitivesRaw(void*, UserVertexSource, ...)` pointer-and-identity level instead --
+  `CNA.Graphics.UserVertexSource` is `public` (not `internal`, unlike the `CNA.Interop` enum it
+  mirrors) specifically so `CNA.XnaCompat` can pass it with no `InternalsVisibleTo` grant into
+  `CNA.Interop` needed.
+- `Game.Window`/`GameWindow.Title`: the real ABI has no `cna_game_window_set_title` -- the only
+  setter is `cna_game_set_window_title` (`runtime.h:246`), a plain owned-handle call safe to run
+  any time (including from a game's own constructor, confirmed from the header's "Active owned or
+  callback-borrowed" doc wording, needed since `HelloGame`'s constructor sets `Window.Title` before
+  any lifecycle callback ever fires).
+- `Texture2D.SetData(Color[])`: not part of the original scoping pass, surfaced only once
+  `cna-cs-template` actually got far enough to compile against it. Real XNA's `SetData` is generic;
+  this project implements only the `Color[]` case any current caller needs, going straight through
+  `cna_texture2d_set_data_rgba8`'s own `const CNA_Color*` pixel-array shape.
+
+Also found and fixed the actual remaining blocker for `cna-cs-template` itself: its `.csproj`
+referenced a nonexistent `CNA.Framework 1.0.0-preview` NuGet package (now a `ProjectReference` to
+the sibling `cna-cs` checkout's `CNA.XnaCompat.csproj`, which pulls in `CNA.Framework`
+transitively) -- and, found only once that was fixed and real compile errors could surface, a
+genuine namespace collision: `HelloGame.cs`/`Program.cs` declared `namespace CNA.NET.Template;`,
+which nests under `CNA` and made bare `Game`/`Color`/`PlayerIndex` resolve to `CNA`'s own types
+instead of the intended `Microsoft.Xna.Framework` compat ones (an enclosing namespace's members
+shadow a `using` directive's imports in C#, even though the `using Microsoft.Xna.Framework;` line
+was right there) -- cascading into every other error the first real build attempt reported. Asked
+the user how to resolve it (renaming the template's namespace vs. fully-qualifying every reference
+vs. leaving it unbuilt); user chose the rename. Fixed by renaming to `CnaCsTemplate` in both files
+and the `.csproj`'s `RootNamespace` -- no logic touched.
+
+`cna-cs-template` now builds clean with `Engine=CNA` (0 errors; 5 pre-existing nullable-field
+warnings in `HelloGame.cs` itself, not touched) and `Engine=MonoGame` still builds too (unaffected,
+confirms no regression to the other three engine branches). `cna-cs`'s own `CNA.sln` still builds
+with 0 warnings/0 errors and all 440 tests still pass throughout every step of this push.
+
+Not yet done: `Engine=FNA`/`Engine=Kni` weren't build-verified (FNA needs a local `libs\FNA.dll`
+this environment doesn't have; Kni wasn't attempted). Runtime behavior of `cna-cs-template` itself
+is unverified beyond compiling -- this environment has no real `cna-native` shared library to run
+against. The `/code-review high` cycle for both this push and the still-pending native-ABI-migration
+compile-fix pass (see the entry below) is still outstanding.
+
 ## Native ABI migration verified by compilation -- clean build, 440/440 runnable tests pass (2026-08-18, session 7 continued autonomously; user lifted the compilation hold with "zkus to zkompilovat")
 
 First build attempt across the whole 11-step migration, now that the standing compilation hold is
