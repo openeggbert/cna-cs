@@ -74,4 +74,39 @@ public class RenderTargetCube : TextureCube
     /// <summary>Matches <c>cna_render_target_destroy</c> -- not <c>cna_texturecube_destroy</c>,
     /// which this type would otherwise inherit and which does not own this handle.</summary>
     protected override void ReleaseNative(nint handleValue) => RenderTarget2D.ReleaseNativeRenderTarget(handleValue);
+
+    /// <summary>Shares <see cref="RenderTarget2D"/>'s reader -- <c>cna_render_target_get_info</c>
+    /// serves both kinds and reports which through its own <c>kind</c> field.</summary>
+    private static CnaRenderTargetInfo GetInfo(nint handleValue) => RenderTarget2D.GetInfo(handleValue);
+
+    /// <summary>The depth/stencil format this target was created with.</summary>
+    public DepthFormat DepthStencilFormat => (DepthFormat)GetInfo(NativeHandleValue).DepthStencilFormat;
+
+    /// <summary>How many samples this target multisamples with. Zero when it does not.</summary>
+    public int MultiSampleCount => GetInfo(NativeHandleValue).MultiSampleCount;
+
+    /// <summary>Whether contents survive a device reset or a rebind.</summary>
+    public RenderTargetUsage RenderTargetUsage => (RenderTargetUsage)GetInfo(NativeHandleValue).Usage;
+
+    /// <summary>Whether a device reset has discarded this target's contents. Read from native
+    /// (<c>CNA_RenderTargetInfo.content_lost</c>) rather than hardcoded -- the same correction
+    /// <see cref="DynamicVertexBuffer.IsContentLost"/> already got.</summary>
+    public bool IsContentLost => GetInfo(NativeHandleValue).ContentLost != 0;
+
+    /// <summary>
+    /// Raised when a device reset discards this target's contents.
+    ///
+    /// <c>render_target.h</c> has no per-target subscription route -- unlike
+    /// <c>vertex_resources.h</c>/<c>index_resources.h</c>, which do. So this is currently inert,
+    /// and says so rather than pretending: <see cref="IsContentLost"/> is the real signal, and a
+    /// game that needs to react polls it after a reset. Closing this needs a
+    /// <c>cna_render_target_subscribe_content_lost</c> upstream.
+    /// </summary>
+    public event EventHandler<EventArgs>? ContentLost
+    {
+        add => _contentLost += value;
+        remove => _contentLost -= value;
+    }
+
+    private EventHandler<EventArgs>? _contentLost;
 }

@@ -413,6 +413,12 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_effect_destroy(CnaHandle effect);
 
+    /// <summary>Clones an effect into "an owned clone of the same concrete native type"
+    /// (<c>effects.h:1166</c>) -- so a cloned BasicEffect really is a BasicEffect natively, which is
+    /// what lets the managed side rewrap it as the same class.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_effect_clone(CnaHandle effect, out CnaHandle outClone);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_effect_apply(CnaHandle effect);
 

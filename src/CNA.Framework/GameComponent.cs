@@ -137,6 +137,11 @@ public class GameComponent : IGameComponent, IUpdateable, IComparable<GameCompon
         }
     }
 
+    /// <summary>Raised once as this component is disposed, matching real XNA. Fires on the way
+    /// *into* disposal, so a handler can still read the component's own state -- the same ordering
+    /// <see cref="Graphics.GraphicsResource.Disposing"/> uses.</summary>
+    public event EventHandler<EventArgs>? Disposed;
+
     public event EventHandler<EventArgs>? EnabledChanged;
 
     public event EventHandler<EventArgs>? UpdateOrderChanged;
@@ -209,6 +214,8 @@ public class GameComponent : IGameComponent, IUpdateable, IComparable<GameCompon
         }
 
         _disposed = true;
+        Native.cna_game_component_destroy(_handle);        _disposed = true;
+        Disposed?.Invoke(this, EventArgs.Empty);
         Native.cna_game_component_destroy(_handle);
 
         if (_selfHandle.IsAllocated)

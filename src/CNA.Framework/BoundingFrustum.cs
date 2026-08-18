@@ -224,5 +224,10 @@ public class BoundingFrustum : IEquatable<BoundingFrustum>
 
     public bool Equals(BoundingFrustum? other) => other is not null && _matrix.Equals(other._matrix);
     public override bool Equals(object? obj) => Equals(obj as BoundingFrustum);
+    /// <summary>Matches real XNA's format: the six planes in Near/Far/Left/Right/Top/Bottom
+    /// order.</summary>
+    public override string ToString() =>
+        $"{{Near:{Near} Far:{Far} Left:{Left} Right:{Right} Top:{Top} Bottom:{Bottom}}}";
+
     public override int GetHashCode() => _matrix.GetHashCode();
 }

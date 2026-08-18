@@ -111,6 +111,16 @@ public class GameComponentCollection : ICollection<GameComponent>
         ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
     }
 
+    /// <summary>Removes the component at a position. Real XNA's collection is a
+    /// <c>Collection&lt;IGameComponent&gt;</c>, so it has this through
+    /// <see cref="System.Collections.IList"/>. Resolves the component first so
+    /// <see cref="ComponentRemoved"/> can name it, which is what a handler needs.</summary>
+    public void RemoveAt(int index)
+    {
+        GameComponent component = this[index];
+        Remove(component);
+    }
+
     public bool Remove(GameComponent item)
     {
         ArgumentNullException.ThrowIfNull(item);

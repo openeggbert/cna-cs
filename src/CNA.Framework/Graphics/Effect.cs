@@ -118,6 +118,30 @@ public abstract class Effect : IDisposable
 
     public void Apply() => OnApply();
 
+    /// <summary>
+    /// An independent copy of this effect, matching real XNA's <c>Effect.Clone</c>.
+    ///
+    /// Abstract-by-default rather than implemented here: the ABI clones into "an owned clone of the
+    /// same concrete native type", so rewrapping the result needs to know which managed class to
+    /// build -- which only the concrete effect knows. Every effect this project ships overrides it.
+    /// The base throws rather than returning something of the wrong type.
+    /// </summary>
+    public virtual Effect Clone() =>
+        throw new NotSupportedException(
+            $"{GetType().Name} does not implement Clone. The native clone route exists " +
+            "(cna_effect_clone), but rewrapping its result requires the concrete effect type to " +
+            "construct the matching managed class.");
+
+    /// <summary>Clones the native effect and hands back the new handle for a subclass to wrap.
+    /// The caller owns it.</summary>
+    private protected CnaHandle CloneNativeHandle()
+    {
+        CnaResult result = Native.cna_effect_clone(new CnaHandle(NativeEffectHandleValue), out CnaHandle clone);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(Clone));
+        return clone;
+    }
+
     protected abstract void OnApply();
 
     public virtual void Dispose()

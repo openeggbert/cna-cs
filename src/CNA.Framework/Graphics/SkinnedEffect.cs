@@ -214,4 +214,19 @@ public class SkinnedEffect : StockEffect, IEffectMatrices, IEffectFog, IEffectLi
 
     private protected override void ReleaseAdditionalNativeResources() =>
         ReleaseDirectionalLights(DirectionalLight0, DirectionalLight1, DirectionalLight2);
+
+    /// <summary>Adopts an already-created native effect -- the clone route's landing point. Private
+    /// because a caller has no way to obtain a bare handle; only <see cref="Clone"/> produces one.</summary>
+    private SkinnedEffect(GraphicsDevice graphicsDevice, CnaHandle nativeHandle)
+        : base(graphicsDevice, nativeHandle)
+    {
+        DirectionalLight0 = FetchDirectionalLight(0);
+        DirectionalLight1 = FetchDirectionalLight(1);
+        DirectionalLight2 = FetchDirectionalLight(2);
+    }
+
+    /// <summary>An independent copy, matching real XNA. The native clone is documented to be "of
+    /// the same concrete native type", which is what makes rewrapping it as
+    /// <see cref="SkinnedEffect"/> correct rather than a guess.</summary>
+    public override Effect Clone() => new SkinnedEffect(GraphicsDevice, CloneNativeHandle());
 }

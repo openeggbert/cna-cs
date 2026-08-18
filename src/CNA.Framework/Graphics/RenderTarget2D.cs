@@ -79,4 +79,46 @@ public class RenderTarget2D : Texture2D
     public override int Width => GetDimensions(NativeHandleValue).Width;
 
     public override int Height => GetDimensions(NativeHandleValue).Height;
+
+    /// <summary>Reads the whole info block. Kept alongside <see cref="GetDimensions"/> rather than
+    /// replacing it: most callers want only the two dimensions, and this one exists because
+    /// XNA exposes five more properties off the same native call.</summary>
+    internal static CnaRenderTargetInfo GetInfo(nint handleValue)
+    {
+        var info = new CnaRenderTargetInfo();
+        CnaResult result = Native.cna_render_target_get_info(new CnaHandle(handleValue), ref info);
+        CnaException.ThrowIfFailed(result, "cna_render_target_get_info");
+        return info;
+    }
+
+    /// <summary>The depth/stencil format this target was created with.</summary>
+    public DepthFormat DepthStencilFormat => (DepthFormat)GetInfo(NativeHandleValue).DepthStencilFormat;
+
+    /// <summary>How many samples this target multisamples with. Zero when it does not.</summary>
+    public int MultiSampleCount => GetInfo(NativeHandleValue).MultiSampleCount;
+
+    /// <summary>Whether contents survive a device reset or a rebind.</summary>
+    public RenderTargetUsage RenderTargetUsage => (RenderTargetUsage)GetInfo(NativeHandleValue).Usage;
+
+    /// <summary>Whether a device reset has discarded this target's contents. Read from native
+    /// (<c>CNA_RenderTargetInfo.content_lost</c>) rather than hardcoded -- the same correction
+    /// <see cref="DynamicVertexBuffer.IsContentLost"/> already got.</summary>
+    public bool IsContentLost => GetInfo(NativeHandleValue).ContentLost != 0;
+
+    /// <summary>
+    /// Raised when a device reset discards this target's contents.
+    ///
+    /// <c>render_target.h</c> has no per-target subscription route -- unlike
+    /// <c>vertex_resources.h</c>/<c>index_resources.h</c>, which do. So this is currently inert,
+    /// and says so rather than pretending: <see cref="IsContentLost"/> is the real signal, and a
+    /// game that needs to react polls it after a reset. Closing this needs a
+    /// <c>cna_render_target_subscribe_content_lost</c> upstream.
+    /// </summary>
+    public event EventHandler<EventArgs>? ContentLost
+    {
+        add => _contentLost += value;
+        remove => _contentLost -= value;
+    }
+
+    private EventHandler<EventArgs>? _contentLost;
 }

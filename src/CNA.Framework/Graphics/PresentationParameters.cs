@@ -94,6 +94,17 @@ public class PresentationParameters
     /// origin.</summary>
     public Rectangle Bounds => new(0, 0, BackBufferWidth, BackBufferHeight);
 
+    /// <summary>
+    /// The native window this device presents into. Matches real XNA's <c>DeviceWindowHandle</c>.
+    ///
+    /// Always zero, and read-only. <c>display.h</c> has
+    /// <c>cna_graphics_device_get_native_window_handle</c>, which answers for a *device*; this is a
+    /// standalone value type with no device to ask. Setting it has no route at all -- in this ABI
+    /// the window belongs to the game, not to a presentation parameter. Present rather than omitted
+    /// so ported XNA source compiles.
+    /// </summary>
+    public nint DeviceWindowHandle => 0;
+
     public PresentationParameters Clone() => new(_native);
 
     internal CnaPresentationParameters ToNative() => _native;

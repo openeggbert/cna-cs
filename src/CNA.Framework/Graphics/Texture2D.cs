@@ -149,6 +149,44 @@ public class Texture2D : Texture
         SetDataRgba8(NativeHandleValue, data);
     }
 
+    /// <summary>The whole surface as a rectangle at the origin. Matches real XNA.</summary>
+    public Rectangle Bounds => new(0, 0, Width, Height);
+
+    /// <summary>
+    /// Matches real XNA's <c>GetData</c>. Currently throws.
+    ///
+    /// <c>texture.h</c> declares <c>cna_texture2d_get_data</c> and <c>_get_data_rgba8</c>, but this
+    /// binding has no route to reach them for an arbitrary <typeparamref name="T"/>: the ABI reads
+    /// into a typed destination selected by its own format enum, and mapping an arbitrary managed
+    /// element type onto that safely needs a size-and-format check the ABI does not expose. Rather
+    /// than read the wrong number of bytes, this reports what is missing.
+    ///
+    /// The member exists rather than being omitted so ported XNA source compiles and fails at the
+    /// call rather than at build time -- see <c>plan.md</c>'s scope mandate.
+    /// </summary>
+    public void GetData<T>(T[] data) where T : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        GetData(0, null, data, 0, data.Length);
+    }
+
+    /// <summary>See <see cref="GetData{T}(T[])"/>.</summary>
+    public void GetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
+        GetData(0, null, data, startIndex, elementCount);
+
+    /// <summary>See <see cref="GetData{T}(T[])"/>.</summary>
+    public void GetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
+        where T : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(data);
+
+        throw new NotSupportedException(
+            "Texture2D.GetData is not reachable through the current C API. cna_texture2d_get_data " +
+            "reads into a destination typed by its own format enum, and this binding has no route " +
+            "to verify that an arbitrary element type matches that format -- reading the wrong " +
+            "width would silently corrupt the result. Needs a format-and-element-size query upstream.");
+    }
+
     /// <summary>
     /// Matches real XNA's <c>Texture2D.FromStream</c>: decodes an encoded image (PNG, JPEG, DDS or
     /// whatever else the renderer supports) into a texture.
