@@ -6,6 +6,14 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// re-typing, since that enum is duplicated per namespace (see its own doc comment).</summary>
 public class Texture3D : CNA.Graphics.Texture3D
 {
+    /// <summary>Wraps an already-created native handle -- the landing point for a texture read back
+    /// out of a shader parameter. <c>protected internal</c> so <see cref="EffectParameter"/> can
+    /// reach it, matching <see cref="Texture2D"/>'s own raw-handle constructor.</summary>
+    protected internal Texture3D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+        : base(graphicsDevice, nativeHandleValue)
+    {
+    }
+
     public Texture3D(GraphicsDevice graphicsDevice, int width, int height, int depth)
         : base(graphicsDevice, width, height, depth)
     {

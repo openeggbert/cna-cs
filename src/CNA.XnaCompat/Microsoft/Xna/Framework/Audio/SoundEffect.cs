@@ -35,4 +35,17 @@ public class SoundEffect : CNA.Audio.SoundEffect
 
     public static int GetSampleSizeInBytes(TimeSpan duration, int sampleRate, AudioChannels channels) =>
         CNA.Audio.SoundEffect.GetSampleSizeInBytes(duration, sampleRate, (CNA.Audio.AudioChannels)(int)channels);
+
+    /// <summary>Matches real XNA's <c>SoundEffect.FromStream</c>, re-typed to this namespace's own
+    /// <see cref="SoundEffect"/>. Cannot forward to the base factory -- that builds a
+    /// <c>CNA.Audio.SoundEffect</c> and a compat effect is a separate class -- so it goes through
+    /// the same <c>protected internal</c> raw-handle constructor <c>ContentManager</c> uses, taking
+    /// ownership of the decoded handle.</summary>
+    public static new SoundEffect FromStream(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        using CNA.Audio.SoundEffect decoded = CNA.Audio.SoundEffect.FromStream(stream);
+        return new SoundEffect(decoded.DetachNativeHandle());
+    }
 }

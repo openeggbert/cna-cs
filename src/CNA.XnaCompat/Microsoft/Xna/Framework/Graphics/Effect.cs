@@ -48,4 +48,17 @@ public abstract class Effect : CNA.Graphics.Effect
         Inner.Dispose();
         base.Dispose();
     }
+
+    /// <summary>
+    /// Matches real XNA's <c>Effect.Clone</c>. Throws on this base, as on the CNA one.
+    ///
+    /// The compat effects <em>compose</em> their <c>CNA.Graphics</c> counterpart rather than
+    /// deriving from it, so cloning has to build both halves: the native clone and a matching compat
+    /// wrapper around it. Only a concrete effect knows which pair to build, and every concrete
+    /// compat effect overrides this.
+    /// </summary>
+    public override CNA.Graphics.Effect Clone() =>
+        throw new NotSupportedException(
+            $"{GetType().Name} does not implement Clone. Cloning a compat effect needs both the " +
+            "native clone and a matching compat wrapper, which only the concrete effect type can build.");
 }

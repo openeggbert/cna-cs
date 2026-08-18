@@ -17,4 +17,53 @@ public class GraphicsAdapter : CNA.Graphics.GraphicsAdapter
 
     public bool IsProfileSupported(GraphicsProfile profile) =>
         base.IsProfileSupported((CNA.Graphics.GraphicsProfile)(int)profile);
+
+    /// <summary>Re-typed: <c>GraphicsProfile</c>, <c>SurfaceFormat</c> and <c>DepthFormat</c> are
+    /// all separate enums per namespace.</summary>
+    public bool QueryRenderTargetFormat(
+        GraphicsProfile graphicsProfile,
+        SurfaceFormat format,
+        DepthFormat depthFormat,
+        int multiSampleCount,
+        out SurfaceFormat selectedFormat,
+        out DepthFormat selectedDepthFormat,
+        out int selectedMultiSampleCount)
+    {
+        bool exact = base.QueryRenderTargetFormat(
+            (CNA.Graphics.GraphicsProfile)(int)graphicsProfile,
+            (CNA.Graphics.SurfaceFormat)(int)format,
+            (CNA.Graphics.DepthFormat)(int)depthFormat,
+            multiSampleCount,
+            out CNA.Graphics.SurfaceFormat nativeFormat,
+            out CNA.Graphics.DepthFormat nativeDepth,
+            out selectedMultiSampleCount);
+
+        selectedFormat = (SurfaceFormat)(int)nativeFormat;
+        selectedDepthFormat = (DepthFormat)(int)nativeDepth;
+        return exact;
+    }
+
+    /// <summary>See <see cref="QueryRenderTargetFormat"/>.</summary>
+    public bool QueryBackBufferFormat(
+        GraphicsProfile graphicsProfile,
+        SurfaceFormat format,
+        DepthFormat depthFormat,
+        int multiSampleCount,
+        out SurfaceFormat selectedFormat,
+        out DepthFormat selectedDepthFormat,
+        out int selectedMultiSampleCount)
+    {
+        bool exact = base.QueryBackBufferFormat(
+            (CNA.Graphics.GraphicsProfile)(int)graphicsProfile,
+            (CNA.Graphics.SurfaceFormat)(int)format,
+            (CNA.Graphics.DepthFormat)(int)depthFormat,
+            multiSampleCount,
+            out CNA.Graphics.SurfaceFormat nativeFormat,
+            out CNA.Graphics.DepthFormat nativeDepth,
+            out selectedMultiSampleCount);
+
+        selectedFormat = (SurfaceFormat)(int)nativeFormat;
+        selectedDepthFormat = (DepthFormat)(int)nativeDepth;
+        return exact;
+    }
 }

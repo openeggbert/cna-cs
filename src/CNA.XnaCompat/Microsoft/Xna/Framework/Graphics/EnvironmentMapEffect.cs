@@ -198,4 +198,16 @@ public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffect
 
     void CNA.Graphics.IEffectLights.EnableDefaultLighting() => Typed.EnableDefaultLighting();
 
+
+    /// <summary>Clones both halves: the native effect and a matching compat wrapper around it. See
+    /// <see cref="Effect.Clone"/> for why the base cannot do this.</summary>
+    public override CNA.Graphics.Effect Clone() =>
+        new EnvironmentMapEffect((GraphicsDevice)GraphicsDevice, (CNA.Graphics.EnvironmentMapEffect)Typed.Clone());
+
+    /// <summary>Adopts an already-cloned inner effect. Private: only <see cref="Clone"/> has
+    /// one.</summary>
+    private EnvironmentMapEffect(GraphicsDevice graphicsDevice, CNA.Graphics.EnvironmentMapEffect inner)
+        : base(graphicsDevice, inner)
+    {
+    }
 }

@@ -36,4 +36,32 @@ public class RenderTargetCube : TextureCube
 
     protected override void ReleaseNative(nint handleValue) =>
         CNA.Graphics.RenderTarget2D.ReleaseNativeRenderTarget(handleValue);
+
+    /// <summary>Reads from <c>cna_render_target_get_info</c> through
+    /// <c>CNA.Graphics.RenderTarget2D</c>'s own internal reader, the same way
+    /// this type's own dimensions already are -- it derives from its own
+    /// namespace's texture base, not from <c>CNA.Graphics.RenderTarget2D</c>, so there is no base
+    /// property to re-type. <c>cna_render_target_get_info</c> serves both kinds.</summary>
+    public DepthFormat DepthStencilFormat =>
+        (DepthFormat)(int)CNA.Graphics.RenderTarget2D.GetRenderTargetProperties(NativeHandleValue).DepthStencilFormat;
+
+    /// <summary>See <see cref="DepthStencilFormat"/>.</summary>
+    public RenderTargetUsage RenderTargetUsage =>
+        (RenderTargetUsage)(int)CNA.Graphics.RenderTarget2D.GetRenderTargetProperties(NativeHandleValue).Usage;
+
+    /// <summary>See <see cref="DepthStencilFormat"/>.</summary>
+    public int MultiSampleCount => CNA.Graphics.RenderTarget2D.GetRenderTargetProperties(NativeHandleValue).MultiSampleCount;
+
+    /// <summary>See <see cref="DepthStencilFormat"/>.</summary>
+    public bool IsContentLost => CNA.Graphics.RenderTarget2D.GetRenderTargetProperties(NativeHandleValue).ContentLost;
+
+    /// <summary>Inert -- <c>render_target.h</c> has no per-target subscription route. See
+    /// <see cref="CNA.Graphics.RenderTarget2D.ContentLost"/>.</summary>
+    public event EventHandler<EventArgs>? ContentLost
+    {
+        add => _contentLost += value;
+        remove => _contentLost -= value;
+    }
+
+    private EventHandler<EventArgs>? _contentLost;
 }

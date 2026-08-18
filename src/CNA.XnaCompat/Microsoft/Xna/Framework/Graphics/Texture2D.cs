@@ -72,4 +72,9 @@ public class Texture2D : Texture
         using CNA.Graphics.Texture2D decoded = CNA.Graphics.Texture2D.FromStream(graphicsDevice, stream);
         return new Texture2D(graphicsDevice, decoded.DetachNativeHandle());
     }
+
+    /// <summary>This namespace's own <c>Rectangle</c>. Not a <c>new</c> override: this class
+    /// derives from its own namespace's texture base rather than from
+    /// <c>CNA.Graphics.Texture2D</c>, so there is nothing to hide.</summary>
+    public Rectangle Bounds => new(0, 0, Width, Height);
 }

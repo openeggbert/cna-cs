@@ -112,4 +112,37 @@ public class EffectParameter
 
         return result;
     }
+
+    /// <summary>Re-typed: <c>Texture2D</c> is a separate class per namespace. Detaches the handle
+    /// from the framework wrapper rather than sharing it -- two owners of one texture handle is a
+    /// double-free.</summary>
+    public Texture2D? GetValueTexture2D()
+    {
+        using CNA.Graphics.Texture2D? texture = _parameter.GetValueTexture2D();
+        return texture is null ? null : new Texture2D(GraphicsDeviceOf(texture), texture.DetachNativeHandle());
+    }
+
+    /// <summary>See <see cref="GetValueTexture2D"/>.</summary>
+    public Texture3D? GetValueTexture3D()
+    {
+        using CNA.Graphics.Texture3D? texture = _parameter.GetValueTexture3D();
+        return texture is null ? null : new Texture3D(GraphicsDeviceOf(texture), texture.DetachNativeHandle());
+    }
+
+    /// <summary>See <see cref="GetValueTexture2D"/>.</summary>
+    public TextureCube? GetValueTextureCube()
+    {
+        using CNA.Graphics.TextureCube? texture = _parameter.GetValueTextureCube();
+        return texture is null ? null : new TextureCube(GraphicsDeviceOf(texture), texture.DetachNativeHandle());
+    }
+
+    /// <summary>The compat device the framework texture was built against. It is compat-typed for
+    /// every reachable instance -- the parameter's device is threaded down from the compat
+    /// <c>Effect</c> that created it -- but the cast is checked rather than assumed, because
+    /// <c>GraphicsResource.GraphicsDevice</c> is public and this class cannot prove otherwise.</summary>
+    private static GraphicsDevice GraphicsDeviceOf(CNA.Graphics.Texture texture) =>
+        texture.GraphicsDevice as GraphicsDevice
+        ?? throw new InvalidOperationException(
+            "This effect parameter's texture belongs to a CNA.Graphics.GraphicsDevice rather than a " +
+            "compat one, so it cannot be re-typed into this namespace.");
 }

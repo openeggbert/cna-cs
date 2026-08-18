@@ -79,6 +79,12 @@ public class SoundEffect : IDisposable
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
 
+    /// <summary>Hands this effect's handle to a new owner, leaving this object inert. Used by
+    /// CNA.XnaCompat's own <c>FromStream</c>, which cannot reuse the base factory's result because
+    /// a compat <c>SoundEffect</c> is a separate class -- see
+    /// <see cref="NativeResourceHandle.Detach"/> for why transferring beats sharing.</summary>
+    internal nint DetachNativeHandle() => _handle.Detach();
+
     /// <summary>
     /// A caller-set label. Real XNA's <c>SoundEffect.Name</c>, and unlike
     /// <c>GraphicsResource.Name</c> this one really does cross the ABI --

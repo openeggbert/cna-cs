@@ -91,6 +91,20 @@ public class RenderTarget2D : Texture2D
         return info;
     }
 
+    /// <summary>
+    /// The four XNA properties read off one info block, returned as public types rather than as
+    /// <c>CnaRenderTargetInfo</c> -- the same reason <see cref="GetDimensions"/> returns a tuple:
+    /// CNA.XnaCompat's parallel render targets need to call this, and they cannot name a
+    /// <c>CNA.Interop</c> type.
+    /// </summary>
+    internal static (DepthFormat DepthStencilFormat, RenderTargetUsage Usage, int MultiSampleCount, bool ContentLost)
+        GetRenderTargetProperties(nint handleValue)
+    {
+        CnaRenderTargetInfo info = GetInfo(handleValue);
+        return ((DepthFormat)info.DepthStencilFormat, (RenderTargetUsage)info.Usage,
+                info.MultiSampleCount, info.ContentLost != 0);
+    }
+
     /// <summary>The depth/stencil format this target was created with.</summary>
     public DepthFormat DepthStencilFormat => (DepthFormat)GetInfo(NativeHandleValue).DepthStencilFormat;
 

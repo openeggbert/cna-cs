@@ -21,7 +21,7 @@ public class Texture3D : Texture
     /// a caller has no way to obtain a bare handle, and the only producer inside this assembly is
     /// <see cref="EffectParameter"/> rewrapping a texture read back out of a shader
     /// parameter.</summary>
-    private protected Texture3D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+    protected internal Texture3D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
         : base(graphicsDevice, nativeHandleValue)
     {
     }
