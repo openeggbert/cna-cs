@@ -37,12 +37,6 @@ public class SkinnedEffect : StockEffect, IEffectMatrices, IEffectFog, IEffectLi
         return handle;
     }
 
-    private DirectionalLight FetchDirectionalLight(uint index)
-    {
-        CnaResult result = Native.cna_effect_lights_get_directional_light(Handle, index, out CnaHandle light);
-        CnaException.ThrowIfFailed(result, nameof(SkinnedEffect));
-        return new DirectionalLight(light);
-    }
 
     public DirectionalLight DirectionalLight0 { get; }
 
@@ -218,10 +212,6 @@ public class SkinnedEffect : StockEffect, IEffectMatrices, IEffectFog, IEffectLi
         set => SetFloat(Native.cna_effect_fog_set_end, value, nameof(FogEnd));
     }
 
-    private protected override void ReleaseAdditionalNativeResources()
-    {
-        Native.cna_directional_light_destroy(DirectionalLight0.NativeHandle);
-        Native.cna_directional_light_destroy(DirectionalLight1.NativeHandle);
-        Native.cna_directional_light_destroy(DirectionalLight2.NativeHandle);
-    }
+    private protected override void ReleaseAdditionalNativeResources() =>
+        ReleaseDirectionalLights(DirectionalLight0, DirectionalLight1, DirectionalLight2);
 }

@@ -1345,8 +1345,7 @@ WP11–WP14 are the largest new subsystems and come last.
       objects. Note §27's `EffectParameter` handle caching (Phase 5) is now
       genuinely applicable again and remains **not done** — the collections
       re-resolve on every access by design; revisit if profiling shows it
-      matters. `BasicEffect` still carries its own handle/helper copy instead
-      of deriving from `StockEffect` — tracked in WP15. Original scope:
+      matters. `BasicEffect` derived from `StockEffect` in WP15. Original scope:
       <details>**WP4 — Full effect system.** Name-indexed `EffectParameter` /
       `EffectParameterCollection` / `EffectParameterClass` /
       `EffectParameterType`, `EffectAnnotation(Collection)`,
@@ -1445,7 +1444,7 @@ WP11–WP14 are the largest new subsystems and come last.
       (~87 members), with the compat `Effect` overriding `NativeEffectHandleValue`
       so the pair remains one native effect. docs/architecture.md updated --
       this is now a documented exception to its "no duplicated logic" rule, taken
-      deliberately. Folding `BasicEffect` onto `StockEffect` remains, in WP15.
+      deliberately. `BasicEffect` was folded onto `StockEffect` in WP15.
       Original note:
       <details>The one type in this area still missing.
       `Microsoft.Xna.Framework.Graphics.Effect` cannot simply be added: the
@@ -1497,12 +1496,37 @@ WP11–WP14 are the largest new subsystems and come last.
       `ResourceContentManager`. Native: `content_readers.h`. This is the
       extensibility half of the content system — the existing
       `ContentManager.Load<T>` covers only the built-in types.</details>
-- [ ] **WP15 — Close the pre-mandate deferrals.** `.cnj` skinning (vertex
-      strides 48/52/56/68, `"skeleton"`/`"animations"`), unblocked once
-      WP4 lands `SkinnedEffect`; `ModelEffectCollection`'s compat mirror,
-      previously called a "permanent gap" for want of an override seam —
-      re-solve it, since "no seam exists" is a fixable design problem now
-      that omitting it is no longer allowed; `.xnb` LZ4; runtime glTF.
+- [ ] **WP15 — Close the pre-mandate deferrals.** Landed so far:
+      - **Native event callbacks — done 2026-08-18.** Three deferrals
+        (`DynamicSoundEffectInstance.BufferNeeded`, `GraphicsDeviceManager`'s
+        four device events, `Microphone.BufferReady`) all wanted the same
+        `void(void*)` bridge, so it exists once as `NativeEventBridge`: a
+        `GCHandle` root, a total callback, and unsubscription ordered before
+        freeing the root. Exceptions follow `GameComponent`'s bargain — catch,
+        keep the first, count the rest, rethrow the original at the next
+        managed-initiated call. The `#pragma warning disable CS0067` and the doc
+        comments admitting the manager events never fired are gone.
+        `Microphone` needed an instance cache first (both here and in compat):
+        subscribing on a wrapper rebuilt per read of `All` would leak the
+        registration and raise nothing observable. `Game.Dispose` ends those
+        registrations, since they are taken against that game.
+      - **`SoundEffectInstance.Apply3D` — done 2026-08-18**, plus a
+        `protected virtual Dispose(bool)` so a subclass can release a
+        subscription before the handle it is registered against.
+      - **`BasicEffect` folded onto `StockEffect` — done 2026-08-18.** Not just
+        de-duplication: it held a bare `CnaHandle` where the other four hold an
+        owned `SafeHandle`, so an undisposed one leaked. `DirectionalLight` now
+        owns its handle too, which closes the same leak for all five lit effects
+        on the finalizer path — previously only the explicit-`Dispose` path
+        released them.
+
+      Still open: `.cnj` skinning (vertex strides 48/52/56/68,
+      `"skeleton"`/`"animations"`), unblocked once WP4 landed `SkinnedEffect`;
+      `ModelEffectCollection`'s compat mirror, previously called a "permanent
+      gap" for want of an override seam — re-solve it, since "no seam exists" is
+      a fixable design problem now that omitting it is no longer allowed;
+      `.xnb` LZ4; runtime glTF; managed content-reader registration;
+      `MediaLibrary`'s always-empty collections against `media_library.h`.
 - [x] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
       review; pre-existing, not introduced by it) — done 2026-08-18. Slice 1:**
       every type whose handle accessor is *private* now pairs each native call

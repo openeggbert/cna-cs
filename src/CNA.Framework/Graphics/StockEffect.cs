@@ -3,17 +3,18 @@ using CNA.Interop;
 namespace CNA.Graphics;
 
 /// <summary>
-/// Shared base for the native-backed stock effects added by Phase 8 WP4b
-/// (<see cref="AlphaTestEffect"/>, <see cref="DualTextureEffect"/>,
+/// Shared base for the native-backed stock effects (<see cref="BasicEffect"/>,
+/// <see cref="AlphaTestEffect"/>, <see cref="DualTextureEffect"/>,
 /// <see cref="EnvironmentMapEffect"/>, <see cref="SkinnedEffect"/>): it owns the
-/// <c>CNA_EffectHandle</c>, its disposal, <c>Apply</c>, and the small get/set helpers each of
-/// those four would otherwise repeat.
+/// <c>CNA_EffectHandle</c>, its disposal, <c>Apply</c>, the small get/set helpers, and the
+/// three-point directional-light rig, each of which the five would otherwise repeat.
 ///
-/// <see cref="BasicEffect"/> deliberately does *not* derive from this yet. It predates this class
-/// and carries its own copy of the same handle-and-helpers shape plus three independently owned
-/// <see cref="DirectionalLight"/> handles with their own disposal rules; migrating it is a real
-/// (small) refactor of already-reviewed working code, so it belongs in its own increment rather
-/// than riding along with four new types. Tracked in <c>plan.md</c> WP15.
+/// <see cref="BasicEffect"/> was the last to move here, in WP15. It predated this class and carried
+/// its own copy of the same shape, which cost more than duplication: its handle was a bare
+/// <see cref="CnaHandle"/> rather than a
+/// <see cref="System.Runtime.InteropServices.SafeHandle"/>, so an undisposed
+/// <see cref="BasicEffect"/> leaked its effect and all three lights for the process lifetime --
+/// exactly what this class's owned handle exists to prevent.
 /// </summary>
 public abstract class StockEffect : Effect
 {
@@ -45,6 +46,37 @@ public abstract class StockEffect : Effect
     {
         CnaResult result = Native.cna_effect_apply(Handle);
         CnaException.ThrowIfFailed(result, nameof(Apply));
+    }
+
+    /// <summary>
+    /// Fetches one of the effect's three directional lights.
+    ///
+    /// Confirmed against <c>BasicEffectSmoke.c</c>: each fetch returns an *independently owned*
+    /// handle that survives its parent effect being destroyed first, so each needs its own
+    /// <c>cna_directional_light_destroy</c> rather than being freed implicitly with the effect.
+    /// The returned <see cref="DirectionalLight"/> owns that handle, so the destroy happens either
+    /// through <see cref="ReleaseDirectionalLights"/> on disposal or through its critical finalizer
+    /// if nothing ever disposes the effect. A lit effect pairs the two.
+    /// </summary>
+    private protected DirectionalLight FetchDirectionalLight(uint index)
+    {
+        CnaResult result = Native.cna_effect_lights_get_directional_light(Handle, index, out CnaHandle light);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(FetchDirectionalLight));
+        return new DirectionalLight(light);
+    }
+
+    /// <summary>Releases the three lights a lit effect fetched -- see
+    /// <see cref="FetchDirectionalLight"/> for why they are not freed with the effect. Called from
+    /// <see cref="ReleaseAdditionalNativeResources"/>, so it inherits that hook's disposal guard;
+    /// each light also owns its handle, so an effect that is never disposed at all still has them
+    /// reclaimed by the critical finalizer rather than leaking.</summary>
+    private protected static void ReleaseDirectionalLights(
+        DirectionalLight light0, DirectionalLight light1, DirectionalLight light2)
+    {
+        light0.ReleaseNative();
+        light1.ReleaseNative();
+        light2.ReleaseNative();
     }
 
     /// <summary>Releases handles a subclass owns *besides* the effect itself -- the three
