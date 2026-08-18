@@ -114,6 +114,38 @@ public class GraphicsAdapter
         CnaException.ThrowIfFailed(result, nameof(Refresh));
     }
 
+    /// <summary>
+    /// Whether device creation should use the null (no-op) device. Matches real XNA's static
+    /// <c>UseNullDevice</c>.
+    ///
+    /// Stored managed-side and pushed to native on the next
+    /// <see cref="ApplyDevicePreferences(GraphicsDevice)"/>. It cannot be pushed on write:
+    /// <c>cna_graphics_adapter_set_device_preferences</c> takes a graphics device and an adapter
+    /// index, and real XNA's property is a static with neither -- a game sets it *before* creating
+    /// the device it applies to.
+    /// </summary>
+    public static bool UseNullDevice { get; set; }
+
+    /// <summary>Whether device creation should use the reference rasterizer. See
+    /// <see cref="UseNullDevice"/> for why this is applied rather than pushed.</summary>
+    public static bool UseReferenceDevice { get; set; }
+
+    /// <summary>Pushes <see cref="UseNullDevice"/>/<see cref="UseReferenceDevice"/> to native for
+    /// one adapter. <c>CNAEXT</c>: real XNA has no such call, because its statics are read by the
+    /// device factory rather than pushed -- this ABI needs a device and an index, so the push has to
+    /// be explicit.</summary>
+    public void ApplyDevicePreferences(GraphicsDevice graphicsDevice)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+
+        CnaResult result = Native.cna_graphics_adapter_set_device_preferences(
+            graphicsDevice.ResolveNativeDeviceHandle(),
+            AdapterIndex,
+            UseNullDevice ? (byte)1 : (byte)0,
+            UseReferenceDevice ? (byte)1 : (byte)0);
+        CnaException.ThrowIfFailed(result, nameof(ApplyDevicePreferences));
+    }
+
     /// <summary>Real XNA's <c>GraphicsAdapter.Adapters</c>, which cannot be static here -- see this
     /// class's own doc comment.</summary>
     public static IReadOnlyList<GraphicsAdapter> GetAdapters(GraphicsDevice graphicsDevice)

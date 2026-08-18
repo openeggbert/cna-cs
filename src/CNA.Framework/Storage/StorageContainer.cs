@@ -241,4 +241,31 @@ public class StorageContainer : IDisposable
 
         return names;
     }
+
+    /// <summary>Raised as this storagecontainer is disposed, matching real XNA. The subscription is
+    /// taken on the first <c>+=</c> and released with this object -- see
+    /// <see cref="GraphicsDeviceManager.DeviceCreated"/> for the shared reasoning.</summary>
+    public event EventHandler<EventArgs>? Disposing
+    {
+        add
+        {
+            _disposingBridge ??= NativeEventBridge.Subscribe(
+                () => _disposingHandler?.Invoke(this, EventArgs.Empty),
+                (callback, context) =>
+                {
+                    CnaResult result = Native.cna_storage_container_subscribe_disposing(
+                        NativeHandle, callback, context, out CnaHandle registration);
+                    GC.KeepAlive(this);
+                    CnaException.ThrowIfFailed(result, nameof(Disposing));
+                    return registration;
+                },
+                registration => Native.cna_storage_container_unsubscribe_disposing(registration));
+
+            _disposingHandler += value;
+        }
+        remove => _disposingHandler -= value;
+    }
+
+    private NativeEventBridge? _disposingBridge;
+    private EventHandler<EventArgs>? _disposingHandler;
 }

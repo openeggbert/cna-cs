@@ -68,6 +68,7 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_game_run(CnaHandle game);
 
+
     /// <summary>Steps exactly one native frame instead of blocking until exit -- a distinct real
     /// function <see cref="cna_game_run"/> wraps, with no equivalent in the old guessed API.
     /// Unused today (<c>Game.Run()</c> only calls <see cref="cna_game_run"/>); declared here since
@@ -980,6 +981,32 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_audio_unsubscribe_ext(CnaHandle registration);
+
+    // The four XACT Disposing events and the storage container's. All `void(void*)`, so they go
+    // through NativeEventBridge.Subscribe like the rest.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_subscribe_disposing_ext(
+        CnaHandle engine, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_wave_bank_subscribe_disposing_ext(
+        CnaHandle waveBank, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_bank_subscribe_disposing_ext(
+        CnaHandle soundBank, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cue_subscribe_disposing_ext(
+        CnaHandle cue, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_subscribe_disposing(
+        CnaHandle container, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_storage_container_unsubscribe_disposing(CnaHandle registration);
 
     /// <summary>Matches <c>cna_microphone_subscribe_buffer_ready_at</c> (<c>audio.h:1017</c>).
     /// Indexed like every other microphone route, because microphones are entries in a runtime list
@@ -2115,6 +2142,9 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_present(CnaHandle device);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_dispose(CnaHandle device);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_reset(CnaHandle device);

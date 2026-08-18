@@ -394,6 +394,11 @@ public abstract class Game : IDisposable
         CnaException.ThrowIfFailed(result, "cna_game_run");
     }
 
+    /// <summary>Runs a single frame -- update and draw -- without entering the loop. Matches real
+    /// XNA's <c>RunOneFrame</c>, and is what a host driving the game itself uses alongside
+    /// <see cref="Tick"/>.</summary>
+    public void RunOneFrame() => Invoke(Native.cna_game_run_one_frame, nameof(RunOneFrame));
+
     public void Exit()
     {
         CnaResult result = Native.cna_game_request_exit(_nativeHandle);

@@ -77,4 +77,31 @@ public class WaveBank : IDisposable
         _handle.Dispose();
         GC.SuppressFinalize(this);
     }
+
+    /// <summary>Raised as this wavebank is disposed, matching real XNA. The subscription is
+    /// taken on the first <c>+=</c> and released with this object -- see
+    /// <see cref="GraphicsDeviceManager.DeviceCreated"/> for the shared reasoning.</summary>
+    public event EventHandler<EventArgs>? Disposing
+    {
+        add
+        {
+            _disposingBridge ??= NativeEventBridge.Subscribe(
+                () => _disposingHandler?.Invoke(this, EventArgs.Empty),
+                (callback, context) =>
+                {
+                    CnaResult result = Native.cna_wave_bank_subscribe_disposing_ext(
+                        NativeHandle, callback, context, out CnaHandle registration);
+                    GC.KeepAlive(this);
+                    CnaException.ThrowIfFailed(result, nameof(Disposing));
+                    return registration;
+                },
+                registration => Native.cna_audio_unsubscribe_ext(registration));
+
+            _disposingHandler += value;
+        }
+        remove => _disposingHandler -= value;
+    }
+
+    private NativeEventBridge? _disposingBridge;
+    private EventHandler<EventArgs>? _disposingHandler;
 }

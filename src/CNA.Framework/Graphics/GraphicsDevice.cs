@@ -15,7 +15,7 @@ namespace CNA.Graphics;
 /// lifecycle callbacks -- so resolving fresh, synchronously, at the top of each method stays inside
 /// the same callback invocation the whole time, which is exactly what the real ABI requires.
 /// </summary>
-public class GraphicsDevice
+public class GraphicsDevice : IDisposable
 {
     /// <summary>What <see cref="SetRenderTargets"/> last bound -- see
     /// <see cref="GetRenderTargets"/> for why the answer is kept here rather than read back.</summary>
@@ -1059,4 +1059,51 @@ public class GraphicsDevice
             ResolveNativeDeviceHandle(), (int)primitiveType, baseVertex, minVertexIndex, numVertices, startIndex, primitiveCount);
         CnaException.ThrowIfFailed(result, nameof(DrawIndexedPrimitives));
     }
+
+    /// <summary>
+    /// Disposes the device, matching real XNA where <c>GraphicsDevice</c> is
+    /// <see cref="IDisposable"/>.
+    ///
+    /// Releases the event subscriptions this object took, then asks native to dispose. The device
+    /// handle itself is <em>not</em> released here: it is the game's, resolved through
+    /// <see cref="ResolveNativeDeviceHandle"/> rather than owned, and destroying it would pull the
+    /// device out from under a game that is still running.
+    /// </summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_deviceDisposed)
+        {
+            return;
+        }
+
+        _deviceDisposed = true;
+
+        for (int i = 0; i < _deviceEventBridges.Length; i++)
+        {
+            _deviceEventBridges[i]?.Dispose();
+            _deviceEventBridges[i] = null;
+        }
+
+        _resourceCreatedBridge?.Dispose();
+        _resourceCreatedBridge = null;
+        _resourceDestroyedBridge?.Dispose();
+        _resourceDestroyedBridge = null;
+
+        if (!disposing)
+        {
+            return;
+        }
+
+        // Deliberately unchecked: Dispose must not throw, and a device already torn down by its
+        // game makes this an ordinary, harmless failure.
+        Native.cna_graphics_device_dispose(ResolveNativeDeviceHandle());
+    }
+
+    private bool _deviceDisposed;
 }
