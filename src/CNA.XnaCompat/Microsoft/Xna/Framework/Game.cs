@@ -26,6 +26,12 @@ public abstract class Game : CNA.Game
     /// element conversion is involved.</summary>
     public new GameComponentCollection Components => _components ??= new GameComponentCollection(base.Components);
 
+    /// <summary>Re-typed so a compat game gets this namespace's own <see cref="LaunchParameters"/>.
+    /// The base builds a fresh one per read from the process command line -- see
+    /// <see cref="CNA.Game.LaunchParameters"/> for why it cannot come from native -- so re-wrapping
+    /// costs nothing beyond the parse that was already happening.</summary>
+    public new LaunchParameters LaunchParameters => new(Environment.GetCommandLineArgs().Skip(1));
+
     protected override Content.ContentManager CreateContentManager() =>
         new Content.ContentManager(GetNativeContentHandle());
 

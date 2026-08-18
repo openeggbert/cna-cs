@@ -1,3 +1,4 @@
+using CNA.Interop;
 using CNA.Media;
 
 namespace CNA;
@@ -16,9 +17,21 @@ namespace CNA;
 /// </summary>
 public static class FrameworkDispatcher
 {
-    /// <summary>Pumps every framework subsystem that needs periodic servicing. Today that is
-    /// media only (song-end detection and queue auto-advance); audio needs none here, since
-    /// <c>SoundEffectInstance</c> state is queried from native on demand rather than tracked
-    /// managed-side.</summary>
-    public static void Update() => MediaPlayer.Update();
+    /// <summary>
+    /// Pumps every framework subsystem that needs periodic servicing.
+    ///
+    /// Forwards to <c>cna_framework_dispatcher_update</c>, the canonical pump, rather than calling
+    /// <see cref="MediaPlayer.Update"/> directly as it used to. The native route is what the engine
+    /// itself services -- media today, and whatever it services tomorrow -- so calling it means this
+    /// does not have to be updated every time the engine grows a subsystem. A sweep of unbound
+    /// header functions found it.
+    ///
+    /// <see cref="MediaPlayer.Update"/> stays public and still works; a game that only wants the
+    /// media pump can call it.
+    /// </summary>
+    public static void Update()
+    {
+        CnaResult result = Native.cna_framework_dispatcher_update(CnaAmbientGame.Current);
+        CnaException.ThrowIfFailed(result, nameof(Update));
+    }
 }

@@ -1803,6 +1803,69 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_game_unsubscribe(CnaHandle registration);
 
+    // The rest of runtime.h's game surface. A sweep of unbound header functions showed Game was
+    // missing nine real XNA members -- IsActive, IsFixedTimeStep, TargetElapsedTime,
+    // InactiveSleepTime, ResetElapsedTime, SuppressDraw, Tick, LaunchParameters, and the
+    // Activated/Deactivated/Exiting/Disposed events.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_get_is_active(CnaHandle game, out byte outActive);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_get_is_fixed_time_step(CnaHandle game, out byte outFixed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_set_is_fixed_time_step(CnaHandle game, byte isFixed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_get_target_elapsed_time_ticks(CnaHandle game, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_set_target_elapsed_time_ticks(CnaHandle game, long ticks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_get_inactive_sleep_time_ticks(CnaHandle game, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_set_inactive_sleep_time_ticks(CnaHandle game, long ticks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_reset_elapsed_time(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_suppress_draw(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_tick(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_subscribe(
+        CnaHandle game, uint eventId, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_launch_parameters_get_count(CnaHandle game, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_launch_parameters_contains_key(
+        CnaHandle game, CnaStringView key, out byte outPresent);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_launch_parameters_get_value_size(
+        CnaHandle game, CnaStringView key, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_game_launch_parameters_copy_value(
+        CnaHandle game, CnaStringView key, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_launch_parameters_add(
+        CnaHandle game, CnaStringView key, CnaStringView value);
+
+    /// <summary>The canonical framework pump (<c>runtime.h</c>). <c>FrameworkDispatcher.Update</c>
+    /// forwards to it.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_framework_dispatcher_update(CnaHandle game);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_apply_changes(CnaHandle manager);
 

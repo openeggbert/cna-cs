@@ -156,6 +156,237 @@ public abstract class Game : IDisposable
         }
     }
 
+    /// <summary>Whether this game currently has focus. XNA games use it to pause when the player
+    /// alt-tabs away.</summary>
+    public bool IsActive => ReadBool(Native.cna_game_get_is_active, nameof(IsActive));
+
+    /// <summary>Whether <c>Update</c> is called at a fixed rate (<see cref="TargetElapsedTime"/>)
+    /// or as fast as the loop runs.</summary>
+    public bool IsFixedTimeStep
+    {
+        get => ReadBool(Native.cna_game_get_is_fixed_time_step, nameof(IsFixedTimeStep));
+        set
+        {
+            CnaResult result = Native.cna_game_set_is_fixed_time_step(_nativeHandle, value ? (byte)1 : (byte)0);
+            CnaException.ThrowIfFailed(result, nameof(IsFixedTimeStep));
+        }
+    }
+
+    /// <summary>The interval between fixed-step updates. Only meaningful while
+    /// <see cref="IsFixedTimeStep"/> is set.</summary>
+    public TimeSpan TargetElapsedTime
+    {
+        get => TimeSpan.FromTicks(ReadTicks(Native.cna_game_get_target_elapsed_time_ticks, nameof(TargetElapsedTime)));
+        set
+        {
+            CnaResult result = Native.cna_game_set_target_elapsed_time_ticks(_nativeHandle, value.Ticks);
+            CnaException.ThrowIfFailed(result, nameof(TargetElapsedTime));
+        }
+    }
+
+    /// <summary>How long the loop sleeps between frames while the game is not
+    /// <see cref="IsActive"/> -- how an XNA game stops burning CPU in the background.</summary>
+    public TimeSpan InactiveSleepTime
+    {
+        get => TimeSpan.FromTicks(ReadTicks(Native.cna_game_get_inactive_sleep_time_ticks, nameof(InactiveSleepTime)));
+        set
+        {
+            CnaResult result = Native.cna_game_set_inactive_sleep_time_ticks(_nativeHandle, value.Ticks);
+            CnaException.ThrowIfFailed(result, nameof(InactiveSleepTime));
+        }
+    }
+
+    /// <summary>
+    /// The command-line parameters the game was launched with, parsed the way real XNA parses them.
+    ///
+    /// Built from <see cref="Environment.GetCommandLineArgs"/>, not from native, and that needs
+    /// saying. The ABI addresses a launch parameter <b>by key only</b> --
+    /// <c>contains_key</c>, <c>get_value_size</c>, <c>copy_value</c>, <c>add</c> -- with no route to
+    /// enumerate the keys it holds. So a dictionary cannot be materialised from it at all.
+    ///
+    /// The process command line is the same information the platform handed native, so parsing it
+    /// here answers the question rather than working around it. Where the two could disagree is a
+    /// parameter added through <see cref="AddLaunchParameter"/> at run time: that one reaches
+    /// native and not this dictionary. <see cref="ContainsLaunchParameter"/> and
+    /// <see cref="GetLaunchParameter"/> ask native directly and are authoritative for exactly that
+    /// case.
+    /// </summary>
+    public LaunchParameters LaunchParameters => new(Environment.GetCommandLineArgs().Skip(1));
+
+    /// <summary>Discards the time accumulated since the last frame, so the next
+    /// <c>Update</c> does not try to catch up. What a game calls after a long load, to stop the
+    /// fixed-step loop from firing a burst of updates.</summary>
+    public void ResetElapsedTime() => Invoke(Native.cna_game_reset_elapsed_time, nameof(ResetElapsedTime));
+
+    /// <summary>Skips this frame's <c>Draw</c>. Real XNA's own way to say "nothing changed".</summary>
+    public void SuppressDraw() => Invoke(Native.cna_game_suppress_draw, nameof(SuppressDraw));
+
+    /// <summary>Runs one iteration of the loop by hand. For a host that drives the game itself
+    /// rather than handing control to <see cref="Run"/>.</summary>
+    public void Tick() => Invoke(Native.cna_game_tick, nameof(Tick));
+
+    /// <summary>Raised when the game gains focus. See
+    /// <see cref="GraphicsDeviceManager.DeviceCreated"/> for why the native subscription is taken on
+    /// the first <c>+=</c> and held until disposal.</summary>
+    public event EventHandler<EventArgs>? Activated
+    {
+        add { EnsureSubscribed(CnaGameEvent.Activated); _activated += value; }
+        remove => _activated -= value;
+    }
+
+    /// <summary>Raised when the game loses focus.</summary>
+    public event EventHandler<EventArgs>? Deactivated
+    {
+        add { EnsureSubscribed(CnaGameEvent.Deactivated); _deactivated += value; }
+        remove => _deactivated -= value;
+    }
+
+    /// <summary>Raised as the game is disposed.</summary>
+    public event EventHandler<EventArgs>? Disposed
+    {
+        add { EnsureSubscribed(CnaGameEvent.Disposed); _disposedEvent += value; }
+        remove => _disposedEvent -= value;
+    }
+
+    /// <summary>Raised when the game is exiting, before the loop stops.</summary>
+    public event EventHandler<EventArgs>? Exiting
+    {
+        add { EnsureSubscribed(CnaGameEvent.Exiting); _exiting += value; }
+        remove => _exiting -= value;
+    }
+
+    private EventHandler<EventArgs>? _activated;
+    private EventHandler<EventArgs>? _deactivated;
+    private EventHandler<EventArgs>? _disposedEvent;
+    private EventHandler<EventArgs>? _exiting;
+
+    private readonly NativeEventBridge?[] _eventBridges =
+        new NativeEventBridge?[(int)CnaGameEvent.Exiting + 1];
+
+    private void EnsureSubscribed(CnaGameEvent which)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        int index = (int)which;
+        if (_eventBridges[index] is not null)
+        {
+            return;
+        }
+
+        _eventBridges[index] = NativeEventBridge.Subscribe(
+            () => RaiseGameEvent(which),
+            (callback, context) =>
+            {
+                CnaResult result = Native.cna_game_subscribe(
+                    _nativeHandle, (uint)which, callback, context, out CnaHandle registration);
+                CnaException.ThrowIfFailed(result, nameof(EnsureSubscribed));
+                return registration;
+            },
+            registration => Native.cna_game_unsubscribe(registration));
+    }
+
+    private void RaiseGameEvent(CnaGameEvent which)
+    {
+        EventHandler<EventArgs>? handler = which switch
+        {
+            CnaGameEvent.Activated => _activated,
+            CnaGameEvent.Deactivated => _deactivated,
+            CnaGameEvent.Disposed => _disposedEvent,
+            CnaGameEvent.Exiting => _exiting,
+            _ => null,
+        };
+
+        handler?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Whether native holds a launch parameter with this key. Authoritative where
+    /// <see cref="LaunchParameters"/> is not -- see its own doc comment.</summary>
+    public bool ContainsLaunchParameter(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        byte present = 0;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            key, view => Native.cna_game_launch_parameters_contains_key(_nativeHandle, view, out present));
+        CnaException.ThrowIfFailed(result, nameof(ContainsLaunchParameter));
+        return present != 0;
+    }
+
+    /// <summary>One launch parameter's value, or <see langword="null"/> when the key is
+    /// absent.</summary>
+    public unsafe string? GetLaunchParameter(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        if (!ContainsLaunchParameter(key))
+        {
+            return null;
+        }
+
+        ulong byteCount = 0;
+        CnaResult sizeResult = CnaStringMarshal.WithStringView(
+            key, view => Native.cna_game_launch_parameters_get_value_size(_nativeHandle, view, out byteCount));
+        CnaException.ThrowIfFailed(sizeResult, nameof(GetLaunchParameter));
+
+        if (byteCount == 0)
+        {
+            return string.Empty;
+        }
+
+        byte[] buffer = new byte[byteCount];
+        ulong written = 0;
+        fixed (byte* bufferPtr = buffer)
+        {
+            byte* pinned = bufferPtr;
+            CnaResult copyResult = CnaStringMarshal.WithStringView(
+                key,
+                view => Native.cna_game_launch_parameters_copy_value(_nativeHandle, view, pinned, byteCount, out written));
+            CnaException.ThrowIfFailed(copyResult, nameof(GetLaunchParameter));
+        }
+
+        return System.Text.Encoding.UTF8.GetString(buffer, 0, (int)written);
+    }
+
+    /// <summary>Adds a launch parameter. <c>CNAEXT</c> -- real XNA's <c>LaunchParameters</c> is
+    /// populated only by the platform, but the ABI exposes an add route and a host driving the game
+    /// itself has no other way to supply one.</summary>
+    public void AddLaunchParameter(string key, string value)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(value);
+
+        CnaResult result = CnaStringMarshal.WithStringView(
+            key, keyView => CnaStringMarshal.WithStringView(
+                value, valueView => Native.cna_game_launch_parameters_add(_nativeHandle, keyView, valueView)));
+        CnaException.ThrowIfFailed(result, nameof(AddLaunchParameter));
+    }
+
+    private delegate CnaResult BoolGetter(CnaHandle game, out byte outValue);
+
+    private delegate CnaResult TicksGetter(CnaHandle game, out long outTicks);
+
+    private delegate CnaResult VoidCall(CnaHandle game);
+
+    private bool ReadBool(BoolGetter getter, string context)
+    {
+        CnaResult result = getter(_nativeHandle, out byte value);
+        CnaException.ThrowIfFailed(result, context);
+        return value != 0;
+    }
+
+    private long ReadTicks(TicksGetter getter, string context)
+    {
+        CnaResult result = getter(_nativeHandle, out long ticks);
+        CnaException.ThrowIfFailed(result, context);
+        return ticks;
+    }
+
+    private void Invoke(VoidCall call, string context)
+    {
+        CnaResult result = call(_nativeHandle);
+        CnaException.ThrowIfFailed(result, context);
+    }
+
     /// <summary>Hands control to native CNA. Blocks until the game exits.</summary>
     public void Run()
     {
@@ -319,6 +550,13 @@ public abstract class Game : IDisposable
         }
         catch (Exception)
         {
+        }
+
+        // And this game's own four.
+        for (int i = 0; i < _eventBridges.Length; i++)
+        {
+            _eventBridges[i]?.Dispose();
+            _eventBridges[i] = null;
         }
 
         Native.cna_game_destroy(_nativeHandle);
