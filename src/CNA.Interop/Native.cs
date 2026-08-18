@@ -605,6 +605,54 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- TouchPanel (real ABI, input.h + input_touch.h -- Phase 8 WP9) ------------------------
+    //
+    // Split across two headers: the state snapshot lives with the rest of input (cna_touch_get_state
+    // in input.h, alongside keyboard/mouse/gamepad), while the panel's own configuration and the
+    // gesture queue live in input_touch.h. The _ext-suffixed panel functions (enqueue_gesture,
+    // raise_touch_event, set_finger, update, reset_for_tests) are CNA test hooks with no XNA
+    // counterpart and are deliberately not bound.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_get_state(CnaHandle game, ref CnaTouchState state);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_capabilities_init(ref CnaTouchCapabilities capabilities);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_get_display_width(CnaHandle game, out int outWidth);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_set_display_width(CnaHandle game, int width);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_get_display_height(CnaHandle game, out int outHeight);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_set_display_height(CnaHandle game, int height);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_get_display_orientation(CnaHandle game, out uint outOrientation);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_set_display_orientation(CnaHandle game, uint orientation);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_get_enabled_gestures(CnaHandle game, out uint outGestures);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_set_enabled_gestures(CnaHandle game, uint gestures);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_get_is_gesture_available(CnaHandle game, out byte outAvailable);
+
+    /// <summary>Dequeues the next gesture. <c>CNA_RESULT_INVALID_STATE</c> when the queue is empty,
+    /// which <c>CNA.Input.TouchPanel.ReadGesture</c> turns into the documented
+    /// <see cref="System.InvalidOperationException"/> real XNA throws in the same
+    /// situation.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_touch_panel_read_gesture(CnaHandle game, ref CnaGestureSample sample);
+
     // -- ContentManager (real ABI, content.h -- step 6 of the native-ABI migration) -----------
     //
     // Renamed throughout (cna_content_* -> cna_content_manager_*) and switched from

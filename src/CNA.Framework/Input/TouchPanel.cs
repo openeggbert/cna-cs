@@ -1,0 +1,125 @@
+using CNA.Interop;
+
+namespace CNA.Input.Touch;
+
+/// <summary>
+/// Matches real XNA's <c>TouchPanel</c>: a static snapshot/queue facade over the touch device,
+/// the same shape <see cref="Keyboard"/>/<see cref="Mouse"/>/<see cref="GamePad"/> already use
+/// here.
+///
+/// Like those, every call passes <see cref="CnaAmbientGame.Current"/> rather than taking a game
+/// parameter -- real XNA's <c>TouchPanel</c> is static with no game argument, while the ABI's
+/// touch functions all require a game handle, so the ambient handle is what bridges the two. See
+/// <see cref="Keyboard"/>, which established this pattern.
+/// </summary>
+public static class TouchPanel
+{
+    public static TouchCollection GetState()
+    {
+        var state = new CnaTouchState();
+        CnaResult result = Native.cna_touch_get_state(CnaAmbientGame.Current, ref state);
+        CnaException.ThrowIfFailed(result, nameof(GetState));
+        return TouchCollection.FromNative(in state);
+    }
+
+    public static TouchPanelCapabilities GetCapabilities()
+    {
+        var capabilities = new CnaTouchCapabilities();
+        CnaResult result = Native.cna_touch_capabilities_init(ref capabilities);
+        CnaException.ThrowIfFailed(result, nameof(GetCapabilities));
+        return TouchPanelCapabilities.FromNative(in capabilities);
+    }
+
+    public static int DisplayWidth
+    {
+        get
+        {
+            CnaResult result = Native.cna_touch_panel_get_display_width(CnaAmbientGame.Current, out int value);
+            CnaException.ThrowIfFailed(result, nameof(DisplayWidth));
+            return value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_touch_panel_set_display_width(CnaAmbientGame.Current, value);
+            CnaException.ThrowIfFailed(result, nameof(DisplayWidth));
+        }
+    }
+
+    public static int DisplayHeight
+    {
+        get
+        {
+            CnaResult result = Native.cna_touch_panel_get_display_height(CnaAmbientGame.Current, out int value);
+            CnaException.ThrowIfFailed(result, nameof(DisplayHeight));
+            return value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_touch_panel_set_display_height(CnaAmbientGame.Current, value);
+            CnaException.ThrowIfFailed(result, nameof(DisplayHeight));
+        }
+    }
+
+    public static DisplayOrientation DisplayOrientation
+    {
+        get
+        {
+            CnaResult result = Native.cna_touch_panel_get_display_orientation(CnaAmbientGame.Current, out uint value);
+            CnaException.ThrowIfFailed(result, nameof(DisplayOrientation));
+            return (DisplayOrientation)value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_touch_panel_set_display_orientation(CnaAmbientGame.Current, (uint)value);
+            CnaException.ThrowIfFailed(result, nameof(DisplayOrientation));
+        }
+    }
+
+    /// <summary>Which gestures <see cref="ReadGesture"/> will report. Nothing is queued until this
+    /// is set -- matching real XNA, where an unset <c>EnabledGestures</c> means
+    /// <see cref="IsGestureAvailable"/> never becomes true.</summary>
+    public static GestureType EnabledGestures
+    {
+        get
+        {
+            CnaResult result = Native.cna_touch_panel_get_enabled_gestures(CnaAmbientGame.Current, out uint value);
+            CnaException.ThrowIfFailed(result, nameof(EnabledGestures));
+            return (GestureType)value;
+        }
+        set
+        {
+            CnaResult result = Native.cna_touch_panel_set_enabled_gestures(CnaAmbientGame.Current, (uint)value);
+            CnaException.ThrowIfFailed(result, nameof(EnabledGestures));
+        }
+    }
+
+    public static bool IsGestureAvailable
+    {
+        get
+        {
+            CnaResult result = Native.cna_touch_panel_get_is_gesture_available(CnaAmbientGame.Current, out byte value);
+            CnaException.ThrowIfFailed(result, nameof(IsGestureAvailable));
+            return value != 0;
+        }
+    }
+
+    /// <summary>Dequeues the next gesture. Throws <see cref="InvalidOperationException"/> when the
+    /// queue is empty, matching real XNA -- callers are expected to guard with
+    /// <see cref="IsGestureAvailable"/>. The native call reports this as
+    /// <see cref="CnaResult.InvalidState"/>, which is translated here rather than surfaced as a
+    /// <see cref="CnaException"/>, so XNA source that catches the documented exception still
+    /// works.</summary>
+    public static GestureSample ReadGesture()
+    {
+        var sample = new CnaGestureSample();
+        CnaResult result = Native.cna_touch_panel_read_gesture(CnaAmbientGame.Current, ref sample);
+
+        if (result == CnaResult.InvalidState)
+        {
+            throw new InvalidOperationException("No gesture is available; check TouchPanel.IsGestureAvailable first.");
+        }
+
+        CnaException.ThrowIfFailed(result, nameof(ReadGesture));
+        return GestureSample.FromNative(in sample);
+    }
+}
