@@ -128,6 +128,55 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     protected override CNA.Graphics.TextureCollection CreateTextureCollection(bool vertexStage) =>
         new TextureCollection(this, vertexStage);
 
+    /// <summary>Re-typed: <c>Rectangle</c> is a separate struct per namespace. Everything else the
+    /// device gained -- <c>Present</c>, <c>Reset</c>, <c>MultiSampleMask</c>,
+    /// <c>ReferenceStencil</c>, <c>IsDisposed</c>, <c>DrawInstancedPrimitives</c>, the four
+    /// events -- is inherited unchanged, since none of those types diverge.</summary>
+    public new Rectangle ScissorRectangle
+    {
+        get => base.ScissorRectangle;
+        set => base.ScissorRectangle = value;
+    }
+
+    /// <summary>Re-typed: <c>Color</c> is a separate struct per namespace.</summary>
+    public new Color BlendFactor
+    {
+        get => base.BlendFactor;
+        set => base.BlendFactor = value;
+    }
+
+    /// <summary>Re-typed: <c>GraphicsDeviceStatus</c> is a separate enum per namespace.</summary>
+    public new GraphicsDeviceStatus GraphicsDeviceStatus => (GraphicsDeviceStatus)(int)base.GraphicsDeviceStatus;
+
+    /// <summary>Re-typed: takes this namespace's own <see cref="PresentationParameters"/>.</summary>
+    public void Reset(PresentationParameters presentationParameters)
+    {
+        ArgumentNullException.ThrowIfNull(presentationParameters);
+        base.Reset(presentationParameters);
+    }
+
+    /// <summary>Re-typed: takes this namespace's own <see cref="PresentationParameters"/> and
+    /// <see cref="GraphicsAdapter"/>.</summary>
+    public void Reset(PresentationParameters presentationParameters, GraphicsAdapter graphicsAdapter)
+    {
+        ArgumentNullException.ThrowIfNull(presentationParameters);
+        ArgumentNullException.ThrowIfNull(graphicsAdapter);
+        base.Reset(presentationParameters, graphicsAdapter);
+    }
+
+    /// <summary>Re-typed: <c>PrimitiveType</c> is a separate enum per namespace.</summary>
+    public void DrawInstancedPrimitives(
+        PrimitiveType primitiveType,
+        int baseVertex,
+        int minVertexIndex,
+        int numVertices,
+        int startIndex,
+        int primitiveCount,
+        int instanceCount) =>
+        base.DrawInstancedPrimitives(
+            (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex,
+            numVertices, startIndex, primitiveCount, instanceCount);
+
     /// <summary>Matches real XNA's <c>SetRenderTargets</c>. Re-typed rather than inherited: the
     /// base takes <c>CNA.Graphics.RenderTargetBinding</c>, and this namespace's own is a separate
     /// struct (structs cannot be subclassed), so the array is converted element-wise -- the same

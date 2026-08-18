@@ -143,6 +143,231 @@ public class GraphicsDevice
     /// <see cref="SamplerStateCollection.Wrap"/> documents.</summary>
     protected virtual PresentationParameters WrapPresentationParameters(PresentationParameters parameters) => parameters;
 
+    /// <summary>Whether this device has been disposed.</summary>
+    public bool IsDisposed
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_is_disposed(ResolveNativeDeviceHandle(), out byte disposed);
+            CnaException.ThrowIfFailed(result, nameof(IsDisposed));
+            return disposed != 0;
+        }
+    }
+
+    /// <summary>Whether the device is usable, lost, or lost and not yet reset. What an XNA game
+    /// checks before drawing, and the reason <see cref="DeviceLostException"/> exists.</summary>
+    public GraphicsDeviceStatus GraphicsDeviceStatus
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_status(ResolveNativeDeviceHandle(), out uint status);
+            CnaException.ThrowIfFailed(result, nameof(GraphicsDeviceStatus));
+            return (GraphicsDeviceStatus)status;
+        }
+    }
+
+    /// <summary>The scissor test rectangle. Only applied while the active
+    /// <see cref="RasterizerState"/> enables scissor testing.</summary>
+    public Rectangle ScissorRectangle
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_scissor_rectangle(ResolveNativeDeviceHandle(), out CnaRect rect);
+            CnaException.ThrowIfFailed(result, nameof(ScissorRectangle));
+            return new Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
+        }
+        set
+        {
+            CnaResult result = Native.cna_graphics_device_set_scissor_rectangle(
+                ResolveNativeDeviceHandle(), new CnaRect(value.X, value.Y, value.Width, value.Height));
+            CnaException.ThrowIfFailed(result, nameof(ScissorRectangle));
+        }
+    }
+
+    /// <summary>The constant colour a <see cref="Blend.BlendFactor"/> blend multiplies by.</summary>
+    public Color BlendFactor
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_blend_factor(ResolveNativeDeviceHandle(), out CnaColor color);
+            CnaException.ThrowIfFailed(result, nameof(BlendFactor));
+            return Color.FromNative(color);
+        }
+        set
+        {
+            CnaResult result = Native.cna_graphics_device_set_blend_factor(ResolveNativeDeviceHandle(), value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(BlendFactor));
+        }
+    }
+
+    /// <summary>Which multisample samples are written. All bits set by default.</summary>
+    public int MultiSampleMask
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_multi_sample_mask(ResolveNativeDeviceHandle(), out int mask);
+            CnaException.ThrowIfFailed(result, nameof(MultiSampleMask));
+            return mask;
+        }
+        set
+        {
+            CnaResult result = Native.cna_graphics_device_set_multi_sample_mask(ResolveNativeDeviceHandle(), value);
+            CnaException.ThrowIfFailed(result, nameof(MultiSampleMask));
+        }
+    }
+
+    /// <summary>The value the stencil test compares against.</summary>
+    public int ReferenceStencil
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_reference_stencil(ResolveNativeDeviceHandle(), out int stencil);
+            CnaException.ThrowIfFailed(result, nameof(ReferenceStencil));
+            return stencil;
+        }
+        set
+        {
+            CnaResult result = Native.cna_graphics_device_set_reference_stencil(ResolveNativeDeviceHandle(), value);
+            CnaException.ThrowIfFailed(result, nameof(ReferenceStencil));
+        }
+    }
+
+    /// <summary>Presents the back buffer. A game running the CNA loop never needs this -- the loop
+    /// presents -- but a host driving <see cref="Game.Tick"/> itself does.</summary>
+    public void Present()
+    {
+        CnaResult result = Native.cna_graphics_device_present(ResolveNativeDeviceHandle());
+        CnaException.ThrowIfFailed(result, nameof(Present));
+    }
+
+    /// <summary>Recreates the device with its current presentation parameters.</summary>
+    public void Reset()
+    {
+        CnaResult result = Native.cna_graphics_device_reset(ResolveNativeDeviceHandle());
+        CnaException.ThrowIfFailed(result, nameof(Reset));
+    }
+
+    /// <summary>Recreates the device with new presentation parameters, keeping the current
+    /// adapter.</summary>
+    public unsafe void Reset(PresentationParameters presentationParameters)
+    {
+        ArgumentNullException.ThrowIfNull(presentationParameters);
+
+        CnaPresentationParameters native = presentationParameters.ToNative();
+
+        // A null adapter index is how the ABI spells "keep the current adapter", which is what real
+        // XNA's parameters-only overload means.
+        CnaResult result = Native.cna_graphics_device_reset_with_parameters(
+            ResolveNativeDeviceHandle(), in native, null);
+        CnaException.ThrowIfFailed(result, nameof(Reset));
+    }
+
+    /// <summary>Recreates the device on a specific adapter.</summary>
+    public unsafe void Reset(PresentationParameters presentationParameters, GraphicsAdapter graphicsAdapter)
+    {
+        ArgumentNullException.ThrowIfNull(presentationParameters);
+        ArgumentNullException.ThrowIfNull(graphicsAdapter);
+
+        CnaPresentationParameters native = presentationParameters.ToNative();
+        uint adapterIndex = graphicsAdapter.AdapterIndex;
+        CnaResult result = Native.cna_graphics_device_reset_with_parameters(
+            ResolveNativeDeviceHandle(), in native, &adapterIndex);
+        GC.KeepAlive(graphicsAdapter);
+        CnaException.ThrowIfFailed(result, nameof(Reset));
+    }
+
+    /// <summary>Matches real XNA's <c>DrawInstancedPrimitives</c>: draws the bound indexed geometry
+    /// <paramref name="instanceCount"/> times, with per-instance data supplied by a second vertex
+    /// buffer bound at an instance frequency.</summary>
+    public void DrawInstancedPrimitives(
+        PrimitiveType primitiveType,
+        int baseVertex,
+        int minVertexIndex,
+        int numVertices,
+        int startIndex,
+        int primitiveCount,
+        int instanceCount)
+    {
+        CnaResult result = Native.cna_graphics_device_draw_instanced_primitives(
+            ResolveNativeDeviceHandle(), (int)primitiveType, baseVertex, minVertexIndex,
+            numVertices, startIndex, primitiveCount, instanceCount);
+        CnaException.ThrowIfFailed(result, nameof(DrawInstancedPrimitives));
+    }
+
+    /// <summary>Raised as the device is disposed. See
+    /// <see cref="GraphicsDeviceManager.DeviceCreated"/> for why the native subscription is taken on
+    /// the first <c>+=</c> and held until disposal.
+    ///
+    /// These four are the *device's* own events, released with
+    /// <c>cna_graphics_device_unsubscribe</c> -- a different registration family from the manager's
+    /// identically-named ones, which use <c>cna_game_unsubscribe</c>. Both exist, and a game may
+    /// subscribe to either.</summary>
+    public event EventHandler<EventArgs>? Disposing
+    {
+        add { EnsureDeviceSubscribed(CnaGraphicsDeviceEvent.Disposing); _disposingEvent += value; }
+        remove => _disposingEvent -= value;
+    }
+
+    public event EventHandler<EventArgs>? DeviceLost
+    {
+        add { EnsureDeviceSubscribed(CnaGraphicsDeviceEvent.DeviceLost); _deviceLost += value; }
+        remove => _deviceLost -= value;
+    }
+
+    public event EventHandler<EventArgs>? DeviceReset
+    {
+        add { EnsureDeviceSubscribed(CnaGraphicsDeviceEvent.DeviceReset); _deviceReset += value; }
+        remove => _deviceReset -= value;
+    }
+
+    public event EventHandler<EventArgs>? DeviceResetting
+    {
+        add { EnsureDeviceSubscribed(CnaGraphicsDeviceEvent.DeviceResetting); _deviceResetting += value; }
+        remove => _deviceResetting -= value;
+    }
+
+    private EventHandler<EventArgs>? _disposingEvent;
+    private EventHandler<EventArgs>? _deviceLost;
+    private EventHandler<EventArgs>? _deviceReset;
+    private EventHandler<EventArgs>? _deviceResetting;
+
+    private readonly NativeEventBridge?[] _deviceEventBridges =
+        new NativeEventBridge?[(int)CnaGraphicsDeviceEvent.DeviceResetting + 1];
+
+    private void EnsureDeviceSubscribed(CnaGraphicsDeviceEvent which)
+    {
+        int index = (int)which;
+        if (_deviceEventBridges[index] is not null)
+        {
+            return;
+        }
+
+        _deviceEventBridges[index] = NativeEventBridge.Subscribe(
+            () => RaiseDeviceEvent(which),
+            (callback, context) =>
+            {
+                CnaResult result = Native.cna_graphics_device_subscribe_event(
+                    ResolveNativeDeviceHandle(), (uint)which, callback, context, out CnaHandle registration);
+                CnaException.ThrowIfFailed(result, nameof(EnsureDeviceSubscribed));
+                return registration;
+            },
+            registration => Native.cna_graphics_device_unsubscribe(registration));
+    }
+
+    private void RaiseDeviceEvent(CnaGraphicsDeviceEvent which)
+    {
+        EventHandler<EventArgs>? handler = which switch
+        {
+            CnaGraphicsDeviceEvent.Disposing => _disposingEvent,
+            CnaGraphicsDeviceEvent.DeviceLost => _deviceLost,
+            CnaGraphicsDeviceEvent.DeviceReset => _deviceReset,
+            CnaGraphicsDeviceEvent.DeviceResetting => _deviceResetting,
+            _ => null,
+        };
+
+        handler?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>The display mode this device is currently presenting in.</summary>
     public DisplayMode DisplayMode
     {

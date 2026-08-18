@@ -2006,6 +2006,66 @@ internal static partial class Native
     internal static partial CnaResult cna_graphics_device_set_presentation_parameters(
         CnaHandle device, in CnaPresentationParameters parameters);
 
+    // The rest of graphics_device.h's XNA surface. A sweep of unbound header functions found
+    // GraphicsDevice missing its render-state properties, Present/Reset, status/IsDisposed and all
+    // six of its events.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_is_disposed(CnaHandle device, out byte outIsDisposed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_status(CnaHandle device, out uint outStatus);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_scissor_rectangle(CnaHandle device, out CnaRect outRect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_scissor_rectangle(CnaHandle device, CnaRect rect);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_blend_factor(CnaHandle device, out CnaColor outColor);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_blend_factor(CnaHandle device, CnaColor color);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_multi_sample_mask(CnaHandle device, out int outMask);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_multi_sample_mask(CnaHandle device, int mask);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_reference_stencil(CnaHandle device, out int outStencil);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_reference_stencil(CnaHandle device, int stencil);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_present(CnaHandle device);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_reset(CnaHandle device);
+
+    /// <summary><paramref name="adapterIndex"/> is a pointer so it can be omitted -- null keeps the
+    /// current adapter, which is what real XNA's two-argument <c>Reset</c> overload means.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_reset_with_parameters(
+        CnaHandle device, in CnaPresentationParameters parameters, uint* adapterIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_draw_instanced_primitives(
+        CnaHandle device, int primitiveType, int baseVertex, int minVertexIndex, int numVertices,
+        int startIndex, int primitiveCount, int instanceCount);
+
+    /// <summary>Subscribes to one <c>CNA_GRAPHICS_DEVICE_EVENT_*</c>. Released with
+    /// <c>cna_graphics_device_unsubscribe</c> -- its own family, not the runtime one.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_subscribe_event(
+        CnaHandle device, uint deviceEvent, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_unsubscribe(CnaHandle registration);
+
     /// <summary><c>ref</c> for the same caller-initialized reason as
     /// <see cref="cna_graphics_adapter_get_current_display_mode"/>.</summary>
     [LibraryImport(LibraryName)]
