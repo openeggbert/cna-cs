@@ -11,6 +11,113 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Phase 8: complete XNA 4.0 API coverage -- 94/201 → 201/201 in 20 increments (2026-08-18, session 7 continued; user directive "cna-cs musi pokryvat cele xna 4.0")
+
+The user rejected the vertical-slice scoping this project had used until now ("zadne jenom uzka
+podmnozina xna 4.0") and required complete XNA 4.0 coverage. `plan.md` gained a **Scope mandate**
+section retiring three standing rules -- "no caller needs it yet" as a reason to omit, a documented
+scope cut as a terminal state, and sample-driven coverage -- while explicitly keeping the fidelity
+bar (real ABI grounding, the design invariants, build-clean + tests-pass per increment), plus a
+Phase 8 broken into work packages.
+
+**Baseline was measured, not estimated.** A reflection-free inventory (grep for public type
+declarations in `CNA.XnaCompat`, compared against a hand-listed 201-type XNA 4.0 surface) put the
+starting point at **94/201, 47%**. That command lives in `plan.md` so the number can be re-derived
+rather than trusted. Final state: **201/201**, tests **440 → 659**, build 0 warnings/0 errors
+throughout, `cna-cs-template` still building at every step.
+
+The load-bearing discovery, made before any code was written: the real C API already has headers
+for essentially every missing area (`curve.h`, `input_touch.h`, `storage.h`,
+`runtime_components.h`, `texture_volume.h`, `effects.h`, `xact.h`, `video.h`, `display.h`,
+`content_readers.h`). Full coverage was therefore **binding work against an ABI that already
+exists**, not inventing stubs -- which is what made the mandate achievable at this quality bar at
+all.
+
+### Findings that changed the design (not mechanical work)
+
+- **A managed component model would have compiled and never run.** `runtime_components.h` shows the
+  native game owns its own component collection and drives each component through a callback table.
+  Writing `GameComponent` managed-side -- the obvious approach, since XNA's is pure logic -- would
+  have produced code that looked correct while native iterated its own empty list. Found while
+  scoping WP7, which is why that package split into a managed half (services, `FrameworkDispatcher`)
+  and a bound half.
+- **`Curve`'s tests caught two real math errors in the first draft.** Evaluation scaled both
+  tangents by the segment duration (real XNA does not -- `ComputeTangents` already expresses them as
+  a value delta, so scaling again squares every computed tangent), and `ComputeTangents` used one
+  formula for both `TangentIn` and `TangentOut` (XNA is asymmetric for both `Linear` and `Smooth`).
+  Neither fails to compile; both produce plausible-looking animation. This is the concrete payoff of
+  the WP8 decision to implement `Curve` **managed** rather than bind `curve.h`: native-backed types
+  cannot be exercised at all in this environment, so binding it would have traded a tested
+  implementation for an untestable one.
+- **Dynamic buffers are not a separate resource.** `CNA_VertexBufferCreateInfo` and
+  `CNA_IndexBufferCreateInfo` each carry a `dynamic` flag -- and this project's interop structs
+  already *had* that field, always written as 0. `DynamicVertexBuffer`/`DynamicIndexBuffer` are
+  therefore thin subclasses that flip one bit, not new bindings.
+- **A factory hook shaped as `CreateAdapter()` recursed forever.** It forced the compat override to
+  write `new GraphicsAdapter(this, base.Adapter.AdapterIndex)`, and `Adapter` dispatches straight
+  back into the override -- a StackOverflow the compiler cannot see. Reshaped so the index is
+  resolved separately and passed in, removing the cycle by construction rather than by remembering
+  not to write it.
+
+### Two documented architecture exceptions, both forced by C# single inheritance
+
+Where XNA's own hierarchy has a base class the facade must expose, a compat leaf cannot derive from
+both that compat base and its `CNA`-namespace counterpart:
+
+- **WP3a, textures.** `Microsoft.Xna.Framework.Graphics.Texture2D` now derives from the compat
+  `Texture`, reusing `internal static` native helpers on `CNA.Graphics.Texture2D` -- about five call
+  sites, no duplicated logic. Reparenting also forced `SpriteBatch`/`BasicEffect`/`SpriteFont` to
+  widen from `Texture2D` to the shared `Texture`; `SpriteBatch` was the one real obstacle (it needs
+  2D dimensions for default source rects), solved by reading them through the handle-based
+  `GetTexture2DDimensions` rather than the managed type.
+- **WP4c, effects.** The same problem with ~87 members at stake. Raised with the user rather than
+  decided unilaterally, because it changes `docs/architecture.md`'s own "no duplicated logic for
+  reference types" rule; the user chose to do it. Resolved by **composition**: each compat effect
+  holds its `CNA.Graphics` counterpart and forwards. What keeps that from being two drifting objects
+  is one override -- compat `Effect` reports the *inner* effect's `NativeEffectHandleValue`, so the
+  pair is a single native effect. `docs/architecture.md` now records both exceptions with their
+  reasons.
+
+### Deliberate scope cuts inside the mandate, and how they are expressed
+
+The mandate does not permit silent omission, so where the C API genuinely offers nothing the type
+still exists with real XNA signatures and the unbacked member throws `NotSupportedException` naming
+the missing native function. `DualTextureEffect.Texture2` is the worked example: `effects.h` exposes
+a single texture setter, and silently no-opping would render a two-layer effect as one layer with no
+diagnostic.
+
+Three CNA-only extensions were deliberately **not** surfaced, for XNA-shape fidelity:
+`CNA_TouchLocation.pressure`, `CNA_GestureSample.finger_id_ext`, and
+`CNA_PresentationParameters.headless_ext`. Exposing members XNA never had would make code written
+against this layer silently non-portable.
+
+### Gaps closed that predated the mandate
+
+- **`ModelEffectCollection`'s compat mirror**, previously recorded as a *permanent* gap because
+  `CNA.Graphics.ModelMesh` constructs its collection at field-initializer time with no override
+  seam. The fix was to stop needing a seam: wrap the already-constructed collection rather than
+  replace it. `DirectionalLight` had the identical problem and the identical resolution.
+- **The fabricated effect technique.** `Effect` handed out a single made-up `EffectTechnique`
+  reporting the hardcoded name `"Default"`, always exactly one pass, and no parameters -- and
+  `EffectPass.Apply()` forwarded to the whole effect, so a multi-pass technique would silently have
+  rendered only the effect-wide apply. WP4a replaced all of it with the real native objects.
+- **`FrameworkDispatcher`.** `Game.Update` called `MediaPlayer.Update()` directly, documented as "the
+  closest equivalent this project can offer" to a type it did not have. It has it now.
+- **§27's `EffectParameter` handle caching**, marked "not applicable" in Phase 5 because no
+  name-indexed parameter system existed. WP4a added one, so it is applicable again -- and remains
+  deliberately not done (the collections re-resolve by design); recorded in `plan.md`.
+
+### Not done
+
+`/code-review high` over Phase 8 had not run when this entry was written -- 20 commits of new
+surface. Everything else outstanding is collected in `plan.md` **WP15**: folding `BasicEffect` onto
+`StockEffect`, `.cnj` skinning (unblocked now that `SkinnedEffect` exists),
+`DrawUserIndexedPrimitives`, 3D/cube `SetData`/`GetData`, the native-callback features
+(`DynamicSoundEffectInstance.BufferNeeded`, `SoundEffect.Apply3D`, `GraphicsDeviceManager`'s device
+events, managed content-reader registration), the remaining `Game` members, `.xnb` LZ4, and runtime
+glTF. Runtime behaviour of any of this is still unverified -- there is no real `cna-native` in this
+environment, so everything here is compile- and unit-test-verified only.
+
 ## "Missing XNA surface" push for cna-cs-template: BlendState/DepthStencilState/RasterizerState, Viewport, GraphicsProfile, DrawUserPrimitives, Game.Window/IsMouseVisible (2026-08-18, session 7 continued autonomously; user asked to finish `../cna-cs-template`, chose "add the missing XNA surface to cna-cs first" over simplifying the demo)
 
 `cna-cs-template`'s `HelloGame.cs` (an adaptive 3D-cube/2D-logo demo, unchanged since before this
