@@ -29,6 +29,24 @@ public class EffectPass : IDisposable
         _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_pass_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>.
+    ///
+    /// Every caller pairs this with <see cref="GC.KeepAlive(object)"/> after the native call. That
+    /// is not decoration: these wrappers are routinely temporaries -- <c>effect.Parameters["World"]
+    /// .SetValue(m)</c> leaves the <see cref="EffectParameter"/> unreachable the moment its handle
+    /// has been read -- and the moment they are unreachable the <see cref="System.Runtime.InteropServices.SafeHandle"/>
+    /// finalizer is free to run <c>destroy</c> while the native call is still in flight. Giving
+    /// these types SafeHandle ownership is what fixed their leak; it is also what introduced this
+    /// hazard, since before that they held a bare handle with no finalizer at all.
+    ///
+    /// <see cref="GC.KeepAlive(object)"/> rather than
+    /// <see cref="System.Runtime.InteropServices.SafeHandle.DangerousAddRef"/>/<c>DangerousRelease</c>:
+    /// it closes the reachability hazard, which is the real one here, but it does not make a
+    /// concurrent <c>Dispose</c> from another thread safe. Nothing in this project is thread-safe,
+    /// so that is consistent rather than a new gap -- and the ref-counted form is what
+    /// <c>plan.md</c> WP17 will apply project-wide.
+    /// </summary>
     private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
 
     public void Dispose()
@@ -37,14 +55,23 @@ public class EffectPass : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public unsafe string Name => NativeStringReader.Read(
-        Native.cna_effect_pass_get_name_byte_count, Native.cna_effect_pass_copy_name, _handle, nameof(Name));
+    public unsafe string Name
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_effect_pass_get_name_byte_count, Native.cna_effect_pass_copy_name, _handle, nameof(Name));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     public EffectAnnotationCollection Annotations
     {
         get
         {
             CnaResult result = Native.cna_effect_pass_get_annotations(_handle, out CnaHandle collection);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Annotations));
             return new EffectAnnotationCollection(collection);
         }
@@ -53,6 +80,7 @@ public class EffectPass : IDisposable
     public void Apply()
     {
         CnaResult result = Native.cna_effect_pass_apply(_handle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Apply));
     }
 }

@@ -26,6 +26,24 @@ public class EffectParameter : IDisposable
         _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_parameter_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>.
+    ///
+    /// Every caller pairs this with <see cref="GC.KeepAlive(object)"/> after the native call. That
+    /// is not decoration: these wrappers are routinely temporaries -- <c>effect.Parameters["World"]
+    /// .SetValue(m)</c> leaves the <see cref="EffectParameter"/> unreachable the moment its handle
+    /// has been read -- and the moment they are unreachable the <see cref="System.Runtime.InteropServices.SafeHandle"/>
+    /// finalizer is free to run <c>destroy</c> while the native call is still in flight. Giving
+    /// these types SafeHandle ownership is what fixed their leak; it is also what introduced this
+    /// hazard, since before that they held a bare handle with no finalizer at all.
+    ///
+    /// <see cref="GC.KeepAlive(object)"/> rather than
+    /// <see cref="System.Runtime.InteropServices.SafeHandle.DangerousAddRef"/>/<c>DangerousRelease</c>:
+    /// it closes the reachability hazard, which is the real one here, but it does not make a
+    /// concurrent <c>Dispose</c> from another thread safe. Nothing in this project is thread-safe,
+    /// so that is consistent rather than a new gap -- and the ref-counted form is what
+    /// <c>plan.md</c> WP17 will apply project-wide.
+    /// </summary>
     private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
 
     public void Dispose()
@@ -34,11 +52,27 @@ public class EffectParameter : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public unsafe string Name => NativeStringReader.Read(
-        Native.cna_effect_parameter_get_name_byte_count, Native.cna_effect_parameter_copy_name, _handle, nameof(Name));
+    public unsafe string Name
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_effect_parameter_get_name_byte_count, Native.cna_effect_parameter_copy_name, _handle, nameof(Name));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
-    public unsafe string Semantic => NativeStringReader.Read(
-        Native.cna_effect_parameter_get_semantic_byte_count, Native.cna_effect_parameter_copy_semantic, _handle, nameof(Semantic));
+    public unsafe string Semantic
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_effect_parameter_get_semantic_byte_count, Native.cna_effect_parameter_copy_semantic, _handle, nameof(Semantic));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     public int RowCount => GetInfo().RowCount;
 
@@ -54,6 +88,7 @@ public class EffectParameter : IDisposable
         get
         {
             CnaResult result = Native.cna_effect_parameter_get_elements(_handle, out CnaHandle collection);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Elements));
             return new EffectParameterCollection(collection);
         }
@@ -65,6 +100,7 @@ public class EffectParameter : IDisposable
         get
         {
             CnaResult result = Native.cna_effect_parameter_get_structure_members(_handle, out CnaHandle collection);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(StructureMembers));
             return new EffectParameterCollection(collection);
         }
@@ -75,6 +111,7 @@ public class EffectParameter : IDisposable
         get
         {
             CnaResult result = Native.cna_effect_parameter_get_annotations(_handle, out CnaHandle collection);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Annotations));
             return new EffectAnnotationCollection(collection);
         }
@@ -122,6 +159,7 @@ public class EffectParameter : IDisposable
     {
         ArgumentNullException.ThrowIfNull(value);
         CnaResult result = CnaStringMarshal.WithStringView(value, view => Native.cna_effect_parameter_set_value_string(_handle, view));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetValue));
     }
 
@@ -154,6 +192,7 @@ public class EffectParameter : IDisposable
 
         CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
         CnaResult result = Native.cna_effect_parameter_set_value_texture(_handle, textureType, handle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetValue));
     }
 
@@ -189,6 +228,7 @@ public class EffectParameter : IDisposable
     {
         var info = new CnaEffectParameterInfo();
         CnaResult result = Native.cna_effect_parameter_get_info(_handle, ref info);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_effect_parameter_get_info");
         return info;
     }
@@ -197,6 +237,7 @@ public class EffectParameter : IDisposable
     {
         T value = default;
         CnaResult result = Native.cna_effect_parameter_get_value(_handle, valueType, &value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_effect_parameter_get_value");
         return value;
     }
@@ -204,6 +245,7 @@ public class EffectParameter : IDisposable
     private unsafe void SetScalar<T>(CnaEffectValueType valueType, T value) where T : unmanaged
     {
         CnaResult result = Native.cna_effect_parameter_set_value(_handle, valueType, &value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_effect_parameter_set_value");
     }
 
@@ -221,6 +263,7 @@ public class EffectParameter : IDisposable
         fixed (TNative* nativePtr = native)
         {
             CnaResult result = Native.cna_effect_parameter_set_values(_handle, valueType, nativePtr, (ulong)native.Length);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, "cna_effect_parameter_set_values");
         }
     }
