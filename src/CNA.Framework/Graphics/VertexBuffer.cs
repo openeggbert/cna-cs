@@ -53,7 +53,7 @@ public class VertexBuffer : IDisposable
         VertexCount = vertexCount;
         BufferUsage = bufferUsage;
 
-        CnaHandle declarationHandle = CreateNativeDeclaration(vertexDeclaration);
+        CnaHandle declarationHandle = vertexDeclaration.CreateNativeHandle();
         try
         {
             var createInfo = new CnaVertexBufferCreateInfo
@@ -75,33 +75,6 @@ public class VertexBuffer : IDisposable
             // buffer keeps its own copy, so this declaration is never needed again after the call
             // above, whether it succeeded or failed.
             Native.cna_vertex_declaration_destroy(declarationHandle);
-        }
-    }
-
-    /// <summary>Builds a native vertex-declaration handle from <paramref name="vertexDeclaration"/>'s
-    /// own client-side elements/stride -- <see cref="Graphics.VertexDeclaration"/> itself stays a
-    /// pure C# data type (matching real XNA's own object model, which the earlier design already
-    /// got right); only this one call site needs a real native handle, and only momentarily.
-    /// <see cref="VertexElement"/>'s field order and <see cref="VertexElementFormat"/>/
-    /// <see cref="VertexElementUsage"/>'s numeric values were confirmed to already match
-    /// <c>CNA_VertexElement</c>/<c>CNA_VERTEX_ELEMENT_FORMAT_*</c>/<c>CNA_VERTEX_ELEMENT_USAGE_*</c>
-    /// exactly before relying on the direct field-for-field conversion below.</summary>
-    private static unsafe CnaHandle CreateNativeDeclaration(VertexDeclaration vertexDeclaration)
-    {
-        VertexElement[] elements = vertexDeclaration.GetVertexElements();
-        var nativeElements = new CnaVertexElement[elements.Length];
-        for (int i = 0; i < elements.Length; i++)
-        {
-            nativeElements[i] = new CnaVertexElement(
-                elements[i].Offset, (uint)elements[i].VertexElementFormat, (uint)elements[i].VertexElementUsage, elements[i].UsageIndex);
-        }
-
-        fixed (CnaVertexElement* elementsPtr = nativeElements)
-        {
-            CnaResult result = Native.cna_vertex_declaration_create_with_stride(
-                vertexDeclaration.VertexStride, elementsPtr, (ulong)nativeElements.Length, out CnaHandle declaration);
-            CnaException.ThrowIfFailed(result, nameof(VertexDeclaration));
-            return declaration;
         }
     }
 

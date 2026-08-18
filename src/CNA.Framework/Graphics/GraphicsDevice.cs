@@ -161,26 +161,64 @@ public class GraphicsDevice
         }
     }
 
-    /// <summary>Matches real XNA's <c>DrawUserPrimitives&lt;T&gt;</c>. Only the four vertex types
-    /// the real ABI's own <c>CNA_UserVertexSource</c> names -- <see cref="VertexPositionColor"/>,
-    /// <see cref="VertexPositionColorTexture"/>, <see cref="VertexPositionTexture"/>,
-    /// <see cref="VertexPositionNormalTexture"/> -- are supported; any other <typeparamref name="T"/>
-    /// would need the raw-stream route with a native vertex-declaration resource this project
-    /// doesn't have (see <see cref="UserVertexSource"/>'s own doc comment).</summary>
+    /// <summary>
+    /// Matches real XNA's <c>DrawUserPrimitives&lt;T&gt;</c>, for any
+    /// <see cref="IVertexType"/>-implementing <typeparamref name="T"/>.
+    ///
+    /// The four types <c>CNA_UserVertexSource</c> names by identity take that route, which needs no
+    /// declaration at all. Anything else goes through <c>CNA_USER_VERTEX_SOURCE_RAW_STREAM</c> with
+    /// a declaration built from the type -- which is what the header intends, and what
+    /// <see cref="VertexBuffer"/> has always done for its own creation path.
+    ///
+    /// It used to throw <see cref="NotSupportedException"/> for every other <typeparamref name="T"/>,
+    /// on the recorded grounds that the raw route "would need a native vertex-declaration resource
+    /// this project doesn't have". A header audit found otherwise:
+    /// <c>cna_vertex_declaration_create_with_stride</c> was already bound and already in use one
+    /// file over.
+    /// </summary>
     public unsafe void DrawUserPrimitives<T>(PrimitiveType primitiveType, T[] vertexData, int vertexOffset, int primitiveCount)
         where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(vertexData);
 
-        UserVertexSource vertexSource = VertexSourceFor<T>();
+        UserVertexSource? typedSource = TypedVertexSourceFor<T>();
 
         fixed (T* vertexDataPtr = vertexData)
         {
-            DrawUserPrimitivesRaw(primitiveType, vertexDataPtr, vertexSource, vertexOffset, primitiveCount);
+            if (typedSource is UserVertexSource source)
+            {
+                DrawUserPrimitivesRaw(primitiveType, vertexDataPtr, source, vertexOffset, primitiveCount);
+                return;
+            }
+
+            DrawUserPrimitivesRaw(
+                primitiveType, vertexDataPtr, UserVertexSource.RawStream, vertexOffset, primitiveCount,
+                DeclarationFor<T>());
         }
     }
 
-    private static UserVertexSource VertexSourceFor<T>() where T : unmanaged
+    /// <summary>Derives the declaration for a vertex type that has no
+    /// <c>CNA_UserVertexSource</c> identity of its own. Rejects a non-<see cref="IVertexType"/>
+    /// <typeparamref name="T"/> here rather than letting
+    /// <see cref="VertexDeclaration.FromType"/>'s reflection failure surface as something less
+    /// obvious.</summary>
+    private static VertexDeclaration DeclarationFor<T>() where T : unmanaged
+    {
+        if (!typeof(IVertexType).IsAssignableFrom(typeof(T)))
+        {
+            throw new NotSupportedException(
+                $"DrawUserPrimitives<{typeof(T).Name}> needs {typeof(T).Name} to implement IVertexType, so its " +
+                "vertex declaration can be derived. Only VertexPositionColor, VertexPositionColorTexture, " +
+                "VertexPositionTexture and VertexPositionNormalTexture are drawable without one.");
+        }
+
+        return VertexDeclaration.FromType(typeof(T));
+    }
+
+    /// <summary><see langword="null"/> when <typeparamref name="T"/> is not one of the four types
+    /// the ABI names directly -- which is a fall-through to the raw-stream route, not a
+    /// failure.</summary>
+    private static UserVertexSource? TypedVertexSourceFor<T>() where T : unmanaged
     {
         if (typeof(T) == typeof(VertexPositionColor))
         {
@@ -202,10 +240,7 @@ public class GraphicsDevice
             return UserVertexSource.PositionNormalTexture;
         }
 
-        throw new NotSupportedException(
-            $"DrawUserPrimitives<{typeof(T).Name}> is not supported -- only VertexPositionColor, " +
-            "VertexPositionColorTexture, VertexPositionTexture, and VertexPositionNormalTexture match a real " +
-            "CNA_USER_VERTEX_SOURCE_* identity.");
+        return null;
     }
 
     /// <summary>Matches real XNA's <c>DrawUserIndexedPrimitives&lt;T&gt;</c>: the same
@@ -226,15 +261,23 @@ public class GraphicsDevice
         ArgumentNullException.ThrowIfNull(vertexData);
         ArgumentNullException.ThrowIfNull(indexData);
 
-        UserVertexSource vertexSource = VertexSourceFor<TVertex>();
+        UserVertexSource? typedSource = TypedVertexSourceFor<TVertex>();
         IndexElementSize indexElementSize = IndexBuffer.SizeForType(typeof(TIndex));
 
         fixed (TVertex* vertexDataPtr = vertexData)
         fixed (TIndex* indexDataPtr = indexData)
         {
             DrawUserIndexedPrimitivesRaw(
-                primitiveType, vertexDataPtr, vertexSource, vertexOffset, numVertices,
-                indexDataPtr, indexElementSize, indexOffset, primitiveCount);
+                primitiveType,
+                vertexDataPtr,
+                typedSource ?? UserVertexSource.RawStream,
+                vertexOffset,
+                numVertices,
+                indexDataPtr,
+                indexElementSize,
+                indexOffset,
+                primitiveCount,
+                typedSource is null ? DeclarationFor<TVertex>() : null);
         }
     }
 
@@ -251,36 +294,50 @@ public class GraphicsDevice
         void* indexData,
         IndexElementSize indexElementSize,
         int indexOffset,
-        int primitiveCount)
+        int primitiveCount,
+        VertexDeclaration? vertexDeclaration = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(vertexOffset);
         ArgumentOutOfRangeException.ThrowIfNegative(numVertices);
         ArgumentOutOfRangeException.ThrowIfNegative(indexOffset);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
 
-        var primitives = new CnaUserPrimitives
+        CnaHandle declaration = vertexDeclaration?.CreateNativeHandle() ?? CnaHandle.Zero;
+        try
         {
-            PrimitiveType = (int)primitiveType,
-            VertexSource = (CnaUserVertexSource)vertexSource,
-            VertexData = vertexData,
-            VertexDeclaration = CnaHandle.Zero,
-            VertexOffset = vertexOffset,
+            var primitives = new CnaUserPrimitives
+            {
+                PrimitiveType = (int)primitiveType,
+                VertexSource = (CnaUserVertexSource)vertexSource,
+                VertexData = vertexData,
+                VertexDeclaration = declaration,
+                VertexOffset = vertexOffset,
 
-            // Meaningful only on this route -- the non-indexed draw ignores it, per the header.
-            NumVertices = numVertices,
-            PrimitiveCount = primitiveCount,
-        };
+                // Meaningful only on this route -- the non-indexed draw ignores it, per the header.
+                NumVertices = numVertices,
+                PrimitiveCount = primitiveCount,
+            };
 
-        var indices = new CnaUserIndices
+            var indices = new CnaUserIndices
+            {
+                IndexElementSize = (uint)indexElementSize,
+                IndexOffset = indexOffset,
+                IndexData = indexData,
+            };
+
+            CnaResult result = Native.cna_graphics_device_draw_user_indexed_primitives(
+                ResolveNativeDeviceHandle(), in primitives, in indices);
+            CnaException.ThrowIfFailed(result, nameof(DrawUserIndexedPrimitives));
+        }
+        finally
         {
-            IndexElementSize = (uint)indexElementSize,
-            IndexOffset = indexOffset,
-            IndexData = indexData,
-        };
-
-        CnaResult result = Native.cna_graphics_device_draw_user_indexed_primitives(
-            ResolveNativeDeviceHandle(), in primitives, in indices);
-        CnaException.ThrowIfFailed(result, nameof(DrawUserIndexedPrimitives));
+            // The draw reads the declaration during the call and keeps nothing, so it is released
+            // immediately -- in a finally, because a failed draw must not leak it.
+            if (declaration.Value != 0)
+            {
+                Native.cna_vertex_declaration_destroy(declaration);
+            }
+        }
     }
 
     /// <summary>The pointer-and-identity level <see cref="DrawUserPrimitives{T}"/> builds on --
@@ -288,25 +345,46 @@ public class GraphicsDevice
     /// reach it for its own, separately-typed compat vertex structs (structs can't share a type
     /// across the CNA/XnaCompat boundary the way <see cref="RenderTarget2D"/>-style reference types
     /// do -- see <see cref="Graphics.UserVertexSource"/>'s own doc comment) without ever naming a
-    /// <c>CNA.Interop</c> type.</summary>
+    /// <c>CNA.Interop</c> type.
+    ///
+    /// <paramref name="vertexDeclaration"/> is optional and only meaningful for
+    /// <see cref="UserVertexSource.RawStream"/>: the header states that a raw stream without one
+    /// uses the implicit <c>VertexPositionColor</c> layout, and that a typed source without one
+    /// uses its own type's declaration.</summary>
     protected unsafe void DrawUserPrimitivesRaw(
-        PrimitiveType primitiveType, void* vertexData, UserVertexSource vertexSource, int vertexOffset, int primitiveCount)
+        PrimitiveType primitiveType,
+        void* vertexData,
+        UserVertexSource vertexSource,
+        int vertexOffset,
+        int primitiveCount,
+        VertexDeclaration? vertexDeclaration = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(vertexOffset);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
 
-        var primitives = new CnaUserPrimitives
+        CnaHandle declaration = vertexDeclaration?.CreateNativeHandle() ?? CnaHandle.Zero;
+        try
         {
-            PrimitiveType = (int)primitiveType,
-            VertexSource = (CnaUserVertexSource)vertexSource,
-            VertexData = vertexData,
-            VertexDeclaration = CnaHandle.Zero,
-            VertexOffset = vertexOffset,
-            PrimitiveCount = primitiveCount,
-        };
+            var primitives = new CnaUserPrimitives
+            {
+                PrimitiveType = (int)primitiveType,
+                VertexSource = (CnaUserVertexSource)vertexSource,
+                VertexData = vertexData,
+                VertexDeclaration = declaration,
+                VertexOffset = vertexOffset,
+                PrimitiveCount = primitiveCount,
+            };
 
-        CnaResult result = Native.cna_graphics_device_draw_user_primitives(ResolveNativeDeviceHandle(), in primitives);
-        CnaException.ThrowIfFailed(result, nameof(DrawUserPrimitives));
+            CnaResult result = Native.cna_graphics_device_draw_user_primitives(ResolveNativeDeviceHandle(), in primitives);
+            CnaException.ThrowIfFailed(result, nameof(DrawUserPrimitives));
+        }
+        finally
+        {
+            if (declaration.Value != 0)
+            {
+                Native.cna_vertex_declaration_destroy(declaration);
+            }
+        }
     }
 
     /// <summary>

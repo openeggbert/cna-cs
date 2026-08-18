@@ -1,3 +1,4 @@
+using CNA.Interop;
 namespace CNA.Graphics;
 
 /// <summary>
@@ -30,6 +31,44 @@ public class VertexDeclaration
     public int VertexStride { get; }
 
     public VertexElement[] GetVertexElements() => (VertexElement[])_elements.Clone();
+
+    /// <summary>
+    /// Builds a native <c>CNA_VertexDeclarationHandle</c> from this declaration's own elements and
+    /// stride. The caller owns the result and must destroy it.
+    ///
+    /// This type stays a pure C# data type, matching real XNA's object model -- only the call sites
+    /// that hand a declaration to native need a handle, and only momentarily. It lives here rather
+    /// than in <see cref="VertexBuffer"/>, where it started, because
+    /// <see cref="GraphicsDevice.DrawUserPrimitives{T}"/> needs the same conversion: without it,
+    /// that method could only draw the four vertex types <c>CNA_UserVertexSource</c> names by
+    /// identity, which was a self-imposed limit rather than an ABI one.
+    ///
+    /// <see cref="VertexElement"/>'s field order and <see cref="VertexElementFormat"/>/
+    /// <see cref="VertexElementUsage"/>'s numeric values were confirmed to match
+    /// <c>CNA_VertexElement</c>/<c>CNA_VERTEX_ELEMENT_FORMAT_*</c>/<c>CNA_VERTEX_ELEMENT_USAGE_*</c>
+    /// exactly before relying on the direct field-for-field conversion.
+    /// </summary>
+    internal unsafe CnaHandle CreateNativeHandle()
+    {
+        VertexElement[] elements = GetVertexElements();
+        var nativeElements = new CnaVertexElement[elements.Length];
+        for (int i = 0; i < elements.Length; i++)
+        {
+            nativeElements[i] = new CnaVertexElement(
+                elements[i].Offset,
+                (uint)elements[i].VertexElementFormat,
+                (uint)elements[i].VertexElementUsage,
+                elements[i].UsageIndex);
+        }
+
+        fixed (CnaVertexElement* elementsPtr = nativeElements)
+        {
+            CnaResult result = Native.cna_vertex_declaration_create_with_stride(
+                VertexStride, elementsPtr, (ulong)nativeElements.Length, out CnaHandle declaration);
+            CnaException.ThrowIfFailed(result, nameof(VertexDeclaration));
+            return declaration;
+        }
+    }
 
     /// <summary>
     /// Derives a <see cref="VertexDeclaration"/> from an <see cref="IVertexType"/>-implementing

@@ -135,18 +135,27 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     /// their CNA.Graphics counterparts (structs can't be subclassed to share one), so the base
     /// generic method's own <c>typeof(T) ==</c> checks would never match. Goes through
     /// <see cref="CNA.Graphics.GraphicsDevice.DrawUserPrimitivesRaw"/> instead, the shared
-    /// pointer-and-identity level both namespaces build on.</summary>
+    /// pointer-and-identity level both namespaces build on.
+    ///
+    /// Any <see cref="IVertexType"/> works, not only the four the ABI names -- see
+    /// <see cref="CNA.Graphics.UserVertexSource"/> for why the previous restriction was
+    /// self-imposed.</summary>
     public unsafe void DrawUserPrimitives<T>(PrimitiveType primitiveType, T[] vertexData, int vertexOffset, int primitiveCount)
         where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(vertexData);
 
-        CNA.Graphics.UserVertexSource vertexSource = VertexSourceFor<T>();
+        CNA.Graphics.UserVertexSource? typedSource = TypedVertexSourceFor<T>();
 
         fixed (T* vertexDataPtr = vertexData)
         {
             DrawUserPrimitivesRaw(
-                (CNA.Graphics.PrimitiveType)(int)primitiveType, vertexDataPtr, vertexSource, vertexOffset, primitiveCount);
+                (CNA.Graphics.PrimitiveType)(int)primitiveType,
+                vertexDataPtr,
+                typedSource ?? CNA.Graphics.UserVertexSource.RawStream,
+                vertexOffset,
+                primitiveCount,
+                typedSource is null ? DeclarationFor<T>() : null);
         }
     }
 
@@ -168,19 +177,31 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         ArgumentNullException.ThrowIfNull(vertexData);
         ArgumentNullException.ThrowIfNull(indexData);
 
-        CNA.Graphics.UserVertexSource vertexSource = VertexSourceFor<TVertex>();
+        CNA.Graphics.UserVertexSource? typedSource = TypedVertexSourceFor<TVertex>();
         CNA.Graphics.IndexElementSize indexElementSize = CNA.Graphics.IndexBuffer.SizeForType(typeof(TIndex));
 
         fixed (TVertex* vertexDataPtr = vertexData)
         fixed (TIndex* indexDataPtr = indexData)
         {
             DrawUserIndexedPrimitivesRaw(
-                (CNA.Graphics.PrimitiveType)(int)primitiveType, vertexDataPtr, vertexSource, vertexOffset, numVertices,
-                indexDataPtr, indexElementSize, indexOffset, primitiveCount);
+                (CNA.Graphics.PrimitiveType)(int)primitiveType,
+                vertexDataPtr,
+                typedSource ?? CNA.Graphics.UserVertexSource.RawStream,
+                vertexOffset,
+                numVertices,
+                indexDataPtr,
+                indexElementSize,
+                indexOffset,
+                primitiveCount,
+                typedSource is null ? DeclarationFor<TVertex>() : null);
         }
     }
 
-    private static CNA.Graphics.UserVertexSource VertexSourceFor<T>() where T : unmanaged
+    /// <summary><see langword="null"/> for a vertex type the ABI does not name directly, which is
+    /// a fall-through to the raw-stream route rather than a failure -- see
+    /// <see cref="CNA.Graphics.UserVertexSource"/> for the header evidence that the raw route was
+    /// never actually blocked.</summary>
+    private static CNA.Graphics.UserVertexSource? TypedVertexSourceFor<T>() where T : unmanaged
     {
         if (typeof(T) == typeof(VertexPositionColor))
         {
@@ -202,9 +223,24 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
             return CNA.Graphics.UserVertexSource.PositionNormalTexture;
         }
 
-        throw new NotSupportedException(
-            $"DrawUserPrimitives<{typeof(T).Name}> is not supported -- only VertexPositionColor, " +
-            "VertexPositionColorTexture, VertexPositionTexture, and VertexPositionNormalTexture match a real " +
-            "CNA_USER_VERTEX_SOURCE_* identity.");
+        return null;
+    }
+
+    /// <summary>Derives the declaration for a compat vertex type with no
+    /// <c>CNA_UserVertexSource</c> identity. Goes through this namespace's own
+    /// <see cref="VertexDeclaration"/>, which converts implicitly to the CNA one, so a compat
+    /// <see cref="IVertexType"/> is read through the compat interface it actually
+    /// implements.</summary>
+    private static CNA.Graphics.VertexDeclaration DeclarationFor<T>() where T : unmanaged
+    {
+        if (Activator.CreateInstance<T>() is not IVertexType instance)
+        {
+            throw new NotSupportedException(
+                $"DrawUserPrimitives<{typeof(T).Name}> needs {typeof(T).Name} to implement IVertexType, so its " +
+                "vertex declaration can be derived. Only VertexPositionColor, VertexPositionColorTexture, " +
+                "VertexPositionTexture and VertexPositionNormalTexture are drawable without one.");
+        }
+
+        return instance.VertexDeclaration.Framework;
     }
 }

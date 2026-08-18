@@ -26,11 +26,16 @@ internal enum CnaGraphicsProfile : uint
 }
 
 /// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_UserVertexSource</c>
-/// exactly (<c>graphics_device.h:897-908</c>). Only the four typed sources are used here --
-/// <see cref="RawStream"/> would need a caller-supplied <c>CNA_VertexDeclarationHandle</c> this
-/// project has no native-backed declaration resource for (this project's
-/// <c>CNA.Graphics.VertexDeclaration</c> is a client-side-only description, never uploaded to
-/// native as its own resource).</summary>
+/// exactly (<c>graphics_device.h:897-908</c>). All five are used.
+///
+/// <see cref="RawStream"/> was previously described as unreachable, "would need a caller-supplied
+/// <c>CNA_VertexDeclarationHandle</c> this project has no native-backed declaration resource for".
+/// That was wrong twice over, and a header audit found it: <c>vertex_resources.h:110-135</c>
+/// creates real owned declarations, this repository already bound and used
+/// <c>cna_vertex_declaration_create_with_stride</c> for <c>VertexBuffer</c>, and
+/// <c>graphics_device.h:928-933</c> says a raw stream with no declaration at all falls back to the
+/// implicit <c>VertexPositionColor</c> layout. <c>DrawUserPrimitives&lt;T&gt;</c> was throwing
+/// <c>NotSupportedException</c> for a limit that did not exist.</summary>
 internal enum CnaUserVertexSource : uint
 {
     RawStream = 0,
