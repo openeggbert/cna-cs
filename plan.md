@@ -1,5 +1,35 @@
 # CNA.NET (`cna-dotnet`) — Implementation Plan
 
+## Corrections — read before trusting a "cannot be done" note below
+
+A header audit on 2026-08-18 checked every claim in this repository that some
+capability was absent from the C API. Ten were false. The historical entries
+further down are left as the record of what was believed at the time, so this
+list is where the current truth lives:
+
+| Claim, as recorded | Reality |
+| --- | --- |
+| `MediaLibrary`'s music scan has "no C ABI exposure to build against"; collections "permanently empty by design" | `media_library.h`, 148 functions, scans on open. Fully bound. |
+| `MediaPlayer.State`/`Volume`/`IsMuted`/`PlayPosition`/`Queue` are "plain C# static state, not native queries" | `media_player.h`, 41 functions, owns queue, state machine and playback clock. Fully bound. |
+| `SoundEffect.Play()` needs "XNA's internal instance pool ... which this repository has no equivalent for" | `audio.h:483`/`:499`, including the `out_played` "instance limit reached" flag. Bound. |
+| `SpriteFont` "needs no new native ABI surface at all"; its loader P/Invoked `cna_content_load_spritefont` | That symbol exists in no header — every `Load<SpriteFont>` would have thrown `EntryPointNotFoundException`. `sprite_font.h` is a real eight-function resource. `.xnb` font parsing is managed now. |
+| `DrawUserPrimitives<T>`'s raw route "would need a native vertex-declaration resource this project doesn't have" | `vertex_resources.h:110-135`, already bound and in use by `VertexBuffer`. Any `IVertexType` draws. |
+| `ContentLost` is "a Direct3D 9-era concept the C API has no counterpart for" | `CNA_VertexBufferInfo.is_content_lost` and `cna_vertex_buffer_subscribe_content_lost`, plus index equivalents. Bound. |
+| `VertexBuffer.GetData<T>` "is not supported by the real cna C API" | True for raw bytes only; `cna_vertex_buffer_get_data` is a real typed readback. Bound for the four XNA vertex types. |
+| `ResourceContentManager`: "the C API has no resource-manager concept at all" | `cna_content_manager_create_resource` exists — but its embedded-resource stream is a declared placeholder that fails every load, so the managed implementation stays. |
+| `DualTextureEffect.Texture2` throws: "the C API has no second-layer function" | `cna_dual_texture_effect_set_texture` takes a layer index. Already fixed on the CNA side; the compat doc was stale. |
+| `GameComponentCollection`: "native owns the list and does not report modifications" | `cna_game_components_subscribe_added`/`_removed` exist. The snapshot enumerator is still right, for a different reason. |
+
+Genuinely confirmed absent, re-checked in the same pass: managed content-reader
+registration (no factory entry point anywhere), service registration through
+`runtime_components.h`, nonzero buffer transfer offsets, and custom `.fx`
+effects (`cna_effect_create_compiled` returns `CNA_RESULT_NOT_SUPPORTED` while
+native bytecode loading is unavailable).
+
+The pattern worth carrying forward: a scope cut reads like a settled fact, and
+nothing in the text distinguishes one that was researched from one that was
+assumed. Re-check against the headers before relying on any of them.
+
 **Status:** Active — Phases 0-3 complete; Phase 4 essentially complete for
 the scope this plan actually calls for (pure math/value types,
 `Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads, `RenderTarget2D`,

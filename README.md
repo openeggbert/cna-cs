@@ -1,6 +1,7 @@
 # CNA.NET
 
-> **Status: In progress - NOT YET FUNCTIONAL**
+> **Status: complete XNA 4.0 API surface; needs the `cna-native` shared library
+> to run.**
 
 
 CNA.NET is the official C#/.NET language binding for [CNA](https://github.com/openeggbert/cna),
@@ -35,87 +36,60 @@ that promise does and does not cover.
 
 ## Status
 
-The pure math/value-type layer (`Vector2`/`3`/`4`, `Matrix`, `Quaternion`,
-`Color`, `Rectangle`, `Point`, `Ray`, `Plane`, the `Bounding*` types,
-`MathHelper`) is complete and fully real today — no native dependency, so
-unlike everything else it isn't a stub. `SpriteFont` (glyph table and
-`MeasureString`) and the vertex-format layer (`VertexDeclaration`,
-`VertexElement`, the standard `VertexPosition*` structs) join that "fully
-real today" group too — each has a real-XNA public-API escape hatch that
-needs no native ABI at all. `Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart`
-and their collection types go a step further: the *entire* feature needs
-**zero** native ABI, since `Model.Draw()`/`ModelMesh.Draw()` are pure
-managed logic built entirely on top of already native-backed primitives
-(`SetVertexBuffer`, `Indices`, `Effect.Apply()`, `DrawIndexedPrimitives`).
-`Song` (construction, equality, `FromUri`) is real and testable today
-too, against real temporary files — its own escape hatch is a plain
-file-existence check, no native call at all. `Album`/`Artist`/`Genre`/
-`Playlist`/`MediaLibrary`'s music side is real and fully testable too, but
-by deliberate design rather than a native escape hatch: every music
-collection `MediaLibrary` exposes is always empty, since the real C++
-engine's own scanning logic depends on FFmpeg/native tag-parsing
-infrastructure this binding has no way to reach (see [`NEXT.md`](NEXT.md)
-for the detail) — the full real XNA object model compiles and runs, it
-just never has anything real to report. `MediaLibrary`'s *picture* side
-(`Picture`/`PictureAlbum`/`GetPictureFromToken`/`SavePicture`) is a step
-further still: genuinely real, not always-empty, since saving a picture
-needs only plain file I/O — no native dependency, real, growing data,
-fully testable (against a throwaway temp directory, never the real
-Pictures folder — see [`NEXT.md`](NEXT.md)). `Model` file-*loading* joins
-the "fully real today" group too, for both real, uncompressed **and**
-real, LZX-compressed `.xnb` binary assets (`CNA.Content.Xnb`): parsing a
-`.xnb` file's bytes into bones/meshes/vertex-and-index-buffer data is
-pure C#/BCL logic with **zero** native ABI dependency, confirmed
-byte-for-byte against a real MonoGame-compiled `Model` fixture, not just
-self-consistency — LZX decompression itself (`LzxDecoder`/
-`XnbLzxDecompression`, a direct C# port of the real openeggbert/cna C++
-engine's own `LzxDecoder`) is the same story, confirmed byte-for-byte
-against two real, LZX-compressed MonoGame fixtures and an independently
-FNA-produced reference decompressed output, not just "parses without
-throwing." Only the final step (constructing the real, GPU-backed
-`VertexBuffer`/`IndexBuffer` objects from that data, via
-`ContentManager.Load<Model>()`) needs the native ABI, same as everything
-else below. `Model` file-loading also now covers a real, minimal-scope
-subset of the real C++ engine's own `.cnj` JSON format (`CNA.Content.Cnj`)
--- JSON envelope, an optional real `"bones"` rigid scene-graph hierarchy
-(cnjVersion 2), `BasicEffect` only, vertex sidecar strides 16/20/24/32
-only, tried only when no `.xnb` file of the same asset name exists.
-MonoGame's own Lz4 `.xnb` extension (no local format grounding exists to
-implement it correctly), `.cnj`'s own skinning surface (confirmed
-architecturally separate from the now-supported bone hierarchy, and not
-renderable in any meaningful way regardless, since this project has no
-`SkinnedEffect` anywhere to consume it), and runtime glTF are all
-explicitly out of scope (see [`NEXT.md`](NEXT.md)).
-Everything else native-backed (`Game`, `GraphicsDevice`, `Texture2D`,
-`SpriteBatch` including the full extended `Draw`/`DrawString` overload
-families, `RenderTarget2D`, `SoundEffect`/`SoundEffectInstance`,
-`VertexBuffer`/`IndexBuffer`, `ContentManager`, `Keyboard`, `Mouse`,
-`GamePad`) has its managed side built and compiles, but does **not** yet
-work end to end, because it depends on a stable C ABI in
-[`openeggbert/cna`](https://github.com/openeggbert/cna) that has not been
-implemented there yet (`modules/c-api/`). `BasicEffect` straddles both
-groups: its constructor and full property surface (`World`/`View`/
-`Projection`, lighting, fog, texturing, `EnableDefaultLighting()`) are real
-and tested today with no native dependency, same escape hatch `SpriteFont`
-found, but `Apply()` itself is native-backed like everything else in this
-paragraph — and since `Model.Draw()` ultimately calls `Effect.Apply()` too,
-drawing a `Model` end to end is still blocked on the same native ABI as
-everything else, even though the model/mesh/bone bookkeeping around it
-isn't. `MediaPlayer` straddles the same way: `State`/`Volume`/`IsMuted`/
-`PlayPosition` are plain C# static state needing no native call, but
-`Play`/`Pause`/`Resume`/`Stop`/`IsVisualizationEnabled`/
-`GetVisualizationData` are native-backed — the latter two backed by a
-real, working, dependency-free FFT implementation already in the C++
-engine, not a stub. See
-[`plan.md`](plan.md) for the full phase-by-phase status and
-[`NEXT.md`](NEXT.md) for the session-by-session history of how it got here
-and where to pick up next.
+**Coverage: the complete XNA 4.0 public API.** Every type in
+`Microsoft.Xna.Framework`, `.Audio`, `.Content`, `.Graphics`,
+`.Graphics.PackedVector`, `.Input`, `.Input.Touch`, `.Media` and `.Storage`
+is present, bound against the real
+[`openeggbert/cna`](https://github.com/openeggbert/cna) C API headers.
+`.GamerServices` and `.Net` are deliberately excluded: they bind a live-service
+model that has no meaning outside Xbox Live and are not part of what "write an
+XNA game" means.
 
-`dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors)
-and `dotnet test` passes all 476 unit tests. Running `samples/HelloGame`
-builds and starts, then throws a `DllNotFoundException` for `cna-native`
-from inside `Game`'s constructor — exactly the expected failure point until
-the upstream C ABI ships, not a bug here.
+Two groups, by what runs without a native library:
+
+**Real and fully testable today, with no native dependency.** The math and
+value types (`Vector2`/`3`/`4`, `Matrix`, `Quaternion`, `Color`, `Rectangle`,
+`Point`, `Ray`, `Plane`, the `Bounding*` types, `MathHelper`), the `Curve`
+system, the whole `PackedVector` namespace, the vertex-format layer
+(`VertexDeclaration`, `VertexElement`, the `VertexPosition*` structs),
+`SpriteFont`'s glyph table and `MeasureString`, and the `.xnb`/`.cnj` content
+*parsers* — including LZX decompression, which is checked against real
+content-pipeline fixtures.
+
+**Native-backed.** Everything else. The managed side is complete and the calls
+are real; running any of it needs the `cna-native` shared library on the load
+path. `samples/HelloGame` builds and starts, then throws `DllNotFoundException`
+from `Game`'s constructor without it — the expected failure point, not a bug
+here.
+
+The binding is grounded in the headers rather than designed alongside them:
+every signature is read out of `modules/c-api/include/CNA/C/*.h`, and where the
+C API offers nothing, the real XNA signature is implemented and throws
+`NotSupportedException` naming the missing native function. Never a silent
+no-op, never an omission.
+
+`dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors) and
+`dotnet test` passes 661 unit tests. See [`plan.md`](plan.md) for the
+phase-by-phase status and [`NEXT.md`](NEXT.md) for the session-by-session
+history and where to pick up next.
+
+### A note on the earlier status text
+
+This section used to say that the native-backed half "does **not** yet work end
+to end, because it depends on a stable C ABI in `openeggbert/cna` that has not
+been implemented there yet", that `MediaLibrary`'s music collections were
+"always empty" because the scan "depends on FFmpeg/native tag-parsing
+infrastructure this binding has no way to reach", and that `MediaPlayer`'s
+`State`/`Volume`/`IsMuted`/`PlayPosition` were "plain C# static state needing no
+native call".
+
+All three were false, and an audit of every such claim against the shipped
+headers is what established it. The C API ships 60 headers;
+`media_library.h` alone is 148 functions and scans on open; `media_player.h` is
+41 and owns the queue, the state machine and the playback clock. Each of those
+areas is now a real binding, and the reimplementations they had accumulated are
+gone. The lesson is recorded here rather than quietly edited away: a documented
+scope cut is a claim about the world, and it goes stale like any other.
 
 ## Why a C# binding, and why first
 
