@@ -605,6 +605,74 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_gamepad_get_capabilities(CnaHandle game, uint playerIndex, ref CnaGamePadCapabilities capabilities);
 
+    // -- Game components (real ABI, runtime_components.h -- Phase 8 WP7b) --------------------
+    //
+    // The native game owns the component collection and drives each component through its own
+    // callback table -- which is why this is bound rather than reimplemented managed-side (a
+    // managed-only component model would compile and never run; see plan.md WP7).
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_game_component_create(
+        CnaHandle game, in CnaGameComponentCallbacks callbacks, out CnaHandle outComponent);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_drawable_game_component_create(
+        CnaHandle game, in CnaGameComponentCallbacks callbacks, out CnaHandle outComponent);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_component_destroy(CnaHandle component);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_component_get_enabled(CnaHandle component, out byte outEnabled);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_component_set_enabled(CnaHandle component, byte enabled);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_component_get_update_order(CnaHandle component, out int outOrder);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_component_set_update_order(CnaHandle component, int order);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_component_get_is_drawable(CnaHandle component, out byte outIsDrawable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_drawable_game_component_get_draw_order(CnaHandle component, out int outOrder);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_drawable_game_component_set_draw_order(CnaHandle component, int order);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_drawable_game_component_get_visible(CnaHandle component, out byte outVisible);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_drawable_game_component_set_visible(CnaHandle component, byte visible);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_get_count(CnaHandle game, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_get_at(CnaHandle game, ulong index, out CnaHandle outComponent);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_add(CnaHandle game, CnaHandle component);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_remove(CnaHandle game, CnaHandle component, out byte outRemoved);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_remove_at(CnaHandle game, ulong index);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_clear(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_contains(CnaHandle game, CnaHandle component, out byte outContains);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_components_index_of(CnaHandle game, CnaHandle component, out long outIndex);
+
     // -- Microphone + DynamicSoundEffectInstance (real ABI, audio.h -- Phase 8 WP11b) ---------
     //
     // Microphones are addressed by index against the game handle, not by their own handle -- the

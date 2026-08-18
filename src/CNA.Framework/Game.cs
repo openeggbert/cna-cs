@@ -111,6 +111,13 @@ public abstract class Game : IDisposable
     /// which a game runs before anything reads this.</summary>
     public GameServiceContainer Services { get; } = new();
 
+    private GameComponentCollection? _components;
+
+    /// <summary>Matches real XNA's <c>Game.Components</c>. A view over the native collection the
+    /// game already owns -- see <see cref="GameComponentCollection"/> for why it is not a managed
+    /// list.</summary>
+    public GameComponentCollection Components => _components ??= new GameComponentCollection(this);
+
     public ContentManager Content { get; }
 
     public GraphicsDevice GraphicsDevice { get; protected set; } = null!;

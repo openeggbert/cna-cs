@@ -1379,13 +1379,14 @@ WP11–WP14 are the largest new subsystems and come last.
       and the `IGraphicsDeviceService`/`IGraphicsDeviceManager` contracts.
       Native: `runtime_graphics_manager.h` — already fully surveyed
       2026-08-18, every function confirmed to exist.</details>
-- [~] **WP7 — Game component / service model — WP7a done 2026-08-18**
-      (interfaces, `GameServiceContainer`, `LaunchParameters`,
-      `FrameworkDispatcher`). **WP7b outstanding:** `GameComponent`/
-      `DrawableGameComponent`/`GameComponentCollection`, which must bind
-      `runtime_components.h` rather than be managed-only -- the native game
-      owns its own component collection and drives it through a callback
-      table, so a managed model would compile and never run. Original scope:
+- [x] **WP7 — Game component / service model — done 2026-08-18 (WP7a+WP7b).** Coverage →194/201.
+      WP7b bound `GameComponent`/`DrawableGameComponent`/
+      `GameComponentCollection` against `runtime_components.h`, as predicted:
+      the native game owns the collection and drives components through a
+      callback table, so a managed model would have compiled and never run.
+      `Game.IsActive`/`.IsFixedTimeStep`/`.TargetElapsedTime`/`.SuppressDraw()`
+      and the `Activated`/`Deactivated`/`Exiting` events remain — moved to
+      WP15. Original scope:
       <details>**WP7 — Game component / service model.** `IGameComponent`,
       `IUpdateable`, `IDrawable`, `GameComponent`,
       `DrawableGameComponent`, `GameComponentCollection`,

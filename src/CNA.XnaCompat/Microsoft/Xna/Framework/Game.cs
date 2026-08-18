@@ -19,6 +19,13 @@ public abstract class Game : CNA.Game
 
     public new GameWindow Window => (GameWindow)base.Window;
 
+    private GameComponentCollection? _components;
+
+    /// <summary>Re-typed only so the name resolves in this namespace -- the element type is the
+    /// base <see cref="CNA.GameComponent"/>, which both namespaces' components derive from, so no
+    /// element conversion is involved.</summary>
+    public new GameComponentCollection Components => _components ??= new GameComponentCollection(base.Components);
+
     protected override Content.ContentManager CreateContentManager() =>
         new Content.ContentManager(GetNativeContentHandle());
 
