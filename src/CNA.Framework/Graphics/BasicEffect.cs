@@ -33,7 +33,7 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     private readonly CnaHandle _handle;
 
-    private protected override CnaHandle NativeEffectHandle => _handle;
+    protected internal override nint NativeEffectHandleValue => _handle.AsNint;
     private Texture? _texture;
     private bool _disposed;
 

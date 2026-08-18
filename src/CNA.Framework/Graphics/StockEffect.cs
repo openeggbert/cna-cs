@@ -34,7 +34,7 @@ public abstract class StockEffect : Effect
     /// assembly-internal accessor instead.</summary>
     internal CnaHandle NativeEffectHandleForCloning => Handle;
 
-    private protected override CnaHandle NativeEffectHandle => Handle;
+    protected internal override nint NativeEffectHandleValue => Handle.AsNint;
 
     /// <summary>Selects this effect on its owning device. Every stock effect shares
     /// <c>cna_effect_apply</c> -- there is no per-effect-type apply.</summary>

@@ -1,121 +1,136 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>
-/// XNA 4.0-compatible <c>BasicEffect</c>. Extends <see cref="CNA.Graphics.BasicEffect"/> directly
-/// (not a separate compat <c>Effect</c> base) -- the same "preserve the real logic's lineage over
-/// namespace purity" trade-off <c>RenderTarget2D</c> already made this session, for the same
-/// reason: <c>BasicEffect</c>'s actual value is its property surface and
-/// <see cref="CNA.Graphics.BasicEffect.OnApply"/> algorithm, and a full separate compat
-/// <c>Effect</c>/<c>EffectTechnique</c>/<c>EffectPass</c> hierarchy would either duplicate all of
-/// that from scratch or hit the exact "two independent pieces of mutable state that can desync"
-/// bug class this session already found and fixed once for <c>GraphicsDevice.Indices</c> --
-/// <c>DirectionalLight0</c>/<c>1</c>/<c>2</c> are constructed once, inside the base class's own
-/// constructor, with no seam for a compat subclass to intervene, so there is no safe way to give
-/// them a compat-typed <c>DirectionalLight</c> without either duplicating construction (risking
-/// the OnApply() computation reading a different light object than compat code mutated) or a
-/// runtime-unsafe downcast (the actual objects were never constructed as any compat subclass).
-///
-/// **Real, narrow, documented compat gap as a result:** <c>effect.CurrentTechnique</c>,
-/// <c>.Passes</c>, and <c>DirectionalLight0/1/2</c> are all inherited unchanged, so they return
-/// this project's own <c>CNA.Graphics</c>-namespaced types, not XNA-namespaced ones. The common
-/// <c>effect.CurrentTechnique.Passes[0].Apply();</c> and <c>effect.DirectionalLight0.Enabled =
-/// true;</c> idioms both still compile and work correctly (nothing about them needs to *name* the
-/// intermediate types) -- only an explicit type declaration like
-/// <c>Microsoft.Xna.Framework.Graphics.EffectTechnique technique = effect.CurrentTechnique;</c> or
-/// <c>...DirectionalLight light = effect.DirectionalLight0;</c> would fail to compile. All other
-/// properties (<c>World</c>/<c>View</c>/<c>Projection</c>, <c>DiffuseColor</c>, ...) are
-/// <c>CNA</c>-namespace-typed fields/properties that convert automatically through their implicit
-/// operators at ordinary read/write call sites, same as every other inherited-unchanged member
-/// elsewhere in this compat layer. Only <see cref="Texture"/> needs its own override, for the
-/// same reason <c>SpriteFont.Texture</c> did.
-/// </summary>
-public class BasicEffect : CNA.Graphics.BasicEffect, IEffectMatrices, IEffectFog, IEffectLights
+/// <summary>XNA 4.0-compatible <c>BasicEffect</c>. Derives from this namespace's <see cref="Effect"/>
+/// -- see that type's doc comment for why these forward to an inner <c>CNA.Graphics</c> effect
+/// rather than inheriting from it, and how the two stay one native effect.</summary>
+public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public BasicEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+        : base(graphicsDevice, new CNA.Graphics.BasicEffect(graphicsDevice))
     {
     }
 
-    public new Texture2D? Texture
+    private CNA.Graphics.BasicEffect Typed => (CNA.Graphics.BasicEffect)Inner;
+
+    public Vector3 DiffuseColor
     {
-        get => (Texture2D?)base.Texture;
-        set => base.Texture = value;
+        get => Typed.DiffuseColor;
+        set => Typed.DiffuseColor = value;
     }
 
-    Matrix IEffectMatrices.World
+    public Vector3 EmissiveColor
     {
-        get => base.World;
-        set => base.World = value;
+        get => Typed.EmissiveColor;
+        set => Typed.EmissiveColor = value;
     }
 
-    Matrix IEffectMatrices.View
+    public Vector3 SpecularColor
     {
-        get => base.View;
-        set => base.View = value;
+        get => Typed.SpecularColor;
+        set => Typed.SpecularColor = value;
     }
 
-    Matrix IEffectMatrices.Projection
+    public float SpecularPower
     {
-        get => base.Projection;
-        set => base.Projection = value;
+        get => Typed.SpecularPower;
+        set => Typed.SpecularPower = value;
     }
 
-    Vector3 IEffectFog.FogColor
+    public float Alpha
     {
-        get => base.FogColor;
-        set => base.FogColor = value;
+        get => Typed.Alpha;
+        set => Typed.Alpha = value;
     }
 
-    bool IEffectFog.FogEnabled
+    public bool VertexColorEnabled
     {
-        get => base.FogEnabled;
-        set => base.FogEnabled = value;
+        get => Typed.VertexColorEnabled;
+        set => Typed.VertexColorEnabled = value;
     }
 
-    float IEffectFog.FogStart
+    public bool PreferPerPixelLighting
     {
-        get => base.FogStart;
-        set => base.FogStart = value;
+        get => Typed.PreferPerPixelLighting;
+        set => Typed.PreferPerPixelLighting = value;
     }
 
-    float IEffectFog.FogEnd
+    public bool TextureEnabled
     {
-        get => base.FogEnd;
-        set => base.FogEnd = value;
+        get => Typed.TextureEnabled;
+        set => Typed.TextureEnabled = value;
     }
 
-    Vector3 IEffectLights.AmbientLightColor
+    public Texture? Texture
     {
-        get => base.AmbientLightColor;
-        set => base.AmbientLightColor = value;
+        get => Typed.Texture as Texture;
+        set => Typed.Texture = value;
     }
 
-    bool IEffectLights.LightingEnabled
+    public Matrix World
     {
-        get => base.LightingEnabled;
-        set => base.LightingEnabled = value;
+        get => Typed.World;
+        set => Typed.World = value;
     }
 
-    DirectionalLight IEffectLights.DirectionalLight0 => DirectionalLight0;
+    public Matrix View
+    {
+        get => Typed.View;
+        set => Typed.View = value;
+    }
 
-    DirectionalLight IEffectLights.DirectionalLight1 => DirectionalLight1;
+    public Matrix Projection
+    {
+        get => Typed.Projection;
+        set => Typed.Projection = value;
+    }
 
-    DirectionalLight IEffectLights.DirectionalLight2 => DirectionalLight2;
+    public bool FogEnabled
+    {
+        get => Typed.FogEnabled;
+        set => Typed.FogEnabled = value;
+    }
 
-    void IEffectLights.EnableDefaultLighting() => base.EnableDefaultLighting();
+    public Vector3 FogColor
+    {
+        get => Typed.FogColor;
+        set => Typed.FogColor = value;
+    }
 
-    /// <summary>Re-typed so the compat <see cref="IEffectLights"/> contract is satisfied with this
-    /// namespace's <see cref="DirectionalLight"/>. Each wraps the single light object the base
-    /// class already constructed rather than building a second one -- see that type's own doc
-    /// comment.</summary>
-    public new DirectionalLight DirectionalLight0 => _light0 ??= new DirectionalLight(base.DirectionalLight0);
+    public float FogStart
+    {
+        get => Typed.FogStart;
+        set => Typed.FogStart = value;
+    }
 
-    public new DirectionalLight DirectionalLight1 => _light1 ??= new DirectionalLight(base.DirectionalLight1);
+    public float FogEnd
+    {
+        get => Typed.FogEnd;
+        set => Typed.FogEnd = value;
+    }
 
-    public new DirectionalLight DirectionalLight2 => _light2 ??= new DirectionalLight(base.DirectionalLight2);
+    public Vector3 AmbientLightColor
+    {
+        get => Typed.AmbientLightColor;
+        set => Typed.AmbientLightColor = value;
+    }
+
+    public bool LightingEnabled
+    {
+        get => Typed.LightingEnabled;
+        set => Typed.LightingEnabled = value;
+    }
+
+    public void EnableDefaultLighting() => Typed.EnableDefaultLighting();
+
+    /// <summary>Each wraps the single light the inner effect already constructed rather than
+    /// building a second one -- see <see cref="DirectionalLight"/>'s own doc comment.</summary>
+    public DirectionalLight DirectionalLight0 => _light0 ??= new DirectionalLight(Typed.DirectionalLight0);
+
+    public DirectionalLight DirectionalLight1 => _light1 ??= new DirectionalLight(Typed.DirectionalLight1);
+
+    public DirectionalLight DirectionalLight2 => _light2 ??= new DirectionalLight(Typed.DirectionalLight2);
 
     private DirectionalLight? _light0;
     private DirectionalLight? _light1;
     private DirectionalLight? _light2;
-
 }

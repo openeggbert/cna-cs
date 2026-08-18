@@ -1,93 +1,130 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>EnvironmentMapEffect</c>. Extends
-/// <see cref="CNA.Graphics.EnvironmentMapEffect"/> directly, exactly as <see cref="BasicEffect"/> does
-/// -- see that type's own doc comment for the trade-off and for the identical, documented gap
-/// (<c>CurrentTechnique</c>/<c>Passes</c>, and the directional lights where present, are inherited
-/// unchanged and so report <c>CNA.Graphics</c>-namespaced types). Every property here involves only
-/// <see cref="Vector3"/>/<see cref="Matrix"/>/<see cref="float"/>/<see cref="bool"/>, which convert
-/// implicitly across the boundary, so nothing needs re-typing.</summary>
-public class EnvironmentMapEffect : CNA.Graphics.EnvironmentMapEffect, IEffectMatrices, IEffectFog, IEffectLights
+/// <summary>XNA 4.0-compatible <c>EnvironmentMapEffect</c>. Derives from this namespace's <see cref="Effect"/>
+/// -- see that type's doc comment for why these forward to an inner <c>CNA.Graphics</c> effect
+/// rather than inheriting from it, and how the two stay one native effect.</summary>
+public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public EnvironmentMapEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+        : base(graphicsDevice, new CNA.Graphics.EnvironmentMapEffect(graphicsDevice))
     {
     }
 
-    Matrix IEffectMatrices.World
+    private CNA.Graphics.EnvironmentMapEffect Typed => (CNA.Graphics.EnvironmentMapEffect)Inner;
+
+    public Vector3 DiffuseColor
     {
-        get => base.World;
-        set => base.World = value;
+        get => Typed.DiffuseColor;
+        set => Typed.DiffuseColor = value;
     }
 
-    Matrix IEffectMatrices.View
+    public Vector3 EmissiveColor
     {
-        get => base.View;
-        set => base.View = value;
+        get => Typed.EmissiveColor;
+        set => Typed.EmissiveColor = value;
     }
 
-    Matrix IEffectMatrices.Projection
+    public float Alpha
     {
-        get => base.Projection;
-        set => base.Projection = value;
+        get => Typed.Alpha;
+        set => Typed.Alpha = value;
     }
 
-    Vector3 IEffectFog.FogColor
+    public float EnvironmentMapAmount
     {
-        get => base.FogColor;
-        set => base.FogColor = value;
+        get => Typed.EnvironmentMapAmount;
+        set => Typed.EnvironmentMapAmount = value;
     }
 
-    bool IEffectFog.FogEnabled
+    public Vector3 EnvironmentMapSpecular
     {
-        get => base.FogEnabled;
-        set => base.FogEnabled = value;
+        get => Typed.EnvironmentMapSpecular;
+        set => Typed.EnvironmentMapSpecular = value;
     }
 
-    float IEffectFog.FogStart
+    public float FresnelFactor
     {
-        get => base.FogStart;
-        set => base.FogStart = value;
+        get => Typed.FresnelFactor;
+        set => Typed.FresnelFactor = value;
     }
 
-    float IEffectFog.FogEnd
+    public Texture? Texture
     {
-        get => base.FogEnd;
-        set => base.FogEnd = value;
+        get => Typed.Texture as Texture;
+        set => Typed.Texture = value;
     }
 
-    Vector3 IEffectLights.AmbientLightColor
+    public TextureCube? EnvironmentMap
     {
-        get => base.AmbientLightColor;
-        set => base.AmbientLightColor = value;
+        get => Typed.EnvironmentMap as TextureCube;
+        set => Typed.EnvironmentMap = value;
     }
 
-    bool IEffectLights.LightingEnabled
+    public Matrix World
     {
-        get => base.LightingEnabled;
-        set => base.LightingEnabled = value;
+        get => Typed.World;
+        set => Typed.World = value;
     }
 
-    DirectionalLight IEffectLights.DirectionalLight0 => DirectionalLight0;
+    public Matrix View
+    {
+        get => Typed.View;
+        set => Typed.View = value;
+    }
 
-    DirectionalLight IEffectLights.DirectionalLight1 => DirectionalLight1;
+    public Matrix Projection
+    {
+        get => Typed.Projection;
+        set => Typed.Projection = value;
+    }
 
-    DirectionalLight IEffectLights.DirectionalLight2 => DirectionalLight2;
+    public bool FogEnabled
+    {
+        get => Typed.FogEnabled;
+        set => Typed.FogEnabled = value;
+    }
 
-    void IEffectLights.EnableDefaultLighting() => base.EnableDefaultLighting();
+    public Vector3 FogColor
+    {
+        get => Typed.FogColor;
+        set => Typed.FogColor = value;
+    }
 
-    /// <summary>Re-typed so the compat <see cref="IEffectLights"/> contract is satisfied with this
-    /// namespace's <see cref="DirectionalLight"/>. Each wraps the single light object the base
-    /// class already constructed rather than building a second one -- see that type's own doc
-    /// comment.</summary>
-    public new DirectionalLight DirectionalLight0 => _light0 ??= new DirectionalLight(base.DirectionalLight0);
+    public float FogStart
+    {
+        get => Typed.FogStart;
+        set => Typed.FogStart = value;
+    }
 
-    public new DirectionalLight DirectionalLight1 => _light1 ??= new DirectionalLight(base.DirectionalLight1);
+    public float FogEnd
+    {
+        get => Typed.FogEnd;
+        set => Typed.FogEnd = value;
+    }
 
-    public new DirectionalLight DirectionalLight2 => _light2 ??= new DirectionalLight(base.DirectionalLight2);
+    public Vector3 AmbientLightColor
+    {
+        get => Typed.AmbientLightColor;
+        set => Typed.AmbientLightColor = value;
+    }
+
+    public bool LightingEnabled
+    {
+        get => Typed.LightingEnabled;
+        set => Typed.LightingEnabled = value;
+    }
+
+    public void EnableDefaultLighting() => Typed.EnableDefaultLighting();
+
+    /// <summary>Each wraps the single light the inner effect already constructed rather than
+    /// building a second one -- see <see cref="DirectionalLight"/>'s own doc comment.</summary>
+    public DirectionalLight DirectionalLight0 => _light0 ??= new DirectionalLight(Typed.DirectionalLight0);
+
+    public DirectionalLight DirectionalLight1 => _light1 ??= new DirectionalLight(Typed.DirectionalLight1);
+
+    public DirectionalLight DirectionalLight2 => _light2 ??= new DirectionalLight(Typed.DirectionalLight2);
 
     private DirectionalLight? _light0;
     private DirectionalLight? _light1;
     private DirectionalLight? _light2;
-
 }

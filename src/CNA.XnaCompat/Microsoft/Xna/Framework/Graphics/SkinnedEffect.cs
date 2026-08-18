@@ -1,93 +1,165 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>SkinnedEffect</c>. Extends
-/// <see cref="CNA.Graphics.SkinnedEffect"/> directly, exactly as <see cref="BasicEffect"/> does
-/// -- see that type's own doc comment for the trade-off and for the identical, documented gap
-/// (<c>CurrentTechnique</c>/<c>Passes</c>, and the directional lights where present, are inherited
-/// unchanged and so report <c>CNA.Graphics</c>-namespaced types). Every property here involves only
-/// <see cref="Vector3"/>/<see cref="Matrix"/>/<see cref="float"/>/<see cref="bool"/>, which convert
-/// implicitly across the boundary, so nothing needs re-typing.</summary>
-public class SkinnedEffect : CNA.Graphics.SkinnedEffect, IEffectMatrices, IEffectFog, IEffectLights
+/// <summary>XNA 4.0-compatible <c>SkinnedEffect</c>. Derives from this namespace's <see cref="Effect"/>
+/// -- see that type's doc comment for why these forward to an inner <c>CNA.Graphics</c> effect
+/// rather than inheriting from it, and how the two stay one native effect.</summary>
+public class SkinnedEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public SkinnedEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+        : base(graphicsDevice, new CNA.Graphics.SkinnedEffect(graphicsDevice))
     {
     }
 
-    Matrix IEffectMatrices.World
+    private CNA.Graphics.SkinnedEffect Typed => (CNA.Graphics.SkinnedEffect)Inner;
+
+    public Vector3 DiffuseColor
     {
-        get => base.World;
-        set => base.World = value;
+        get => Typed.DiffuseColor;
+        set => Typed.DiffuseColor = value;
     }
 
-    Matrix IEffectMatrices.View
+    public Vector3 EmissiveColor
     {
-        get => base.View;
-        set => base.View = value;
+        get => Typed.EmissiveColor;
+        set => Typed.EmissiveColor = value;
     }
 
-    Matrix IEffectMatrices.Projection
+    public Vector3 SpecularColor
     {
-        get => base.Projection;
-        set => base.Projection = value;
+        get => Typed.SpecularColor;
+        set => Typed.SpecularColor = value;
     }
 
-    Vector3 IEffectFog.FogColor
+    public float SpecularPower
     {
-        get => base.FogColor;
-        set => base.FogColor = value;
+        get => Typed.SpecularPower;
+        set => Typed.SpecularPower = value;
     }
 
-    bool IEffectFog.FogEnabled
+    public float Alpha
     {
-        get => base.FogEnabled;
-        set => base.FogEnabled = value;
+        get => Typed.Alpha;
+        set => Typed.Alpha = value;
     }
 
-    float IEffectFog.FogStart
+    public bool PreferPerPixelLighting
     {
-        get => base.FogStart;
-        set => base.FogStart = value;
+        get => Typed.PreferPerPixelLighting;
+        set => Typed.PreferPerPixelLighting = value;
     }
 
-    float IEffectFog.FogEnd
+    public bool VertexColorEnabled
     {
-        get => base.FogEnd;
-        set => base.FogEnd = value;
+        get => Typed.VertexColorEnabled;
+        set => Typed.VertexColorEnabled = value;
     }
 
-    Vector3 IEffectLights.AmbientLightColor
+    public int WeightsPerVertex
     {
-        get => base.AmbientLightColor;
-        set => base.AmbientLightColor = value;
+        get => Typed.WeightsPerVertex;
+        set => Typed.WeightsPerVertex = value;
     }
 
-    bool IEffectLights.LightingEnabled
+    public Texture? Texture
     {
-        get => base.LightingEnabled;
-        set => base.LightingEnabled = value;
+        get => Typed.Texture as Texture;
+        set => Typed.Texture = value;
     }
 
-    DirectionalLight IEffectLights.DirectionalLight0 => DirectionalLight0;
+    /// <summary>Real XNA's documented bone ceiling, forwarded rather than restated so the two
+    /// cannot drift.</summary>
+    public const int MaxBones = CNA.Graphics.SkinnedEffect.MaxBones;
 
-    DirectionalLight IEffectLights.DirectionalLight1 => DirectionalLight1;
+    public void SetBoneTransforms(Matrix[] boneTransforms)
+    {
+        ArgumentNullException.ThrowIfNull(boneTransforms);
 
-    DirectionalLight IEffectLights.DirectionalLight2 => DirectionalLight2;
+        var converted = new CNA.Matrix[boneTransforms.Length];
+        for (int i = 0; i < converted.Length; i++)
+        {
+            converted[i] = boneTransforms[i];
+        }
 
-    void IEffectLights.EnableDefaultLighting() => base.EnableDefaultLighting();
+        Typed.SetBoneTransforms(converted);
+    }
 
-    /// <summary>Re-typed so the compat <see cref="IEffectLights"/> contract is satisfied with this
-    /// namespace's <see cref="DirectionalLight"/>. Each wraps the single light object the base
-    /// class already constructed rather than building a second one -- see that type's own doc
-    /// comment.</summary>
-    public new DirectionalLight DirectionalLight0 => _light0 ??= new DirectionalLight(base.DirectionalLight0);
+    public Matrix[] GetBoneTransforms(int count)
+    {
+        CNA.Matrix[] source = Typed.GetBoneTransforms(count);
+        var converted = new Matrix[source.Length];
+        for (int i = 0; i < converted.Length; i++)
+        {
+            converted[i] = source[i];
+        }
 
-    public new DirectionalLight DirectionalLight1 => _light1 ??= new DirectionalLight(base.DirectionalLight1);
+        return converted;
+    }
 
-    public new DirectionalLight DirectionalLight2 => _light2 ??= new DirectionalLight(base.DirectionalLight2);
+    public Matrix World
+    {
+        get => Typed.World;
+        set => Typed.World = value;
+    }
+
+    public Matrix View
+    {
+        get => Typed.View;
+        set => Typed.View = value;
+    }
+
+    public Matrix Projection
+    {
+        get => Typed.Projection;
+        set => Typed.Projection = value;
+    }
+
+    public bool FogEnabled
+    {
+        get => Typed.FogEnabled;
+        set => Typed.FogEnabled = value;
+    }
+
+    public Vector3 FogColor
+    {
+        get => Typed.FogColor;
+        set => Typed.FogColor = value;
+    }
+
+    public float FogStart
+    {
+        get => Typed.FogStart;
+        set => Typed.FogStart = value;
+    }
+
+    public float FogEnd
+    {
+        get => Typed.FogEnd;
+        set => Typed.FogEnd = value;
+    }
+
+    public Vector3 AmbientLightColor
+    {
+        get => Typed.AmbientLightColor;
+        set => Typed.AmbientLightColor = value;
+    }
+
+    public bool LightingEnabled
+    {
+        get => Typed.LightingEnabled;
+        set => Typed.LightingEnabled = value;
+    }
+
+    public void EnableDefaultLighting() => Typed.EnableDefaultLighting();
+
+    /// <summary>Each wraps the single light the inner effect already constructed rather than
+    /// building a second one -- see <see cref="DirectionalLight"/>'s own doc comment.</summary>
+    public DirectionalLight DirectionalLight0 => _light0 ??= new DirectionalLight(Typed.DirectionalLight0);
+
+    public DirectionalLight DirectionalLight1 => _light1 ??= new DirectionalLight(Typed.DirectionalLight1);
+
+    public DirectionalLight DirectionalLight2 => _light2 ??= new DirectionalLight(Typed.DirectionalLight2);
 
     private DirectionalLight? _light0;
     private DirectionalLight? _light1;
     private DirectionalLight? _light2;
-
 }

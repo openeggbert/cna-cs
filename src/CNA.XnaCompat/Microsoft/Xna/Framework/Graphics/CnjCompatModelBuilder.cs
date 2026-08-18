@@ -124,7 +124,7 @@ internal static class CnjCompatModelBuilder
     private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, CnjBasicEffectData data)
     {
         var effect = new BasicEffect(graphicsDevice);
-        CnjModelBuilder.ApplyBasicEffectData(effect, data);
+        CnjModelBuilder.ApplyBasicEffectData((CNA.Graphics.BasicEffect)effect.Inner, data);
         return effect;
     }
 }

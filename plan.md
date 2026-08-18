@@ -1439,7 +1439,15 @@ WP11–WP14 are the largest new subsystems and come last.
       "permanent gap"** recorded before the mandate: the fix was to wrap the
       already-constructed base collection rather than to find an override seam
       that does not exist.
-- [ ] **WP4c — compat `Effect` base.** The one type in this area still missing.
+- [x] **WP4c — compat `Effect` base — done 2026-08-18. Coverage 201/201.**
+      Resolved by composition rather than the `internal static` route WP3a used:
+      each compat stock effect holds its `CNA.Graphics` counterpart and forwards
+      (~87 members), with the compat `Effect` overriding `NativeEffectHandleValue`
+      so the pair remains one native effect. docs/architecture.md updated --
+      this is now a documented exception to its "no duplicated logic" rule, taken
+      deliberately. Folding `BasicEffect` onto `StockEffect` remains, in WP15.
+      Original note:
+      <details>The one type in this area still missing.
       `Microsoft.Xna.Framework.Graphics.Effect` cannot simply be added: the
       compat stock effects derive from their `CNA.Graphics` counterparts to
       inherit ~30 native-backed properties each, and C# single inheritance
@@ -1447,7 +1455,7 @@ WP11–WP14 are the largest new subsystems and come last.
       the one WP3a used for `Texture2D` — expose the leaf effects' native calls
       as `internal static` helpers and reparent the compat classes onto a compat
       `Effect` — which is a real refactor of already-reviewed code and wants its
-      own increment. Also fold `BasicEffect` onto `StockEffect` while there.
+      own increment. Also fold `BasicEffect` onto `StockEffect` while there.</details>
 - [x] **WP11 — Full audio — done 2026-08-18 (WP11a+WP11b).** Coverage →191/201.
       XACT (`AudioEngine`, `AudioCategory`, `AudioStopOptions`, `WaveBank`,
       `SoundBank`, `Cue`) plus 3D audio (`AudioListener`, `AudioEmitter`).

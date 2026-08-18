@@ -75,10 +75,32 @@ functionality being permanently constrained by 2010-era XNA naming
 ### `CNA.XnaCompat` (project) → `Microsoft.Xna.Framework` namespace
 
 The `Microsoft.Xna.Framework`-named compatibility facade. Reference types
-(`Game`, `GraphicsDeviceManager`, `GraphicsDevice`, `Texture2D`,
-`SpriteBatch`, `ContentManager`) are thin subclasses of their `CNA`-namespace
-counterparts — no duplicated logic, just XNA-shaped constructors and members
-forwarding to `base`.
+(`Game`, `GraphicsDeviceManager`, `GraphicsDevice`, `SpriteBatch`,
+`ContentManager`) are thin subclasses of their `CNA`-namespace counterparts —
+no duplicated logic, just XNA-shaped constructors and members forwarding to
+`base`.
+
+**Two documented exceptions, both forced by C# single inheritance** (Phase 8;
+see `plan.md`). Where XNA's own type hierarchy has a base class that this
+facade must also expose, a compat leaf type cannot both derive from that compat
+base *and* from its `CNA`-namespace counterpart:
+
+- **Textures** (WP3a). `Microsoft.Xna.Framework.Graphics.Texture2D` derives
+  from the compat `Texture`, so `Texture t = someTexture2D;` compiles as it does
+  in XNA. It reuses `CNA.Graphics.Texture2D`'s `internal static` native helpers
+  rather than duplicating any logic — about five call sites.
+- **Effects** (WP4c). `Microsoft.Xna.Framework.Graphics.Effect` is a real base
+  of the compat stock effects for the same reason. Here the reuse is by
+  *composition*: each compat effect holds its `CNA.Graphics` counterpart and
+  forwards, roughly 87 members across the five of them. The forwards carry no
+  logic, but there are enough of them to be worth calling out. What keeps this
+  from being two drifting objects is that the compat `Effect` overrides
+  `NativeEffectHandleValue` to report the inner effect's handle — so the pair
+  is one native effect, not two.
+
+Both were taken deliberately, over the alternative of leaving the XNA base type
+absent, once the project's scope mandate made complete XNA 4.0 coverage a
+requirement rather than a goal.
 
 #### Why the XNA value types are not literally the same type as the `CNA` namespace ones
 

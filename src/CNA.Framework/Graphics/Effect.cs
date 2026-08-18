@@ -43,11 +43,24 @@ public abstract class Effect : IDisposable
     /// effect. Such a subclass simply has no reflection surface, which the message says plainly
     /// instead of failing as a null handle deeper in native code.
     /// </summary>
-    private protected virtual CnaHandle NativeEffectHandle =>
+    /// <summary>Typed <see cref="nint"/>, not <see cref="CnaHandle"/>, and
+    /// <c>protected internal</c> rather than <c>private protected</c> -- both so CNA.XnaCompat can
+    /// take part. Phase 8 WP4c made <c>Microsoft.Xna.Framework.Graphics.Effect</c> a real base
+    /// class of the compat stock effects, which therefore hold a <c>CNA.Graphics</c> effect by
+    /// composition and must forward this handle out of it; the <c>internal</c> half of
+    /// <c>protected internal</c> is what lets them read it off that inner instance (CNA.Framework
+    /// grants <c>InternalsVisibleTo</c> to CNA.XnaCompat), and the <c>protected</c> half is what
+    /// lets them override it. Same "raw <see cref="nint"/> across the assembly boundary" rule
+    /// <c>GraphicsDevice.NativeGameHandleValue</c> and <c>Texture2D</c>'s handle constructor
+    /// already follow -- see docs/architecture.md.</summary>
+    protected internal virtual nint NativeEffectHandleValue =>
         throw new NotSupportedException(
             $"{GetType().Name} is not backed by a native CNA effect, so Parameters, Techniques and " +
-            "CurrentTechnique are unavailable. Only this assembly's own stock effects (BasicEffect, " +
-            "AlphaTestEffect, DualTextureEffect, EnvironmentMapEffect, SkinnedEffect) provide one.");
+            "CurrentTechnique are unavailable. Only this project's own stock effects (BasicEffect, " +
+            "AlphaTestEffect, DualTextureEffect, EnvironmentMapEffect, SkinnedEffect, EffectMaterial) " +
+            "provide one.");
+
+    private CnaHandle NativeEffectHandle => new(NativeEffectHandleValue);
 
     public EffectParameterCollection Parameters
     {

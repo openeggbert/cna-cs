@@ -1,68 +1,92 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>AlphaTestEffect</c>. Extends
-/// <see cref="CNA.Graphics.AlphaTestEffect"/> directly, exactly as <see cref="BasicEffect"/> does
-/// -- see that type's own doc comment for the trade-off and for the identical, documented gap
-/// (<c>CurrentTechnique</c>/<c>Passes</c>, and the directional lights where present, are inherited
-/// unchanged and so report <c>CNA.Graphics</c>-namespaced types). Every property here involves only
-/// <see cref="Vector3"/>/<see cref="Matrix"/>/<see cref="float"/>/<see cref="bool"/>, which convert
-/// implicitly across the boundary, except <see cref="AlphaFunction"/> below.</summary>
-public class AlphaTestEffect : CNA.Graphics.AlphaTestEffect, IEffectMatrices, IEffectFog
+/// <summary>XNA 4.0-compatible <c>AlphaTestEffect</c>. Derives from this namespace's <see cref="Effect"/>
+/// -- see that type's doc comment for why these forward to an inner <c>CNA.Graphics</c> effect
+/// rather than inheriting from it, and how the two stay one native effect.</summary>
+public class AlphaTestEffect : Effect, IEffectMatrices, IEffectFog
 {
     public AlphaTestEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+        : base(graphicsDevice, new CNA.Graphics.AlphaTestEffect(graphicsDevice))
     {
     }
 
-    /// <summary>The one member that does need re-typing here: <see cref="CompareFunction"/> is
-    /// duplicated per namespace (see that enum's own doc comment), unlike the vector/matrix/scalar
-    /// properties this class inherits unchanged.</summary>
-    public new CompareFunction AlphaFunction
+    private CNA.Graphics.AlphaTestEffect Typed => (CNA.Graphics.AlphaTestEffect)Inner;
+
+    public Vector3 DiffuseColor
     {
-        get => (CompareFunction)(int)base.AlphaFunction;
-        set => base.AlphaFunction = (CNA.Graphics.CompareFunction)(int)value;
+        get => Typed.DiffuseColor;
+        set => Typed.DiffuseColor = value;
     }
 
-    Matrix IEffectMatrices.World
+    public float Alpha
     {
-        get => base.World;
-        set => base.World = value;
+        get => Typed.Alpha;
+        set => Typed.Alpha = value;
     }
 
-    Matrix IEffectMatrices.View
+    public bool VertexColorEnabled
     {
-        get => base.View;
-        set => base.View = value;
+        get => Typed.VertexColorEnabled;
+        set => Typed.VertexColorEnabled = value;
     }
 
-    Matrix IEffectMatrices.Projection
+    public int ReferenceAlpha
     {
-        get => base.Projection;
-        set => base.Projection = value;
+        get => Typed.ReferenceAlpha;
+        set => Typed.ReferenceAlpha = value;
     }
 
-    Vector3 IEffectFog.FogColor
+    public CompareFunction AlphaFunction
     {
-        get => base.FogColor;
-        set => base.FogColor = value;
+        get => (CompareFunction)(int)Typed.AlphaFunction;
+        set => Typed.AlphaFunction = (CNA.Graphics.CompareFunction)(int)value;
     }
 
-    bool IEffectFog.FogEnabled
+    public Texture? Texture
     {
-        get => base.FogEnabled;
-        set => base.FogEnabled = value;
+        get => Typed.Texture as Texture;
+        set => Typed.Texture = value;
     }
 
-    float IEffectFog.FogStart
+    public Matrix World
     {
-        get => base.FogStart;
-        set => base.FogStart = value;
+        get => Typed.World;
+        set => Typed.World = value;
     }
 
-    float IEffectFog.FogEnd
+    public Matrix View
     {
-        get => base.FogEnd;
-        set => base.FogEnd = value;
+        get => Typed.View;
+        set => Typed.View = value;
     }
 
+    public Matrix Projection
+    {
+        get => Typed.Projection;
+        set => Typed.Projection = value;
+    }
+
+    public bool FogEnabled
+    {
+        get => Typed.FogEnabled;
+        set => Typed.FogEnabled = value;
+    }
+
+    public Vector3 FogColor
+    {
+        get => Typed.FogColor;
+        set => Typed.FogColor = value;
+    }
+
+    public float FogStart
+    {
+        get => Typed.FogStart;
+        set => Typed.FogStart = value;
+    }
+
+    public float FogEnd
+    {
+        get => Typed.FogEnd;
+        set => Typed.FogEnd = value;
+    }
 }

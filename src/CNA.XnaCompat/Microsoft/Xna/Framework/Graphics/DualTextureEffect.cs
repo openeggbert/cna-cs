@@ -1,59 +1,86 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>DualTextureEffect</c>. Extends
-/// <see cref="CNA.Graphics.DualTextureEffect"/> directly, exactly as <see cref="BasicEffect"/> does
-/// -- see that type's own doc comment for the trade-off and for the identical, documented gap
-/// (<c>CurrentTechnique</c>/<c>Passes</c>, and the directional lights where present, are inherited
-/// unchanged and so report <c>CNA.Graphics</c>-namespaced types). Every property here involves only
-/// <see cref="Vector3"/>/<see cref="Matrix"/>/<see cref="float"/>/<see cref="bool"/>, which convert
-/// implicitly across the boundary, so nothing needs re-typing.</summary>
-public class DualTextureEffect : CNA.Graphics.DualTextureEffect, IEffectMatrices, IEffectFog
+/// <summary>XNA 4.0-compatible <c>DualTextureEffect</c>. Derives from this namespace's <see cref="Effect"/>
+/// -- see that type's doc comment for why these forward to an inner <c>CNA.Graphics</c> effect
+/// rather than inheriting from it, and how the two stay one native effect. <c>Texture2</c> throws, as on the CNA side -- the C API has no second-layer function.</summary>
+public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog
 {
     public DualTextureEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+        : base(graphicsDevice, new CNA.Graphics.DualTextureEffect(graphicsDevice))
     {
     }
 
-    Matrix IEffectMatrices.World
+    private CNA.Graphics.DualTextureEffect Typed => (CNA.Graphics.DualTextureEffect)Inner;
+
+    public Vector3 DiffuseColor
     {
-        get => base.World;
-        set => base.World = value;
+        get => Typed.DiffuseColor;
+        set => Typed.DiffuseColor = value;
     }
 
-    Matrix IEffectMatrices.View
+    public float Alpha
     {
-        get => base.View;
-        set => base.View = value;
+        get => Typed.Alpha;
+        set => Typed.Alpha = value;
     }
 
-    Matrix IEffectMatrices.Projection
+    public bool VertexColorEnabled
     {
-        get => base.Projection;
-        set => base.Projection = value;
+        get => Typed.VertexColorEnabled;
+        set => Typed.VertexColorEnabled = value;
     }
 
-    Vector3 IEffectFog.FogColor
+    public Texture? Texture
     {
-        get => base.FogColor;
-        set => base.FogColor = value;
+        get => Typed.Texture as Texture;
+        set => Typed.Texture = value;
     }
 
-    bool IEffectFog.FogEnabled
+    public Texture? Texture2
     {
-        get => base.FogEnabled;
-        set => base.FogEnabled = value;
+        get => Typed.Texture2 as Texture;
+        set => Typed.Texture2 = value;
     }
 
-    float IEffectFog.FogStart
+    public Matrix World
     {
-        get => base.FogStart;
-        set => base.FogStart = value;
+        get => Typed.World;
+        set => Typed.World = value;
     }
 
-    float IEffectFog.FogEnd
+    public Matrix View
     {
-        get => base.FogEnd;
-        set => base.FogEnd = value;
+        get => Typed.View;
+        set => Typed.View = value;
     }
 
+    public Matrix Projection
+    {
+        get => Typed.Projection;
+        set => Typed.Projection = value;
+    }
+
+    public bool FogEnabled
+    {
+        get => Typed.FogEnabled;
+        set => Typed.FogEnabled = value;
+    }
+
+    public Vector3 FogColor
+    {
+        get => Typed.FogColor;
+        set => Typed.FogColor = value;
+    }
+
+    public float FogStart
+    {
+        get => Typed.FogStart;
+        set => Typed.FogStart = value;
+    }
+
+    public float FogEnd
+    {
+        get => Typed.FogEnd;
+        set => Typed.FogEnd = value;
+    }
 }

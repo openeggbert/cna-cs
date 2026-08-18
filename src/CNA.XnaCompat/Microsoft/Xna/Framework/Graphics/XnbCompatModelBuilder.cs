@@ -120,12 +120,13 @@ internal static class XnbCompatModelBuilder
     /// constructor, unlike its <c>Effect</c> property, is not the documented gap), but reuses
     /// <c>CNA.Content.Xnb.XnbModelBuilder.ApplyBasicEffectData</c> directly for the field-assignment
     /// logic itself (a code-review finding: the two used to duplicate that logic field-by-field,
-    /// with nothing actually compat-specific about it -- compat <see cref="BasicEffect"/> subclasses
-    /// the base one directly, so it upcasts fine as that method's parameter).</summary>
+    /// with nothing actually compat-specific about it). Since Phase 8 WP4c the compat
+    /// <see cref="BasicEffect"/> no longer subclasses the base one -- it holds it -- so the shared
+    /// helper is handed that inner effect rather than the wrapper.</summary>
     private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data)
     {
         var effect = new BasicEffect(graphicsDevice);
-        XnbModelBuilder.ApplyBasicEffectData(effect, data);
+        XnbModelBuilder.ApplyBasicEffectData((CNA.Graphics.BasicEffect)effect.Inner, data);
         return effect;
     }
 
