@@ -5,7 +5,7 @@ namespace CNA.Interop;
 /// <summary>
 /// Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_Matrix</c> exactly
 /// (<c>math_values.h:92-...</c>) -- row-major (<c>m11</c> is "row 1, column 1"), the same
-/// convention <see cref="CNA.Matrix"/> already used before this migration (confirmed field-for-field,
+/// convention <c>CNA.Matrix</c> already used before this migration (confirmed field-for-field,
 /// not assumed): a direct, untransposed field copy is correct. Passed *by value* to every
 /// <c>cna_effect_matrices_set_*</c> function and *by pointer* to every <c>_get_*</c> one, matching
 /// this file's other by-value blittable structs (<see cref="CnaColor"/>, <see cref="CnaVector2"/>).

@@ -8,11 +8,11 @@ namespace CNA.Interop;
 /// (<c>runtime.h:32-41</c>) -- a CNA-initialized (not caller-initialized) diagnostic structure
 /// passed to every lifecycle callback so it can report why it failed. Real XNA/MonoGame Update or
 /// Draw overrides can and do throw; a managed exception must never unwind across the
-/// <c>UnmanagedCallersOnly</c> boundary (undefined behavior), so <see cref="CNA.Game"/>'s callback
+/// <c>UnmanagedCallersOnly</c> boundary (undefined behavior), so <c>CNA.Game</c>'s callback
 /// wrappers catch it, encode its message into a pinned buffer they own, and populate
 /// <see cref="Message"/> to point at it before returning <c>CNA_RESULT_CALLBACK</c> -- see
 /// <c>Game.cs</c>'s own callback-wrapper doc comments for why that buffer must be pinned for the
-/// <see cref="CNA.Game"/> instance's whole lifetime rather than `fixed`-pinned only for the
+/// <c>CNA.Game</c> instance's whole lifetime rather than `fixed`-pinned only for the
 /// duration of the method that builds it.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]

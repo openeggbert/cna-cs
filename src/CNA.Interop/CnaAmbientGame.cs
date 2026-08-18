@@ -7,7 +7,7 @@ namespace CNA.Interop;
 /// <c>input.h</c> requires one as its first parameter, with no parameterless alternative anywhere,
 /// but those classes are deliberately static to match real XNA's own static API shape (a real
 /// compatibility requirement, not an implementation detail -- see the "one genuinely blocking
-/// architectural decision" in <c>NEXT.md</c>'s native-ABI-migration entry). <see cref="Game"/> sets
+/// architectural decision" in <c>NEXT.md</c>'s native-ABI-migration entry). <c>CNA.Game</c> sets
 /// <see cref="Current"/> once its native handle exists and clears it on disposal; a plain static
 /// field (not thread-local, not a stack) is correct here because this project, like real XNA
 /// itself, assumes exactly one game runs per process -- the same assumption the static

@@ -19,7 +19,7 @@ namespace CNA.Graphics;
 /// vertices. Neither real function has an offset parameter into the *native* buffer, though (only
 /// a window into the *caller's* own array) -- always operating on native index zero -- so, same as
 /// <see cref="VertexBuffer.SetData{T}(int,T[],int,int,int)"/>, a nonzero
-/// <paramref name="offsetInBytes"/>-equivalent throws.
+/// <c>offsetInBytes</c>-equivalent throws.
 /// </summary>
 public class IndexBuffer : IDisposable
 {

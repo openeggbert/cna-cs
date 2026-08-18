@@ -20,7 +20,7 @@ namespace CNA.Graphics;
 /// <c>VertexBuffer</c>, not here. <see cref="SetData{T}(int,T[],int,int,int)"/> is more fortunate --
 /// <c>cna_vertex_buffer_set_data_raw</c> is a real, confirmed raw-upload route -- but it has no
 /// offset parameter at all (always writes starting at native vertex zero), so a nonzero
-/// <paramref name="offsetInBytes"/>-equivalent throws too.
+/// <c>offsetInBytes</c>-equivalent throws too.
 /// </summary>
 public class VertexBuffer : IDisposable
 {

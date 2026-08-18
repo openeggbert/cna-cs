@@ -11,7 +11,7 @@ namespace CNA.Interop;
 /// is now the real wire type exactly, rather than relying on that coincidence, now that a real
 /// ABI exists to confirm against (see <c>NEXT.md</c>'s native-ABI-migration entry). The
 /// <see cref="nint"/> constructor overload is kept so every existing call site building a
-/// <see cref="CnaHandle"/> from a <see cref="NativeResourceHandle"/>'s own <see cref="nint"/>
+/// <see cref="CnaHandle"/> from a <c>NativeResourceHandle</c>'s own <see cref="nint"/>
 /// storage (<c>DangerousGetHandle()</c>) keeps compiling unchanged -- converting at this one
 /// boundary point, rather than at every call site individually.
 /// </summary>
@@ -22,7 +22,7 @@ internal readonly struct CnaHandle : IEquatable<CnaHandle>
 
     public CnaHandle(ulong value) => Value = value;
 
-    /// <summary>Converts from the pointer-width handle storage <see cref="NativeResourceHandle"/>
+    /// <summary>Converts from the pointer-width handle storage <c>NativeResourceHandle</c>
     /// (and every native-backed managed wrapper's own <c>NativeHandleValue</c>) still uses --
     /// always exact and lossless on every platform this project targets (CNA is 64-bit-only), the
     /// same reasoning this type's own constructor used to rely on for its whole representation.</summary>
