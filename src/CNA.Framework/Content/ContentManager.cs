@@ -35,7 +35,7 @@ namespace CNA.Content;
 /// <see cref="Game"/> once its own device becomes available -- <em>that</em> part is native-ABI-blocked,
 /// same as the rest of this class's content types.
 /// </summary>
-public class ContentManager
+public class ContentManager : IDisposable
 {
     private readonly nint _nativeHandleValue;
 
@@ -79,6 +79,45 @@ public class ContentManager
             CnaException.ThrowIfFailed(result, nameof(RootDirectory));
         }
     }
+
+    /// <summary>
+    /// The service container assets are resolved through. Matches real XNA's
+    /// <c>ServiceProvider</c>.
+    ///
+    /// Always <see langword="null"/>. <c>content.h</c> documents both manager constructors as
+    /// creating one "with a null service provider", and exposes only
+    /// <c>cna_content_manager_get_has_service_provider</c> -- a boolean, with no route to obtain the
+    /// provider itself. Present rather than omitted so ported XNA source compiles; reporting null is
+    /// what the ABI actually says is there.
+    /// </summary>
+    public IServiceProvider? ServiceProvider => null;
+
+    /// <summary>Unloads every asset, then releases nothing else -- the native manager belongs to
+    /// the game that created it. Matches real XNA's <c>ContentManager.Dispose</c>, which is
+    /// <c>Unload</c> plus a disposed flag.</summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>The overridable half, for a subclass that owns more than the base does.</summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        if (disposing)
+        {
+            Unload();
+        }
+    }
+
+    private bool _disposed;
 
     /// <summary>Releases every asset this manager loaded. Matches real XNA's <c>Unload</c>: the
     /// manager stays usable and can load again afterwards.</summary>

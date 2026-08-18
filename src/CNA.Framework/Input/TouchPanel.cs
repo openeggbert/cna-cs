@@ -38,6 +38,19 @@ public static class TouchPanel
         return TouchPanelCapabilities.FromNative(in capabilities);
     }
 
+    /// <summary>The window touch input is bound to. Matches real XNA's
+    /// <c>TouchPanel.WindowHandle</c>. Read-only here: the ABI exposes the getter only, and the
+    /// window is the game's rather than something a caller reassigns.</summary>
+    public static nint WindowHandle
+    {
+        get
+        {
+            CnaResult result = Native.cna_touch_panel_get_window_handle(CnaAmbientGame.Current, out ulong window);
+            CnaException.ThrowIfFailed(result, nameof(WindowHandle));
+            return unchecked((nint)window);
+        }
+    }
+
     public static int DisplayWidth
     {
         get

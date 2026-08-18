@@ -37,6 +37,47 @@ public class StorageDevice
     /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
+    /// <summary>
+    /// Raised when the set of storage devices changes. Matches real XNA's static
+    /// <c>DeviceChanged</c>.
+    ///
+    /// Process-wide, like the media-player events: <c>cna_storage_device_subscribe_device_changed</c>
+    /// takes no device and no game handle, so the subscription belongs to the process and is held
+    /// for it. Taken on the first <c>+=</c>.
+    /// </summary>
+    public static event EventHandler<EventArgs>? DeviceChanged
+    {
+        add
+        {
+            lock (DeviceChangedLock)
+            {
+                _deviceChangedBridge ??= NativeEventBridge.Subscribe(
+                    () => _deviceChanged?.Invoke(null, EventArgs.Empty),
+                    (callback, context) =>
+                    {
+                        CnaResult result = Native.cna_storage_device_subscribe_device_changed(
+                            callback, context, out CnaHandle registration);
+                        CnaException.ThrowIfFailed(result, nameof(DeviceChanged));
+                        return registration;
+                    },
+                    registration => Native.cna_storage_device_unsubscribe_device_changed(registration));
+
+                _deviceChanged += value;
+            }
+        }
+        remove
+        {
+            lock (DeviceChangedLock)
+            {
+                _deviceChanged -= value;
+            }
+        }
+    }
+
+    private static readonly object DeviceChangedLock = new();
+    private static NativeEventBridge? _deviceChangedBridge;
+    private static EventHandler<EventArgs>? _deviceChanged;
+
     public bool IsConnected
     {
         get

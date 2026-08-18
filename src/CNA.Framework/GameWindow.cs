@@ -36,6 +36,19 @@ public class GameWindow
         }
     }
 
+    /// <summary>The native window handle. Matches real XNA's <c>Handle</c>, typed as
+    /// <see cref="nint"/> the way XNA types it as <c>IntPtr</c>, over an ABI that carries it as a
+    /// <see cref="ulong"/>.</summary>
+    public nint Handle
+    {
+        get
+        {
+            CnaResult result = Native.cna_game_window_get_native_handle_ext(NativeGame, out ulong handle);
+            CnaException.ThrowIfFailed(result, nameof(Handle));
+            return unchecked((nint)handle);
+        }
+    }
+
     /// <summary>Whether the user may resize the window by dragging its border. The setter can fail
     /// with a platform error on a backend that cannot honour it -- surfaced rather than
     /// swallowed, because silently ignoring it would leave a game believing it had a fixed-size

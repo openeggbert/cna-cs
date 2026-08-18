@@ -84,6 +84,11 @@ public class AudioEngine : IDisposable
         }
     }
 
+    /// <summary>The XACT content version this engine expects, matching real XNA's own
+    /// <c>ContentVersion</c> constant. A compile-time constant there and here: it describes the
+    /// format, not the engine instance, so there is nothing to ask native about.</summary>
+    public const int ContentVersion = 46;
+
     public void Update()
     {
         CnaResult result = Native.cna_audio_engine_update(NativeHandle);

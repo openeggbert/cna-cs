@@ -132,6 +132,33 @@ public class SoundEffect : IDisposable
         }
     }
 
+    /// <summary>
+    /// Matches real XNA's <c>SoundEffect.FromStream</c>: decodes an encoded audio stream (WAV, and
+    /// whatever else the backend supports) into a sound effect.
+    ///
+    /// The whole stream is read into memory first, because
+    /// <c>cna_sound_effect_create_from_encoded_ext</c> decodes from a contiguous block rather than
+    /// from a reader -- the same shape <see cref="Graphics.Texture2D.FromStream"/> has.
+    /// </summary>
+    public static unsafe SoundEffect FromStream(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        byte[] encoded = buffer.ToArray();
+
+        CnaHandle soundEffect;
+        fixed (byte* encodedPtr = encoded)
+        {
+            CnaResult result = Native.cna_sound_effect_create_from_encoded_ext(
+                CnaAmbientGame.Current, encodedPtr, (ulong)encoded.Length, out soundEffect);
+            CnaException.ThrowIfFailed(result, nameof(FromStream));
+        }
+
+        return new SoundEffect(soundEffect.AsNint);
+    }
+
     public SoundEffectInstance CreateInstance() => new(CreateNativeInstanceHandle());
 
     /// <summary>
