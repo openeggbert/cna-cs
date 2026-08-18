@@ -98,6 +98,10 @@ internal static class CnjModelBuilder
             // the part's Parent link) -- see ModelMeshPart.Effect's own doc comment, and
             // XnbModelBuilder.Build's own identical ordering requirement/comment for the .xnb path.
             part.Effect = BuildBasicEffect(graphicsDevice, meshData.Effect);
+
+            // Everything on this part -- both buffers and the effect -- was created here, so the
+            // model owns them and Model.Dispose may release them. See ModelMeshPart.Dispose.
+            part.MarkResourcesOwned();
         }
 
         return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex: 0);

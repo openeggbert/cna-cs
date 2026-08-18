@@ -111,6 +111,7 @@ internal static class CnjCompatModelBuilder
             // assignment has to happen after the ModelMesh constructor above (which sets the part's
             // Parent link).
             part.Effect = BuildBasicEffect(graphicsDevice, meshData.Effect);
+            part.MarkResourcesOwned();
         }
 
         return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex: 0);

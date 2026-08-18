@@ -13,7 +13,7 @@ namespace CNA.Graphics;
 /// parameterless <c>Model() = default;</c> -- an unpopulated model has no realistic use here
 /// either way, so adding it would be speculative API surface, not a real gap.
 /// </summary>
-public class Model
+public class Model : IDisposable
 {
     private Matrix[] _sharedDrawBoneMatrices = [];
 
@@ -203,4 +203,18 @@ public class Model
             mesh.Draw();
         }
     }
+
+    /// <summary>Disposes every mesh, and through them every part's builder-created buffers and
+    /// effect. Real XNA has no <c>Model.Dispose</c>; this exists because those are native handles
+    /// with no device to reclaim them -- see <see cref="ModelMeshPart.Dispose"/>.</summary>
+    public void Dispose()
+    {
+        foreach (ModelMesh mesh in Meshes)
+        {
+            mesh.Dispose();
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
 }

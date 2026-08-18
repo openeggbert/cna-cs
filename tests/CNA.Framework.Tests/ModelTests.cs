@@ -300,3 +300,62 @@ public class ModelTests
         Assert.Equal(bone1.Transform, effect.World);
     }
 }
+
+/// <summary>
+/// <see cref="Model"/>/<see cref="ModelMesh"/>/<see cref="ModelMeshPart"/> gained disposal in
+/// Phase 8 WP18, because a loaded model's buffers and effects are native handles with no device to
+/// reclaim them. What is testable without a real <c>cna-native</c> is the ownership gate: a part
+/// only releases resources a model builder created, never ones game code assigned.
+/// </summary>
+public class ModelDisposalTests
+{
+    [Fact]
+    public void Dispose_PartWithNoResources_DoesNotThrow()
+    {
+        using var part = new ModelMeshPart(null, null, numVertices: 0, primitiveCount: 0, startIndex: 0, vertexOffset: 0);
+    }
+
+    [Fact]
+    public void Dispose_IsIdempotent()
+    {
+        var part = new ModelMeshPart(null, null, numVertices: 0, primitiveCount: 0, startIndex: 0, vertexOffset: 0);
+
+        part.Dispose();
+        part.Dispose();
+    }
+
+    /// <summary>The gate that matters: a part whose resources came from game code rather than a
+    /// builder must not release them, since the caller still holds and owns them. Disposing a
+    /// buffer out from under its owner would be worse than the leak WP18 fixes.</summary>
+    [Fact]
+    public void Dispose_DoesNotTouchCallerAssignedResources()
+    {
+        var part = new ModelMeshPart(null, null, numVertices: 0, primitiveCount: 0, startIndex: 0, vertexOffset: 0);
+        var effect = new RecordingEffect();
+        part.Effect = effect;
+
+        part.Dispose();
+
+        Assert.False(effect.WasDisposed);
+    }
+
+    private sealed class RecordingEffect : Effect
+    {
+        public RecordingEffect()
+            : base(new GraphicsDevice(nativeGameHandleValue: 0))
+        {
+        }
+
+        public bool WasDisposed { get; private set; }
+
+        protected override void OnApply()
+        {
+        }
+
+        public override void Dispose()
+        {
+            WasDisposed = true;
+            base.Dispose();
+        }
+    }
+}

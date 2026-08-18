@@ -10,7 +10,7 @@ namespace CNA.Graphics;
 /// them either, since a part with no buffers yet (filled in later via <see cref="SetVertexBuffer"/>/
 /// <see cref="SetIndexBuffer"/>) is a legitimate intermediate state during hand-building.
 /// </summary>
-public class ModelMeshPart
+public class ModelMeshPart : IDisposable
 {
     private Effect? _effect;
 
@@ -112,4 +112,46 @@ public class ModelMeshPart
     public void SetVertexBuffer(VertexBuffer? value) => VertexBuffer = value;
 
     public void SetIndexBuffer(IndexBuffer? value) => IndexBuffer = value;
+
+    /// <summary>
+    /// Releases the vertex buffer, index buffer and effect this part holds.
+    ///
+    /// Real XNA has no <c>ModelMeshPart.Dispose</c> -- there, a loaded model's GPU resources are
+    /// reclaimed with the device. Here they are native handles with no such owner, so without this
+    /// a loaded model leaked one effect (plus its three directional lights) and two buffers per
+    /// part until the GC got round to the finalizers. Found by a code-review pass; see
+    /// <c>plan.md</c> WP18.
+    ///
+    /// Only disposes what a model builder created for this part. A part whose buffers or effect
+    /// were assigned by game code (<see cref="SetVertexBuffer"/>, <see cref="SetIndexBuffer"/>,
+    /// <see cref="Effect"/>) is that caller's to manage, so those are left alone -- disposing a
+    /// buffer the caller still holds would be worse than the leak this fixes.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        if (_ownsResources)
+        {
+            VertexBuffer?.Dispose();
+            IndexBuffer?.Dispose();
+            Effect?.Dispose();
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    private bool _disposed;
+    private bool _ownsResources;
+
+    /// <summary>Marks this part's current buffers and effect as builder-created, so
+    /// <see cref="Dispose"/> releases them. Set only by the model builders -- see that method's own
+    /// doc comment for why assignment from game code deliberately does not set it.</summary>
+    internal void MarkResourcesOwned() => _ownsResources = true;
+
 }

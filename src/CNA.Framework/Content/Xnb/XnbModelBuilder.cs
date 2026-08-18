@@ -78,6 +78,7 @@ internal static class XnbModelBuilder
                 if (effectData is not null)
                 {
                     parts[i].Effect = BuildBasicEffect(graphicsDevice, effectData);
+                    parts[i].MarkResourcesOwned();
                 }
             }
 

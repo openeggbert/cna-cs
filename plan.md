@@ -1512,12 +1512,15 @@ WP11–WP14 are the largest new subsystems and come last.
       is still using it. Defeating exactly that is why `SafeHandle` exists, and
       design invariant #4 assumes it works. The fix is mechanical but touches
       every call site; it wants its own increment and its own review.
-- [ ] **WP18 — `Model`/`ModelMesh`/`ModelMeshPart` have no `Dispose`.** The
+- [x] **WP18 — `Model`/`ModelMesh`/`ModelMeshPart` disposal — done 2026-08-18.**
+      Gated on a builder-set ownership flag, so a part never releases buffers or
+      an effect that game code assigned. Original note:
+      <details>**WP18 — `Model`/`ModelMesh`/`ModelMeshPart` have no `Dispose`.** The
       model builders create one `BasicEffect` per mesh part and nothing ever
       releases it. Phase 8 reduced this from an unbounded leak to a
       GC-reclaimable one (`StockEffect` now holds its handle in a
       `NativeResourceHandle`), but a loaded model still owns native resources
-      with no way to release them deterministically.
+      with no way to release them deterministically.</details>
 - [ ] **WP16 — Re-audit to 201/201.** Re-run the inventory command above,
       drive the missing list to zero, then close out with a full
       `/code-review high` pass over everything Phase 8 added.

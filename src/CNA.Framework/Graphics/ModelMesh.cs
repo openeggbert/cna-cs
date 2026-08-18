@@ -5,7 +5,7 @@ namespace CNA.Graphics;
 /// Constructors are <c>CNAEXT</c> (content-pipeline-only in real XNA), same reason and same
 /// treatment as <see cref="ModelBone"/>'s own constructor.
 /// </summary>
-public class ModelMesh
+public class ModelMesh : IDisposable
 {
     private readonly GraphicsDevice _graphicsDevice;
 
@@ -89,4 +89,17 @@ public class ModelMesh
             }
         }
     }
+
+    /// <summary>Disposes every part of this mesh -- see <see cref="ModelMeshPart.Dispose"/> for
+    /// what each part actually releases.</summary>
+    public void Dispose()
+    {
+        foreach (ModelMeshPart part in MeshParts)
+        {
+            part.Dispose();
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
 }
