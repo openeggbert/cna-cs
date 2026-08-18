@@ -15,8 +15,16 @@ public class EffectParameterCollection : IEnumerable<EffectParameter>, IDisposab
 {
     private readonly NativeResourceHandle _ownedHandle;
 
-    internal EffectParameterCollection(CnaHandle handle)
+    private readonly GraphicsDevice? _graphicsDevice;
+
+    /// <summary>The device is threaded through purely so
+    /// <see cref="EffectParameter.GetValueTexture2D"/> and its siblings can build a real texture
+    /// wrapper -- a <see cref="Texture"/> is a <see cref="GraphicsResource"/> and needs one.
+    /// Nullable because a collection reached through nested elements or structure members may not
+    /// carry it; those parameters report that rather than guessing a device.</summary>
+    internal EffectParameterCollection(CnaHandle handle, GraphicsDevice? graphicsDevice = null)
     {
+        _graphicsDevice = graphicsDevice;
         _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_parameter_collection_destroy(new CnaHandle(h)));
     }
 
@@ -67,7 +75,7 @@ public class EffectParameterCollection : IEnumerable<EffectParameter>, IDisposab
             CnaResult result = Native.cna_effect_parameter_collection_get_at(_handle, (ulong)index, out CnaHandle element);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectParameterCollection));
-            return new EffectParameter(element);
+            return new EffectParameter(element, _graphicsDevice);
         }
     }
 
@@ -87,7 +95,7 @@ public class EffectParameterCollection : IEnumerable<EffectParameter>, IDisposab
                 GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectParameterCollection));
 
-            return found != 0 ? new EffectParameter(element) : null;
+            return found != 0 ? new EffectParameter(element, _graphicsDevice) : null;
         }
     }
 

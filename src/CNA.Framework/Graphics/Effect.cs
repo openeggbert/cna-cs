@@ -76,7 +76,7 @@ public abstract class Effect : IDisposable
             {
                 CnaResult result = Native.cna_effect_get_parameters(NativeEffectHandle, out CnaHandle collection);
                 CnaException.ThrowIfFailed(result, nameof(Parameters));
-                _parameters = new EffectParameterCollection(collection);
+                _parameters = new EffectParameterCollection(collection, GraphicsDevice);
             }
 
             return _parameters;

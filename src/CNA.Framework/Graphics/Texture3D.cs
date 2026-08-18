@@ -17,6 +17,15 @@ namespace CNA.Graphics;
 /// </summary>
 public class Texture3D : Texture
 {
+    /// <summary>Wraps an already-created native handle. <c>private protected</c> rather than public:
+    /// a caller has no way to obtain a bare handle, and the only producer inside this assembly is
+    /// <see cref="EffectParameter"/> rewrapping a texture read back out of a shader
+    /// parameter.</summary>
+    private protected Texture3D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+        : base(graphicsDevice, nativeHandleValue)
+    {
+    }
+
     public Texture3D(GraphicsDevice graphicsDevice, int width, int height, int depth)
         : this(graphicsDevice, width, height, depth, mipMap: false, SurfaceFormat.Color)
     {
@@ -185,4 +194,10 @@ public class Texture3D : Texture
         return colors;
     }
 
+
+    /// <summary>Wraps a handle this assembly already owns. Exists because
+    /// <see cref="EffectParameter"/> reads a retained texture handle back out of a shader parameter
+    /// and has to rewrap it; the raw-handle constructor itself stays <c>protected</c>.</summary>
+    internal static Texture3D FromNativeHandle(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
+        new(graphicsDevice, nativeHandleValue);
 }

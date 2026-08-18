@@ -21,8 +21,11 @@ public class EffectParameter : IDisposable
 {
     private readonly NativeResourceHandle _ownedHandle;
 
-    internal EffectParameter(CnaHandle handle)
+    private readonly GraphicsDevice? _graphicsDevice;
+
+    internal EffectParameter(CnaHandle handle, GraphicsDevice? graphicsDevice = null)
     {
+        _graphicsDevice = graphicsDevice;
         _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_parameter_destroy(new CnaHandle(h)));
     }
 
@@ -90,7 +93,7 @@ public class EffectParameter : IDisposable
             CnaResult result = Native.cna_effect_parameter_get_elements(_handle, out CnaHandle collection);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Elements));
-            return new EffectParameterCollection(collection);
+            return new EffectParameterCollection(collection, _graphicsDevice);
         }
     }
 
@@ -102,7 +105,7 @@ public class EffectParameter : IDisposable
             CnaResult result = Native.cna_effect_parameter_get_structure_members(_handle, out CnaHandle collection);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(StructureMembers));
-            return new EffectParameterCollection(collection);
+            return new EffectParameterCollection(collection, _graphicsDevice);
         }
     }
 
@@ -230,6 +233,72 @@ public class EffectParameter : IDisposable
     public unsafe float[] GetValueSingleArray(int count) => GetArray<float, float>(CnaEffectValueType.Single, count, static f => f);
 
     public unsafe int[] GetValueInt32Array(int count) => GetArray<int, int>(CnaEffectValueType.Int32, count, static i => i);
+
+    public unsafe bool[] GetValueBooleanArray(int count) =>
+        GetArray<byte, bool>(CnaEffectValueType.Boolean, count, static b => b != 0);
+
+    public unsafe Quaternion[] GetValueQuaternionArray(int count) =>
+        GetArray<CnaQuaternion, Quaternion>(CnaEffectValueType.Quaternion, count, Quaternion.FromNative);
+
+    /// <summary>
+    /// The parameter's value read back transposed. Matches real XNA's
+    /// <c>GetValueMatrixTranspose</c>.
+    ///
+    /// A distinct native value type (<c>CNA_EFFECT_VALUE_TYPE_MATRIX_TRANSPOSE</c>), not this
+    /// binding transposing what the plain getter returns -- shader constant registers store the
+    /// transposed form, so which one native hands back is its decision to make and not something to
+    /// reconstruct on top of the other.
+    /// </summary>
+    public unsafe Matrix GetValueMatrixTranspose() =>
+        Matrix.FromNative(GetScalar<CnaMatrix>(CnaEffectValueType.MatrixTranspose));
+
+    public unsafe Matrix[] GetValueMatrixTransposeArray(int count) =>
+        GetArray<CnaMatrix, Matrix>(CnaEffectValueType.MatrixTranspose, count, Matrix.FromNative);
+
+    /// <summary>Writes the value transposed. Matches real XNA's <c>SetValueTranspose</c>.</summary>
+    public unsafe void SetValueTranspose(Matrix value) =>
+        SetScalar(CnaEffectValueType.MatrixTranspose, value.ToNative());
+
+    /// <summary>Writes an array transposed.</summary>
+    public unsafe void SetValueTranspose(Matrix[] value) =>
+        SetArray(CnaEffectValueType.MatrixTranspose, value, static m => m.ToNative());
+
+    /// <summary>
+    /// The texture this parameter holds, or <see langword="null"/> when it holds none.
+    ///
+    /// The handle comes back <em>retained</em> (<c>effects.h:707</c>), so the returned wrapper owns
+    /// it and disposing the wrapper is correct. That is why this can hand back a real object where
+    /// <see cref="TextureCollection"/>'s getter cannot: there the handle is borrowed and unowned,
+    /// here it is the caller's.
+    /// </summary>
+    public Texture2D? GetValueTexture2D() =>
+        ReadTexture(CnaEffectTextureType.Texture2D, h => new Texture2D(_graphicsDevice!, h));
+
+    /// <summary>See <see cref="GetValueTexture2D"/>.</summary>
+    public Texture3D? GetValueTexture3D() =>
+        ReadTexture(CnaEffectTextureType.Texture3D, h => Texture3D.FromNativeHandle(_graphicsDevice!, h));
+
+    /// <summary>See <see cref="GetValueTexture2D"/>.</summary>
+    public TextureCube? GetValueTextureCube() =>
+        ReadTexture(CnaEffectTextureType.TextureCube, h => TextureCube.FromNativeHandle(_graphicsDevice!, h));
+
+    private T? ReadTexture<T>(CnaEffectTextureType textureType, Func<nint, T> wrap)
+        where T : Texture
+    {
+        if (_graphicsDevice is null)
+        {
+            throw new NotSupportedException(
+                "This EffectParameter was reached without a GraphicsDevice -- through a nested " +
+                "element or structure member collection -- so it cannot build a Texture wrapper, " +
+                "which needs one. Read the texture from a parameter obtained directly from " +
+                "Effect.Parameters instead.");
+        }
+
+        CnaResult result = Native.cna_effect_parameter_get_value_texture(_handle, textureType, out CnaHandle texture);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, "cna_effect_parameter_get_value_texture");
+        return texture.IsNull ? null : wrap(texture.AsNint);
+    }
 
     private CnaEffectParameterInfo GetInfo()
     {

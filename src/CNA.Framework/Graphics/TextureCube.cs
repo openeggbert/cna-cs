@@ -146,4 +146,10 @@ public class TextureCube : Texture
         Rectangle = rectangle?.ToNative() ?? default,
     };
 
+
+    /// <summary>Wraps a handle this assembly already owns. Exists because
+    /// <see cref="EffectParameter"/> reads a retained texture handle back out of a shader parameter
+    /// and has to rewrap it; the raw-handle constructor itself stays <c>protected</c>.</summary>
+    internal static TextureCube FromNativeHandle(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
+        new(graphicsDevice, nativeHandleValue);
 }
