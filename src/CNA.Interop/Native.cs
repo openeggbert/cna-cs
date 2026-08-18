@@ -1953,6 +1953,45 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sound_effect_create_instance(CnaHandle soundEffect, out CnaHandle instance);
 
+    /// <summary>Fire-and-forget playback (<c>audio.h:483</c>). <c>out_played</c> is the canonical
+    /// "instance limit reached" answer -- <c>CNA_FALSE</c> rather than a failure, which is also
+    /// what a disposed effect reports.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_play(CnaHandle soundEffect, out byte outPlayed);
+
+    /// <summary>(<c>audio.h:499</c>.) The canonical asymmetry is preserved by native: pan is
+    /// range-checked and pitch is clamped.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_play_with_settings(
+        CnaHandle soundEffect, float volume, float pitch, float pan, out byte outPlayed);
+
+    // The four process-wide audio settings (audio.h:408-471). Game-handle addressed, like every
+    // other route in this header.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_get_master_volume(CnaHandle game, out float outVolume);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_set_master_volume(CnaHandle game, float volume);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_get_distance_scale(CnaHandle game, out float outScale);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_set_distance_scale(CnaHandle game, float scale);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_get_doppler_scale(CnaHandle game, out float outScale);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_set_doppler_scale(CnaHandle game, float scale);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_get_speed_of_sound(CnaHandle game, out float outSpeed);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_set_speed_of_sound(CnaHandle game, float speed);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sound_effect_instance_destroy(CnaHandle instance);
 

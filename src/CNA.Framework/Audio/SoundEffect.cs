@@ -9,13 +9,14 @@ namespace CNA.Audio;
 /// design this project selected back in step 2 specifically for this) -- no parameterless audio
 /// route exists anywhere in the real ABI.
 ///
-/// Deliberately does *not* implement real XNA's fire-and-forget <c>Play()</c>/
-/// <c>Play(volume,pitch,pan)</c> convenience methods on this type: those rely on XNA's internal
-/// instance pool to auto-manage a played-and-forgotten <see cref="SoundEffectInstance"/>'s
-/// lifetime (including the "instance limit reached, returns false" behavior), which this
-/// repository has no equivalent for. Call <see cref="CreateInstance"/> and manage the returned
-/// instance's lifetime explicitly instead -- a real, commonly-used XNA pattern in its own right,
-/// not a workaround.
+/// <see cref="Play()"/> and <see cref="Play(float,float,float)"/> are real. They were previously
+/// absent, on the recorded grounds that fire-and-forget playback "relies on XNA's internal instance
+/// pool ... which this repository has no equivalent for" -- but <c>audio.h:483</c> and <c>:499</c>
+/// are exactly that pool, including the <c>out_played</c> flag that carries the "instance limit
+/// reached, returns false" behaviour the note named as the missing part. A header audit found it.
+/// The same audit found the four process-wide settings
+/// (<see cref="MasterVolume"/>/<see cref="DistanceScale"/>/<see cref="DopplerScale"/>/
+/// <see cref="SpeedOfSound"/>) sitting unbound at <c>audio.h:408-471</c>.
 /// </summary>
 public class SoundEffect : IDisposable
 {
@@ -89,6 +90,89 @@ public class SoundEffect : IDisposable
     }
 
     public SoundEffectInstance CreateInstance() => new(CreateNativeInstanceHandle());
+
+    /// <summary>
+    /// Plays once, with no instance to control it. Returns <see langword="false"/> when the engine
+    /// already has too many instances playing, matching real XNA -- that is an ordinary answer, not
+    /// an error, and so is a disposed effect answering <see langword="false"/>.
+    /// </summary>
+    public bool Play()
+    {
+        CnaResult result = Native.cna_sound_effect_play(new CnaHandle(NativeHandleValue), out byte played);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(Play));
+        return played != 0;
+    }
+
+    /// <summary>
+    /// Plays once with explicit settings. The canonical asymmetry is preserved and is native's:
+    /// <paramref name="pitch"/> is clamped, while <paramref name="pan"/> outside [-1, 1] is
+    /// rejected. Reproducing the pan check here as well would give the caller a
+    /// <see cref="ArgumentOutOfRangeException"/> rather than a native result, which is what
+    /// <see cref="SoundEffectInstance.Pan"/> already does for the same reason.
+    /// </summary>
+    public bool Play(float volume, float pitch, float pan)
+    {
+        if (pan is < -1f or > 1f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pan), pan, "Must be between -1 and 1.");
+        }
+
+        CnaResult result = Native.cna_sound_effect_play_with_settings(
+            new CnaHandle(NativeHandleValue), volume, pitch, pan, out byte played);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(Play));
+        return played != 0;
+    }
+
+    /// <summary>The process-wide playback volume, in [0, 1].</summary>
+    public static float MasterVolume
+    {
+        get => GetGlobal(Native.cna_sound_effect_get_master_volume, nameof(MasterVolume));
+        set => SetGlobal(Native.cna_sound_effect_set_master_volume, value, nameof(MasterVolume));
+    }
+
+    /// <summary>Scales the distance between an <see cref="AudioListener"/> and an
+    /// <see cref="AudioEmitter"/> for 3D attenuation.</summary>
+    public static float DistanceScale
+    {
+        get => GetGlobal(Native.cna_sound_effect_get_distance_scale, nameof(DistanceScale));
+        set => SetGlobal(Native.cna_sound_effect_set_distance_scale, value, nameof(DistanceScale));
+    }
+
+    /// <summary>Scales the Doppler effect applied to 3D playback.</summary>
+    public static float DopplerScale
+    {
+        get => GetGlobal(Native.cna_sound_effect_get_doppler_scale, nameof(DopplerScale));
+        set => SetGlobal(Native.cna_sound_effect_set_doppler_scale, value, nameof(DopplerScale));
+    }
+
+    /// <summary>The speed of sound used for Doppler, in units per second.</summary>
+    public static float SpeedOfSound
+    {
+        get => GetGlobal(Native.cna_sound_effect_get_speed_of_sound, nameof(SpeedOfSound));
+        set => SetGlobal(Native.cna_sound_effect_set_speed_of_sound, value, nameof(SpeedOfSound));
+    }
+
+    private delegate CnaResult GetGlobalFunc(CnaHandle game, out float outValue);
+
+    private delegate CnaResult SetGlobalFunc(CnaHandle game, float value);
+
+    /// <summary>These four are static in XNA but game-addressed in the ABI, so they read the
+    /// ambient game the same way <c>Keyboard</c>/<c>Mouse</c> do -- see
+    /// <c>CnaAmbientGame</c>.</summary>
+    private static float GetGlobal(GetGlobalFunc getter, string propertyName)
+    {
+        CnaResult result = getter(CnaAmbientGame.Current, out float value);
+        CnaException.ThrowIfFailed(result, propertyName);
+        return value;
+    }
+
+    private static void SetGlobal(SetGlobalFunc setter, float value, string propertyName)
+    {
+        CnaResult result = setter(CnaAmbientGame.Current, value);
+        CnaException.ThrowIfFailed(result, propertyName);
+    }
 
     /// <summary>
     /// Creates the native playable-instance handle without wrapping it. <c>internal</c> (visible
