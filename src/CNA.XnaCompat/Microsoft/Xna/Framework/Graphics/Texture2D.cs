@@ -58,4 +58,18 @@ public class Texture2D : Texture
 
         CNA.Graphics.Texture2D.SetDataRgba8(NativeHandleValue, CNA.Graphics.Texture2D.PackColors(converted));
     }
+
+    /// <summary>Matches real XNA's <c>Texture2D.FromStream</c>, re-typed to this namespace's own
+    /// <see cref="GraphicsDevice"/> and <see cref="Texture2D"/>. Cannot forward to the base
+    /// factory: that one builds a <c>CNA.Graphics.Texture2D</c>, and a compat texture is a separate
+    /// class -- so it goes through the same <c>protected internal</c> raw-handle constructor
+    /// <c>ContentManager</c> uses.</summary>
+    public static Texture2D FromStream(GraphicsDevice graphicsDevice, Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ArgumentNullException.ThrowIfNull(stream);
+
+        using CNA.Graphics.Texture2D decoded = CNA.Graphics.Texture2D.FromStream(graphicsDevice, stream);
+        return new Texture2D(graphicsDevice, decoded.DetachNativeHandle());
+    }
 }

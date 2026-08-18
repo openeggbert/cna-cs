@@ -149,6 +149,81 @@ public class Texture2D : Texture
         SetDataRgba8(NativeHandleValue, data);
     }
 
+    /// <summary>
+    /// Matches real XNA's <c>Texture2D.FromStream</c>: decodes an encoded image (PNG, JPEG, DDS or
+    /// whatever else the renderer supports) into a texture.
+    ///
+    /// The whole stream is read into memory first, because the ABI decodes from a contiguous byte
+    /// block rather than from a callback-driven reader. That matches what XNA's own implementation
+    /// does with a non-seekable stream anyway.
+    ///
+    /// Found unbound by a sweep of header functions with no binding --
+    /// <c>cna_texture2d_create_from_encoded_memory</c> had been there all along.
+    /// </summary>
+    public static unsafe Texture2D FromStream(GraphicsDevice graphicsDevice, Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ArgumentNullException.ThrowIfNull(stream);
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        byte[] encoded = buffer.ToArray();
+
+        CnaHandle texture;
+        fixed (byte* encodedPtr = encoded)
+        {
+            // A null decode_info preserves the source dimensions, which is what FromStream means.
+            CnaResult result = Native.cna_texture2d_create_from_encoded_memory(
+                graphicsDevice.ResolveNativeDeviceHandle(), encodedPtr, (ulong)encoded.Length, 0, out texture);
+            CnaException.ThrowIfFailed(result, nameof(FromStream));
+        }
+
+        return new Texture2D(graphicsDevice, texture.AsNint);
+    }
+
+    /// <summary>Matches real XNA's <c>SaveAsPng</c>. <paramref name="width"/>/
+    /// <paramref name="height"/> are the encoded size, which XNA allows to differ from the
+    /// texture's own.</summary>
+    public void SaveAsPng(Stream stream, int width, int height) =>
+        SaveAs(stream, CnaTextureImageFormat.Png, width, height, nameof(SaveAsPng));
+
+    /// <summary>Matches real XNA's <c>SaveAsJpeg</c>.</summary>
+    public void SaveAsJpeg(Stream stream, int width, int height) =>
+        SaveAs(stream, CnaTextureImageFormat.Jpeg, width, height, nameof(SaveAsJpeg));
+
+    /// <summary>Encodes and writes. Asks native for the exact byte count first rather than guessing
+    /// a buffer size -- the same two-call shape every other sized read in this binding uses, and the
+    /// reason a partial or truncated image cannot be written.</summary>
+    private unsafe void SaveAs(Stream stream, CnaTextureImageFormat format, int width, int height, string context)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var handle = new CnaHandle(NativeHandleValue);
+        CnaResult sizeResult = Native.cna_texture2d_get_encoded_byte_count(
+            handle, (uint)format, (uint)width, (uint)height, out ulong byteCount);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(sizeResult, context);
+
+        if (byteCount == 0)
+        {
+            return;
+        }
+
+        byte[] encoded = new byte[byteCount];
+        ulong written;
+        fixed (byte* encodedPtr = encoded)
+        {
+            CnaResult copyResult = Native.cna_texture2d_copy_encoded(
+                handle, (uint)format, (uint)width, (uint)height, encodedPtr, byteCount, out written);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(copyResult, context);
+        }
+
+        stream.Write(encoded, 0, (int)written);
+    }
+
     /// <summary>Convenience overload matching real XNA's common <c>SetData&lt;Color&gt;</c> usage
     /// (the general <c>SetData&lt;T&gt;</c> generic itself isn't implemented -- no caller in this
     /// project needs any other <c>T</c>). Goes straight through

@@ -576,6 +576,23 @@ internal static partial class Native
         in CnaTexture2DCreateInfo createInfo,
         out CnaHandle texture);
 
+    // Texture2D.FromStream / SaveAsPng / SaveAsJpeg (texture.h). Found unbound by the same sweep.
+    // `decode_info` is optional -- null preserves the source dimensions, which is what real XNA's
+    // FromStream does.
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texture2d_create_from_encoded_memory(
+        CnaHandle graphicsDevice, byte* encodedData, ulong encodedByteCount, nint decodeInfo, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texture2d_get_encoded_byte_count(
+        CnaHandle texture, uint imageFormat, uint targetWidth, uint targetHeight, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texture2d_copy_encoded(
+        CnaHandle texture, uint imageFormat, uint targetWidth, uint targetHeight,
+        byte* destination, ulong capacity, out ulong outByteCount);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_texture2d_destroy(CnaHandle texture);
 
