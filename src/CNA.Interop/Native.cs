@@ -653,6 +653,21 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_batch_begin(CnaHandle spriteBatch, in CnaSpriteBatchBeginInfo beginInfo);
 
+    /// <summary>The state-taking <c>Begin</c> (<c>graphics_state.h</c>). Every state pointer is
+    /// optional -- null selects the canonical default for that slot (AlphaBlend, LinearClamp, and
+    /// so on), which is exactly what real XNA's <see langword="null"/> arguments mean.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sprite_batch_begin_with_states(
+        CnaHandle spriteBatch, uint sortMode, CnaBlendState* blendState, CnaSamplerState* samplerState,
+        CnaDepthStencilState* depthStencilState, CnaRasterizerState* rasterizerState);
+
+    /// <summary>As above, plus a custom effect and an optional transform matrix.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sprite_batch_begin_with_effect(
+        CnaHandle spriteBatch, uint sortMode, CnaBlendState* blendState, CnaSamplerState* samplerState,
+        CnaDepthStencilState* depthStencilState, CnaRasterizerState* rasterizerState,
+        CnaHandle effect, CnaMatrix* transformMatrix);
+
     /// <summary>Matches <c>cna_sprite_batch_submit_scaled_many</c> exactly
     /// (<c>graphics.h:533</c>) -- the old guessed name, <c>cna_sprite_batch_draw_many</c>, has no
     /// real equivalent, but <see cref="CnaSpriteDrawCommand"/>'s own field shape needed only a

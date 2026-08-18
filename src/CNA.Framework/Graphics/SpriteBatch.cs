@@ -12,8 +12,8 @@ namespace CNA.Graphics;
 /// <c>cna_sprite_batch_submit_many</c>). This also introduced real <c>Begin</c>/<c>End</c> pairing
 /// validation this type never had before
 /// (there was nothing to validate when every <c>Draw</c> call went straight to native) --
-/// <c>Draw</c>-before-<see cref="Begin"/>, <see cref="End"/>-before-<see cref="Begin"/>, and
-/// calling <see cref="Begin"/> twice without an intervening <see cref="End"/> all now throw
+/// <c>Draw</c>-before-<see cref="Begin()"/>, <see cref="End"/>-before-<see cref="Begin()"/>, and
+/// calling <see cref="Begin()"/> twice without an intervening <see cref="End"/> all now throw
 /// <see cref="InvalidOperationException"/>, matching real XNA/MonoGame's own behavior there
 /// (message text recalled from memory, not independently verified against a live binary or
 /// decompiled source -- flagged the same way this session flags other recalled-not-verified
@@ -67,17 +67,116 @@ public class SpriteBatch : IDisposable
 
     public void Begin()
     {
-        if (_hasBegun)
-        {
-            throw new InvalidOperationException(
-                "Begin cannot be called again until End has been successfully called.");
-        }
+        BeginGuard();
 
         var beginInfo = new CnaSpriteBatchBeginInfo();
         CnaResult result = Native.cna_sprite_batch_begin(new CnaHandle(NativeHandleValue), in beginInfo);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Begin));
 
+        BeginSucceeded();
+    }
+
+    /// <summary>Matches real XNA's <c>Begin(SpriteSortMode, BlendState)</c>.</summary>
+    public void Begin(SpriteSortMode sortMode, BlendState? blendState) =>
+        Begin(sortMode, blendState, null, null, null);
+
+    /// <summary>
+    /// Matches real XNA's five-argument <c>Begin</c>.
+    ///
+    /// A <see langword="null"/> state means "the canonical default for that slot" -- AlphaBlend,
+    /// LinearClamp, and so on -- which is both what XNA documents and what the ABI's own null
+    /// pointer selects, so nothing has to be substituted here.
+    /// </summary>
+    public unsafe void Begin(
+        SpriteSortMode sortMode,
+        BlendState? blendState,
+        SamplerState? samplerState,
+        DepthStencilState? depthStencilState,
+        RasterizerState? rasterizerState)
+    {
+        BeginGuard();
+
+        CnaBlendState blend = blendState?.ToNative() ?? default;
+        CnaSamplerState sampler = samplerState?.ToNative() ?? default;
+        CnaDepthStencilState depthStencil = depthStencilState?.ToNative() ?? default;
+        CnaRasterizerState rasterizer = rasterizerState?.ToNative() ?? default;
+
+        CnaResult result = Native.cna_sprite_batch_begin_with_states(
+            new CnaHandle(NativeHandleValue),
+            (uint)sortMode,
+            blendState is null ? null : &blend,
+            samplerState is null ? null : &sampler,
+            depthStencilState is null ? null : &depthStencil,
+            rasterizerState is null ? null : &rasterizer);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(Begin));
+
+        BeginSucceeded();
+    }
+
+    /// <summary>Matches real XNA's six-argument <c>Begin</c>, with a custom
+    /// <see cref="Effect"/>.</summary>
+    public void Begin(
+        SpriteSortMode sortMode,
+        BlendState? blendState,
+        SamplerState? samplerState,
+        DepthStencilState? depthStencilState,
+        RasterizerState? rasterizerState,
+        Effect? effect) =>
+        Begin(sortMode, blendState, samplerState, depthStencilState, rasterizerState, effect, null);
+
+    /// <summary>Matches real XNA's seven-argument <c>Begin</c>: a custom effect plus a transform
+    /// applied to every sprite in the batch.</summary>
+    public unsafe void Begin(
+        SpriteSortMode sortMode,
+        BlendState? blendState,
+        SamplerState? samplerState,
+        DepthStencilState? depthStencilState,
+        RasterizerState? rasterizerState,
+        Effect? effect,
+        Matrix? transformMatrix)
+    {
+        BeginGuard();
+
+        CnaBlendState blend = blendState?.ToNative() ?? default;
+        CnaSamplerState sampler = samplerState?.ToNative() ?? default;
+        CnaDepthStencilState depthStencil = depthStencilState?.ToNative() ?? default;
+        CnaRasterizerState rasterizer = rasterizerState?.ToNative() ?? default;
+        CnaMatrix transform = transformMatrix?.ToNative() ?? default;
+
+        CnaResult result = Native.cna_sprite_batch_begin_with_effect(
+            new CnaHandle(NativeHandleValue),
+            (uint)sortMode,
+            blendState is null ? null : &blend,
+            samplerState is null ? null : &sampler,
+            depthStencilState is null ? null : &depthStencil,
+            rasterizerState is null ? null : &rasterizer,
+            effect is null ? CnaHandle.Zero : new CnaHandle(effect.NativeEffectHandleValue),
+            transformMatrix is null ? null : &transform);
+        GC.KeepAlive(this);
+        GC.KeepAlive(effect);
+        CnaException.ThrowIfFailed(result, nameof(Begin));
+
+        BeginSucceeded();
+    }
+
+    /// <summary>Shared precondition. Extracted when the four state-taking overloads landed, so
+    /// "Begin without End" means the same thing on all five rather than on whichever one happened
+    /// to be written first.</summary>
+    private void BeginGuard()
+    {
+        if (_hasBegun)
+        {
+            throw new InvalidOperationException(
+                "Begin cannot be called again until End has been successfully called.");
+        }
+    }
+
+    /// <summary>Shared post-condition. Runs only after the native call succeeded, so a failed
+    /// <c>Begin</c> leaves the batch closed rather than half-open.</summary>
+    private void BeginSucceeded()
+    {
         _commandBuffer.Clear();
         _referencedTextures.Clear();
         _hasBegun = true;
@@ -268,10 +367,10 @@ public class SpriteBatch : IDisposable
     /// Wraps the flush + native end call in <c>try</c>/<c>finally</c> specifically so a native
     /// failure can't permanently strand this instance: without it, a thrown <see cref="CnaException"/>
     /// would leave <see cref="_hasBegun"/> stuck <c>true</c> forever, since nothing else ever
-    /// resets it and there is no public API to do so directly -- every future <see cref="Begin"/>
+    /// resets it and there is no public API to do so directly -- every future <see cref="Begin()"/>
     /// call would then throw "cannot be called again until End has been successfully called"
     /// with no way to recover short of disposing this instance and constructing a new one. Resetting
-    /// unconditionally lets a caller retry <see cref="Begin"/> after a failure instead.
+    /// unconditionally lets a caller retry <see cref="Begin()"/> after a failure instead.
     /// </summary>
     public void End()
     {

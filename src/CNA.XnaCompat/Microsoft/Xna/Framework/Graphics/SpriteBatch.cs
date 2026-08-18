@@ -19,6 +19,52 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
     {
     }
 
+    /// <summary>Matches real XNA's <c>Begin(SpriteSortMode, BlendState)</c>. Re-typed for the same
+    /// reason the <c>SpriteEffects</c> overloads are: <see cref="SpriteSortMode"/> is a distinct
+    /// enum per namespace, so an XNA-namespaced argument would not bind to the base
+    /// overload.</summary>
+    public void Begin(SpriteSortMode sortMode, BlendState? blendState) =>
+        Begin(sortMode, blendState, null, null, null);
+
+    /// <summary>Matches real XNA's five-argument <c>Begin</c>. The state objects subclass their
+    /// <c>CNA.Graphics</c> counterparts, so only the sort mode needs converting.</summary>
+    public void Begin(
+        SpriteSortMode sortMode,
+        BlendState? blendState,
+        SamplerState? samplerState,
+        DepthStencilState? depthStencilState,
+        RasterizerState? rasterizerState) =>
+        base.Begin(
+            (CNA.Graphics.SpriteSortMode)(int)sortMode,
+            blendState, samplerState, depthStencilState, rasterizerState);
+
+    /// <summary>Matches real XNA's six-argument <c>Begin</c>.</summary>
+    public void Begin(
+        SpriteSortMode sortMode,
+        BlendState? blendState,
+        SamplerState? samplerState,
+        DepthStencilState? depthStencilState,
+        RasterizerState? rasterizerState,
+        Effect? effect) =>
+        Begin(sortMode, blendState, samplerState, depthStencilState, rasterizerState, effect, null);
+
+    /// <summary>Matches real XNA's seven-argument <c>Begin</c>. The compat <see cref="Effect"/>
+    /// composes its <c>CNA.Graphics</c> counterpart rather than deriving from it -- see that type's
+    /// doc comment -- so its inner effect is what reaches the base.</summary>
+    public void Begin(
+        SpriteSortMode sortMode,
+        BlendState? blendState,
+        SamplerState? samplerState,
+        DepthStencilState? depthStencilState,
+        RasterizerState? rasterizerState,
+        Effect? effect,
+        Matrix? transformMatrix) =>
+        base.Begin(
+            (CNA.Graphics.SpriteSortMode)(int)sortMode,
+            blendState, samplerState, depthStencilState, rasterizerState,
+            effect?.Inner,
+            transformMatrix is { } matrix ? matrix : null);
+
     public void Draw(
         Texture2D texture,
         Vector2 position,
