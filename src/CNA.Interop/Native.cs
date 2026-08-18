@@ -2195,6 +2195,16 @@ internal static partial class Native
         CnaHandle device, uint adapterIndex, byte useNullDevice, byte useReferenceDevice);
 
     [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_query_render_target_format(
+        CnaHandle device, uint adapterIndex, uint profile, uint format, uint depthFormat,
+        int multiSampleCount, ref CnaGraphicsFormatSelection outSelection);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_adapter_query_backbuffer_format(
+        CnaHandle device, uint adapterIndex, uint profile, uint format, uint depthFormat,
+        int multiSampleCount, ref CnaGraphicsFormatSelection outSelection);
+
+    [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_sound_effect_create_from_encoded_ext(
         CnaHandle game, byte* bytes, ulong byteCount, out CnaHandle outSoundEffect);
 

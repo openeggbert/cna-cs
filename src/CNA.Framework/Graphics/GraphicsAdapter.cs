@@ -21,13 +21,26 @@ namespace CNA.Graphics;
 /// </summary>
 public class GraphicsAdapter
 {
-    private readonly GraphicsDevice _graphicsDevice;
+    private readonly GraphicsDevice? _graphicsDevice;
 
     internal GraphicsAdapter(GraphicsDevice graphicsDevice, uint adapterIndex)
     {
         _graphicsDevice = graphicsDevice;
         AdapterIndex = adapterIndex;
     }
+
+    /// <summary>For the static <see cref="Adapters"/>/<see cref="DefaultAdapter"/> path, which has
+    /// no managed <see cref="GraphicsDevice"/> to hold -- only the ambient game's handle. Every
+    /// member here uses the device for exactly one thing, its handle, so carrying none is
+    /// sufficient.</summary>
+    private GraphicsAdapter(uint adapterIndex)
+    {
+        AdapterIndex = adapterIndex;
+    }
+
+    /// <summary>This adapter's device handle: the one it was constructed with, or the ambient
+    /// game's when it was constructed without.</summary>
+    private CnaHandle DeviceHandle => _graphicsDevice?.ResolveNativeDeviceHandle() ?? AmbientDeviceHandle();
 
     public uint AdapterIndex { get; }
 
@@ -53,7 +66,7 @@ public class GraphicsAdapter
         {
             var native = new CnaDisplayMode();
             CnaResult result = Native.cna_graphics_adapter_get_current_display_mode(
-                _graphicsDevice.ResolveNativeDeviceHandle(), AdapterIndex, ref native);
+                DeviceHandle, AdapterIndex, ref native);
             CnaException.ThrowIfFailed(result, nameof(CurrentDisplayMode));
             return DisplayMode.FromNative(in native);
         }
@@ -66,7 +79,7 @@ public class GraphicsAdapter
     {
         get
         {
-            CnaHandle device = _graphicsDevice.ResolveNativeDeviceHandle();
+            CnaHandle device = DeviceHandle;
 
             CnaResult countResult = Native.cna_graphics_adapter_get_display_mode_count(device, AdapterIndex, 0, 0, out ulong count);
             CnaException.ThrowIfFailed(countResult, nameof(SupportedDisplayModes));
@@ -99,7 +112,7 @@ public class GraphicsAdapter
     public bool IsProfileSupported(GraphicsProfile profile)
     {
         CnaResult result = Native.cna_graphics_adapter_is_profile_supported(
-            _graphicsDevice.ResolveNativeDeviceHandle(), AdapterIndex, (CnaGraphicsProfile)profile, out byte supported);
+            DeviceHandle, AdapterIndex, (CnaGraphicsProfile)profile, out byte supported);
         CnaException.ThrowIfFailed(result, nameof(IsProfileSupported));
         return supported != 0;
     }
@@ -112,6 +125,122 @@ public class GraphicsAdapter
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         CnaResult result = Native.cna_graphics_adapters_refresh(graphicsDevice.ResolveNativeDeviceHandle());
         CnaException.ThrowIfFailed(result, nameof(Refresh));
+    }
+
+    /// <summary>
+    /// Every adapter on the system. Matches real XNA's static <c>Adapters</c>.
+    ///
+    /// Static after all. The doc comment above says enumerating "needs a device", which is true of
+    /// the ABI route -- but a device is reachable from the ambient game
+    /// (<c>cna_game_get_graphics_device</c>), the same way <c>Keyboard</c>/<c>Mouse</c> reach one.
+    /// So the XNA shape is available and <see cref="GetAdapters(GraphicsDevice)"/> stays for a
+    /// caller that has a specific device in hand.
+    /// </summary>
+    public static IReadOnlyList<GraphicsAdapter> Adapters
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_adapter_get_count(AmbientDeviceHandle(), out ulong count);
+            CnaException.ThrowIfFailed(result, nameof(Adapters));
+
+            var adapters = new GraphicsAdapter[count];
+            for (uint i = 0; i < count; i++)
+            {
+                adapters[i] = new GraphicsAdapter(i);
+            }
+
+            return adapters;
+        }
+    }
+
+    /// <summary>The adapter the system considers default. Matches real XNA's static
+    /// <c>DefaultAdapter</c>. See <see cref="Adapters"/>.</summary>
+    public static GraphicsAdapter DefaultAdapter
+    {
+        get
+        {
+            foreach (GraphicsAdapter adapter in Adapters)
+            {
+                if (adapter.IsDefaultAdapter)
+                {
+                    return adapter;
+                }
+            }
+
+            // Matches GetDefaultAdapter's own reasoning: the ABI reports which adapter is default
+            // rather than promising index zero, so falling back to zero is a last resort and not
+            // the primary answer.
+            return new GraphicsAdapter(0);
+        }
+    }
+
+    /// <summary>The ambient game's graphics device handle. Throws with a message naming the cause
+    /// when no game is running, rather than passing a zero handle to native.</summary>
+    private static CnaHandle AmbientDeviceHandle()
+    {
+        CnaResult result = Native.cna_game_get_graphics_device(CnaAmbientGame.Current, out CnaHandle device);
+        CnaException.ThrowIfFailed(result, nameof(Adapters));
+        return device;
+    }
+
+    /// <summary>
+    /// What this adapter would actually give you for a requested render-target format.
+    ///
+    /// Matches real XNA's <c>QueryRenderTargetFormat</c>: the <c>out</c> values are what the adapter
+    /// substituted, and the return value says whether anything had to be substituted at all.
+    /// </summary>
+    public bool QueryRenderTargetFormat(
+        GraphicsProfile graphicsProfile,
+        SurfaceFormat format,
+        DepthFormat depthFormat,
+        int multiSampleCount,
+        out SurfaceFormat selectedFormat,
+        out DepthFormat selectedDepthFormat,
+        out int selectedMultiSampleCount) =>
+        Query(
+            Native.cna_graphics_adapter_query_render_target_format, graphicsProfile, format, depthFormat,
+            multiSampleCount, out selectedFormat, out selectedDepthFormat, out selectedMultiSampleCount,
+            nameof(QueryRenderTargetFormat));
+
+    /// <summary>The back-buffer equivalent. See <see cref="QueryRenderTargetFormat"/>.</summary>
+    public bool QueryBackBufferFormat(
+        GraphicsProfile graphicsProfile,
+        SurfaceFormat format,
+        DepthFormat depthFormat,
+        int multiSampleCount,
+        out SurfaceFormat selectedFormat,
+        out DepthFormat selectedDepthFormat,
+        out int selectedMultiSampleCount) =>
+        Query(
+            Native.cna_graphics_adapter_query_backbuffer_format, graphicsProfile, format, depthFormat,
+            multiSampleCount, out selectedFormat, out selectedDepthFormat, out selectedMultiSampleCount,
+            nameof(QueryBackBufferFormat));
+
+    private delegate CnaResult QueryFunc(
+        CnaHandle device, uint adapterIndex, uint profile, uint format, uint depthFormat,
+        int multiSampleCount, ref CnaGraphicsFormatSelection outSelection);
+
+    private bool Query(
+        QueryFunc query,
+        GraphicsProfile graphicsProfile,
+        SurfaceFormat format,
+        DepthFormat depthFormat,
+        int multiSampleCount,
+        out SurfaceFormat selectedFormat,
+        out DepthFormat selectedDepthFormat,
+        out int selectedMultiSampleCount,
+        string context)
+    {
+        var selection = new CnaGraphicsFormatSelection();
+        CnaResult result = query(
+            AmbientDeviceHandle(), AdapterIndex, (uint)graphicsProfile, (uint)format, (uint)depthFormat,
+            multiSampleCount, ref selection);
+        CnaException.ThrowIfFailed(result, context);
+
+        selectedFormat = (SurfaceFormat)selection.Format;
+        selectedDepthFormat = (DepthFormat)selection.DepthFormat;
+        selectedMultiSampleCount = selection.MultiSampleCount;
+        return selection.ExactMatch != 0;
     }
 
     /// <summary>
@@ -184,7 +313,7 @@ public class GraphicsAdapter
     {
         var info = new CnaGraphicsAdapterInfo();
         CnaResult result = Native.cna_graphics_adapter_get_info(
-            _graphicsDevice.ResolveNativeDeviceHandle(), AdapterIndex, ref info);
+            DeviceHandle, AdapterIndex, ref info);
         CnaException.ThrowIfFailed(result, "cna_graphics_adapter_get_info");
         return info;
     }
@@ -210,7 +339,7 @@ public class GraphicsAdapter
         byte[] buffer = new byte[byteLength];
         fixed (byte* bufferPtr = buffer)
         {
-            CnaResult result = copy(_graphicsDevice.ResolveNativeDeviceHandle(), AdapterIndex, bufferPtr, byteLength, out ulong written);
+            CnaResult result = copy(DeviceHandle, AdapterIndex, bufferPtr, byteLength, out ulong written);
             CnaException.ThrowIfFailed(result, "cna_graphics_adapter_copy_*");
             return Encoding.UTF8.GetString(buffer, 0, (int)written);
         }

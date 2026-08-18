@@ -80,3 +80,27 @@ internal struct CnaPresentationParameters
         StructVersion = 1;
     }
 }
+
+/// <summary>
+/// Mirrors <c>CNA_GraphicsFormatSelection</c> exactly (<c>display.h:99</c>): what an adapter would
+/// actually give you for a requested format, and whether it had to substitute.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaGraphicsFormatSelection
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public byte ExactMatch;
+    public byte Reserved0;
+    public byte Reserved1;
+    public byte Reserved2;
+    public uint Format;
+    public uint DepthFormat;
+    public int MultiSampleCount;
+
+    public unsafe CnaGraphicsFormatSelection()
+    {
+        StructSize = (uint)sizeof(CnaGraphicsFormatSelection);
+        StructVersion = 1;
+    }
+}
