@@ -160,6 +160,49 @@ internal static partial class Native
         int startIndex,
         int primitiveCount);
 
+    // -- Graphics state (real ABI, graphics_state.h) -------------------------------------------
+    //
+    // Part of the post-migration "missing XNA surface" push (see NEXT.md): BlendState/
+    // DepthStencilState/RasterizerState were guessed-and-never-built during the original
+    // migration since the old HelloGame smoke test never touched them. The preset init functions
+    // take no device handle at all -- pure value computation, safe to call at any time, including
+    // before cna_runtime_initialize -- which is why CNA.Graphics.BlendState/DepthStencilState/
+    // RasterizerState's static presets can be plain `static readonly` fields instead of needing
+    // lazy/deferred initialization.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_blend_state_init(CnaBlendStatePreset preset, out CnaBlendState outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_depth_stencil_state_init(CnaDepthStencilStatePreset preset, out CnaDepthStencilState outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_rasterizer_state_init(CnaRasterizerStatePreset preset, out CnaRasterizerState outState);
+
+    /// <summary>Matches <c>cna_graphics_device_get_blend_state</c> exactly
+    /// (<c>graphics_state.h:393</c>).</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_blend_state(CnaHandle device, out CnaBlendState outState);
+
+    /// <summary>Matches <c>cna_graphics_device_set_blend_state</c> exactly
+    /// (<c>graphics_state.h:404</c>) -- <paramref name="state"/> is "copied during the call" per
+    /// the header, so a plain <c>in</c> by-value parameter (not <c>ref</c>) is correct here, unlike
+    /// this project's self-populating-constructor structs elsewhere.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_blend_state(CnaHandle device, in CnaBlendState state);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_depth_stencil_state(CnaHandle device, out CnaDepthStencilState outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_depth_stencil_state(CnaHandle device, in CnaDepthStencilState state);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_rasterizer_state(CnaHandle device, out CnaRasterizerState outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_set_rasterizer_state(CnaHandle device, in CnaRasterizerState state);
+
     // -- Effect / BasicEffect (real ABI, effects.h -- step 8 of the native-ABI migration) -----
     //
     // The old cna_graphics_device_apply_basic_effect (a device-scoped "push these 33 fields as

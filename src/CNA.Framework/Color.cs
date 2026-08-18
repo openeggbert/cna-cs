@@ -181,4 +181,6 @@ public struct Color : IEquatable<Color>
     public override readonly string ToString() => $"{{R:{R} G:{G} B:{B} A:{A}}}";
 
     internal readonly CNA.Interop.CnaColor ToNative() => new(R, G, B, A);
+
+    internal static Color FromNative(CNA.Interop.CnaColor native) => new(native.R, native.G, native.B, native.A);
 }

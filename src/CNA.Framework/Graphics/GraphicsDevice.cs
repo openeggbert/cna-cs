@@ -91,6 +91,82 @@ public class GraphicsDevice
         CnaException.ThrowIfFailed(result, nameof(SetVertexBuffer));
     }
 
+    private BlendState? _blendState;
+
+    /// <summary>Lazily queries the device's current state on first read (via
+    /// <c>cna_graphics_device_get_blend_state</c>) rather than defaulting to
+    /// <see cref="Graphics.BlendState.Opaque"/> locally -- the real ABI is the source of truth for
+    /// what a freshly created device actually starts with, not an assumption made here.</summary>
+    public BlendState BlendState
+    {
+        get
+        {
+            if (_blendState is null)
+            {
+                CnaResult queryResult = Native.cna_graphics_device_get_blend_state(ResolveNativeDeviceHandle(), out CnaBlendState native);
+                CnaException.ThrowIfFailed(queryResult, nameof(BlendState));
+                _blendState = BlendState.FromNative(native);
+            }
+
+            return _blendState;
+        }
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            CnaResult result = Native.cna_graphics_device_set_blend_state(ResolveNativeDeviceHandle(), value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(BlendState));
+            _blendState = value;
+        }
+    }
+
+    private DepthStencilState? _depthStencilState;
+
+    public DepthStencilState DepthStencilState
+    {
+        get
+        {
+            if (_depthStencilState is null)
+            {
+                CnaResult queryResult = Native.cna_graphics_device_get_depth_stencil_state(ResolveNativeDeviceHandle(), out CnaDepthStencilState native);
+                CnaException.ThrowIfFailed(queryResult, nameof(DepthStencilState));
+                _depthStencilState = DepthStencilState.FromNative(native);
+            }
+
+            return _depthStencilState;
+        }
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            CnaResult result = Native.cna_graphics_device_set_depth_stencil_state(ResolveNativeDeviceHandle(), value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(DepthStencilState));
+            _depthStencilState = value;
+        }
+    }
+
+    private RasterizerState? _rasterizerState;
+
+    public RasterizerState RasterizerState
+    {
+        get
+        {
+            if (_rasterizerState is null)
+            {
+                CnaResult queryResult = Native.cna_graphics_device_get_rasterizer_state(ResolveNativeDeviceHandle(), out CnaRasterizerState native);
+                CnaException.ThrowIfFailed(queryResult, nameof(RasterizerState));
+                _rasterizerState = RasterizerState.FromNative(native);
+            }
+
+            return _rasterizerState;
+        }
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            CnaResult result = Native.cna_graphics_device_set_rasterizer_state(ResolveNativeDeviceHandle(), value.ToNative());
+            CnaException.ThrowIfFailed(result, nameof(RasterizerState));
+            _rasterizerState = value;
+        }
+    }
+
     private IndexBuffer? _indices;
 
     public IndexBuffer? Indices
