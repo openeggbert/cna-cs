@@ -55,8 +55,11 @@ public class ReadOnlyMediaCollection<T> : IDisposable, IEnumerable<T>
     private protected delegate CnaResult ElementFunc(CnaHandle collection, int index, out CnaHandle outElement);
 
     /// <summary>See <see cref="MediaLibrary"/> for why every handle read is paired with
-    /// <see cref="GC.KeepAlive(object)"/>.</summary>
-    private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
+    /// <see cref="GC.KeepAlive(object)"/>. <c>internal</c> rather than <c>private</c> so
+    /// <see cref="MediaPlayer"/> can hand a <see cref="SongCollection"/> straight to
+    /// <c>cna_media_player_play_songs</c> -- the alternative is rebuilding a native collection that
+    /// already exists.</summary>
+    internal CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     public int Count
     {

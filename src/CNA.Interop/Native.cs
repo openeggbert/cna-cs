@@ -2214,26 +2214,124 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_song_collection_destroy(CnaHandle collection);
 
-    // -- MediaPlayer (real ABI, media_player.h -- step 10) -------------------------------------
+    // -- MediaPlayer (media_player.h) ------------------------------------------------------
     //
-    // Renamed throughout (cna_mediaplayer_* -> cna_media_player_*). The single biggest shape
-    // change: every one of these now needs a game handle (CnaAmbientGame.Current) -- no
-    // parameterless media route exists anywhere, matching audio's own step 9 finding. Play is a
-    // much deeper change than a rename: cna_mediaplayer_play took a raw file-path string; the real
-    // cna_media_player_play_song takes a CNA_SongHandle -- Song had to become a real native object
-    // first (see this file's own Song section above) before this function could even be called
-    // correctly. State/Volume/IsMuted/PlayPosition stay deliberately NOT native-backed, matching
-    // this project's own pre-migration design choice to mirror the real C++ engine's plain static
-    // state -- see CNA.Media.MediaPlayer.cs for why that choice still holds. This project also
-    // deliberately does not adopt the real native queue (cna_media_queue_*,
-    // cna_media_player_get_queue) or cna_media_player_move_next/_previous/get_is_repeating/
-    // _is_shuffled in this pass -- genuine new capability (this project's own local
-    // CNA.Media.MediaQueue-based queue management already reproduces the same observable XNA
-    // behavior once its own native calls below are fixed), not something the ABI mismatch forces;
-    // see NEXT.md's own "not yet acted on" note for the full reasoning.
+    // Every route takes a game handle (CnaAmbientGame.Current); no parameterless media route
+    // exists anywhere, the same finding audio produced.
+    //
+    // The whole 41-function surface is bound. A previous pass bound eight of them and recorded
+    // that State/Volume/IsMuted/PlayPosition/Queue "stay deliberately NOT native-backed", mirroring
+    // the C++ engine's plain static fields, and that the native queue and move_next/_previous/
+    // is_repeating/is_shuffled were "genuine new capability ... not something the ABI mismatch
+    // forces". A header audit showed the cost of that: the managed side had reimplemented the
+    // engine's queue management, shuffle order, state machine and playback timer, so two
+    // independent implementations of the same behaviour could disagree, and native's was the one
+    // actually driving the audio device.
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_media_player_play_song(CnaHandle game, CnaHandle song);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_play_songs(CnaHandle game, CnaHandle songs);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_play_songs_from(CnaHandle game, CnaHandle songs, int index);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_move_next(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_move_previous(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_state(CnaHandle game, out uint outState);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_volume(CnaHandle game, out float outVolume);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_is_muted(CnaHandle game, out byte outMuted);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_is_repeating(CnaHandle game, out byte outRepeating);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_set_is_repeating(CnaHandle game, byte repeating);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_is_shuffled(CnaHandle game, out byte outShuffled);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_set_is_shuffled(CnaHandle game, byte shuffled);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_play_position_ticks(CnaHandle game, out long outTicks);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_game_has_control(CnaHandle game, out byte outHasControl);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_is_visualization_enabled(CnaHandle game, out byte outEnabled);
+
+    /// <summary>The canonical timer and state-transition pump (<c>media_player.h:276</c>).</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_update_ext(CnaHandle game);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_program_exit_ext(CnaHandle game);
+
+    /// <summary>The fallback song-end detector (<c>media_player.h:301</c>). A song whose duration
+    /// is unknown never reports ended, rather than reporting it immediately.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_detect_song_ended_by_elapsed_time_ext(
+        CnaHandle song, long elapsedTicks, out byte outEnded);
+
+    /// <summary>The canonical event is <b>static</b>, so this subscription belongs to the process
+    /// rather than to a game and takes no game handle (<c>media_player.h:317</c>). See
+    /// <see cref="nint"/> callback note on the graphics-device-manager subscribe.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_subscribe_active_song_changed_ext(
+        nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_subscribe_media_state_changed_ext(
+        nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_unsubscribe_ext(CnaHandle registration);
+
+    // ---- MediaQueue (media_player.h:373-487) ----
+    //
+    // The queue handle is borrowed from the player, which owns the process-wide queue; releasing it
+    // with cna_media_queue_destroy releases the handle, not the queue.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_player_get_queue(CnaHandle game, out CnaHandle outQueue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_get_count(CnaHandle queue, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_get_active_song_index(CnaHandle queue, out int outIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_set_active_song_index(CnaHandle queue, int index);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_get_active_song(
+        CnaHandle queue, out CnaHandle outSong, out byte outAvailable);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_get_at(CnaHandle queue, int index, out CnaHandle outSong);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_add(CnaHandle queue, CnaHandle song);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_clear(CnaHandle queue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_media_queue_destroy(CnaHandle queue);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_media_player_pause(CnaHandle game);

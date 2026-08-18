@@ -56,6 +56,11 @@ public static class MediaPlayer
 
     public static TimeSpan PlayPosition => CNA.Media.MediaPlayer.PlayPosition;
 
+    /// <summary>Real XNA's "is the game, rather than the player's own background music, in charge
+    /// of what is playing". Landed when <c>MediaPlayer</c> was rebound onto the full
+    /// <c>media_player.h</c> surface -- it was one of the routes that had never been bound.</summary>
+    public static bool GameHasControl => CNA.Media.MediaPlayer.GameHasControl;
+
     public static void Play(Song song)
     {
         ArgumentNullException.ThrowIfNull(song);
@@ -105,4 +110,9 @@ public static class MediaPlayer
     /// directly, with no members of its own -- see that type's own doc comment), so it upcasts as
     /// this parameter with no seam for anything to diverge.</summary>
     public static void GetVisualizationData(VisualizationData data) => CNA.Media.MediaPlayer.GetVisualizationData(data);
+
+    /// <summary>Releases the renderer's media resources. <c>CNAEXT</c>, like
+    /// <c>CNA.Media.MediaPlayer.Update</c> -- real XNA has no equivalent, because its own framework
+    /// does this at shutdown.</summary>
+    public static void ProgramExit() => CNA.Media.MediaPlayer.ProgramExit();
 }
