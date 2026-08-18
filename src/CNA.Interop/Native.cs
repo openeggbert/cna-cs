@@ -280,6 +280,20 @@ internal static partial class Native
     internal static partial CnaResult cna_graphics_device_set_render_target_cube(
         CnaHandle device, CnaHandle renderTarget, uint cubeMapFace);
 
+    /// <summary>Replaces the whole active binding array (<c>render_target.h:238</c>). Zero
+    /// bindings restores the backbuffer.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_set_render_targets(
+        CnaHandle graphicsDevice, CnaRenderTargetBinding* bindings, ulong bindingCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_render_target_count(
+        CnaHandle graphicsDevice, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_copy_render_targets(
+        CnaHandle graphicsDevice, CnaRenderTargetBinding* destination, ulong capacity, out ulong outCount);
+
     /// <summary>Matches <c>cna_texture_get_info</c> exactly (<c>texture.h:130</c>) -- documented
     /// as accepting a "Texture2D, Texture3D, TextureCube or matching render-target handle", which
     /// is what lets <c>CNA.Graphics.Texture</c> expose <c>LevelCount</c>/<c>Format</c> on the base
@@ -908,6 +922,32 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_audio_engine_get_category(CnaHandle engine, CnaStringView name, out CnaHandle outCategory);
+
+    // AudioEngine.RendererDetails (xact.h:122-...). Index-addressed rather than a value struct,
+    // because a detail carries two strings -- the header says so explicitly.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_get_renderer_count(CnaHandle engine, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_get_renderer_friendly_name_size(
+        CnaHandle engine, ulong rendererIndex, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_audio_engine_copy_renderer_friendly_name(
+        CnaHandle engine, ulong rendererIndex, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_get_renderer_id_size(
+        CnaHandle engine, ulong rendererIndex, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_audio_engine_copy_renderer_id(
+        CnaHandle engine, ulong rendererIndex, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_get_renderer_hash_code(
+        CnaHandle engine, ulong rendererIndex, out int outHashCode);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_audio_category_destroy(CnaHandle category);

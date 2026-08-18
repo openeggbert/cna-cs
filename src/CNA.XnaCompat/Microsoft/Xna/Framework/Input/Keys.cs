@@ -175,4 +175,6 @@ public enum Keys
 internal static class KeysExtensions
 {
     public static CNA.Input.Keys ToFrameworkKeys(this Keys key) => (CNA.Input.Keys)(int)key;
+
+    public static Keys ToCompatKeys(this CNA.Input.Keys key) => (Keys)(int)key;
 }

@@ -17,6 +17,10 @@ namespace CNA.Graphics;
 /// </summary>
 public class GraphicsDevice
 {
+    /// <summary>What <see cref="SetRenderTargets"/> last bound -- see
+    /// <see cref="GetRenderTargets"/> for why the answer is kept here rather than read back.</summary>
+    private RenderTargetBinding[] _boundRenderTargets = [];
+
     /// <summary>
     /// The raw native *game* handle value -- not the device handle; see this class's own doc
     /// comment for why holding a cached device handle across calls is unsafe under the real ABI.
@@ -421,6 +425,94 @@ public class GraphicsDevice
             ResolveNativeDeviceHandle(), handle, (uint)cubeMapFace);
         GC.KeepAlive(renderTarget);
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
+    }
+
+    /// <summary>
+    /// Matches real XNA's <c>SetRenderTargets</c>: binds a whole multiple-render-target array, or
+    /// restores the backbuffer when given none.
+    ///
+    /// Added in the WP16 re-audit along with <see cref="RenderTargetBinding"/> itself -- only the
+    /// single-target overloads had been bound, while
+    /// <c>cna_graphics_device_set_render_targets</c> (<c>render_target.h:238</c>) had been there
+    /// all along.
+    /// </summary>
+    public unsafe void SetRenderTargets(params RenderTargetBinding[]? renderTargets)
+    {
+        if (renderTargets is null || renderTargets.Length == 0)
+        {
+            CnaResult empty = Native.cna_graphics_device_set_render_targets(ResolveNativeDeviceHandle(), null, 0);
+            CnaException.ThrowIfFailed(empty, nameof(SetRenderTargets));
+            _boundRenderTargets = [];
+            return;
+        }
+
+        var bindings = new CnaRenderTargetBinding[renderTargets.Length];
+        for (int i = 0; i < bindings.Length; i++)
+        {
+            RenderTargetBinding binding = renderTargets[i];
+            if (binding.RenderTarget is null)
+            {
+                throw new ArgumentException(
+                    $"{nameof(renderTargets)}[{i}] is a default-constructed RenderTargetBinding with no target.",
+                    nameof(renderTargets));
+            }
+
+            bindings[i] = new CnaRenderTargetBinding
+            {
+                RenderTarget = new CnaHandle(binding.RenderTarget.NativeHandleValue),
+                ArraySlice = binding.ArraySlice,
+                CubeMapFace = (uint)binding.CubeMapFace,
+            };
+        }
+
+        fixed (CnaRenderTargetBinding* bindingsPtr = bindings)
+        {
+            CnaResult result = Native.cna_graphics_device_set_render_targets(
+                ResolveNativeDeviceHandle(), bindingsPtr, (ulong)bindings.Length);
+
+            // Keeps every bound target reachable across the call -- their handles were read into
+            // the array above, and an unreachable SafeHandle could have been finalized mid-call.
+            GC.KeepAlive(renderTargets);
+            CnaException.ThrowIfFailed(result, nameof(SetRenderTargets));
+        }
+
+        // Recorded only after the bind succeeded, so a failed call leaves the previous answer
+        // standing rather than claiming targets that were never bound. Also what keeps the targets
+        // reachable for as long as they are bound -- see GetRenderTargets.
+        _boundRenderTargets = (RenderTargetBinding[])renderTargets.Clone();
+    }
+
+    /// <summary>
+    /// The targets last bound through <see cref="SetRenderTargets"/>, or an empty array while the
+    /// backbuffer is bound. Matches real XNA's <c>GetRenderTargets</c>.
+    ///
+    /// Answers from the managed references it was handed, not from
+    /// <c>cna_graphics_device_copy_render_targets</c>, for the reason
+    /// <see cref="TextureCollection"/> documents at length: native reports bare handles, and this
+    /// project has no way to map a handle back to the managed
+    /// <see cref="RenderTarget2D"/>/<see cref="RenderTargetCube"/> wrapper that owns it. Re-reading
+    /// could therefore not return the objects the caller set. The count is still checked against
+    /// native, so a binding dropped underneath this device is reported rather than hidden.
+    /// </summary>
+    public RenderTargetBinding[] GetRenderTargets()
+    {
+        CnaResult result = Native.cna_graphics_device_get_render_target_count(
+            ResolveNativeDeviceHandle(), out ulong count);
+        CnaException.ThrowIfFailed(result, nameof(GetRenderTargets));
+
+        if (count == 0 || _boundRenderTargets.Length == 0)
+        {
+            return [];
+        }
+
+        if ((ulong)_boundRenderTargets.Length != count)
+        {
+            throw new InvalidOperationException(
+                $"The device reports {count} bound render target(s) but this object last bound " +
+                $"{_boundRenderTargets.Length}. Something rebound them outside SetRenderTargets.");
+        }
+
+        return (RenderTargetBinding[])_boundRenderTargets.Clone();
     }
 
     public void SetVertexBuffer(VertexBuffer? vertexBuffer)

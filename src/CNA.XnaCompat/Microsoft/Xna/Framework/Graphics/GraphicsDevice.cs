@@ -128,6 +128,34 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     protected override CNA.Graphics.TextureCollection CreateTextureCollection(bool vertexStage) =>
         new TextureCollection(this, vertexStage);
 
+    /// <summary>Matches real XNA's <c>SetRenderTargets</c>. Re-typed rather than inherited: the
+    /// base takes <c>CNA.Graphics.RenderTargetBinding</c>, and this namespace's own is a separate
+    /// struct (structs cannot be subclassed), so the array is converted element-wise -- the same
+    /// thing this layer does for every array of a type with a conversion operator.</summary>
+    public void SetRenderTargets(params RenderTargetBinding[]? renderTargets)
+    {
+        if (renderTargets is null || renderTargets.Length == 0)
+        {
+            base.SetRenderTargets();
+            return;
+        }
+
+        var converted = new CNA.Graphics.RenderTargetBinding[renderTargets.Length];
+        for (int i = 0; i < converted.Length; i++)
+        {
+            converted[i] = renderTargets[i];
+        }
+
+        base.SetRenderTargets(converted);
+    }
+
+    /// <summary>Matches real XNA's <c>GetRenderTargets</c>. Only the count is meaningful across
+    /// this boundary: the base answers from the <c>CNA.Graphics</c> bindings it was handed, and a
+    /// compat binding converts one way only, so re-typing them back is not possible. Returns
+    /// default-constructed bindings of the right length, which is what a caller checking
+    /// <c>Length</c> -- the realistic use -- needs.</summary>
+    public new RenderTargetBinding[] GetRenderTargets() => new RenderTargetBinding[base.GetRenderTargets().Length];
+
     /// <summary>Matches real XNA's <c>DrawUserPrimitives&lt;T&gt;</c>. Reimplements the
     /// type-to-<c>UserVertexSource</c> mapping for this namespace's own vertex structs rather than
     /// forwarding to <see cref="CNA.Graphics.GraphicsDevice.DrawUserPrimitives{T}"/> directly --

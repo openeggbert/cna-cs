@@ -43,6 +43,46 @@ public class AudioEngine : IDisposable
 
     /// <summary>Advances the audio engine. Call once per frame -- see this class's own doc
     /// comment.</summary>
+    /// <summary>
+    /// Every audio renderer this engine describes. Matches real XNA's <c>RendererDetails</c>.
+    ///
+    /// Re-enumerated on every read rather than cached: the ABI addresses a renderer by index into a
+    /// list that reflects the devices present now, so a cached array would go stale the moment one
+    /// is plugged in or removed. The header notes this engine currently describes exactly one
+    /// renderer -- a fact about the backend, not a shape this property assumes.
+    /// </summary>
+    public unsafe IReadOnlyList<RendererDetail> RendererDetails
+    {
+        get
+        {
+            CnaResult countResult = Native.cna_audio_engine_get_renderer_count(NativeHandle, out ulong count);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(countResult, nameof(RendererDetails));
+
+            var details = new RendererDetail[count];
+            for (ulong i = 0; i < count; i++)
+            {
+                string friendlyName = NativeStringReader.ReadIndexed(
+                    Native.cna_audio_engine_get_renderer_friendly_name_size,
+                    Native.cna_audio_engine_copy_renderer_friendly_name,
+                    NativeHandle, i, nameof(RendererDetails));
+
+                string rendererId = NativeStringReader.ReadIndexed(
+                    Native.cna_audio_engine_get_renderer_id_size,
+                    Native.cna_audio_engine_copy_renderer_id,
+                    NativeHandle, i, nameof(RendererDetails));
+
+                CnaResult hashResult = Native.cna_audio_engine_get_renderer_hash_code(NativeHandle, i, out int hash);
+                GC.KeepAlive(this);
+                CnaException.ThrowIfFailed(hashResult, nameof(RendererDetails));
+
+                details[i] = new RendererDetail(friendlyName, rendererId, hash);
+            }
+
+            return details;
+        }
+    }
+
     public void Update()
     {
         CnaResult result = Native.cna_audio_engine_update(NativeHandle);

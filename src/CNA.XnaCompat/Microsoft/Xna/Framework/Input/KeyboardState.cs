@@ -13,4 +13,22 @@ public readonly struct KeyboardState
     public bool IsKeyDown(Keys key) => _framework.IsKeyDown(key.ToFrameworkKeys());
 
     public bool IsKeyUp(Keys key) => !IsKeyDown(key);
+
+    /// <summary>Matches real XNA's indexer. Landed with <see cref="KeyState"/> in the WP16
+    /// re-audit; both were missing.</summary>
+    public KeyState this[Keys key] => IsKeyDown(key) ? KeyState.Down : KeyState.Up;
+
+    /// <summary>Every key currently down, re-typed into this namespace's own
+    /// <see cref="Keys"/>.</summary>
+    public Keys[] GetPressedKeys()
+    {
+        CNA.Input.Keys[] pressed = _framework.GetPressedKeys();
+        var result = new Keys[pressed.Length];
+        for (int i = 0; i < pressed.Length; i++)
+        {
+            result[i] = pressed[i].ToCompatKeys();
+        }
+
+        return result;
+    }
 }

@@ -144,3 +144,24 @@ internal struct CnaRasterizerState
     public byte ScissorTestEnable;
     public ushort ReservedTail;
 }
+
+/// <summary>
+/// Mirrors <c>CNA_RenderTargetBinding</c> exactly (<c>render_target.h:138-149</c>): one
+/// render-target subresource in a multiple-render-target array. Versioned per array element, so it
+/// self-populates its header the way the other versioned structs here do.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaRenderTargetBinding
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaHandle RenderTarget;
+    public int ArraySlice;
+    public uint CubeMapFace;
+
+    public unsafe CnaRenderTargetBinding()
+    {
+        StructSize = (uint)sizeof(CnaRenderTargetBinding);
+        StructVersion = 1;
+    }
+}
