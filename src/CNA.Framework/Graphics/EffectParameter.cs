@@ -133,11 +133,16 @@ public class EffectParameter : IDisposable
 
     public unsafe Vector4 GetValueVector4() => Vector4.FromNative(GetScalar<CnaVector4>(CnaEffectValueType.Vector4));
 
-    public unsafe string GetValueString() => NativeStringReader.Read(
-        Native.cna_effect_parameter_get_value_string_byte_count,
-        Native.cna_effect_parameter_copy_value_string,
-        _handle,
-        nameof(GetValueString));
+    public unsafe string GetValueString()
+    {
+        string value = NativeStringReader.Read(
+            Native.cna_effect_parameter_get_value_string_byte_count,
+            Native.cna_effect_parameter_copy_value_string,
+            _handle,
+            nameof(GetValueString));
+        GC.KeepAlive(this);
+        return value;
+    }
 
     public unsafe void SetValue(bool value) => SetScalar(CnaEffectValueType.Boolean, (byte)(value ? 1 : 0));
 
@@ -159,6 +164,7 @@ public class EffectParameter : IDisposable
     {
         ArgumentNullException.ThrowIfNull(value);
         CnaResult result = CnaStringMarshal.WithStringView(value, view => Native.cna_effect_parameter_set_value_string(_handle, view));
+        GC.KeepAlive(this);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetValue));
     }

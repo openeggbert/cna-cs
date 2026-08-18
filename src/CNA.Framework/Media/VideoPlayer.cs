@@ -25,6 +25,15 @@ public class VideoPlayer : IDisposable
         _handle = new NativeResourceHandle(player.AsNint, h => Native.cna_video_player_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     /// <summary>The video currently loaded, or <see langword="null"/> before the first
@@ -40,6 +49,7 @@ public class VideoPlayer : IDisposable
         get
         {
             CnaResult result = Native.cna_video_player_get_state(NativeHandle, out uint value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(State));
             return (MediaState)value;
         }
@@ -50,12 +60,14 @@ public class VideoPlayer : IDisposable
         get
         {
             CnaResult result = Native.cna_video_player_get_is_looped(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsLooped));
             return value != 0;
         }
         set
         {
             CnaResult result = Native.cna_video_player_set_is_looped(NativeHandle, (byte)(value ? 1 : 0));
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsLooped));
         }
     }
@@ -65,12 +77,14 @@ public class VideoPlayer : IDisposable
         get
         {
             CnaResult result = Native.cna_video_player_get_is_muted(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsMuted));
             return value != 0;
         }
         set
         {
             CnaResult result = Native.cna_video_player_set_is_muted(NativeHandle, (byte)(value ? 1 : 0));
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsMuted));
         }
     }
@@ -80,12 +94,14 @@ public class VideoPlayer : IDisposable
         get
         {
             CnaResult result = Native.cna_video_player_get_volume(NativeHandle, out float value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Volume));
             return value;
         }
         set
         {
             CnaResult result = Native.cna_video_player_set_volume(NativeHandle, value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Volume));
         }
     }
@@ -95,6 +111,7 @@ public class VideoPlayer : IDisposable
         get
         {
             CnaResult result = Native.cna_video_player_get_play_position_ticks(NativeHandle, out long ticks);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PlayPosition));
             return TimeSpan.FromTicks(ticks);
         }
@@ -104,6 +121,7 @@ public class VideoPlayer : IDisposable
     {
         ArgumentNullException.ThrowIfNull(video);
         CnaResult result = Native.cna_video_player_play(NativeHandle, video.NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Play));
         _video = video;
     }
@@ -111,18 +129,21 @@ public class VideoPlayer : IDisposable
     public void Stop()
     {
         CnaResult result = Native.cna_video_player_stop(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Stop));
     }
 
     public void Pause()
     {
         CnaResult result = Native.cna_video_player_pause(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Pause));
     }
 
     public void Resume()
     {
         CnaResult result = Native.cna_video_player_resume(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Resume));
     }
 
@@ -151,6 +172,7 @@ public class VideoPlayer : IDisposable
     public Texture? GetTexture()
     {
         CnaResult result = Native.cna_video_player_get_texture(NativeHandle, out CnaHandle texture, out byte available);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GetTexture));
 
         // _video is non-null whenever native reports a frame: a frame only exists after Play(),

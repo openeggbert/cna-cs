@@ -95,6 +95,7 @@ public abstract class StockEffect : Effect
     private protected bool GetBool(GetBoolFunc getter, string propertyName)
     {
         CnaResult result = getter(Handle, out byte value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return value != 0;
     }
@@ -102,12 +103,14 @@ public abstract class StockEffect : Effect
     private protected void SetBool(SetBoolFunc setter, bool value, string propertyName)
     {
         CnaResult result = setter(Handle, (byte)(value ? 1 : 0));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 
     private protected float GetFloat(GetFloatFunc getter, string propertyName)
     {
         CnaResult result = getter(Handle, out float value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return value;
     }
@@ -115,12 +118,14 @@ public abstract class StockEffect : Effect
     private protected void SetFloat(SetFloatFunc setter, float value, string propertyName)
     {
         CnaResult result = setter(Handle, value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 
     private protected int GetInt(GetIntFunc getter, string propertyName)
     {
         CnaResult result = getter(Handle, out int value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return value;
     }
@@ -128,12 +133,14 @@ public abstract class StockEffect : Effect
     private protected void SetInt(SetIntFunc setter, int value, string propertyName)
     {
         CnaResult result = setter(Handle, value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 
     private protected Vector3 GetVector3(GetVector3Func getter, string propertyName)
     {
         CnaResult result = getter(Handle, out CnaVector3 value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return Vector3.FromNative(value);
     }
@@ -141,6 +148,7 @@ public abstract class StockEffect : Effect
     private protected void SetVector3(SetVector3Func setter, Vector3 value, string propertyName)
     {
         CnaResult result = setter(Handle, value.ToNative());
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 
@@ -153,6 +161,7 @@ public abstract class StockEffect : Effect
     {
         CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
         CnaResult result = setter(Handle, handle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 }

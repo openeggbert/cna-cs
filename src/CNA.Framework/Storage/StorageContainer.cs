@@ -19,21 +19,39 @@ public class StorageContainer : IDisposable
         StorageDevice = storageDevice;
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     public StorageDevice StorageDevice { get; }
 
-    public unsafe string DisplayName => NativeStringReader.Read(
-        Native.cna_storage_container_get_display_name_size,
-        Native.cna_storage_container_copy_display_name,
-        NativeHandle,
-        nameof(DisplayName));
+    public unsafe string DisplayName
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_storage_container_get_display_name_size,
+                Native.cna_storage_container_copy_display_name,
+                NativeHandle,
+                nameof(DisplayName));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     public bool IsDisposed
     {
         get
         {
             CnaResult result = Native.cna_storage_container_get_is_disposed(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsDisposed));
             return value != 0;
         }
@@ -79,6 +97,7 @@ public class StorageContainer : IDisposable
         CnaHandle stream = default;
         CnaResult result = CnaStringMarshal.WithStringView(
             file, view => Native.cna_storage_container_create_file(NativeHandle, view, out stream));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(CreateFile));
         return new StorageStream(stream.AsNint);
     }
@@ -93,6 +112,7 @@ public class StorageContainer : IDisposable
         CnaHandle stream = default;
         CnaResult result = CnaStringMarshal.WithStringView(
             file, view => Native.cna_storage_container_open_file(NativeHandle, view, (uint)fileMode, out stream));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(OpenFile));
         return new StorageStream(stream.AsNint);
     }
@@ -112,6 +132,7 @@ public class StorageContainer : IDisposable
 
         _disposed = true;
         CnaResult result = Native.cna_storage_container_dispose(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Dispose));
         _handle.Dispose();
         GC.SuppressFinalize(this);

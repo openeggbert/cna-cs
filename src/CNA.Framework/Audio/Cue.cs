@@ -20,10 +20,27 @@ public class Cue : IDisposable
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_cue_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
-    public unsafe string Name => NativeStringReader.Read(
-        Native.cna_cue_get_name_size, Native.cna_cue_copy_name, NativeHandle, nameof(Name));
+    public unsafe string Name
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_cue_get_name_size, Native.cna_cue_copy_name, NativeHandle, nameof(Name));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     public bool IsCreated => GetInfo().IsCreated != 0;
 
@@ -44,24 +61,28 @@ public class Cue : IDisposable
     public void Play()
     {
         CnaResult result = Native.cna_cue_play(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Play));
     }
 
     public void Pause()
     {
         CnaResult result = Native.cna_cue_pause(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Pause));
     }
 
     public void Resume()
     {
         CnaResult result = Native.cna_cue_resume(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Resume));
     }
 
     public void Stop(AudioStopOptions options)
     {
         CnaResult result = Native.cna_cue_stop(NativeHandle, (uint)options);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Stop));
     }
 
@@ -73,6 +94,7 @@ public class Cue : IDisposable
         CnaAudioListener nativeListener = listener.ToNative();
         CnaAudioEmitter nativeEmitter = emitter.ToNative();
         CnaResult result = Native.cna_cue_apply_3d(NativeHandle, in nativeListener, in nativeEmitter);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Apply3D));
     }
 
@@ -83,6 +105,7 @@ public class Cue : IDisposable
         float value = 0f;
         CnaResult result = CnaStringMarshal.WithStringView(
             name, view => Native.cna_cue_get_variable(NativeHandle, view, out value));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GetVariable));
         return value;
     }
@@ -93,6 +116,7 @@ public class Cue : IDisposable
 
         CnaResult result = CnaStringMarshal.WithStringView(
             name, view => Native.cna_cue_set_variable(NativeHandle, view, value));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetVariable));
     }
 
@@ -100,6 +124,7 @@ public class Cue : IDisposable
     {
         var info = new CnaCueInfo();
         CnaResult result = Native.cna_cue_get_info(NativeHandle, ref info);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_cue_get_info");
         return info;
     }

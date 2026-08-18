@@ -83,6 +83,7 @@ public class EffectAnnotationCollection : IEnumerable<EffectAnnotation>, IDispos
             byte found = 0;
             CnaResult result = CnaStringMarshal.WithStringView(
                 name, view => Native.cna_effect_annotation_collection_find(_handle, view, out found, out element));
+            GC.KeepAlive(this);
                 GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectAnnotationCollection));
 

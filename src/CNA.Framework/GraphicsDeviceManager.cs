@@ -33,6 +33,7 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         Game = game;
 
         CnaResult result = Native.cna_graphics_device_manager_create(new CnaHandle(game.NativeHandle), out CnaHandle manager);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GraphicsDeviceManager));
 
         _handle = new NativeResourceHandle(manager.AsNint, ReleaseNative);
@@ -48,6 +49,15 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
 
     public Game Game { get; }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     private static void ReleaseNative(nint handleValue) => Native.cna_graphics_device_manager_destroy(new CnaHandle(handleValue));
@@ -57,12 +67,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_preferred_back_buffer_width(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredBackBufferWidth));
             return value;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_preferred_back_buffer_width(NativeHandle, value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredBackBufferWidth));
         }
     }
@@ -72,12 +84,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_preferred_back_buffer_height(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredBackBufferHeight));
             return value;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_preferred_back_buffer_height(NativeHandle, value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredBackBufferHeight));
         }
     }
@@ -87,12 +101,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_preferred_back_buffer_format(NativeHandle, out uint value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredBackBufferFormat));
             return (SurfaceFormat)value;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_preferred_back_buffer_format(NativeHandle, (uint)value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredBackBufferFormat));
         }
     }
@@ -102,12 +118,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_preferred_depth_stencil_format(NativeHandle, out uint value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredDepthStencilFormat));
             return (DepthFormat)value;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_preferred_depth_stencil_format(NativeHandle, (uint)value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferredDepthStencilFormat));
         }
     }
@@ -117,12 +135,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_is_full_screen(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsFullScreen));
             return value != 0;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_is_full_screen(NativeHandle, (byte)(value ? 1 : 0));
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsFullScreen));
         }
     }
@@ -132,12 +152,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_prefer_multi_sampling(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferMultiSampling));
             return value != 0;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_prefer_multi_sampling(NativeHandle, (byte)(value ? 1 : 0));
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PreferMultiSampling));
         }
     }
@@ -147,12 +169,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_synchronize_with_vertical_retrace(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SynchronizeWithVerticalRetrace));
             return value != 0;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_synchronize_with_vertical_retrace(NativeHandle, (byte)(value ? 1 : 0));
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SynchronizeWithVerticalRetrace));
         }
     }
@@ -162,12 +186,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_graphics_profile(NativeHandle, out CnaGraphicsProfile value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(GraphicsProfile));
             return (GraphicsProfile)value;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_graphics_profile(NativeHandle, (CnaGraphicsProfile)value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(GraphicsProfile));
         }
     }
@@ -177,12 +203,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         get
         {
             CnaResult result = Native.cna_graphics_device_manager_get_supported_orientations(NativeHandle, out uint value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SupportedOrientations));
             return (DisplayOrientation)value;
         }
         set
         {
             CnaResult result = Native.cna_graphics_device_manager_set_supported_orientations(NativeHandle, (uint)value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SupportedOrientations));
         }
     }
@@ -193,12 +221,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
     public void ApplyChanges()
     {
         CnaResult result = Native.cna_graphics_device_manager_apply_changes(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ApplyChanges));
     }
 
     public void ToggleFullScreen()
     {
         CnaResult result = Native.cna_graphics_device_manager_toggle_full_screen(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ToggleFullScreen));
     }
 
@@ -237,6 +267,7 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
     public bool BeginDraw()
     {
         CnaResult result = Native.cna_graphics_device_manager_begin_draw(NativeHandle, out byte shouldDraw);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(BeginDraw));
         return shouldDraw != 0;
     }
@@ -244,12 +275,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
     public void CreateDevice()
     {
         CnaResult result = Native.cna_graphics_device_manager_create_device(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(CreateDevice));
     }
 
     public void EndDraw()
     {
         CnaResult result = Native.cna_graphics_device_manager_end_draw(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(EndDraw));
     }
 

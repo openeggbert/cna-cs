@@ -82,6 +82,7 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
             byte found = 0;
             CnaResult result = CnaStringMarshal.WithStringView(
                 name, view => Native.cna_effect_technique_collection_find(_handle, view, out found, out element));
+            GC.KeepAlive(this);
                 GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectTechniqueCollection));
 

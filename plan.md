@@ -1503,8 +1503,18 @@ WP11–WP14 are the largest new subsystems and come last.
       previously called a "permanent gap" for want of an override seam —
       re-solve it, since "no seam exists" is a fixable design problem now
       that omitting it is no longer allowed; `.xnb` LZ4; runtime glTF.
-- [ ] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
-      review; pre-existing, not introduced by it).** Every native-backed type
+- [~] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
+      review; pre-existing, not introduced by it). Slice 1 done 2026-08-18:**
+      every type whose handle accessor is *private* now pairs each native call
+      with `GC.KeepAlive` (151 sites across 20 types, including the delegate
+      helpers, `WithStringView` lambdas and expression-bodied members).
+      **Slice 2 outstanding:** the types whose accessor is `internal` and read
+      by *other* types (`Texture`, `VertexBuffer`, `IndexBuffer`, `SoundEffect`,
+      `SoundEffectInstance`, `SpriteBatch`, `Video`, `AudioEngine`,
+      `ContentReader`) — there the object to keep alive is the *argument*, not
+      `this`, so each of those ~20 call sites needs reading rather than a
+      pattern. Original note:
+      <details>**WP17 — `SafeHandle` use is unsound project-wide.** Every native-backed type
       reads its handle via `SafeHandle.DangerousGetHandle()` with no
       `DangerousAddRef`/`DangerousRelease` pair. Nothing keeps the wrapper alive
       across the native call, so the JIT may treat it as dead once the handle

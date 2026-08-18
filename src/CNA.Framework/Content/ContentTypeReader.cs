@@ -23,20 +23,38 @@ public class ContentTypeReader : IDisposable
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_content_type_reader_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     /// <summary>The canonical name of the type this reader produces.</summary>
-    public unsafe string TargetTypeName => NativeStringReader.Read(
-        Native.cna_content_type_reader_get_target_type_name_size,
-        Native.cna_content_type_reader_copy_target_type_name,
-        NativeHandle,
-        nameof(TargetTypeName));
+    public unsafe string TargetTypeName
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_content_type_reader_get_target_type_name_size,
+                Native.cna_content_type_reader_copy_target_type_name,
+                NativeHandle,
+                nameof(TargetTypeName));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     public int TypeVersion
     {
         get
         {
             CnaResult result = Native.cna_content_type_reader_get_type_version(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(TypeVersion));
             return value;
         }
@@ -49,6 +67,7 @@ public class ContentTypeReader : IDisposable
         get
         {
             CnaResult result = Native.cna_content_type_reader_get_can_deserialize_into_existing_object(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(CanDeserializeIntoExistingObject));
             return value != 0;
         }
@@ -57,6 +76,7 @@ public class ContentTypeReader : IDisposable
     public bool SupportsVersion(int serializedVersion)
     {
         CnaResult result = Native.cna_content_type_reader_supports_version(NativeHandle, serializedVersion, out byte value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SupportsVersion));
         return value != 0;
     }
@@ -64,6 +84,7 @@ public class ContentTypeReader : IDisposable
     public void Initialize()
     {
         CnaResult result = Native.cna_content_type_reader_initialize(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Initialize));
     }
 
@@ -76,6 +97,7 @@ public class ContentTypeReader : IDisposable
         ArgumentNullException.ThrowIfNull(reader);
 
         CnaResult result = Native.cna_content_type_reader_read_untyped(NativeHandle, reader.NativeHandle, out byte hasValue);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadUntyped));
         return hasValue != 0;
     }

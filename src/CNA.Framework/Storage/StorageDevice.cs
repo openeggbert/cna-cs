@@ -26,6 +26,15 @@ public class StorageDevice
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_storage_device_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     public bool IsConnected
@@ -33,6 +42,7 @@ public class StorageDevice
         get
         {
             CnaResult result = Native.cna_storage_device_get_is_connected(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsConnected));
             return value != 0;
         }
@@ -43,6 +53,7 @@ public class StorageDevice
         get
         {
             CnaResult result = Native.cna_storage_device_get_free_space(NativeHandle, out long value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(FreeSpace));
             return value;
         }
@@ -53,6 +64,7 @@ public class StorageDevice
         get
         {
             CnaResult result = Native.cna_storage_device_get_total_space(NativeHandle, out long value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(TotalSpace));
             return value;
         }
@@ -98,6 +110,7 @@ public class StorageDevice
         CnaHandle container = default;
         CnaResult result = CnaStringMarshal.WithStringView(
             displayName, view => Native.cna_storage_container_open(NativeHandle, view, 0, 0, out container));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(OpenContainer));
         return new StorageContainer(container.AsNint, this);
     }
@@ -128,6 +141,7 @@ public class StorageDevice
 
         CnaResult result = CnaStringMarshal.WithStringView(
             titleName, view => Native.cna_storage_device_delete_container(NativeHandle, view));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(DeleteContainer));
     }
 }

@@ -41,6 +41,15 @@ public class WaveBank : IDisposable
 
     private static void Release(nint handleValue) => Native.cna_wave_bank_destroy(new CnaHandle(handleValue));
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     public bool IsDisposed => GetFlag(Native.cna_wave_bank_get_is_disposed, nameof(IsDisposed));
@@ -56,6 +65,7 @@ public class WaveBank : IDisposable
     private bool GetFlag(GetFlagFunc getter, string propertyName)
     {
         CnaResult result = getter(NativeHandle, out byte value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return value != 0;
     }

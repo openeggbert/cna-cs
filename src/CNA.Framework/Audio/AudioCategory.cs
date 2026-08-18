@@ -23,32 +23,53 @@ public class AudioCategory : IEquatable<AudioCategory>, IDisposable
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_audio_category_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
-    public unsafe string Name => NativeStringReader.Read(
-        Native.cna_audio_category_get_name_size, Native.cna_audio_category_copy_name, NativeHandle, nameof(Name));
+    public unsafe string Name
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_audio_category_get_name_size, Native.cna_audio_category_copy_name, NativeHandle, nameof(Name));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     public void Pause()
     {
         CnaResult result = Native.cna_audio_category_pause(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Pause));
     }
 
     public void Resume()
     {
         CnaResult result = Native.cna_audio_category_resume(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Resume));
     }
 
     public void SetVolume(float volume)
     {
         CnaResult result = Native.cna_audio_category_set_volume(NativeHandle, volume);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetVolume));
     }
 
     public void Stop(AudioStopOptions options)
     {
         CnaResult result = Native.cna_audio_category_stop(NativeHandle, (uint)options);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Stop));
     }
 
@@ -60,6 +81,7 @@ public class AudioCategory : IEquatable<AudioCategory>, IDisposable
         }
 
         CnaResult result = Native.cna_audio_category_equals(NativeHandle, other.NativeHandle, out byte equal);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Equals));
         return equal != 0;
     }
@@ -69,6 +91,7 @@ public class AudioCategory : IEquatable<AudioCategory>, IDisposable
     public override int GetHashCode()
     {
         CnaResult result = Native.cna_audio_category_get_hash_code(NativeHandle, out int hashCode);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GetHashCode));
         return hashCode;
     }

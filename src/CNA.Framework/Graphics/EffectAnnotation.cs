@@ -141,11 +141,16 @@ public class EffectAnnotation : IDisposable
         return Vector4.FromNative(value);
     }
 
-    public unsafe string GetValueString() => NativeStringReader.Read(
-        Native.cna_effect_annotation_get_value_string_byte_count,
-        Native.cna_effect_annotation_copy_value_string,
-        _handle,
-        nameof(GetValueString));
+    public unsafe string GetValueString()
+    {
+        string value = NativeStringReader.Read(
+            Native.cna_effect_annotation_get_value_string_byte_count,
+            Native.cna_effect_annotation_copy_value_string,
+            _handle,
+            nameof(GetValueString));
+        GC.KeepAlive(this);
+        return value;
+    }
 
     private CnaEffectAnnotationInfo GetInfo()
     {

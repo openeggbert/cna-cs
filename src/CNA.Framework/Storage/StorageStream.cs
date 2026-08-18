@@ -21,6 +21,15 @@ internal sealed class StorageStream : Stream
         _handle = new NativeResourceHandle(nativeHandleValue, ReleaseNative);
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     /// <summary>Closes the stream before destroying it: <c>cna_storage_stream_close</c> is what
@@ -43,6 +52,7 @@ internal sealed class StorageStream : Stream
         get
         {
             CnaResult result = Native.cna_storage_stream_get_length(NativeHandle, out long value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Length));
             return value;
         }
@@ -53,6 +63,7 @@ internal sealed class StorageStream : Stream
         get
         {
             CnaResult result = Native.cna_storage_stream_get_position(NativeHandle, out long value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Position));
             return value;
         }
@@ -74,6 +85,7 @@ internal sealed class StorageStream : Stream
         fixed (byte* bufferPtr = &buffer[offset])
         {
             CnaResult result = Native.cna_storage_stream_read(NativeHandle, bufferPtr, (ulong)count, out ulong read);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Read));
             return (int)read;
         }
@@ -94,6 +106,7 @@ internal sealed class StorageStream : Stream
         fixed (byte* bufferPtr = &buffer[offset])
         {
             CnaResult result = Native.cna_storage_stream_write(NativeHandle, bufferPtr, (ulong)count);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Write));
         }
     }
@@ -101,6 +114,7 @@ internal sealed class StorageStream : Stream
     public override long Seek(long offset, SeekOrigin origin)
     {
         CnaResult result = Native.cna_storage_stream_seek(NativeHandle, offset, (uint)origin, out long position);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Seek));
         return position;
     }
@@ -108,12 +122,14 @@ internal sealed class StorageStream : Stream
     public override void SetLength(long value)
     {
         CnaResult result = Native.cna_storage_stream_set_length(NativeHandle, value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetLength));
     }
 
     public override void Flush()
     {
         CnaResult result = Native.cna_storage_stream_flush(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Flush));
     }
 
@@ -128,6 +144,7 @@ internal sealed class StorageStream : Stream
     private bool GetFlag(GetFlagFunc getter, string propertyName)
     {
         CnaResult result = getter(NativeHandle, out byte value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return value != 0;
     }

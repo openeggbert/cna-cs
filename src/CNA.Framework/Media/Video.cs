@@ -100,8 +100,16 @@ public class Video : IDisposable
     /// <summary>The source file this video was created from. Not part of real XNA's <c>Video</c>
     /// surface, but the C API reports it and there is no other way for a caller to identify a
     /// video instance.</summary>
-    public unsafe string FileName => NativeStringReader.Read(
-        Native.cna_video_get_file_name_size, Native.cna_video_copy_file_name, NativeHandle, nameof(FileName));
+    public unsafe string FileName
+    {
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_video_get_file_name_size, Native.cna_video_copy_file_name, NativeHandle, nameof(FileName));
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     public void Dispose()
     {

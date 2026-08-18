@@ -56,6 +56,7 @@ public class AudioEngine : IDisposable
         float value = 0f;
         CnaResult result = CnaStringMarshal.WithStringView(
             name, view => Native.cna_audio_engine_get_global_variable(NativeHandle, view, out value));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GetGlobalVariable));
         return value;
     }
@@ -66,6 +67,7 @@ public class AudioEngine : IDisposable
 
         CnaResult result = CnaStringMarshal.WithStringView(
             name, view => Native.cna_audio_engine_set_global_variable(NativeHandle, view, value));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetGlobalVariable));
     }
 
@@ -76,6 +78,7 @@ public class AudioEngine : IDisposable
         CnaHandle category = default;
         CnaResult result = CnaStringMarshal.WithStringView(
             name, view => Native.cna_audio_engine_get_category(NativeHandle, view, out category));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GetCategory));
         return new AudioCategory(category.AsNint);
     }

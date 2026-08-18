@@ -306,6 +306,7 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
     private bool GetBool(GetBoolFunc getter, string propertyName)
     {
         CnaResult result = getter(_handle, out byte value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return value != 0;
     }
@@ -313,12 +314,14 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
     private void SetBool(SetBoolFunc setter, bool value, string propertyName)
     {
         CnaResult result = setter(_handle, value ? (byte)1 : (byte)0);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 
     private Vector3 GetVector3(GetVector3Func getter, string propertyName)
     {
         CnaResult result = getter(_handle, out CnaVector3 value);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
         return Vector3.FromNative(value);
     }
@@ -326,6 +329,7 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
     private void SetVector3(SetVector3Func setter, Vector3 value, string propertyName)
     {
         CnaResult result = setter(_handle, value.ToNative());
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 

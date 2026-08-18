@@ -127,6 +127,7 @@ public class ContentReader : BinaryReader
             byte* ptr = bufferPtr;
             CnaResult result = CnaStringMarshal.WithStringView(
                 readerName, view => Native.cna_content_reader_read_bytes_exact(NativeHandle, count, view, ptr, (ulong)count, out written));
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(ReadBytesExact));
         }
 

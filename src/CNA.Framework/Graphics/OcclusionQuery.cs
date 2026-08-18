@@ -28,17 +28,28 @@ public class OcclusionQuery : IDisposable
 
     public GraphicsDevice GraphicsDevice { get; }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     public void Begin()
     {
         CnaResult result = Native.cna_occlusion_query_begin(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Begin));
     }
 
     public void End()
     {
         CnaResult result = Native.cna_occlusion_query_end(NativeHandle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(End));
     }
 
@@ -47,6 +58,7 @@ public class OcclusionQuery : IDisposable
         get
         {
             CnaResult result = Native.cna_occlusion_query_get_is_complete(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsComplete));
             return value != 0;
         }
@@ -60,6 +72,7 @@ public class OcclusionQuery : IDisposable
         get
         {
             CnaResult result = Native.cna_occlusion_query_get_pixel_count(NativeHandle, out int value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(PixelCount));
             return value;
         }

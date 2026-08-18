@@ -23,6 +23,15 @@ public class SoundBank : IDisposable
         _handle = new NativeResourceHandle(soundBank.AsNint, h => Native.cna_sound_bank_destroy(new CnaHandle(h)));
     }
 
+    /// <summary>
+    /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller
+    /// pairs it with <see cref="GC.KeepAlive(object)"/> after the native call: once the handle
+    /// value has been read this object can be unreachable, and an unreachable
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> may have its critical finalizer run
+    /// <c>destroy</c> while the call is still in flight. Defeating exactly that is what
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> is for, so reading the handle
+    /// without keeping its owner alive gives the guarantee up -- see <c>plan.md</c> WP17.
+    /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
     public bool IsDisposed
@@ -30,6 +39,7 @@ public class SoundBank : IDisposable
         get
         {
             CnaResult result = Native.cna_sound_bank_get_is_disposed(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsDisposed));
             return value != 0;
         }
@@ -40,6 +50,7 @@ public class SoundBank : IDisposable
         get
         {
             CnaResult result = Native.cna_sound_bank_get_is_in_use(NativeHandle, out byte value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(IsInUse));
             return value != 0;
         }
@@ -52,6 +63,7 @@ public class SoundBank : IDisposable
         CnaHandle cue = default;
         CnaResult result = CnaStringMarshal.WithStringView(
             name, view => Native.cna_sound_bank_get_cue(NativeHandle, view, out cue));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GetCue));
         return new Cue(cue.AsNint);
     }
@@ -61,6 +73,7 @@ public class SoundBank : IDisposable
         ArgumentNullException.ThrowIfNull(name);
 
         CnaResult result = CnaStringMarshal.WithStringView(name, view => Native.cna_sound_bank_play_cue(NativeHandle, view));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(PlayCue));
     }
 
@@ -74,6 +87,7 @@ public class SoundBank : IDisposable
         CnaAudioEmitter nativeEmitter = emitter.ToNative();
         CnaResult result = CnaStringMarshal.WithStringView(
             name, view => Native.cna_sound_bank_play_cue_3d(NativeHandle, view, in nativeListener, in nativeEmitter));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(PlayCue));
     }
 

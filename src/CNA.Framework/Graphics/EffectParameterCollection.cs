@@ -83,6 +83,7 @@ public class EffectParameterCollection : IEnumerable<EffectParameter>, IDisposab
             byte found = 0;
             CnaResult result = CnaStringMarshal.WithStringView(
                 name, view => Native.cna_effect_parameter_collection_find_name(_handle, view, out found, out element));
+            GC.KeepAlive(this);
                 GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectParameterCollection));
 
