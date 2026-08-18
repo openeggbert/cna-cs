@@ -198,6 +198,7 @@ public class EffectParameter : IDisposable
 
         CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
         CnaResult result = Native.cna_effect_parameter_set_value_texture(_handle, textureType, handle);
+        GC.KeepAlive(value);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetValue));
     }

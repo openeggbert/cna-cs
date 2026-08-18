@@ -1503,17 +1503,19 @@ WP11–WP14 are the largest new subsystems and come last.
       previously called a "permanent gap" for want of an override seam —
       re-solve it, since "no seam exists" is a fixable design problem now
       that omitting it is no longer allowed; `.xnb` LZ4; runtime glTF.
-- [~] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
-      review; pre-existing, not introduced by it). Slice 1 done 2026-08-18:**
+- [x] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
+      review; pre-existing, not introduced by it) — done 2026-08-18. Slice 1:**
       every type whose handle accessor is *private* now pairs each native call
       with `GC.KeepAlive` (151 sites across 20 types, including the delegate
       helpers, `WithStringView` lambdas and expression-bodied members).
-      **Slice 2 outstanding:** the types whose accessor is `internal` and read
-      by *other* types (`Texture`, `VertexBuffer`, `IndexBuffer`, `SoundEffect`,
-      `SoundEffectInstance`, `SpriteBatch`, `Video`, `AudioEngine`,
-      `ContentReader`) — there the object to keep alive is the *argument*, not
-      `this`, so each of those ~20 call sites needs reading rather than a
-      pattern. Original note:
+      **Slice 2** covered the cross-type reads, where the object to keep alive
+      is the *argument* rather than `this`. Most turned out already safe because
+      the argument is used after the call (e.g. `TextureCollection` stores it,
+      `VideoPlayer.Play` assigns `_video`); the rest got an explicit
+      `GC.KeepAlive`. It also surfaced a defect no `KeepAlive` could express:
+      `SpriteBatch` buffers commands holding bare handles, so a texture drawn
+      and then dropped could be finalized before `End()` flushed — the batch now
+      holds the texture references itself. Original note:
       <details>**WP17 — `SafeHandle` use is unsound project-wide.** Every native-backed type
       reads its handle via `SafeHandle.DangerousGetHandle()` with no
       `DangerousAddRef`/`DangerousRelease` pair. Nothing keeps the wrapper alive

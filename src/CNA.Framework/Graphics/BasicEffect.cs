@@ -221,6 +221,7 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
         {
             CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
             CnaResult result = Native.cna_basic_effect_set_texture(_handle, handle);
+            GC.KeepAlive(value);
             CnaException.ThrowIfFailed(result, nameof(Texture));
             _texture = value;
         }

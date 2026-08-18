@@ -111,6 +111,7 @@ public abstract class Effect : IDisposable
         {
             ArgumentNullException.ThrowIfNull(value);
             CnaResult result = Native.cna_effect_set_current_technique(NativeEffectHandle, value.NativeHandle);
+            GC.KeepAlive(value);
             CnaException.ThrowIfFailed(result, nameof(CurrentTechnique));
         }
     }

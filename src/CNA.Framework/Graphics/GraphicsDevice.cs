@@ -252,6 +252,7 @@ public class GraphicsDevice
     {
         CnaHandle handle = renderTarget is null ? CnaHandle.Zero : new CnaHandle(renderTarget.NativeHandleValue);
         CnaResult result = Native.cna_graphics_device_set_render_target2d(ResolveNativeDeviceHandle(), handle);
+        GC.KeepAlive(renderTarget);
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
     }
 
@@ -265,6 +266,7 @@ public class GraphicsDevice
         CnaHandle handle = renderTarget is null ? CnaHandle.Zero : new CnaHandle(renderTarget.NativeHandleValue);
         CnaResult result = Native.cna_graphics_device_set_render_target_cube(
             ResolveNativeDeviceHandle(), handle, (uint)cubeMapFace);
+        GC.KeepAlive(renderTarget);
         CnaException.ThrowIfFailed(result, nameof(SetRenderTarget));
     }
 
@@ -272,6 +274,7 @@ public class GraphicsDevice
     {
         CnaHandle handle = vertexBuffer is null ? CnaHandle.Zero : new CnaHandle(vertexBuffer.NativeHandleValue);
         CnaResult result = Native.cna_graphics_device_set_vertex_buffer(ResolveNativeDeviceHandle(), handle);
+        GC.KeepAlive(vertexBuffer);
         CnaException.ThrowIfFailed(result, nameof(SetVertexBuffer));
     }
 
@@ -298,6 +301,10 @@ public class GraphicsDevice
         {
             CnaResult result = Native.cna_graphics_device_set_vertex_buffers(
                 ResolveNativeDeviceHandle(), nativePtr, (ulong)native.Length);
+
+            // The native array holds bare handles; vertexBuffers is what keeps the VertexBuffer
+            // objects (and so their SafeHandles) reachable across the call.
+            GC.KeepAlive(vertexBuffers);
             CnaException.ThrowIfFailed(result, nameof(SetVertexBuffers));
         }
     }
@@ -416,6 +423,7 @@ public class GraphicsDevice
         {
             CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
             CnaResult result = Native.cna_graphics_device_set_index_buffer(ResolveNativeDeviceHandle(), handle);
+        GC.KeepAlive(value);
             CnaException.ThrowIfFailed(result, nameof(Indices));
             _indices = value;
         }

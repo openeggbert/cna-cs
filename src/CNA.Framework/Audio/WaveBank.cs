@@ -18,6 +18,7 @@ public class WaveBank : IDisposable
         CnaHandle waveBank = default;
         CnaResult result = CnaStringMarshal.WithStringView(
             nonStreamingWaveBankFilename, view => Native.cna_wave_bank_create(audioEngine.NativeHandle, view, out waveBank));
+        GC.KeepAlive(audioEngine);
         CnaException.ThrowIfFailed(result, nameof(WaveBank));
 
         _handle = new NativeResourceHandle(waveBank.AsNint, Release);
@@ -34,6 +35,7 @@ public class WaveBank : IDisposable
         CnaResult result = CnaStringMarshal.WithStringView(
             streamingWaveBankFilename,
             view => Native.cna_wave_bank_create_streaming(audioEngine.NativeHandle, view, offset, packetSize, out waveBank));
+        GC.KeepAlive(audioEngine);
         CnaException.ThrowIfFailed(result, nameof(WaveBank));
 
         _handle = new NativeResourceHandle(waveBank.AsNint, Release);

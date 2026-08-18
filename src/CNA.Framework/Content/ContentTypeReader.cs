@@ -97,6 +97,7 @@ public class ContentTypeReader : IDisposable
         ArgumentNullException.ThrowIfNull(reader);
 
         CnaResult result = Native.cna_content_type_reader_read_untyped(NativeHandle, reader.NativeHandle, out byte hasValue);
+        GC.KeepAlive(reader);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(ReadUntyped));
         return hasValue != 0;

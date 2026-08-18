@@ -18,6 +18,7 @@ public class SoundBank : IDisposable
         CnaHandle soundBank = default;
         CnaResult result = CnaStringMarshal.WithStringView(
             filename, view => Native.cna_sound_bank_create(audioEngine.NativeHandle, view, out soundBank));
+        GC.KeepAlive(audioEngine);
         CnaException.ThrowIfFailed(result, nameof(SoundBank));
 
         _handle = new NativeResourceHandle(soundBank.AsNint, h => Native.cna_sound_bank_destroy(new CnaHandle(h)));

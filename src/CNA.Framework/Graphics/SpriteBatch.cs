@@ -33,6 +33,24 @@ public class SpriteBatch : IDisposable
     private readonly NativeResourceHandle _handle;
     private readonly List<SpriteFont.GlyphPlacement> _glyphPlacementBuffer = [];
     private readonly List<CnaSpriteDrawCommand> _commandBuffer = [];
+
+    /// <summary>
+    /// Every texture referenced by a buffered command, held until the batch is flushed.
+    ///
+    /// <see cref="CnaSpriteDrawCommand"/> stores only a raw handle, so between a
+    /// <c>Draw</c> and the <see cref="End"/> that flushes it nothing else keeps the managed
+    /// <see cref="Texture"/> reachable -- and an unreachable texture may have its
+    /// <see cref="System.Runtime.InteropServices.SafeHandle"/> finalizer run
+    /// <c>cna_texture2d_destroy</c> in between, leaving <see cref="End"/> to draw a destroyed
+    /// texture. Unlike the rest of WP17 this window spans a whole frame rather than a single call,
+    /// so a <see cref="GC.KeepAlive(object)"/> cannot express it; the batch has to hold the
+    /// references itself.
+    ///
+    /// Reference equality rather than the default comparer: two distinct textures must both be
+    /// held even if some future <c>Equals</c> considers them equal, and the common case (many
+    /// draws of one texture) collapses to a single entry.
+    /// </summary>
+    private readonly HashSet<Texture> _referencedTextures = new(ReferenceEqualityComparer.Instance);
     private bool _hasBegun;
 
     public SpriteBatch(GraphicsDevice graphicsDevice)
@@ -60,6 +78,7 @@ public class SpriteBatch : IDisposable
         CnaException.ThrowIfFailed(result, nameof(Begin));
 
         _commandBuffer.Clear();
+        _referencedTextures.Clear();
         _hasBegun = true;
     }
 
@@ -135,6 +154,7 @@ public class SpriteBatch : IDisposable
         (int textureWidth, int textureHeight) = Texture2D.GetTexture2DDimensions(texture.NativeHandleValue);
         Rectangle source = sourceRectangle ?? new Rectangle(0, 0, textureWidth, textureHeight);
 
+        _referencedTextures.Add(texture);
         _commandBuffer.Add(new CnaSpriteDrawCommand(
             new CnaHandle(texture.NativeHandleValue),
             position.ToNative(),
@@ -288,6 +308,7 @@ public class SpriteBatch : IDisposable
         }
 
         _commandBuffer.Clear();
+        _referencedTextures.Clear();
     }
 
     private void EnsureHasBegun(string caller)

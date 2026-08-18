@@ -73,6 +73,7 @@ public class DualTextureEffect : StockEffect, IEffectMatrices, IEffectFog
     {
         CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
         CnaResult result = Native.cna_dual_texture_effect_set_texture(Handle, layer, handle);
+        GC.KeepAlive(value);
         CnaException.ThrowIfFailed(result, propertyName);
     }
 

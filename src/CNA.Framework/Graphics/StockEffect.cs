@@ -161,6 +161,7 @@ public abstract class StockEffect : Effect
     {
         CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
         CnaResult result = setter(Handle, handle);
+        GC.KeepAlive(value);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, propertyName);
     }

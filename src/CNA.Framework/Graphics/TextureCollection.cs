@@ -57,6 +57,8 @@ public class TextureCollection
             CnaResult result = Native.cna_graphics_device_set_texture(
                 _graphicsDevice.ResolveNativeDeviceHandle(), _stage, (uint)index, handle);
             CnaException.ThrowIfFailed(result, nameof(TextureCollection));
+
+            // Also what keeps `value` reachable across the native call above -- see plan.md WP17.
             _bound[index] = value;
         }
     }

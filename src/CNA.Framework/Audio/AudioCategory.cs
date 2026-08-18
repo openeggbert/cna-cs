@@ -81,6 +81,7 @@ public class AudioCategory : IEquatable<AudioCategory>, IDisposable
         }
 
         CnaResult result = Native.cna_audio_category_equals(NativeHandle, other.NativeHandle, out byte equal);
+        GC.KeepAlive(other);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Equals));
         return equal != 0;
