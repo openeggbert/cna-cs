@@ -18,4 +18,11 @@ public class SoundEffectInstance : CNA.Audio.SoundEffectInstance
     }
 
     public new SoundState State => (SoundState)(int)base.State;
+
+    /// <summary>Inherited behaviour, re-typed only so the compat
+    /// <see cref="AudioListener"/>/<see cref="AudioEmitter"/> bind -- they subclass the CNA ones,
+    /// so this could have been inherited unchanged; it is declared for discoverability alongside
+    /// the rest of this namespace's audio surface.</summary>
+    public void Apply3D(AudioListener listener, AudioEmitter emitter) => base.Apply3D(listener, emitter);
+
 }

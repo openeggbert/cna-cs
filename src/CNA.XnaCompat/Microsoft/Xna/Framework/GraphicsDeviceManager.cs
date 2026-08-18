@@ -40,7 +40,9 @@ public class GraphicsDeviceManager : CNA.GraphicsDeviceManager, IGraphicsDeviceS
     /// <summary>The compat <see cref="IGraphicsDeviceService"/> contract, satisfied by the same
     /// object that already satisfies the CNA one -- registered into <c>Game.Services</c> by
     /// the base constructor, so a component can look up either. The events forward to the base's,
-    /// which are documented as inert until the native subscription route is bound.</summary>
+    /// which WP15 made real -- they now come from
+    /// <c>cna_graphics_device_manager_subscribe</c>, so a compat subscriber is subscribed to
+    /// native, not to a placeholder.</summary>
     Graphics.GraphicsDevice IGraphicsDeviceService.GraphicsDevice => GraphicsDevice;
 
     event EventHandler<EventArgs>? IGraphicsDeviceService.DeviceCreated
@@ -66,5 +68,4 @@ public class GraphicsDeviceManager : CNA.GraphicsDeviceManager, IGraphicsDeviceS
         add => base.DeviceResetting += value;
         remove => base.DeviceResetting -= value;
     }
-
 }

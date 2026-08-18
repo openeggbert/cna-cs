@@ -27,6 +27,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
 {
     private readonly NativeResourceHandle _handle;
 
+    /// <summary>One slot per <c>CNA_GRAPHICS_DEVICE_MANAGER_EVENT_*</c> identity, indexed by that
+    /// identity's own value -- see <see cref="EnsureSubscribed"/>. Null until first subscribed.
+    /// Sized from the enum so adding an identity cannot silently overflow it.</summary>
+    private readonly NativeEventBridge?[] _eventBridges =
+        new NativeEventBridge?[(int)CnaGraphicsDeviceManagerEvent.DeviceResetting + 1];
+
+    private bool _disposed;
+
     public GraphicsDeviceManager(Game game)
     {
         ArgumentNullException.ThrowIfNull(game);
@@ -240,32 +248,110 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
     /// (<c>BlendState</c>, <c>Indices</c>, the sampler/texture collections) could disagree.</summary>
     public GraphicsDevice GraphicsDevice => Game.GraphicsDevice;
 
-    // CS0067 ("event is never used") is expected and correct here: these four are deliberately
-    // inert until the native subscription route is bound. Suppressed with a pragma rather than
-    // silenced by a never-called raiser method, so the compiler keeps telling the truth about them
-    // and the reason lives next to the suppression.
-#pragma warning disable CS0067
+    /// <summary>
+    /// Raised after the device is created -- and genuinely raised, by native. WP15 replaced the
+    /// four inert placeholder events with real subscriptions over
+    /// <c>cna_graphics_device_manager_subscribe</c>, whose event identities
+    /// (<c>CNA_GRAPHICS_DEVICE_MANAGER_EVENT_*</c>, <c>runtime_graphics_manager.h:65-73</c>) map
+    /// one-to-one onto XNA's four <c>IGraphicsDeviceService</c> events.
+    ///
+    /// The native subscription is taken on the first <c>+=</c> and kept until
+    /// <see cref="Dispose()"/>, not dropped again on the last <c>-=</c>. Native registration is not
+    /// free, and a game that subscribes and unsubscribes per screen would otherwise churn a native
+    /// registration every transition; holding it costs one idle callback that finds a null
+    /// invocation list.
+    /// </summary>
+    public event EventHandler<EventArgs>? DeviceCreated
+    {
+        add { EnsureSubscribed(CnaGraphicsDeviceManagerEvent.DeviceCreated); _deviceCreated += value; }
+        remove => _deviceCreated -= value;
+    }
 
-    /// <summary>Raised after the device is created. Never fires today: device creation happens
-    /// inside native <c>cna_graphics_device_manager_create_device</c>, and the C API's own
-    /// subscription route (<c>cna_graphics_device_manager_subscribe</c>) is not bound yet -- see
-    /// <c>plan.md</c> WP15. The events exist so the <see cref="IGraphicsDeviceService"/> contract
-    /// is real and XNA source that subscribes compiles; they are documented as inert rather than
-    /// omitted.</summary>
-    public event EventHandler<EventArgs>? DeviceCreated;
+    /// <summary>Raised before the device is disposed. See <see cref="DeviceCreated"/> for how the
+    /// native subscription is managed.</summary>
+    public event EventHandler<EventArgs>? DeviceDisposing
+    {
+        add { EnsureSubscribed(CnaGraphicsDeviceManagerEvent.DeviceDisposing); _deviceDisposing += value; }
+        remove => _deviceDisposing -= value;
+    }
 
-    public event EventHandler<EventArgs>? DeviceDisposing;
+    /// <summary>Raised after the device finishes resetting. See <see cref="DeviceCreated"/> for how
+    /// the native subscription is managed.</summary>
+    public event EventHandler<EventArgs>? DeviceReset
+    {
+        add { EnsureSubscribed(CnaGraphicsDeviceManagerEvent.DeviceReset); _deviceReset += value; }
+        remove => _deviceReset -= value;
+    }
 
-    public event EventHandler<EventArgs>? DeviceReset;
+    /// <summary>Raised before the device resets. See <see cref="DeviceCreated"/> for how the native
+    /// subscription is managed.</summary>
+    public event EventHandler<EventArgs>? DeviceResetting
+    {
+        add { EnsureSubscribed(CnaGraphicsDeviceManagerEvent.DeviceResetting); _deviceResetting += value; }
+        remove => _deviceResetting -= value;
+    }
 
-    public event EventHandler<EventArgs>? DeviceResetting;
+    private EventHandler<EventArgs>? _deviceCreated;
+    private EventHandler<EventArgs>? _deviceDisposing;
+    private EventHandler<EventArgs>? _deviceReset;
+    private EventHandler<EventArgs>? _deviceResetting;
 
-#pragma warning restore CS0067
+    /// <summary>Subscribes to <paramref name="which"/> exactly once. Indexed by the native event
+    /// identity so the array position and the value handed to native cannot drift apart.</summary>
+    private void EnsureSubscribed(CnaGraphicsDeviceManagerEvent which)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        int index = (int)which;
+        if (_eventBridges[index] is not null)
+        {
+            return;
+        }
+
+        _eventBridges[index] = NativeEventBridge.Subscribe(
+            () => Raise(which),
+            (callback, context) =>
+            {
+                CnaResult result = Native.cna_graphics_device_manager_subscribe(
+                    NativeHandle, (uint)which, callback, context, out CnaHandle registration);
+                GC.KeepAlive(this);
+                CnaException.ThrowIfFailed(result, nameof(EnsureSubscribed));
+                return registration;
+            },
+            registration => Native.cna_game_unsubscribe(registration));
+    }
+
+    private void Raise(CnaGraphicsDeviceManagerEvent which)
+    {
+        EventHandler<EventArgs>? handler = which switch
+        {
+            CnaGraphicsDeviceManagerEvent.DeviceCreated => _deviceCreated,
+            CnaGraphicsDeviceManagerEvent.DeviceDisposing => _deviceDisposing,
+            CnaGraphicsDeviceManagerEvent.DeviceReset => _deviceReset,
+            CnaGraphicsDeviceManagerEvent.DeviceResetting => _deviceResetting,
+            _ => null,
+        };
+
+        handler?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Rethrows the first exception any event handler threw. These callbacks return
+    /// <c>void</c> to native, so an exception cannot be reported where it happens without unwinding
+    /// into native code; <see cref="NativeEventBridge"/> captures it and this surfaces it at the
+    /// next managed-initiated call, the same bargain <see cref="GameComponent"/> makes.</summary>
+    private void ThrowPendingCallbackException()
+    {
+        foreach (NativeEventBridge? bridge in _eventBridges)
+        {
+            bridge?.ThrowPendingException();
+        }
+    }
 
     /// <summary>Matches <c>IGraphicsDeviceManager.BeginDraw</c>: <see langword="false"/> tells the
     /// game to skip this frame's drawing.</summary>
     public bool BeginDraw()
     {
+        ThrowPendingCallbackException();
         CnaResult result = Native.cna_graphics_device_manager_begin_draw(NativeHandle, out byte shouldDraw);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(BeginDraw));
@@ -281,6 +367,7 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
 
     public void EndDraw()
     {
+        ThrowPendingCallbackException();
         CnaResult result = Native.cna_graphics_device_manager_end_draw(NativeHandle);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(EndDraw));
@@ -292,5 +379,47 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
         GC.SuppressFinalize(this);
     }
 
-    protected virtual void Dispose(bool disposing) => _handle.Dispose();
+    /// <summary>Unsubscribes every native event before releasing the manager. Order matters: a
+    /// live registration outliving this object would leave native calling into a freed
+    /// <see cref="System.Runtime.InteropServices.GCHandle"/> context. Any handler failure captured
+    /// but never surfaced is rethrown last, so a game that subscribed and then only ever ran the
+    /// frame loop still hears about it rather than losing it silently.</summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        Exception? pending = null;
+        for (int i = 0; i < _eventBridges.Length; i++)
+        {
+            NativeEventBridge? bridge = _eventBridges[i];
+            _eventBridges[i] = null;
+            if (bridge is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                bridge.ThrowPendingException();
+            }
+            catch (Exception ex)
+            {
+                pending ??= ex;
+            }
+
+            bridge.Dispose();
+        }
+
+        _handle.Dispose();
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
+    }
 }

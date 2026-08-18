@@ -840,12 +840,26 @@ internal static partial class Native
     internal static partial CnaResult cna_microphone_get_sample_size_in_bytes_at(
         CnaHandle game, ulong index, long durationTicks, out int outBytes);
 
+    /// <summary>Matches <c>cna_sound_effect_instance_apply_3d</c> exactly
+    /// (<c>audio.h:1189</c>) -- positional audio on an *instance*, which is why
+    /// <c>SoundEffect.Apply3D</c> creates one rather than being a fire-and-forget call.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sound_effect_instance_apply_3d(
+        CnaHandle instance, in CnaAudioListener listener, in CnaAudioEmitter emitter);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_dynamic_sound_effect_instance_create(
         CnaHandle game, int sampleRate, uint channels, out CnaHandle outInstance);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_dynamic_sound_effect_instance_get_pending_buffer_count(CnaHandle instance, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_dynamic_sound_effect_instance_subscribe_buffer_needed(
+        CnaHandle instance, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_unsubscribe_ext(CnaHandle registration);
 
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_dynamic_sound_effect_instance_submit_buffer(
@@ -1661,6 +1675,20 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_destroy(CnaHandle manager);
+
+    /// <summary>Matches <c>cna_graphics_device_manager_subscribe</c>
+    /// (<c>runtime_graphics_manager.h:518</c>). <paramref name="callback"/> is a
+    /// <c>CNA_GameEventCallback</c>, i.e. <c>void(void*)</c> -- declared as <see cref="nint"/>
+    /// rather than as a function-pointer type so no call site needs an <c>unsafe</c> context; the
+    /// one place that produces the pointer (<c>CNA.NativeEventBridge</c>) is already unsafe, and
+    /// nothing else has any business synthesising one. The same consequence applies as for the
+    /// game-component table: nothing may unwind out of that callback.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_subscribe(
+        CnaHandle manager, uint eventId, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_unsubscribe(CnaHandle registration);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_apply_changes(CnaHandle manager);

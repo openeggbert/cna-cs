@@ -142,7 +142,30 @@ public class SoundEffectInstance : IDisposable
 
     public void Dispose()
     {
-        _handle.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>The overridable half of disposal. Added in WP15 for
+    /// <see cref="DynamicSoundEffectInstance"/>, which holds a native event subscription that must
+    /// be released *before* the instance handle it is registered against.</summary>
+    protected virtual void Dispose(bool disposing) => _handle.Dispose();
+
+    /// <summary>Matches real XNA's <c>Apply3D</c>: positions this instance in 3D relative to a
+    /// listener. Applies to the *instance*, not the effect -- which is why
+    /// <c>SoundEffect.Play</c>-style fire-and-forget playback has no 3D
+    /// form and <c>SoundEffect.Apply3D</c> goes through
+    /// <see cref="SoundEffect.CreateInstance"/>.</summary>
+    public void Apply3D(AudioListener listener, AudioEmitter emitter)
+    {
+        ArgumentNullException.ThrowIfNull(listener);
+        ArgumentNullException.ThrowIfNull(emitter);
+
+        CnaAudioListener nativeListener = listener.ToNative();
+        CnaAudioEmitter nativeEmitter = emitter.ToNative();
+        CnaResult result = Native.cna_sound_effect_instance_apply_3d(
+            new CnaHandle(NativeHandleValue), in nativeListener, in nativeEmitter);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(Apply3D));
     }
 }
