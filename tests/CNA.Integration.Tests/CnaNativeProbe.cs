@@ -61,4 +61,18 @@ public sealed class NativeFactAttribute : FactAttribute
             Skip = reason;
         }
     }
+
+    /// <summary>
+    /// Setting <see cref="FactAttribute.Skip"/> directly on the attribute skips the test even when
+    /// the library <em>is</em> present -- for a test that asserts correct behaviour which a known
+    /// upstream defect currently prevents.
+    ///
+    /// Explicit rather than incidental: the alternative is rewriting such a test to assert the
+    /// broken behaviour, which makes it pass forever and stops it being a question. A skip carries
+    /// its reason into every run, and deleting the reason is the verification.
+    /// </summary>
+    public NativeFactAttribute(string skipReason)
+    {
+        Skip = CnaNativeProbe.SkipReason ?? skipReason;
+    }
 }
