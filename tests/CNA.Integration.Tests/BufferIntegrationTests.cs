@@ -21,7 +21,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     private static VertexPositionColor Vertex(float x) =>
         new(new Vector3(x, x, x), new Color((int)x, 0, 0, 255));
 
-    [NativeFact]
+    [Native3DFact]
     public void VertexBuffer_SetThenGetData_RoundTrips()
     {
         fixture.InsideAFrameWithDevice(device =>
@@ -49,7 +49,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     /// offset with the caller-array offset would still write plausible data and still round-trip
     /// the element it was asked about -- it would just also flatten a neighbour.
     /// </summary>
-    [NativeFact]
+    [Native3DFact]
     public void VertexBuffer_SetData_WithNonzeroOffset_RewritesOnlyThatWindow()
     {
         fixture.InsideAFrameWithDevice(device =>
@@ -79,7 +79,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
 
     /// <summary>Raw readback of a layout the built-in <c>CNA_VertexType</c> set does not name. This
     /// threw as "the C API has no raw-bytes vertex readback" after the route existed.</summary>
-    [NativeFact]
+    [Native3DFact]
     public void VertexBuffer_GetData_ReadsBackACustomLayout()
     {
         fixture.InsideAFrameWithDevice(device =>
@@ -100,7 +100,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         });
     }
 
-    [NativeFact]
+    [Native3DFact]
     public void IndexBuffer_SetData_WithNonzeroOffset_RewritesOnlyThatWindow()
     {
         fixture.InsideAFrameWithDevice(device =>

@@ -22,6 +22,60 @@ public static class CnaNativeProbe
     /// <summary>The ABI version the loaded library reports, for tests that want to log it.</summary>
     public static uint NativeVersion { get; private set; }
 
+    private static readonly Lazy<(bool ThreeD, string Renderer)> Renderer = new(DetectRenderer);
+
+    /// <summary>
+    /// Whether the loaded renderer can do 3D, and what it calls itself.
+    ///
+    /// Measured by briefly creating a game and asking, because <c>cna_graphics_device_supports_capability</c>
+    /// needs a device and a device needs a live game. The game is created with nothing in it and
+    /// disposed immediately, so it cannot leave a child resource behind and block the slot.
+    ///
+    /// Needed because "the renderer cannot do this" and "the binding is broken" are different
+    /// results and were being reported identically: on SDL_RENDERER, which is 2D-only by design,
+    /// the vertex- and index-buffer tests failed with NotSupported. A failure there measures the
+    /// renderer, not the binding.
+    /// </summary>
+    public static bool SupportsThreeD => Renderer.Value.ThreeD;
+
+    public static string RendererName => Renderer.Value.Renderer;
+
+    private static (bool, string) DetectRenderer()
+    {
+        if (SkipReason is not null)
+        {
+            return (false, "none");
+        }
+
+        try
+        {
+            using var probe = new ProbeGame();
+            probe.RunOneFrame();
+            return (probe.ThreeD, probe.Renderer);
+        }
+        catch (Exception)
+        {
+            // Unknown rather than assumed: claiming 3D here would turn a probe failure into a wall
+            // of confusing test failures, and claiming no 3D would silently skip real coverage.
+            return (false, "unknown");
+        }
+    }
+
+    private sealed class ProbeGame : CNA.Game
+    {
+        public bool ThreeD { get; private set; }
+
+        public string Renderer { get; private set; } = "unknown";
+
+        protected override void Update(CNA.GameTime gameTime)
+        {
+            ThreeD = GraphicsDevice.SupportsCapability(CNA.Graphics.GraphicsCapability.ThreeD);
+            Renderer = GraphicsDevice.RendererName;
+            Exit();
+            base.Update(gameTime);
+        }
+    }
+
     private static string? Detect()
     {
         try
@@ -74,5 +128,29 @@ public sealed class NativeFactAttribute : FactAttribute
     public NativeFactAttribute(string skipReason)
     {
         Skip = CnaNativeProbe.SkipReason ?? skipReason;
+    }
+}
+
+/// <summary>
+/// A <see cref="NativeFactAttribute"/> that additionally skips on a renderer with no 3D pipeline.
+///
+/// For tests whose subject genuinely needs one -- a vertex or index buffer cannot even be created
+/// on SDL_RENDERER. Without this they failed there with <c>NotSupported</c>, which reads as a
+/// broken binding and is nothing of the sort: that renderer is 2D-only by design and behaving
+/// exactly as documented. "The renderer cannot" and "the binding is broken" are different results
+/// and were being reported identically.
+/// </summary>
+public sealed class Native3DFactAttribute : FactAttribute
+{
+    public Native3DFactAttribute()
+    {
+        if (CnaNativeProbe.SkipReason is { } reason)
+        {
+            Skip = reason;
+        }
+        else if (!CnaNativeProbe.SupportsThreeD)
+        {
+            Skip = $"Renderer '{CnaNativeProbe.RendererName}' has no 3D pipeline, and this test needs one.";
+        }
     }
 }
