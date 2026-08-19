@@ -95,8 +95,8 @@ blockers. Not the same claim, and the difference matters:
 | Blocker | Effect on a ported game |
 | --- | --- |
 | ~~`cna_effect_create_compiled` → `NOT_SUPPORTED`~~ | **False, and now closed.** The route works; the claim came from a stale header sentence. `Effect(GraphicsDevice, byte[])` and `Load<Effect>` are both bound and exercised by integration tests. |
-| ~~No content-reader registration route~~ | Upstream added `cna_content_type_reader_manager_register`/`_unregister` and `cna_content_manager_load_foreign_ext`. Not yet bound here. |
-| Buffer transfers start at element zero | Nonzero `offsetInBytes` throws — breaks the "update one slice of a big dynamic buffer" pattern particle systems rely on. |
+| ~~No content-reader registration route~~ | **Closed.** `cna_content_type_reader_manager_register`/`_unregister` plus `LoadForeign<T>`, bound and tested. |
+| ~~Buffer transfers start at element zero~~ | **False, and now closed.** `cna_vertex_buffer_set_data_raw_at` and `cna_index_buffer_set_data_at` take a buffer-side offset. The one real caveat is about cost, not result: the renderer replaces whole-buffer contents, so the window is composed CPU-side and the whole buffer is re-uploaded. Bytes land where XNA puts them; the transfer is not smaller. |
 | `PreparingDeviceSettings` cannot write back | MSAA / back-buffer format / adapter chosen before device creation is ignored. |
 | ~~Nothing has ever been executed~~ | **Done.** `tests/CNA.Integration.Tests`, 13 tests against the real library. |
 
@@ -143,6 +143,8 @@ list is where the current truth lives:
 | `GameComponentCollection`: "native owns the list and does not report modifications" | `cna_game_components_subscribe_added`/`_removed` exist. The snapshot enumerator is still right, for a different reason. |
 | `Effect`: "custom user-authored `.fx` shader loading is still not implemented"; recorded as the single largest functional blocker | `cna_effect_create_compiled` works. Fed malformed bytes it answers `InvalidArgument: ... does not contain a structurally valid XNA Direct3D 9 Effect Framework header` -- a live parser, not a stub. The claim traced to a header sentence ("NOT_SUPPORTED while native CNA bytecode loading is unavailable") that had outlived its implementation. `Effect` is now concrete with a real `Effect(GraphicsDevice, byte[])`, as in XNA. |
 | `Texture2D.GetData`: "no route to verify that an arbitrary element type matches that format ... needs a format-and-element-size query upstream" | `cna_texture_validate_get_data_format(format, element_size)` is exactly that query, and sits in the same header ~100 lines from the read it was guarding. Implemented; the round trip is covered by an integration test. |
+| `VertexBuffer`/`IndexBuffer` `SetData` with a nonzero `offsetInBytes`: "not supported by the real cna C API ... has no native-buffer offset parameter at all" | `cna_vertex_buffer_set_data_raw_at` and `cna_index_buffer_set_data_at` take a byte offset into **the buffer**, which is exactly what XNA's `offsetInBytes` means. Both implemented and covered by round-trip tests that check neighbouring elements are untouched. |
+| `VertexBuffer.GetData<T>`: "the C API has no raw-bytes vertex readback, only a typed one over its built-in layouts" | `cna_vertex_buffer_get_data_raw` exists, and its own header doc says it was added because that asymmetry "had no reason behind it". Any custom layout, nonzero offset or custom stride now routes through it. |
 | `ContentManager.Load<Effect>` fell through to "Unsupported content type" | `cna_content_manager_load_effect` exists and reads all three shapes (compiled `.xnb`, `.cnj` naming a stock effect, `.cnj` carrying shader source). Bound; a missing asset now fails as `Io`, not as an unsupported type. |
 
 Genuinely confirmed absent, re-checked in the same pass: managed content-reader

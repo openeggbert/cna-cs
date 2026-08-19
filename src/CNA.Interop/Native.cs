@@ -2720,6 +2720,58 @@ internal static partial class Native
         ulong vertexCount,
         uint vertexStride);
 
+    /// <summary>
+    /// <c>vertex_resources.h</c>. Uploads into a window of the buffer, leaving the rest alone.
+    ///
+    /// <c>bufferOffsetInBytes</c> indexes <b>the buffer</b>, which is what XNA's
+    /// <c>offsetInBytes</c> means -- every other transfer route here offsets the caller's array.
+    /// This is the route the "buffer transfers always start at element zero" gap asked for; the
+    /// throw it replaces was written before it existed.
+    ///
+    /// The header is candid that the deviation is about cost, not result: the renderer contract
+    /// underneath replaces whole-buffer contents, so the window is composed CPU-side and the whole
+    /// buffer is re-uploaded. Bytes land exactly where XNA puts them; the transfer is not smaller.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertex_buffer_set_data_raw_at(
+        CnaHandle vertexBuffer,
+        ulong bufferOffsetInBytes,
+        void* data,
+        ulong dataByteCount,
+        ulong vertexCount,
+        uint vertexStride);
+
+    /// <summary>
+    /// <c>vertex_resources.h</c>. Raw readback from a window of the buffer.
+    ///
+    /// The header states its own reason: typed readback covers only the built-in
+    /// <c>CNA_VertexType</c> layouts, so a buffer written with a custom layout through the raw
+    /// route could never be read back, and "that asymmetry had no reason behind it". This binding
+    /// reported that asymmetry as a gap and then kept a throw saying the ABI "has no raw-bytes
+    /// vertex readback" after it was closed.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertex_buffer_get_data_raw(
+        CnaHandle vertexBuffer,
+        ulong bufferOffsetInBytes,
+        void* destination,
+        ulong destinationByteCount,
+        ulong vertexCount,
+        uint vertexStride);
+
+    /// <summary>
+    /// <c>index_resources.h</c>. The <c>offsetInBytes</c> overload beside
+    /// <c>cna_index_buffer_set_data</c>. <c>transfer.start_index</c> still indexes the caller's
+    /// array, as everywhere else; only <c>bufferOffsetInBytes</c> indexes the buffer.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_index_buffer_set_data_at(
+        CnaHandle indexBuffer,
+        ulong bufferOffsetInBytes,
+        CnaIndexBufferTransfer* transfer,
+        void* data,
+        ulong capacity);
+
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_index_buffer_create(
         CnaHandle graphicsDevice,

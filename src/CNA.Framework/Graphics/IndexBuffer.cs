@@ -123,14 +123,6 @@ public class IndexBuffer : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
 
-        if (offsetInBytes != 0)
-        {
-            throw new NotSupportedException(
-                $"{nameof(IndexBuffer)}.{nameof(SetData)} with a nonzero {nameof(offsetInBytes)} is not supported by the real " +
-                "cna C API -- cna_index_buffer_set_data has no native-buffer offset parameter at all and always writes " +
-                "starting at native index zero.");
-        }
-
         var transfer = new CnaIndexBufferTransfer
         {
             IndexElementSize = IndexElementSizeForType<T>(),
@@ -141,8 +133,28 @@ public class IndexBuffer : IDisposable
 
         fixed (T* basePtr = data)
         {
-            CnaResult result = Native.cna_index_buffer_set_data(
-                new CnaHandle(NativeHandleValue), in transfer, (byte*)basePtr, (ulong)elementCount);
+            // A nonzero offsetInBytes threw here until cna_index_buffer_set_data_at landed. The
+            // plain route replaces the buffer's whole contents -- which is what XNA's
+            // SetData(T[], int, int) does -- so the two are different calls, not one with a default.
+            //
+            // Note what stays the same across both: transfer.StartIndex indexes the *caller's*
+            // array, as everywhere else in this ABI. Only offsetInBytes indexes the buffer. Getting
+            // those two confused is how a slice update silently writes the wrong region.
+            CnaResult result;
+            if (offsetInBytes == 0)
+            {
+                result = Native.cna_index_buffer_set_data(
+                    new CnaHandle(NativeHandleValue), in transfer, (byte*)basePtr, (ulong)elementCount);
+            }
+            else
+            {
+                CnaIndexBufferTransfer windowed = transfer;
+                result = Native.cna_index_buffer_set_data_at(
+                    new CnaHandle(NativeHandleValue), (ulong)offsetInBytes, &windowed,
+                    basePtr, (ulong)elementCount);
+            }
+
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SetData));
         }
     }

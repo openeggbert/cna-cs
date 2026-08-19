@@ -105,19 +105,22 @@ public class VertexBuffer : IDisposable
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
 
-        if (offsetInBytes != 0)
-        {
-            throw new NotSupportedException(
-                $"{nameof(VertexBuffer)}.{nameof(SetData)} with a nonzero {nameof(offsetInBytes)} is not supported by the real " +
-                "cna C API -- cna_vertex_buffer_set_data_raw has no offset parameter at all and always uploads starting at " +
-                "native vertex zero.");
-        }
-
         fixed (T* basePtr = data)
         {
             byte* bytePtr = (byte*)(basePtr + startIndex);
-            CnaResult result = Native.cna_vertex_buffer_set_data_raw(
-                new CnaHandle(NativeHandleValue), bytePtr, (ulong)((long)elementCount * sizeof(T)), (ulong)elementCount, (uint)vertexStride);
+            ulong byteCount = (ulong)((long)elementCount * sizeof(T));
+
+            // A nonzero offsetInBytes threw here until cna_vertex_buffer_set_data_raw_at landed.
+            // The plain _raw route has no buffer offset and always starts at native vertex zero, so
+            // the two are genuinely different calls rather than one with a defaulted argument.
+            CnaResult result = offsetInBytes == 0
+                ? Native.cna_vertex_buffer_set_data_raw(
+                    new CnaHandle(NativeHandleValue), bytePtr, byteCount, (ulong)elementCount, (uint)vertexStride)
+                : Native.cna_vertex_buffer_set_data_raw_at(
+                    new CnaHandle(NativeHandleValue), (ulong)offsetInBytes, bytePtr, byteCount,
+                    (ulong)elementCount, (uint)vertexStride);
+
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SetData));
         }
     }
@@ -134,9 +137,17 @@ public class VertexBuffer : IDisposable
     /// <summary>
     /// Reads vertices back into <paramref name="data"/>.
     ///
-    /// <paramref name="offsetInBytes"/> must be zero and <paramref name="vertexStride"/> must match
-    /// the declaration's own: the ABI reads from native vertex zero at the type's natural stride,
-    /// and quietly ignoring either argument would return the wrong vertices rather than failing.
+    /// Two routes, chosen by <typeparamref name="T"/>. A built-in <c>CNA_VertexType</c> layout
+    /// reads through the typed route; anything else reads through
+    /// <c>cna_vertex_buffer_get_data_raw</c>, which takes a buffer-side byte offset and an explicit
+    /// stride.
+    ///
+    /// Both used to throw -- one because "the C API's typed readback always begins at native vertex
+    /// zero", the other because "the C API has no raw-bytes vertex readback". The first is still
+    /// true of the typed route and is why the raw route is used whenever an offset or a custom
+    /// stride is asked for; the second stopped being true, and the header says why it was closed:
+    /// a buffer written through the raw route could never be read back, and "that asymmetry had no
+    /// reason behind it".
     /// </summary>
     public unsafe void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride)
         where T : unmanaged
@@ -146,20 +157,30 @@ public class VertexBuffer : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
 
-        if (offsetInBytes != 0)
-        {
-            throw new NotSupportedException(
-                $"{nameof(VertexBuffer)}.{nameof(GetData)} cannot start at a nonzero offsetInBytes -- the C API's " +
-                "typed readback always begins at native vertex zero (its own start_index selects the caller's array " +
-                "window instead).");
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
 
-        if (vertexStride != VertexDeclaration.VertexStride)
+        // The typed route reads whole vertices of a built-in type from native vertex zero, with no
+        // stride override -- so anything that needs an offset, a different stride, or a layout the
+        // built-in set does not name goes through the raw route instead.
+        if (offsetInBytes != 0 || vertexStride != VertexDeclaration.VertexStride || !HasBuiltInVertexType<T>())
         {
-            throw new NotSupportedException(
-                $"{nameof(VertexBuffer)}.{nameof(GetData)} cannot read at a vertexStride ({vertexStride}) other than " +
-                $"the buffer's own ({VertexDeclaration.VertexStride}) -- the C API reads whole vertices of a built-in " +
-                "type, with no stride override.");
+            fixed (T* basePtr = data)
+            {
+                byte* destination = (byte*)(basePtr + startIndex);
+                CnaResult rawResult = Native.cna_vertex_buffer_get_data_raw(
+                    new CnaHandle(NativeHandleValue),
+                    (ulong)offsetInBytes,
+                    destination,
+                    (ulong)((long)elementCount * sizeof(T)),
+                    (ulong)elementCount,
+                    (uint)vertexStride);
+
+                GC.KeepAlive(this);
+                CnaException.ThrowIfFailed(rawResult, nameof(GetData));
+            }
+
+            return;
         }
 
         CnaVertexType vertexType = VertexTypeFor<T>();
@@ -184,6 +205,15 @@ public class VertexBuffer : IDisposable
     /// needs. Only the four built-in layouts that are also real XNA vertex types are reachable --
     /// the other three <c>CNA_VertexType</c> values (tangent and skinned variants) are CNAEXT and
     /// have no XNA counterpart to name here.</summary>
+    /// <summary>Whether the typed readback route can name <typeparamref name="T"/>. The raw route
+    /// handles everything else, so this decides which call runs rather than whether the read is
+    /// possible at all.</summary>
+    private static bool HasBuiltInVertexType<T>() where T : unmanaged =>
+        typeof(T) == typeof(VertexPositionColor)
+        || typeof(T) == typeof(VertexPositionColorTexture)
+        || typeof(T) == typeof(VertexPositionNormalTexture)
+        || typeof(T) == typeof(VertexPositionTexture);
+
     private static CnaVertexType VertexTypeFor<T>() where T : unmanaged
     {
         if (typeof(T) == typeof(VertexPositionColor))
@@ -206,10 +236,12 @@ public class VertexBuffer : IDisposable
             return CnaVertexType.PositionTexture;
         }
 
+        // Unreachable from GetData, which routes a non-built-in type to the raw readback before
+        // asking for a tag. Kept as a guard for any future caller of the typed route.
         throw new NotSupportedException(
-            $"{nameof(VertexBuffer)}.{nameof(GetData)}<{typeof(T).Name}> is not supported -- the C API has no " +
-            "raw-bytes vertex readback, only a typed one over its built-in layouts, so only VertexPositionColor, " +
-            "VertexPositionColorTexture, VertexPositionNormalTexture and VertexPositionTexture can be read back.");
+            $"{typeof(T).Name} is not one of the built-in CNA_VertexType layouts, so the typed transfer " +
+            "route cannot name it. Read it through the raw route instead (any nonzero offsetInBytes or " +
+            "custom vertexStride already selects that).");
     }
 
     public void Dispose()
