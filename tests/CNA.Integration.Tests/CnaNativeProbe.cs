@@ -22,7 +22,8 @@ public static class CnaNativeProbe
     /// <summary>The ABI version the loaded library reports, for tests that want to log it.</summary>
     public static uint NativeVersion { get; private set; }
 
-    private static readonly Lazy<(bool ThreeD, string Renderer)> Renderer = new(DetectRenderer);
+    private static readonly Lazy<(IReadOnlySet<CNA.Graphics.GraphicsCapability> Capabilities, string Renderer)> Renderer =
+        new(DetectRenderer);
 
     /// <summary>
     /// Whether the loaded renderer can do 3D, and what it calls itself.
@@ -36,40 +37,55 @@ public static class CnaNativeProbe
     /// the vertex- and index-buffer tests failed with NotSupported. A failure there measures the
     /// renderer, not the binding.
     /// </summary>
-    public static bool SupportsThreeD => Renderer.Value.ThreeD;
+    /// <summary>Whether the loaded renderer reports <paramref name="capability"/>.</summary>
+    public static bool Supports(CNA.Graphics.GraphicsCapability capability) =>
+        Renderer.Value.Capabilities.Contains(capability);
 
     public static string RendererName => Renderer.Value.Renderer;
 
-    private static (bool, string) DetectRenderer()
+    private static (IReadOnlySet<CNA.Graphics.GraphicsCapability>, string) DetectRenderer()
     {
+        var none = new HashSet<CNA.Graphics.GraphicsCapability>();
+
         if (SkipReason is not null)
         {
-            return (false, "none");
+            return (none, "none");
         }
 
         try
         {
             using var probe = new ProbeGame();
             probe.RunOneFrame();
-            return (probe.ThreeD, probe.Renderer);
+            return (probe.Capabilities, probe.Renderer);
         }
         catch (Exception)
         {
-            // Unknown rather than assumed: claiming 3D here would turn a probe failure into a wall
-            // of confusing test failures, and claiming no 3D would silently skip real coverage.
-            return (false, "unknown");
+            // Reports nothing supported rather than assuming either way. Claiming support would
+            // turn a probe failure into a wall of confusing test failures; the opposite silently
+            // drops real coverage -- but a skip says so out loud, and a wrong pass does not.
+            return (none, "unknown");
         }
     }
 
     private sealed class ProbeGame : CNA.Game
     {
-        public bool ThreeD { get; private set; }
+        /// <summary>Every capability, asked once. The probe game exists anyway, so asking for one
+        /// and asking for all fourteen cost the same and the second is what lets a test name the
+        /// capability it actually needs.</summary>
+        public HashSet<CNA.Graphics.GraphicsCapability> Capabilities { get; } = [];
 
         public string Renderer { get; private set; } = "unknown";
 
         protected override void Update(CNA.GameTime gameTime)
         {
-            ThreeD = GraphicsDevice.SupportsCapability(CNA.Graphics.GraphicsCapability.ThreeD);
+            foreach (CNA.Graphics.GraphicsCapability capability in Enum.GetValues<CNA.Graphics.GraphicsCapability>())
+            {
+                if (GraphicsDevice.SupportsCapability(capability))
+                {
+                    Capabilities.Add(capability);
+                }
+            }
+
             Renderer = GraphicsDevice.RendererName;
             Exit();
             base.Update(gameTime);
@@ -140,17 +156,28 @@ public sealed class NativeFactAttribute : FactAttribute
 /// exactly as documented. "The renderer cannot" and "the binding is broken" are different results
 /// and were being reported identically.
 /// </summary>
-public sealed class Native3DFactAttribute : FactAttribute
+public sealed class Native3DFactAttribute() : NativeFactRequiringAttribute(CNA.Graphics.GraphicsCapability.ThreeD);
+
+/// <summary>
+/// A <see cref="NativeFactAttribute"/> that additionally skips unless the loaded renderer reports a
+/// named capability.
+///
+/// General rather than one attribute per capability, because the list keeps growing as tests reach
+/// further: SDL_RENDERER has no 3D pipeline, and SOFTWARE has 3D but no volume-texture storage. A
+/// test that names the capability it needs skips with a reason that says which renderer lacked it,
+/// instead of failing with a NotSupported that reads like a broken binding.
+/// </summary>
+public class NativeFactRequiringAttribute : FactAttribute
 {
-    public Native3DFactAttribute()
+    public NativeFactRequiringAttribute(CNA.Graphics.GraphicsCapability capability)
     {
         if (CnaNativeProbe.SkipReason is { } reason)
         {
             Skip = reason;
         }
-        else if (!CnaNativeProbe.SupportsThreeD)
+        else if (!CnaNativeProbe.Supports(capability))
         {
-            Skip = $"Renderer '{CnaNativeProbe.RendererName}' has no 3D pipeline, and this test needs one.";
+            Skip = $"Renderer '{CnaNativeProbe.RendererName}' does not report {capability}, and this test needs it.";
         }
     }
 }
