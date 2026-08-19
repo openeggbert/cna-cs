@@ -807,6 +807,45 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_content_type_reader_manager_get_is_registered(CnaStringView canonicalName, out byte outIsRegistered);
 
+    /// <summary>
+    /// <c>content_readers.h:464</c>. The registry's extension point for a type CNA does not know.
+    ///
+    /// Refusing a duplicate is a deliberate deviation from the canonical <c>AddTypeCreator</c>,
+    /// which silently ignores a repeat: a caller who registered a name someone else already owned
+    /// would otherwise hold a live handle whose factory is never called, and would find out only
+    /// from assets deserializing into the wrong type.
+    ///
+    /// The registry is process-wide, so a registration outlives any one game.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_content_type_reader_manager_register(
+        CnaStringView canonicalName,
+        CnaContentTypeReaderCallbacks* callbacks,
+        out CnaHandle registration);
+
+    /// <summary>See <see cref="cna_content_type_reader_manager_register"/>. Withdraws the factory
+    /// and destroys the registration handle.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_type_reader_manager_unregister(CnaHandle registration);
+
+    /// <summary>
+    /// <c>content.h:247</c>. Loads an asset whose root reader the caller registered -- the only
+    /// route that reaches a caller-supplied reader from outside. The typed loaders each name a C++
+    /// type this ABI knows, and a custom content type is by definition not one of them, so this
+    /// needs no type argument: the asset's own type-reader table decides which reader runs.
+    ///
+    /// <b>Only compiled <c>.xnb</c> assets reach a registered reader.</b> A loose file or a
+    /// <c>.cnj</c> descriptor is dispatched by requested C++ type instead, and there is no C++ type
+    /// here to dispatch on, so such an asset fails with <c>IO</c> rather than being read by the
+    /// wrong reader.
+    ///
+    /// The <c>void*</c> that comes back is not owned by this call -- neither dereferenced nor
+    /// freed -- and its lifetime is whatever the reader that made it says it is.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_load_foreign_ext(
+        CnaHandle contentManager, CnaStringView assetName, out nint outObject);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_content_type_reader_manager_create_reader(CnaStringView canonicalName, out CnaHandle outTypeReader);
 

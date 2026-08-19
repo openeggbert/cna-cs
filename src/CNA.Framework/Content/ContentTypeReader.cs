@@ -13,13 +13,12 @@ namespace CNA.Content;
 /// managed one, so a derivable base class would look extensible while nothing could ever call a
 /// subclass.
 ///
-/// This is blocked upstream, not pending here. It was recorded as needing "the same callback-table
-/// machinery <c>GameComponent</c> uses" -- which is wrong, and re-checking the header is what
-/// showed it: <c>content_readers.h</c> exposes only <c>_clear_type_creators</c>,
-/// <c>_get_is_registered</c>, <c>_create_reader</c> and
-/// <c>cna_content_register_known_unsupported_xnb_readers</c>. There is no entry point that accepts
-/// a caller-supplied factory at all, so no amount of callback machinery on this side can reach the
-/// registry. Closing it needs a new registration route in the C API.
+/// <b>No longer the whole story.</b> This was blocked upstream -- <c>content_readers.h</c> had no
+/// entry point accepting a caller-supplied factory, so no callback machinery on this side could
+/// reach the registry, and this type could only ever wrap readers CNA already knew. Upstream added
+/// <c>cna_content_type_reader_manager_register</c>, and
+/// <see cref="ContentTypeReaderRegistration"/> is the derivable, really-called counterpart. Use
+/// that to ship a reader; this stays as the read-only view of a reader the registry already holds.
 /// </summary>
 public class ContentTypeReader : IDisposable
 {

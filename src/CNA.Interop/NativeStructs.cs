@@ -491,3 +491,41 @@ internal struct CnaSpriteFontInfo
         StructVersion = 1,
     };
 }
+
+/// <summary>
+/// The behaviour table a caller-supplied content type reader is registered with --
+/// <c>content_readers.h</c>'s <c>CNA_ContentTypeReaderCallbacks</c>.
+///
+/// Every pointer is copied during registration, but <see cref="Context"/> stays caller-owned and
+/// must outlive the registration, so whatever roots the managed side has to be held for at least
+/// that long.
+///
+/// <see cref="Create"/> and <see cref="Read"/> are required; <see cref="Destroy"/> may be null.
+/// Unlike <c>CNA_GameComponentCallbacks</c>, every one of these returns <c>CNA_Result</c> -- a
+/// content reader that fails needs to fail the load rather than have its exception stashed and
+/// rethrown later.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct CnaContentTypeReaderCallbacks
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaStringView TargetTypeName;
+    public int TypeVersion;
+    public byte CanDeserializeIntoExistingObject;
+
+    private byte _reserved0;
+    private byte _reserved1;
+    private byte _reserved2;
+
+    public delegate* unmanaged[Cdecl]<nint, nint*, CnaResult> Create;
+    public delegate* unmanaged[Cdecl]<nint, CnaHandle, nint, nint*, CnaResult> Read;
+    public delegate* unmanaged[Cdecl]<nint, CnaResult> Destroy;
+    public nint Context;
+
+    public static CnaContentTypeReaderCallbacks Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaContentTypeReaderCallbacks),
+        StructVersion = 1,
+    };
+}

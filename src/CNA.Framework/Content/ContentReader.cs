@@ -20,15 +20,56 @@ public class ContentReader : BinaryReader
         : base(stream)
     {
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_content_reader_destroy(new CnaHandle(h)));
-        ContentManager = contentManager;
-        AssetName = assetName;
+        _contentManager = contentManager;
+        _assetName = assetName;
+    }
+
+    /// <summary>
+    /// A reader over a handle native owns and will destroy itself -- the shape a
+    /// <see cref="ManagedContentTypeReader"/> is handed inside a load callback.
+    ///
+    /// The distinction is the whole reason this is a separate factory rather than a flag on the
+    /// constructor above: that one wraps the handle in an owning
+    /// <see cref="NativeResourceHandle"/>, so a reader built through it would run
+    /// <c>cna_content_reader_destroy</c> on native's own reader when the callback returned, part
+    /// way through the very asset it was reading.
+    ///
+    /// <see cref="ContentManager"/> and <see cref="AssetName"/> are unavailable here: the callback
+    /// receives neither, and <c>cna_content_reader_get_content_manager</c> answers a handle this
+    /// binding cannot map back to the managed wrapper that owns it. Both throw rather than
+    /// reporting a plausible wrong answer.
+    /// </summary>
+    internal static ContentReader Borrowing(Stream stream, nint nativeHandleValue) =>
+        new(stream, nativeHandleValue);
+
+    private ContentReader(Stream stream, nint nativeHandleValue)
+        : base(stream)
+    {
+        // ownsHandle: false, so the release is never invoked -- native destroys its own reader.
+        _handle = new NativeResourceHandle(nativeHandleValue, static _ => { }, ownsHandle: false);
     }
 
     internal CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
-    public ContentManager ContentManager { get; }
+    private readonly ContentManager? _contentManager;
+    private readonly string? _assetName;
 
-    public string AssetName { get; }
+    /// <summary>Unavailable on a reader native handed to a
+    /// <see cref="ManagedContentTypeReader"/>: the callback receives no managed manager, and
+    /// <c>cna_content_reader_get_content_manager</c> answers a handle this binding cannot map back
+    /// to the wrapper that owns it. Throws rather than reporting a plausible wrong answer.</summary>
+    public ContentManager ContentManager =>
+        _contentManager ?? throw new NotSupportedException(
+            "This ContentReader was handed to a ManagedContentTypeReader by native, which does not " +
+            "pass the managed ContentManager. cna_content_reader_get_content_manager answers a raw " +
+            "handle that cannot be mapped back to its managed wrapper.");
+
+    /// <summary>Unavailable on a borrowed reader, for the reason
+    /// <see cref="ContentManager"/> gives.</summary>
+    public string AssetName =>
+        _assetName ?? throw new NotSupportedException(
+            "This ContentReader was handed to a ManagedContentTypeReader by native, which does not " +
+            "pass the asset name. Read it from cna_content_reader_copy_asset_name if you need it.");
 
     /// <summary>The content-format version the asset was written with.</summary>
     public int Version
