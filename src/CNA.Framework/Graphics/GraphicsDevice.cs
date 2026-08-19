@@ -79,6 +79,45 @@ public class GraphicsDevice : IDisposable
         CnaException.ThrowIfFailed(result, nameof(Clear));
     }
 
+    /// <summary>
+    /// Whether the active renderer supports <paramref name="capability"/>.
+    ///
+    /// <b>Added because a template got the wrong answer by guessing.</b> <c>cna-cs-template</c>
+    /// probed for this method through <c>dynamic</c>, caught the resulting binder failure, and fell
+    /// back to <c>true</c> -- so on SDL_RENDERER, a renderer that prints "2D-only" during startup,
+    /// it reported "3D pipeline: yes", built a <see cref="BasicEffect"/>, and died in
+    /// <c>DrawUserPrimitives</c>. The fallback was the problem, but the method not existing is what
+    /// made a fallback necessary.
+    ///
+    /// A recognized but unavailable capability is a successful query answering <see langword="false"/>,
+    /// not an error. Operations needing it fail with <c>NOT_SUPPORTED</c> rather than substituting
+    /// other behaviour -- which is exactly why asking first is worth doing.
+    ///
+    /// Not an XNA member: XNA had fixed Reach/HiDef profiles where every conforming device
+    /// supported everything. CNA's renderers genuinely differ, so <see cref="GraphicsProfile"/>
+    /// cannot answer this.
+    /// </summary>
+    public bool SupportsCapability(GraphicsCapability capability)
+    {
+        CnaResult result = Native.cna_graphics_device_supports_capability(
+            ResolveNativeDeviceHandle(), (uint)capability, out byte supported);
+        CnaException.ThrowIfFailed(result, nameof(SupportsCapability));
+        return supported != 0;
+    }
+
+    /// <summary>The active renderer's own name (<c>SOFTWARE</c>, <c>SDL_RENDERER</c>,
+    /// <c>OPENGLES3</c>, …). Useful in a bug report; not something to branch on -- use
+    /// <see cref="SupportsCapability"/> for that, since a name does not tell you what a renderer
+    /// can do.</summary>
+    public unsafe string RendererName =>
+        NativeStringReader.Read(
+            static (CnaHandle device, out ulong bytes) =>
+                Native.cna_graphics_device_get_renderer_name_size(device, out bytes),
+            static (CnaHandle device, byte* destination, ulong capacity, out ulong bytes) =>
+                Native.cna_graphics_device_copy_renderer_name(device, destination, capacity, out bytes),
+            ResolveNativeDeviceHandle(),
+            nameof(RendererName));
+
     public Viewport Viewport
     {
         get

@@ -394,6 +394,27 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_get_viewport(CnaHandle device, out CnaViewport outViewport);
+    /// <summary>
+    /// <c>graphics.h</c>. Queries one capability of the active renderer.
+    ///
+    /// A recognized but unavailable capability is a <em>successful</em> query that writes false --
+    /// not a failure. Operations needing it then answer <c>NOT_SUPPORTED</c> rather than silently
+    /// substituting other behaviour, which is what makes asking first worthwhile.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_supports_capability(
+        CnaHandle graphicsDevice, uint capability, out byte outSupported);
+
+    /// <summary><c>graphics.h</c>. The renderer's own name, for a caller reporting what it got.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_renderer_name_size(
+        CnaHandle graphicsDevice, out ulong outBytes);
+
+    /// <summary>See <see cref="cna_graphics_device_get_renderer_name_size"/>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_copy_renderer_name(
+        CnaHandle graphicsDevice, byte* destination, ulong capacity, out ulong outBytes);
+
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_viewport(CnaHandle device, CnaViewport viewport);

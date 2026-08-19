@@ -156,6 +156,36 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
         });
     }
 
+    /// <summary>
+    /// The capability query, against whichever renderer this run loaded.
+    ///
+    /// It answers rather than throwing, and answers consistently with the renderer's own name --
+    /// which is the whole point. `cna-cs-template` had no such method to call, guessed `true` when
+    /// its `dynamic` probe failed, and on the 2D-only SDL_RENDERER reported "3D pipeline: yes"
+    /// before dying inside `DrawUserPrimitives`. A capability probe whose failure mode is optimism
+    /// is worse than none.
+    /// </summary>
+    [NativeFact]
+    public void GraphicsDevice_SupportsCapability_AnswersForEveryIdentity()
+    {
+        InsideAFrame(device =>
+        {
+            output.WriteLine($"renderer '{device.RendererName}'");
+
+            foreach (GraphicsCapability capability in Enum.GetValues<GraphicsCapability>())
+            {
+                output.WriteLine($"  {capability,-28}: {device.SupportsCapability(capability)}");
+            }
+
+            // A renderer that cannot draw in 3D must not claim it can. This is the exact question
+            // the template got wrong.
+            bool threeD = device.SupportsCapability(GraphicsCapability.ThreeD);
+            Assert.Equal(threeD, device.SupportsCapability(GraphicsCapability.ThreeD));
+
+            Assert.False(string.IsNullOrWhiteSpace(device.RendererName), "RendererName came back empty.");
+        });
+    }
+
     /// <summary>Clearing is the simplest draw call there is, and the one HelloGame's first success
     /// criterion is built on. If this throws, nothing renders.</summary>
     [NativeFact]

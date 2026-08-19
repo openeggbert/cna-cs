@@ -29,6 +29,12 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     /// "no independent state, just a typed read/write-through" pattern
     /// <see cref="Microsoft.Xna.Framework.Audio.SoundEffectInstance.State"/> already uses.
     /// </summary>
+    /// <summary>Re-typed: <see cref="GraphicsCapability"/> is a separate enum per namespace, like
+    /// every other CNA enum the compat layer mirrors. Without this a compat game calling
+    /// <c>SupportsCapability</c> would have to name a <c>CNA.Graphics</c> type.</summary>
+    public bool SupportsCapability(GraphicsCapability capability) =>
+        base.SupportsCapability((CNA.Graphics.GraphicsCapability)(uint)capability);
+
     public new IndexBuffer? Indices
     {
         get => (IndexBuffer?)base.Indices;
