@@ -64,9 +64,17 @@ public class MediaLibrary : IDisposable
     {
         ArgumentNullException.ThrowIfNull(mediaSource);
 
+        // Verified against media_library.h rather than assumed: the route "refuses a source whose
+        // kind is not the local device with CNA_RESULT_NOT_SUPPORTED, exactly as the canonical
+        // constructor refuses it". So this is not a binding limitation and not an ABI one either --
+        // XNA's own constructor rejects it, and the ABI mirrors that deliberately. Checked here
+        // only so the message names the rule instead of surfacing a bare native failure.
         if (mediaSource.MediaSourceType != MediaSourceType.LocalDevice)
         {
-            throw new NotSupportedException("Only MediaSourceType.LocalDevice is supported.");
+            throw new NotSupportedException(
+                $"A media library can only be opened from {nameof(MediaSourceType.LocalDevice)}, not " +
+                $"{mediaSource.MediaSourceType}. Real XNA's own MediaLibrary constructor refuses the " +
+                "same thing, and the C API mirrors it -- this is the documented behaviour, not a gap.");
         }
 
         CnaResult result = Native.cna_media_library_create_from_source(
