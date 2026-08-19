@@ -36,9 +36,22 @@ public class GameWindow
         }
     }
 
-    /// <summary>The native window handle. Matches real XNA's <c>Handle</c>, typed as
+    /// <summary>
+    /// Real XNA's <c>Handle</c>: the platform's own round-trip window token, typed as
     /// <see cref="nint"/> the way XNA types it as <c>IntPtr</c>, over an ABI that carries it as a
-    /// <see cref="ulong"/>.</summary>
+    /// <see cref="ulong"/>.
+    ///
+    /// <b>This is not the native window, despite the route's name.</b> The header used to claim
+    /// this and the canonical native-window accessor answered the same pointer; they do not, and
+    /// upstream measured the difference under X11 -- the native accessor gives a real
+    /// <c>Display*</c> and XID, this gives a platform window pointer widened to an integer. The
+    /// platform layer that mints it says new interop code should not use it; its one documented use
+    /// is the round trip, handing it back through <c>PresentationParameters.DeviceWindowHandle</c>
+    /// to adopt an existing window.
+    ///
+    /// Zero means <em>this renderer never creates a window</em> -- headless, software and stub
+    /// renderers all report it -- rather than that the call failed.
+    /// </summary>
     public nint Handle
     {
         get

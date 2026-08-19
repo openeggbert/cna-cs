@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using CNA.Graphics;
 using CNA.Interop;
 
@@ -261,6 +263,102 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
     /// registration every transition; holding it costs one idle callback that finds a null
     /// invocation list.
     /// </summary>
+    private GCHandle _preparingSelf;
+    private CnaHandle _preparingRegistration;
+    private EventHandler<PreparingDeviceSettingsEventArgs>? _preparingDeviceSettings;
+
+    /// <summary>
+    /// Raised while the device is being prepared, with settings the handler may change. Real XNA's
+    /// <c>PreparingDeviceSettings</c>, and the way a game requests MSAA, picks a back-buffer format
+    /// or chooses an adapter before the device exists.
+    ///
+    /// <b>Missing entirely until now, and recorded as unfixable.</b> This project listed it as a
+    /// blocker on the strength of the observation-only route's header, which said the event
+    /// delivers its argument as a <c>const</c> reference so even a C++ subscriber cannot reach the
+    /// mutable accessor -- and called that canonical rather than introduced. It was fixed at the
+    /// source instead: the argument holds its settings by pointer, so the mutable accessor needs no
+    /// cast, and <c>_subscribe_preparing_device_settings_ext</c> forwards it. The <c>_ext</c>
+    /// suffix marks the shape, not weaker behaviour.
+    ///
+    /// What the handler writes is what the device is created from -- adapter, back-buffer format
+    /// and size, depth-stencil format, multisample count, presentation interval. Native validates
+    /// the result and <em>ignores</em> an invalid one rather than half-applying it, so a handler
+    /// cannot produce a configuration that fails device creation for an unrelated-looking reason.
+    /// </summary>
+    public unsafe event EventHandler<PreparingDeviceSettingsEventArgs>? PreparingDeviceSettings
+    {
+        add
+        {
+            EnsurePreparingSubscribed();
+            _preparingDeviceSettings += value;
+        }
+        remove => _preparingDeviceSettings -= value;
+    }
+
+    private unsafe void EnsurePreparingSubscribed()
+    {
+        if (_preparingSelf.IsAllocated)
+        {
+            return;
+        }
+
+        _preparingSelf = GCHandle.Alloc(this);
+
+        CnaResult result = Native.cna_graphics_device_manager_subscribe_preparing_device_settings_ext(
+            NativeHandle, &OnPreparingDeviceSettings, GCHandle.ToIntPtr(_preparingSelf), out _preparingRegistration);
+
+        if (result.IsFailure())
+        {
+            _preparingSelf.Free();
+            CnaException.ThrowIfFailed(result, nameof(PreparingDeviceSettings));
+        }
+    }
+
+    /// <summary>
+    /// Reads the candidate settings out, runs the handlers, and writes back whatever they changed.
+    ///
+    /// Catches rather than unwinding -- an exception crossing an <c>UnmanagedCallersOnly</c>
+    /// boundary is undefined behaviour -- and the callback returns <c>void</c>, so there is nowhere
+    /// to report one. A handler that throws therefore leaves the settings as native supplied them,
+    /// which is the same outcome as a handler that changed nothing.
+    /// </summary>
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void OnPreparingDeviceSettings(CnaGraphicsDeviceInformation* information, nint context)
+    {
+        if (information is null || context == 0)
+        {
+            return;
+        }
+
+        if (GCHandle.FromIntPtr(context).Target is not GraphicsDeviceManager manager)
+        {
+            return;
+        }
+
+        EventHandler<PreparingDeviceSettingsEventArgs>? handlers = manager._preparingDeviceSettings;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var settings = new GraphicsDeviceInformation
+            {
+                GraphicsProfile = (GraphicsProfile)information->GraphicsProfile,
+                PresentationParameters = PresentationParameters.FromNative(information->PresentationParameters),
+            };
+
+            handlers(manager, new PreparingDeviceSettingsEventArgs(settings));
+
+            information->GraphicsProfile = (uint)settings.GraphicsProfile;
+            information->PresentationParameters = settings.PresentationParameters.ToNative();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     public event EventHandler<EventArgs>? DeviceCreated
     {
         add { EnsureSubscribed(CnaGraphicsDeviceManagerEvent.DeviceCreated); _deviceCreated += value; }
@@ -375,6 +473,14 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
 
     public void Dispose()
     {
+        // Unsubscribe before freeing the root, the rule NativeEventBridge already follows: an
+        // in-flight callback must not reach a GCHandle that has been released.
+        if (_preparingSelf.IsAllocated)
+        {
+            Native.cna_game_unsubscribe(_preparingRegistration);
+            _preparingSelf.Free();
+        }
+
         Dispose(true);
         GC.SuppressFinalize(this);
     }

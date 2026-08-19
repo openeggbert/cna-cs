@@ -560,3 +560,26 @@ internal struct CnaTexture2DTransfer
         StructVersion = 1,
     };
 }
+
+
+/// <summary>
+/// A candidate device configuration -- <c>runtime_graphics_manager.h</c>'s
+/// <c>CNA_GraphicsDeviceInformation</c>.
+///
+/// Caller-initialised and versioned. Handed to a <c>PreparingDeviceSettings</c> handler
+/// <b>mutable</b>, which is the whole point of the <c>_ext</c> subscribe route: what the handler
+/// writes is what the device is created from.
+///
+/// Writes are validated. A handler that corrupts the header or writes an undefined identity leaves
+/// the settings untouched rather than half-applying a configuration that would then fail device
+/// creation for a reason with no obvious connection to what it wrote.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaGraphicsDeviceInformation
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public int AdapterIndex;
+    public uint GraphicsProfile;
+    public CnaPresentationParameters PresentationParameters;
+}

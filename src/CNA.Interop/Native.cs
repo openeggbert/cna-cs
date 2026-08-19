@@ -2013,6 +2013,27 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_destroy(CnaHandle manager);
 
+    /// <summary>
+    /// <c>runtime_graphics_manager.h</c>. The mutable <c>PreparingDeviceSettings</c> subscription --
+    /// what the handler writes is what the device is created from.
+    ///
+    /// This project reported the observation-only sibling as a blocker ("the event delivers its
+    /// argument as a const reference, so a C++ subscriber cannot reach the mutable accessor
+    /// either", called canonical rather than introduced). It was fixed at the source in CBIND-057;
+    /// the <c>_ext</c> suffix marks the shape, not weaker behaviour -- the header is explicit that
+    /// the canonical event is exactly this one and the observation-only route exists only because
+    /// it was published first.
+    ///
+    /// The callback returns <c>void</c> deliberately: a handler that cannot decide what to change
+    /// changes nothing, and there is no failure device preparation could act on.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_graphics_device_manager_subscribe_preparing_device_settings_ext(
+        CnaHandle manager,
+        delegate* unmanaged[Cdecl]<CnaGraphicsDeviceInformation*, nint, void> callback,
+        nint context,
+        out CnaHandle registration);
+
     /// <summary>Matches <c>cna_graphics_device_manager_subscribe</c>
     /// (<c>runtime_graphics_manager.h:518</c>). <paramref name="callback"/> is a
     /// <c>CNA_GameEventCallback</c>, i.e. <c>void(void*)</c> -- declared as <see cref="nint"/>

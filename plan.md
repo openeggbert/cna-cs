@@ -103,7 +103,7 @@ blockers. Not the same claim, and the difference matters:
 | ~~`cna_effect_create_compiled` → `NOT_SUPPORTED`~~ | **False, and now closed.** The route works; the claim came from a stale header sentence. `Effect(GraphicsDevice, byte[])` and `Load<Effect>` are both bound and exercised by integration tests. |
 | ~~No content-reader registration route~~ | **Closed.** `cna_content_type_reader_manager_register`/`_unregister` plus `LoadForeign<T>`, bound and tested. |
 | ~~Buffer transfers start at element zero~~ | **False, and now closed.** `cna_vertex_buffer_set_data_raw_at` and `cna_index_buffer_set_data_at` take a buffer-side offset. The one real caveat is about cost, not result: the renderer replaces whole-buffer contents, so the window is composed CPU-side and the whole buffer is re-uploaded. Bytes land where XNA puts them; the transfer is not smaller. |
-| `PreparingDeviceSettings` cannot write back | MSAA / back-buffer format / adapter chosen before device creation is ignored. |
+| ~~`PreparingDeviceSettings` cannot write back~~ | **Fixed upstream (CBIND-057), and the event now exists here.** This was recorded as the one blocker that needed the C++ event-handler collection changed rather than an ABI addition -- the argument delivered its settings by `const` reference, so "a C++ subscriber cannot reach the mutable accessor either". It holds them by *pointer*, so the mutable accessor needs no cast. The claim was true about the symptom and wrong about the cause, which is why it read as unfixable. |
 | ~~Nothing has ever been executed~~ | **Done.** `tests/CNA.Integration.Tests`, 13 tests against the real library. |
 
 That last row was the one that mattered, and running it found two defects no
