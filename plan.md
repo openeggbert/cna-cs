@@ -1,3 +1,46 @@
+# Current state — 2026-08-19
+
+**Not releasable yet.** The API surface is complete and both layers run against the real library;
+what is missing is everything between "it works here" and "someone else can use it".
+
+## What is done
+
+| | |
+| --- | --- |
+| XNA 4.0 API surface | Complete, to the FNA standard. Where the C ABI cannot back a member it throws and names what is missing, rather than the member being absent. `Microsoft.Xna.Framework.Net`, `.GamerServices` and `Microsoft.Devices.Sensors` are out of scope — FNA ships none of them either. |
+| Interop verification | 833 P/Invoke declarations. All present in the headers, all arities matching, all versioned structs passed correctly, and **all resolving in both built libraries in both directions** — checked as a set difference against `nm -D`, not as a count. |
+| Tests | 804 (532 framework, 171 compat, 101 integration), 1 skipped, 0 warnings, 0 errors. |
+| Runtime verification | Both layers execute against the real engine: `CNA.*` and `Microsoft.Xna.Framework.*`. Native-backed compat types 74/89. |
+| Template | `cna-cs-template` builds and runs on both CNA renderers (3 frames, exit 0) and builds clean on MonoGame and Kni. |
+| ABI | Pinned at 0.6.0, with a floor check (major equal, minor/patch at or above). |
+
+## What blocks a release
+
+1. **There is no package.** All three projects are `IsPackable=false`; `dotnet pack` produces
+   nothing. A consumer can only reference a source checkout by relative path, which is what the
+   template does.
+2. **There is no version and no tag.** 215 commits, zero releases, no `<Version>` anywhere.
+3. **The native library has no shipping story.** Phase 6's `runtimes/<rid>/native/` layout does not
+   exist. A consumer must locate `libcna_c_api.so` themselves and point `CNA_NATIVE_LIBRARY` at it.
+   Whether the package should carry the library or declare it an external dependency is a decision
+   nobody has made; either is defensible and it needs to be written down.
+4. **Only linux-x64 has ever run.** `NativeLibraryResolver`'s Windows and macOS branches are
+   compiled and have never executed. Cross-platform validation is the rest of Phase 6.
+
+## What works but should be said out loud to a user
+
+- **`CompiledEffects` is false on both available renderers.** The compiled-`.fx` route is bound and
+  real, and neither SOFTWARE nor SDL_RENDERER can use it — it needs FNA3D, or SDL_GPU/Vulkan/EasyGL
+  with their build option on. A game shipping a compiled shader will not run on what is built here.
+  Source-based custom shaders do work on SOFTWARE.
+- **15 native-backed types have never executed**, all blocked by something absent from this machine
+  rather than by the binding: XACT needs authored banks, the music family needs music on the device,
+  `PictureAlbumCollection` needs a nested picture album. Listed with reasons under "Runtime
+  coverage: where it stopped".
+- **Coverage means reachability, not correctness.** A shallow smoke test catches a fabricated
+  import, a wrong struct layout and a stale handle. It would not catch a subtly wrong blend
+  equation.
+
 # CNA.NET (`cna-dotnet`) — Implementation Plan
 
 ## Coverage: how it is measured, and what it is
