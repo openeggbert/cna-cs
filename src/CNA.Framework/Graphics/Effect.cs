@@ -80,6 +80,41 @@ public class Effect : IDisposable
     /// <c>InternalsVisibleTo</c> grant into CNA.Interop and can never name that type (invariant 5).
     /// Same rule <c>Texture2D</c>'s handle constructor already follows.
     /// </summary>
+    /// <summary>
+    /// A custom effect from shader <em>source</em> -- real XNA has no such constructor, because XNA
+    /// had one shader language and a compiled pipeline.
+    ///
+    /// Separate capability from <see cref="Effect(GraphicsDevice, byte[])"/>: that one needs
+    /// <see cref="GraphicsCapability.CompiledEffects"/>, this needs
+    /// <see cref="GraphicsCapability.CustomEffects"/>, and they differ in practice -- the SOFTWARE
+    /// renderer reports the second true and the first false. A game shipping a compiled <c>.fx</c>
+    /// still cannot load it there; a game that can supply source can.
+    ///
+    /// <b>Ask <see cref="GraphicsDevice.ShadingDialect"/> first.</b> The text is renderer-specific,
+    /// and the header is explicit that the renderer's identity is not a safe way to infer the
+    /// dialect -- that inference is wrong in a build carrying more than one backend, which is
+    /// exactly the case where it looks right.
+    /// </summary>
+    /// <exception cref="CnaException">If the renderer has no source-effect support, or the sources
+    /// do not compile.</exception>
+    public Effect(GraphicsDevice graphicsDevice, string vertexShaderSource, string fragmentShaderSource)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ArgumentException.ThrowIfNullOrEmpty(vertexShaderSource);
+        ArgumentException.ThrowIfNullOrEmpty(fragmentShaderSource);
+
+        GraphicsDevice = graphicsDevice;
+
+        CnaHandle handle = CnaHandle.Zero;
+        CnaResult result = CnaStringMarshal.WithStringView(vertexShaderSource, vertexView =>
+            CnaStringMarshal.WithStringView(fragmentShaderSource, fragmentView =>
+                Native.cna_shader_effect_create(
+                    graphicsDevice.ResolveNativeDeviceHandle(), vertexView, fragmentView, out handle)));
+
+        CnaException.ThrowIfFailed(result, nameof(Effect));
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)));
+    }
+
     protected internal Effect(GraphicsDevice graphicsDevice, nint nativeHandleValue)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);

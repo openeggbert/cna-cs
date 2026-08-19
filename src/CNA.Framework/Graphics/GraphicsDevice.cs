@@ -123,6 +123,33 @@ public class GraphicsDevice : IDisposable
             ResolveNativeDeviceHandle(),
             nameof(RendererName));
 
+    /// <summary>
+    /// The dialect a source-based <see cref="Effect"/>'s text must be written in.
+    ///
+    /// Not an XNA member; XNA had one shader language. Ask before supplying source rather than
+    /// inferring from <see cref="RendererName"/> -- the header is explicit that the renderer
+    /// identity is not a safe way to infer this, and the inference fails precisely in a build
+    /// carrying more than one backend.
+    ///
+    /// <see cref="ShaderDialect.Unknown"/> means the renderer declared none, and is an answer
+    /// rather than a failure: supplying text for a dialect nobody named is how a shader compiles on
+    /// one machine and not another.
+    ///
+    /// <b>The route is declared and not exported.</b> <c>graphics.h:641</c> declares
+    /// <c>cna_graphics_device_get_shading_dialect</c>; neither built library exports it, confirmed
+    /// by <c>nm -D</c> against both, while <c>cna_shader_effect_create</c> from the same header is
+    /// exported. Reported upstream. This answers <see cref="ShaderDialect.Unknown"/> until it
+    /// exists, which is the honest answer and the one that stops a caller guessing -- calling it
+    /// would raise <see cref="EntryPointNotFoundException"/> at the call site, naming a symbol
+    /// rather than the mismatch.
+    ///
+    /// Worth recording how it was found, because a header sweep cannot: the declarations were
+    /// checked against <c>nm -D</c> output as a set difference. An export *count* matching a
+    /// declaration count would be satisfied by a header naming one route the library lacks while
+    /// the library exports one the header lacks.
+    /// </summary>
+    public ShaderDialect ShadingDialect => ShaderDialect.Unknown;
+
     public Viewport Viewport
     {
         get

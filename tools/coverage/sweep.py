@@ -87,3 +87,34 @@ for n,ps in decls.items():
             bad.append((n,f,ps[i],t[:110]))
 print(f'\nversioned struct passed by `out` ({len(bad)}):')
 for b in bad: print('  ',b[0],'['+b[1]+']','\n     ',b[2],'\n      doc:',b[3])
+
+
+# --- declarations vs the shipped library ---------------------------------------------------------
+#
+# The header check above and this one answer different questions, and the difference is not
+# academic: graphics.h declares cna_graphics_device_get_shading_dialect and neither built library
+# exports it, so a binding written correctly against the header still dies with
+# EntryPointNotFoundException at the call site.
+#
+# A *count* comparison cannot see that. "2,855 declared, 2,855 exported" is equally true of a header
+# naming one route the library lacks while the library exports one the header lacks. Only the set
+# difference finds it, which is why this runs over names rather than totals.
+import subprocess
+
+def check_library(path):
+    try:
+        out = subprocess.run(['nm', '-D', '--defined-only', path],
+                             capture_output=True, text=True, check=True).stdout
+    except Exception as exc:
+        print(f'\n(could not read {path}: {exc})')
+        return
+    exported = {line.split()[-1].split('@@')[0] for line in out.splitlines() if ' cna_' in line}
+    absent = sorted(n for n in decls if n not in exported)
+    # Name the build, not the directory two levels up -- every one of those is called "modules".
+    build = path.split('/media/robertvokac/claude/tmp/cna/')[-1].split('/')[0]
+    print(f'\n{build}: {len(exported)} exports, {len(absent)} declaration(s) absent')
+    for name in absent:
+        print('   ', name)
+
+for candidate in sorted(glob.glob('/media/robertvokac/claude/tmp/cna/*/modules/c-api/libcna_c_api.so')):
+    check_library(candidate)

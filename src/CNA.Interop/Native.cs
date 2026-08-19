@@ -2600,6 +2600,35 @@ internal static partial class Native
     /// subject to the renderer's <c>COMPILED_EFFECTS</c> capability. It was listed as this
     /// binding's single largest functional blocker on the strength of that stale sentence alone.
     /// </summary>
+    /// <summary>
+    /// <c>effects.h:1281</c>. A custom effect from shader <em>source</em>, which is a different
+    /// capability from compiled bytecode -- <c>CUSTOM_EFFECTS</c> rather than
+    /// <c>COMPILED_EFFECTS</c>, and the SOFTWARE renderer reports the first true and the second
+    /// false.
+    ///
+    /// That distinction is why this is bound at all. This project had recorded custom shaders as
+    /// blocked on the strength of the compiled route, and both are needed for the whole story: a
+    /// game shipping a compiled <c>.fx</c> still cannot load it here, and a game that can supply
+    /// source now can.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_shader_effect_create(
+        CnaHandle graphicsDevice,
+        CnaStringView vertexSource,
+        CnaStringView fragmentSource,
+        out CnaHandle effect);
+
+    /// <summary>
+    /// <c>graphics.h:634</c>. Which dialect a source-based effect's text must be written in.
+    ///
+    /// Required rather than optional: source is renderer-specific text, and the header is explicit
+    /// that the renderer identity is not a safe way to infer it. Guessing from the name is wrong in
+    /// a build carrying more than one backend.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_shading_dialect(
+        CnaHandle graphicsDevice, out uint outDialect);
+
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_effect_create_compiled(
         CnaHandle graphicsDevice,

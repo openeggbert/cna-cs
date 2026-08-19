@@ -91,4 +91,76 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         Assert.Contains("Io", caught.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// A real custom shader, from source, on a renderer that says it supports them.
+    ///
+    /// This is the capability the project's "custom shaders are blocked" note never distinguished.
+    /// CustomEffects and CompiledEffects are separate identities and they differ in practice: the
+    /// SOFTWARE renderer reports CustomEffects true and CompiledEffects false. A game shipping a
+    /// compiled .fx still cannot load it there -- and a game that can supply source now can, which
+    /// nothing in this binding could do until the route was bound.
+    ///
+    /// The source is written for whichever dialect the device names, because the header is explicit
+    /// that guessing from the renderer's identity is unsafe. An unknown dialect skips rather than
+    /// guesses.
+    /// </summary>
+    [NativeFactRequiring(GraphicsCapability.CustomEffects)]
+    public void Effect_FromShaderSource_CompilesOnARendererThatSupportsIt()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            ShaderDialect dialect = device.ShadingDialect;
+            output.WriteLine($"renderer wants {dialect}");
+
+            if (dialect is ShaderDialect.Unknown)
+            {
+                output.WriteLine("no dialect declared; supplying text for a guessed one is what the header warns against");
+                return;
+            }
+
+            string version = dialect switch
+            {
+                ShaderDialect.GlslEs => "#version 300 es\nprecision mediump float;",
+                _ => "#version 330 core",
+            };
+
+            string vertex = version + "\nin vec3 a_position;\nvoid main() { gl_Position = vec4(a_position, 1.0); }";
+            string fragment = version + "\nout vec4 o_color;\nvoid main() { o_color = vec4(1.0, 0.0, 0.0, 1.0); }";
+
+            using var effect = new Effect(device, vertex, fragment);
+
+            effect.Apply();
+
+            output.WriteLine(
+                $"compiled: {effect.Parameters.Count} parameter(s), {effect.Techniques.Count} technique(s), " +
+                $"{effect.CurrentTechnique.Passes.Count} pass(es)");
+
+            Assert.True(effect.Techniques.Count > 0, "A compiled effect with no techniques cannot be applied.");
+        });
+    }
+
+    /// <summary>
+    /// Malformed source. <b>Currently accepted</b>, which is what this records.
+    ///
+    /// `cna_shader_effect_create` returns success for "this is not a shader" on a renderer
+    /// reporting CustomEffects, so a game gets a live effect object for text that cannot draw.
+    /// Reported upstream with the two readings I cannot separate from here -- the renderer accepts
+    /// source without compiling it, or the compile is deferred to first use and the constructor is
+    /// not where it reports.
+    ///
+    /// Asserting the acceptance would encode a defect as expected and pass forever, which this
+    /// project has already been caught doing once. So it is skipped, asserting the *correct*
+    /// behaviour, and deleting the skip is the verification.
+    /// </summary>
+    [NativeFact("Upstream: cna_shader_effect_create accepts text that is not a shader and returns a live effect. Reported; remove this Skip to verify the fix.")]
+    public void Effect_FromShaderSource_RejectsMalformedText()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            var thrown = Assert.Throws<CnaException>(() =>
+                new Effect(device, "this is not a shader", "neither is this"));
+
+            output.WriteLine(thrown.Message);
+        });
+    }
 }
