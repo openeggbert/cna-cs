@@ -53,7 +53,8 @@ public sealed class CnjLoaderRegistration
 
     /// <summary>
     /// Registers <paramref name="loader"/> for descriptors whose <c>"type"</c> is
-    /// <paramref name="typeName"/>, on <paramref name="contentManager"/>.
+    /// <paramref name="typeName"/>, against the content manager
+    /// <paramref name="contentManagerHandle"/> names.
     /// </summary>
     /// <exception cref="CnaException">If that type name is already registered on this manager. A
     /// descriptor naming nothing registered fails its load rather than falling back, which is the

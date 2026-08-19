@@ -381,28 +381,6 @@ public class ContentManager : IDisposable
         return soundEffect.AsNint;
     }
 
-    /// <summary>
-    /// Loads an asset whose root reader was registered through
-    /// <see cref="ContentTypeReaderRegistration.Register"/> -- the only route that reaches a
-    /// caller-supplied reader.
-    ///
-    /// Separate from <see cref="Load{T}"/> rather than another case inside it, because the ABI
-    /// route genuinely takes no type: <c>cna_content_manager_load_foreign_ext</c> lets the asset's
-    /// own type-reader table decide which reader runs, since a custom content type is by definition
-    /// not one of the C++ types the typed loaders name. Folding it into <see cref="Load{T}"/> would
-    /// mean claiming to dispatch on <c>T</c> while ignoring it.
-    ///
-    /// <b>Only compiled <c>.xnb</c> assets reach a registered reader.</b> A loose file or a
-    /// <c>.cnj</c> descriptor is dispatched by requested C++ type instead, and there is none here,
-    /// so such an asset fails rather than being read by the wrong reader.
-    ///
-    /// Results are cached by asset name exactly as every other load is, so a second call for the
-    /// same name returns the same instance. <see cref="Unload"/> drops the cache.
-    /// </summary>
-    /// <typeparam name="T">The type the registered reader produces.</typeparam>
-    /// <exception cref="ContentLoadException">If the reader produced something else -- a wrong
-    /// registration is far easier to make than to notice, and an invalid cast deeper in the caller
-    /// would not say which asset caused it.</exception>
     private readonly List<CnjLoaderRegistration> _cnjLoaders = [];
 
     /// <summary>
@@ -432,6 +410,28 @@ public class ContentManager : IDisposable
         return registration;
     }
 
+    /// <summary>
+    /// Loads an asset whose root reader was registered through
+    /// <see cref="ContentTypeReaderRegistration.Register"/> -- the only route that reaches a
+    /// caller-supplied reader.
+    ///
+    /// Separate from <see cref="Load{T}"/> rather than another case inside it, because the ABI
+    /// route genuinely takes no type: <c>cna_content_manager_load_foreign_ext</c> lets the asset's
+    /// own type-reader table decide which reader runs, since a custom content type is by definition
+    /// not one of the C++ types the typed loaders name. Folding it into <see cref="Load{T}"/> would
+    /// mean claiming to dispatch on <c>T</c> while ignoring it.
+    ///
+    /// <b>Only compiled <c>.xnb</c> assets reach a registered reader.</b> A loose file or a
+    /// <c>.cnj</c> descriptor is dispatched by requested C++ type instead, and there is none here,
+    /// so such an asset fails rather than being read by the wrong reader.
+    ///
+    /// Results are cached by asset name exactly as every other load is, so a second call for the
+    /// same name returns the same instance. <see cref="Unload"/> drops the cache.
+    /// </summary>
+    /// <typeparam name="T">The type the registered reader produces.</typeparam>
+    /// <exception cref="ContentLoadException">If the reader produced something else -- a wrong
+    /// registration is far easier to make than to notice, and an invalid cast deeper in the caller
+    /// would not say which asset caused it.</exception>
     public T LoadForeign<T>(string assetName)
         where T : class
     {
