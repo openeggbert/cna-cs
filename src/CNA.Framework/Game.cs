@@ -31,7 +31,14 @@ namespace CNA;
 /// buffer pinned for the whole <see cref="Game"/> instance's lifetime sidesteps that lifetime
 /// question entirely instead of relying on a `fixed` block's lexical scope lining up exactly right.
 /// </summary>
-public abstract class Game : IDisposable
+/// <remarks>
+/// Concrete, as in XNA -- <c>Game</c> there is an ordinary class, and <c>new Game()</c> is legal
+/// even though almost every game subclasses it. This was <see langword="abstract"/> with no
+/// abstract members, which is a divergence that compiles fine and only bites a caller that tries
+/// to instantiate it. Found while writing an integration test that wanted a bare game to read
+/// launch parameters from.
+/// </remarks>
+public class Game : IDisposable
 {
     /// <summary>Matches real XNA's own default <c>TargetElapsedTime</c> (1/60 second, expressed in
     /// 100ns ticks) -- also the exact value the real C API's own lifecycle smoke test uses for the
@@ -46,7 +53,9 @@ public abstract class Game : IDisposable
     private bool _graphicsDeviceInitialized;
     private bool _disposed;
 
-    protected unsafe Game()
+    /// <summary>Public, as in XNA, now that this class is concrete. It was <c>protected</c>, which
+    /// is the matching half of the same divergence.</summary>
+    public unsafe Game()
     {
         _selfHandle = GCHandle.Alloc(this);
         nint context = GCHandle.ToIntPtr(_selfHandle);
@@ -197,21 +206,52 @@ public abstract class Game : IDisposable
     }
 
     /// <summary>
-    /// The command-line parameters the game was launched with, parsed the way real XNA parses them.
+    /// The launch parameters the game was started with -- real XNA's
+    /// <c>Dictionary&lt;string, string&gt;</c>, materialised from native.
     ///
-    /// Built from <see cref="Environment.GetCommandLineArgs"/>, not from native, and that needs
-    /// saying. The ABI addresses a launch parameter <b>by key only</b> --
-    /// <c>contains_key</c>, <c>get_value_size</c>, <c>copy_value</c>, <c>add</c> -- with no route to
-    /// enumerate the keys it holds. So a dictionary cannot be materialised from it at all.
+    /// This used to parse <see cref="Environment.GetCommandLineArgs"/> instead, because the ABI
+    /// addressed a parameter <b>by key only</b> and a count with no key list cannot build a map.
+    /// Parsing the process command line answered correctly for the launch set and diverged the
+    /// moment anything called <see cref="AddLaunchParameter"/> at run time -- a parameter added
+    /// there reached native and never appeared here.
     ///
-    /// The process command line is the same information the platform handed native, so parsing it
-    /// here answers the question rather than working around it. Where the two could disagree is a
-    /// parameter added through <see cref="AddLaunchParameter"/> at run time: that one reaches
-    /// native and not this dictionary. <see cref="ContainsLaunchParameter"/> and
-    /// <see cref="GetLaunchParameter"/> ask native directly and are authoritative for exactly that
-    /// case.
+    /// <c>cna_game_launch_parameters_get_key_size</c>/<c>_copy_key</c> closed that. Native is now
+    /// the single source, so a run-time addition shows up like any other entry and
+    /// <see cref="ContainsLaunchParameter"/>/<see cref="GetLaunchParameter"/> can no longer
+    /// disagree with this dictionary.
+    ///
+    /// Keys come back sorted by name, ordinal ascending -- the ABI sorts deliberately, because the
+    /// underlying container is a hash map whose traversal order is unspecified and where a single
+    /// insertion can rehash and reorder everything. Sorting makes an index a function of the key
+    /// set alone. Adding a parameter still invalidates indices taken before it, which is why this
+    /// reads the count and walks it in one go rather than caching anything.
     /// </summary>
-    public LaunchParameters LaunchParameters => new(Environment.GetCommandLineArgs().Skip(1));
+    public unsafe LaunchParameters LaunchParameters
+    {
+        get
+        {
+            CnaResult countResult = Native.cna_game_launch_parameters_get_count(_nativeHandle, out ulong count);
+            CnaException.ThrowIfFailed(countResult, nameof(LaunchParameters));
+
+            var parameters = new LaunchParameters();
+            for (ulong i = 0; i < count; i++)
+            {
+                ulong index = i;
+                string key = NativeStringReader.ReadIndexed(
+                    static (CnaHandle game, ulong at, out ulong bytes) =>
+                        Native.cna_game_launch_parameters_get_key_size(game, at, out bytes),
+                    static (CnaHandle game, ulong at, byte* destination, ulong capacity, out ulong bytes) =>
+                        Native.cna_game_launch_parameters_copy_key(game, at, destination, capacity, out bytes),
+                    _nativeHandle,
+                    index,
+                    nameof(LaunchParameters));
+
+                parameters[key] = GetLaunchParameter(key) ?? string.Empty;
+            }
+
+            return parameters;
+        }
+    }
 
     /// <summary>Discards the time accumulated since the last frame, so the next
     /// <c>Update</c> does not try to catch up. What a game calls after a long load, to stop the

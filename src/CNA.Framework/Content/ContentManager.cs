@@ -423,15 +423,27 @@ public class ContentManager : IDisposable
     /// real to match" while <c>sprite_font.h</c> shipped an eight-function SpriteFont resource. A
     /// header audit found it.
     ///
-    /// What the C API genuinely lacks is a font *loader*: <c>content.h</c> has
-    /// <c>cna_content_manager_load_texture2d</c>, <c>_load_sound_effect</c> and
-    /// <c>_load_texture_cube</c>, and nothing for fonts. So the container is parsed here -- exactly
-    /// what this project already does for <c>Model</c> -- and the atlas is uploaded through the
-    /// ordinary <see cref="Texture2D"/> path. The 256-glyph cap the old native shape imposed is
-    /// gone with it; a real <c>.xnb</c> font is limited only by the file.
+    /// The C API then genuinely lacked a font *loader*, so the container was parsed here. It has
+    /// one now -- <c>cna_content_manager_load_sprite_font</c> -- and that is the primary path,
+    /// with the managed <c>.xnb</c> parser kept as the fallback.
+    ///
+    /// Native first, for a reason worth stating: parsing the container here meant the font the
+    /// engine holds and the font this binding draws from were two objects, and only one of them
+    /// could be authoritative for layout. Reading the glyph table back out of native's own font
+    /// makes them the same numbers. The fallback still matters -- it handles a font this build of
+    /// the engine cannot open, and it is the only path with no ABI dependency at all -- so it is a
+    /// fallback rather than a deletion.
+    ///
+    /// The 256-glyph cap the old fabricated native shape imposed is gone either way; a real
+    /// <c>.xnb</c> font is limited only by the file.
     /// </summary>
     protected SpriteFontData LoadSpriteFontData(string assetName)
     {
+        if (TryLoadNativeSpriteFontData(assetName, out SpriteFontData native))
+        {
+            return native;
+        }
+
         XnbSpriteFontData data = LoadXnbSpriteFontData(assetName);
         Texture2D texture = BuildAtlas(assetName, data.Texture);
 
@@ -450,6 +462,106 @@ public class ContentManager : IDisposable
             data.Spacing,
             data.Kerning,
             data.DefaultCharacter);
+    }
+
+    /// <summary>
+    /// Loads a font through <c>cna_content_manager_load_sprite_font</c> and reads its glyph table
+    /// back out, or reports that this build could not.
+    ///
+    /// <b>Two owned handles come back, and the font is destroyed before returning.</b> That is
+    /// deliberate, not a leak of the shorter-lived one: the atlas is retained for as long as a font
+    /// uses it, so <c>cna_texture2d_destroy</c> refuses with <c>INVALID_STATE</c> while the font is
+    /// alive. Keeping the native font would mean this binding's <see cref="Graphics.SpriteFont"/>
+    /// -- which is a managed glyph table plus a texture -- had to own and order two handles for no
+    /// gain, since every number it needs has already been copied out by then. Destroying the font
+    /// releases the retention and leaves the atlas owned solely by the returned handle.
+    ///
+    /// Returns <see langword="false"/> rather than throwing when native cannot open the asset, so
+    /// the managed <c>.xnb</c> parser still gets its turn -- a font this build of the engine does
+    /// not understand is exactly the case the fallback exists for. A failure *after* the font
+    /// loaded is a different matter and does throw: at that point the asset is readable and
+    /// something else is wrong, and falling back would hide it.
+    /// </summary>
+    private unsafe bool TryLoadNativeSpriteFontData(string assetName, out SpriteFontData data)
+    {
+        data = default;
+
+        CnaHandle font = CnaHandle.Zero;
+        CnaHandle texture = CnaHandle.Zero;
+        CnaResult load = CnaStringMarshal.WithStringView(
+            assetName,
+            view => Native.cna_content_manager_load_sprite_font(
+                new CnaHandle(_nativeHandleValue), view, out font, out texture));
+
+        if (load.IsFailure())
+        {
+            return false;
+        }
+
+        try
+        {
+            var info = CnaSpriteFontInfo.Versioned();
+            CnaResult infoResult = Native.cna_sprite_font_get_info(font, ref info);
+            CnaException.ThrowIfFailed(infoResult, nameof(LoadSpriteFontData));
+
+            int count = checked((int)info.CharacterCount);
+
+            var glyphs = new CnaSpriteFontGlyph[count];
+            for (int i = 0; i < count; i++)
+            {
+                glyphs[i] = CnaSpriteFontGlyph.Versioned();
+            }
+
+            var characters = new char[count];
+
+            if (count > 0)
+            {
+                fixed (CnaSpriteFontGlyph* glyphPtr = glyphs)
+                {
+                    CnaResult glyphResult = Native.cna_sprite_font_copy_glyphs(
+                        font, glyphPtr, (ulong)count, out _);
+                    CnaException.ThrowIfFailed(glyphResult, nameof(LoadSpriteFontData));
+                }
+
+                fixed (char* charPtr = characters)
+                {
+                    CnaResult charResult = Native.cna_sprite_font_copy_characters(
+                        font, (ushort*)charPtr, (ulong)count, out _);
+                    CnaException.ThrowIfFailed(charResult, nameof(LoadSpriteFontData));
+                }
+            }
+
+            var bounds = new Rectangle[count];
+            var cropping = new Rectangle[count];
+            var kerning = new Vector3[count];
+            for (int i = 0; i < count; i++)
+            {
+                CnaSpriteFontGlyph glyph = glyphs[i];
+                bounds[i] = new Rectangle(
+                    glyph.GlyphBounds.X, glyph.GlyphBounds.Y, glyph.GlyphBounds.Width, glyph.GlyphBounds.Height);
+                cropping[i] = new Rectangle(
+                    glyph.Cropping.X, glyph.Cropping.Y, glyph.Cropping.Width, glyph.Cropping.Height);
+                kerning[i] = new Vector3(glyph.Kerning.X, glyph.Kerning.Y, glyph.Kerning.Z);
+            }
+
+            data = new SpriteFontData(
+                texture.AsNint,
+                bounds,
+                cropping,
+                characters,
+                info.LineSpacing,
+                info.Spacing,
+                kerning,
+                info.HasDefaultCharacter != 0 ? (char)info.DefaultCharacter : null);
+
+            return true;
+        }
+        finally
+        {
+            // Before the caller can ever destroy the atlas, and unconditionally: an exception on
+            // the way out must not leave the font holding the texture hostage.
+            Native.cna_sprite_font_destroy(font);
+        }
     }
 
     /// <summary>

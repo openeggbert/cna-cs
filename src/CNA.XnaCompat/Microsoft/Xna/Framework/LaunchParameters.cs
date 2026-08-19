@@ -13,4 +13,11 @@ public class LaunchParameters : CNA.LaunchParameters
         : base(arguments)
     {
     }
+
+    /// <summary>Re-wraps an already-materialised set, which is how the compat <c>Game</c> re-types
+    /// the base's dictionary without asking native for it twice.</summary>
+    public LaunchParameters(IEnumerable<KeyValuePair<string, string>> parameters)
+        : base(parameters)
+    {
+    }
 }

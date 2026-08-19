@@ -11,7 +11,9 @@ namespace Microsoft.Xna.Framework;
 /// <c>Dispose</c>) is inherited unchanged, since those signatures don't involve any type that
 /// differs between CNA and Microsoft.Xna.Framework.
 /// </summary>
-public abstract class Game : CNA.Game
+/// <remarks>Concrete, matching both XNA and <see cref="CNA.Game"/> -- see that type's own
+/// remarks.</remarks>
+public class Game : CNA.Game
 {
     public new Content.ContentManager Content => (Content.ContentManager)base.Content;
 
@@ -27,10 +29,11 @@ public abstract class Game : CNA.Game
     public new GameComponentCollection Components => _components ??= new GameComponentCollection(base.Components);
 
     /// <summary>Re-typed so a compat game gets this namespace's own <see cref="LaunchParameters"/>.
-    /// The base builds a fresh one per read from the process command line -- see
-    /// <see cref="CNA.Game.LaunchParameters"/> for why it cannot come from native -- so re-wrapping
-    /// costs nothing beyond the parse that was already happening.</summary>
-    public new LaunchParameters LaunchParameters => new(Environment.GetCommandLineArgs().Skip(1));
+    /// Re-wraps the base's dictionary rather than rebuilding it: since
+    /// <see cref="CNA.Game.LaunchParameters"/> started enumerating native, parsing the command line
+    /// a second time here would reintroduce exactly the divergence that change removed -- a
+    /// parameter added at run time would be missing from the compat view only.</summary>
+    public new LaunchParameters LaunchParameters => new(base.LaunchParameters);
 
     protected override Content.ContentManager CreateContentManager() =>
         new Content.ContentManager(GetNativeContentHandle());

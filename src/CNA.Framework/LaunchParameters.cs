@@ -10,6 +10,14 @@ public class LaunchParameters : Dictionary<string, string>
     {
     }
 
+    /// <summary>Copies an already-materialised set. <see cref="Game.LaunchParameters"/> builds one
+    /// key at a time from native and the compat layer re-wraps the result, so both need a route in
+    /// that is not the command-line parser.</summary>
+    public LaunchParameters(IEnumerable<KeyValuePair<string, string>> parameters)
+        : base(parameters, StringComparer.OrdinalIgnoreCase)
+    {
+    }
+
     /// <summary>Parses <c>-key:value</c> / <c>/key:value</c> / <c>-flag</c> style arguments, the
     /// form real XNA's own launch-parameter parsing accepts. An argument with no <c>:</c> becomes
     /// a key with an empty value; one that matches nothing recognisable is

@@ -407,3 +407,87 @@ internal readonly struct CnaVector4
         W = w;
     }
 }
+
+/// <summary>ABI-shaped rectangle -- <c>core.h:133</c>'s <c>CNA_Rectangle</c>, four
+/// <see cref="int"/>s in x/y/width/height order.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct CnaRectangle
+{
+    public readonly int X;
+    public readonly int Y;
+    public readonly int Width;
+    public readonly int Height;
+
+    public CnaRectangle(int x, int y, int width, int height)
+    {
+        X = x;
+        Y = y;
+        Width = width;
+        Height = height;
+    }
+}
+
+/// <summary>
+/// One entry of a SpriteFont's glyph table -- <c>sprite_font.h</c>'s <c>CNA_SpriteFontGlyph</c>.
+///
+/// Versioned per *element*, not per array: <c>struct_size</c> and <c>struct_version</c> sit on
+/// every entry, and version one "requires exact current size". So a caller-supplied array has to
+/// stamp both on each element, and this is the one array in the binding where the two-call
+/// size-then-copy pattern hands back caller-initialized structs rather than plain values.
+///
+/// <c>Character</c> is UTF-16, which maps to C#'s <see cref="char"/> exactly. <c>Reserved</c> must
+/// be zero.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaSpriteFontGlyph
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaRectangle GlyphBounds;
+    public CnaRectangle Cropping;
+    public ushort Character;
+    public ushort Reserved;
+    public CnaVector3 Kerning;
+
+    /// <summary>A zeroed element carrying the version stamp this ABI requires, for the
+    /// caller-initialized half of the contract.</summary>
+    public static unsafe CnaSpriteFontGlyph Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaSpriteFontGlyph),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>
+/// A SpriteFont's layout summary -- <c>sprite_font.h</c>'s <c>CNA_SpriteFontInfo</c>.
+///
+/// Caller-initialized and versioned, so it is passed by <c>ref</c> rather than <c>out</c>: an
+/// <c>out</c> parameter skips the parameterless constructor, which is where the version stamp
+/// comes from.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaSpriteFontInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public ulong CharacterCount;
+    public int LineSpacing;
+    public float Spacing;
+    public ushort DefaultCharacter;
+    public byte HasDefaultCharacter;
+
+    /// <summary>Matches the header's trailing `uint8_t reserved[5]`, which is returned as zero.
+    /// Declared explicitly rather than left to padding so the managed size matches
+    /// `struct_size`, which version one requires to be exact.</summary>
+    private byte _reserved0;
+    private byte _reserved1;
+    private byte _reserved2;
+    private byte _reserved3;
+    private byte _reserved4;
+
+    public static unsafe CnaSpriteFontInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaSpriteFontInfo),
+        StructVersion = 1,
+    };
+}

@@ -1981,6 +1981,70 @@ internal static partial class Native
     internal static unsafe partial CnaResult cna_title_location_copy_path(
         CnaHandle game, byte* destination, ulong capacity, out ulong outBytes);
 
+    /// <summary>
+    /// <c>runtime.h:598</c>. The index-addressed key accessor that makes
+    /// <c>Game.LaunchParameters</c> materialisable: every other accessor is keyed, which is enough
+    /// to read a parameter a caller can already name and not enough to build the map.
+    ///
+    /// <b>Order is by name, ordinal, ascending</b> -- deliberately not the underlying container's
+    /// own order, which is a hash map's and so unspecified between calls. Sorting makes an index a
+    /// function of the key set alone. Adding a parameter still invalidates indices taken before it,
+    /// so read the count and walk it without adding in between.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_game_launch_parameters_get_key_size(
+        CnaHandle game, ulong index, out ulong outBytes);
+
+    /// <summary>See <see cref="cna_game_launch_parameters_get_key_size"/>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_game_launch_parameters_copy_key(
+        CnaHandle game, ulong index, byte* destination, ulong capacity, out ulong outBytes);
+
+    /// <summary>
+    /// <c>content.h:211</c>. The canonical <c>Load&lt;SpriteFont&gt;</c> specialization, reading
+    /// both the <c>.xnb</c> font container and CNA's own <c>.cnj</c> font descriptor.
+    ///
+    /// <b>Two owned handles for one asset</b>, which is why this loader has a parameter the other
+    /// three do not: a SpriteFont is a font *and* the atlas it draws from, and handing back only
+    /// the font would leave the atlas alive but unnameable. Destroy the font first -- the atlas is
+    /// retained while a font uses it, so <c>cna_texture2d_destroy</c> refuses with
+    /// <c>INVALID_STATE</c> until then.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_load_sprite_font(
+        CnaHandle contentManager,
+        CnaStringView assetName,
+        out CnaHandle spriteFont,
+        out CnaHandle texture);
+
+    /// <summary>
+    /// <c>sprite_font.h:146</c>. The inverse of <c>cna_sprite_font_create</c>: the same array that
+    /// constructor accepts, in the same order, so a font round-trips without loss. Element
+    /// <c>i</c> describes the character <c>cna_sprite_font_copy_characters</c> returns at <c>i</c>.
+    ///
+    /// It exists because measuring is not drawing. <c>cna_sprite_font_measure_utf8</c> sizes a whole
+    /// string, which lays out a text box and cannot place a glyph -- without per-glyph bounds,
+    /// cropping and kerning a native-owned font could be measured and never drawn.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sprite_font_copy_glyphs(
+        CnaHandle spriteFont, CnaSpriteFontGlyph* destination, ulong capacity, out ulong outCount);
+
+    /// <summary><c>sprite_font.h</c>. Caller-initialized versioned output, hence <c>ref</c>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sprite_font_get_info(CnaHandle spriteFont, ref CnaSpriteFontInfo info);
+
+    /// <summary><c>sprite_font.h</c>. UTF-16 code units, so <see cref="ushort"/> maps to C#'s
+    /// <see cref="char"/> one for one.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sprite_font_copy_characters(
+        CnaHandle spriteFont, ushort* destination, ulong capacity, out ulong outCount);
+
+    /// <summary><c>sprite_font.h</c>. Must run before the atlas texture is destroyed -- the font
+    /// retains it, and <c>cna_texture2d_destroy</c> answers <c>INVALID_STATE</c> until then.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sprite_font_destroy(CnaHandle spriteFont);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_apply_changes(CnaHandle manager);
 
