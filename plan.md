@@ -2,6 +2,32 @@
 
 ## Coverage: how it is measured, and what it is
 
+### Runtime coverage: where it stopped, and why
+
+Measured by `tools/coverage/runtimecoverage.py`, which refuses to print a single number because
+most of the compat surface has no native side to exercise. **Native-backed: 74 of 89 (83%).**
+
+Fifteen native-backed types have never executed, and each is blocked by something absent from this
+machine rather than by anything missing from the binding:
+
+| Types | Why unreachable here |
+| --- | --- |
+| `AudioEngine`, `SoundBank`, `WaveBank`, `Cue`, `AudioCategory` | XACT needs authored `.xgs`/`.xwb`/`.xsb` banks. Nothing in this repository can produce one -- they come from the XACT authoring tool. |
+| `Song`, `SongCollection`, `Artist`, `ArtistCollection`, `Genre`, `GenreCollection`, `Playlist`, `PlaylistCollection`, `AlbumCollection` | The media library opens and scans; this machine reports 0 songs. Reachable unchanged on a machine with music. |
+| `PictureAlbumCollection` | Pictures exist here (17) and the album tree walks, but `album.Albums` reports 0 sub-albums. Needs a nested picture album on disk. |
+
+`EffectAnnotation` was the last one that looked reachable and is not: a source effect declaring two
+uniforms reflects zero parameters on SOFTWARE, which accepts any non-empty text without inspecting
+it. Recorded because "probably reflects nothing" was a prediction, and this project has been wrong
+about seven of those -- it was worth the ten minutes to measure rather than assume.
+
+**What this coverage does and does not establish.** It establishes that each covered type's native
+routes are reachable and answer plausibly. It does not establish correctness: a shallow smoke test
+finds a fabricated import, a wrong struct layout and a stale handle, and would not find a subtly
+wrong blend equation. The distinction matters because 83% reads like a completeness claim and is
+not one.
+
+
 Three diffs against the C++ engine's own `Microsoft/Xna/Framework/**` headers,
 which are the authority — not a remembered list of XNA 4.0.
 
