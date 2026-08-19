@@ -336,6 +336,34 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_texture_get_info(CnaHandle texture, ref CnaTextureInfo info);
 
+    /// <summary>
+    /// <c>texture.h</c>. Validates that an element size evenly divides a surface-format unit.
+    ///
+    /// This is the query <c>Texture2D.GetData</c> claimed the ABI lacked -- "needs a
+    /// format-and-element-size query upstream" -- while it sat in the same header as the read it
+    /// was guarding. Twelfth entry in plan.md's Corrections table.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texture_validate_get_data_format(
+        uint format, int elementSizeInBytes);
+
+    /// <summary><c>texture.h</c>. Bytes per compression block or uncompressed texel.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_texture_get_format_size(uint format, out int outSize);
+
+    /// <summary>
+    /// <c>texture.h</c>. Reads one typed mip/rectangle transfer into a caller array, atomically:
+    /// failure does not modify the destination.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texture2d_get_data(
+        CnaHandle texture,
+        uint dataType,
+        CnaTexture2DTransfer* transfer,
+        void* destination,
+        ulong destinationCapacity,
+        out ulong outRequiredElements);
+
     /// <summary>Matches <c>cna_graphics_device_set_texture</c> exactly
     /// (<c>graphics_device.h:642</c>). <see cref="CnaHandle.Zero"/> empties the slot. Binding
     /// stores no ownership native-side -- a destroyed texture unbinds itself.</summary>

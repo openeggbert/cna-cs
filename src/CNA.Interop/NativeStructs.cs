@@ -529,3 +529,34 @@ internal unsafe struct CnaContentTypeReaderCallbacks
         StructVersion = 1,
     };
 }
+
+
+/// <summary>
+/// A typed texture transfer window -- <c>texture.h</c>'s <c>CNA_Texture2DTransfer</c>.
+///
+/// Caller-initialized and versioned, so routes taking it use <c>ref</c>, not <c>out</c>.
+/// <see cref="StartIndex"/> and <see cref="ElementCount"/> index the <em>caller's</em> array;
+/// <see cref="Level"/> and <see cref="Rectangle"/> select the texture region.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaTexture2DTransfer
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public int Level;
+    public byte HasRectangle;
+
+    private byte _reserved0;
+    private byte _reserved1;
+    private byte _reserved2;
+
+    public CnaRectangle Rectangle;
+    public ulong StartIndex;
+    public ulong ElementCount;
+
+    public static unsafe CnaTexture2DTransfer Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaTexture2DTransfer),
+        StructVersion = 1,
+    };
+}

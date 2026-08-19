@@ -153,17 +153,25 @@ public class Texture2D : Texture
     public Rectangle Bounds => new(0, 0, Width, Height);
 
     /// <summary>
-    /// Matches real XNA's <c>GetData</c>. Currently throws.
+    /// Matches real XNA's <c>GetData</c>: reads texels back into a caller array.
     ///
-    /// <c>texture.h</c> declares <c>cna_texture2d_get_data</c> and <c>_get_data_rgba8</c>, but this
-    /// binding has no route to reach them for an arbitrary <typeparamref name="T"/>: the ABI reads
-    /// into a typed destination selected by its own format enum, and mapping an arbitrary managed
-    /// element type onto that safely needs a size-and-format check the ABI does not expose. Rather
-    /// than read the wrong number of bytes, this reports what is missing.
+    /// <b>This threw until the header was re-read.</b> The message said
+    /// <c>cna_texture2d_get_data</c> was unreachable because "this binding has no route to verify
+    /// that an arbitrary element type matches that format ... needs a format-and-element-size query
+    /// upstream". <c>cna_texture_validate_get_data_format</c> is that query, and it sits in the same
+    /// header, a hundred lines from the read it was guarding. Twelfth false "the C API cannot do
+    /// this" claim in this repository; see <c>plan.md</c>'s Corrections table.
     ///
-    /// The member exists rather than being omitted so ported XNA source compiles and fails at the
-    /// call rather than at build time -- see <c>plan.md</c>'s scope mandate.
+    /// The safety it was reaching for is now real, in two parts:
+    /// <see cref="TextureDataType.Of{T}"/> refuses an element type the ABI has no overload for,
+    /// by name, and the native validation confirms the size divides this texture's surface-format
+    /// unit. Both run before a single byte is read.
     /// </summary>
+    /// <exception cref="NotSupportedException">If <typeparamref name="T"/> is not one of the
+    /// element types <c>CNA_TextureDataType</c> names.</exception>
+    /// <exception cref="CnaException">If the element size is incompatible with this texture's
+    /// format, or the region is out of range. The read is atomic -- a failure leaves
+    /// <paramref name="data"/> untouched.</exception>
     public void GetData<T>(T[] data) where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -175,16 +183,39 @@ public class Texture2D : Texture
         GetData(0, null, data, startIndex, elementCount);
 
     /// <summary>See <see cref="GetData{T}(T[])"/>.</summary>
-    public void GetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
+    public unsafe void GetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
         where T : unmanaged
     {
         ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
 
-        throw new NotSupportedException(
-            "Texture2D.GetData is not reachable through the current C API. cna_texture2d_get_data " +
-            "reads into a destination typed by its own format enum, and this binding has no route " +
-            "to verify that an arbitrary element type matches that format -- reading the wrong " +
-            "width would silently corrupt the result. Needs a format-and-element-size query upstream.");
+        uint dataType = TextureDataType.Of<T>();
+
+        // Before the read, not after: the whole point of the check is that reading the wrong width
+        // corrupts silently rather than failing.
+        CnaResult validation = Native.cna_texture_validate_get_data_format((uint)Format, sizeof(T));
+        CnaException.ThrowIfFailed(validation, nameof(GetData));
+
+        CnaTexture2DTransfer transfer = CnaTexture2DTransfer.Versioned();
+        transfer.Level = level;
+        transfer.StartIndex = (ulong)startIndex;
+        transfer.ElementCount = (ulong)elementCount;
+
+        if (rect is { } region)
+        {
+            transfer.HasRectangle = 1;
+            transfer.Rectangle = new CnaRectangle(region.X, region.Y, region.Width, region.Height);
+        }
+
+        fixed (T* destination = data)
+        {
+            CnaResult result = Native.cna_texture2d_get_data(
+                new CnaHandle(NativeHandleValue), dataType, &transfer, destination, (ulong)data.Length, out _);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
     }
 
     /// <summary>

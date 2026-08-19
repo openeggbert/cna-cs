@@ -104,27 +104,55 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Pins a *known gap* rather than a capability: <c>Texture2D.GetData</c> is one of the 28
-    /// members that throw, because <c>cna_texture2d_get_data</c> reads into a destination typed by
-    /// its own format enum and the ABI has no way to confirm an arbitrary element type matches.
+    /// The full round trip. This test previously asserted that <c>GetData</c> <em>threw</em>,
+    /// pinning it as a known gap "until the ABI gains a format-and-element-size query" -- and the
+    /// query was in the same header the whole time. It now asserts what it should always have:
+    /// bytes written come back.
     ///
-    /// Worth a test precisely because it is expected to start failing. The day the ABI gains a
-    /// format-and-element-size query, this test fails and says so, instead of the throw quietly
-    /// outliving its reason -- which is exactly how this repository accumulated ten "the C API
-    /// cannot do this" claims that were false.
+    /// The most layout-sensitive path in the binding. <see cref="Color"/> must be four bytes in
+    /// RGBA order on both sides and the transfer descriptor must match the C struct field for
+    /// field; a mismatch reads plausible-looking garbage rather than failing.
     /// </summary>
     [NativeFact]
-    public void Texture2D_GetData_ThrowsAndNamesWhatIsMissing()
+    public void Texture2D_SetThenGetData_RoundTrips()
+    {
+        InsideAFrame(device =>
+        {
+            using var texture = new Texture2D(device, 2, 2);
+
+            Color[] written =
+            [
+                new(255, 0, 0, 255), new(0, 255, 0, 255),
+                new(0, 0, 255, 255), new(255, 255, 255, 128),
+            ];
+
+            texture.SetData(written);
+
+            var read = new Color[4];
+            texture.GetData(read);
+
+            output.WriteLine("wrote: " + string.Join(", ", written));
+            output.WriteLine("read:  " + string.Join(", ", read));
+
+            Assert.Equal(written, read);
+        });
+    }
+
+    /// <summary>An element type the ABI has no overload for must be refused by name, not silently
+    /// read as raw bytes -- a byte-wise read of the wrong type succeeds, returns the right byte
+    /// count, and is wrong.</summary>
+    [NativeFact]
+    public void Texture2D_GetData_RefusesAnUnmappedElementType()
     {
         InsideAFrame(device =>
         {
             using var texture = new Texture2D(device, 2, 2);
             texture.SetData(new Color[4]);
 
-            var thrown = Assert.Throws<NotSupportedException>(() => texture.GetData(new Color[4]));
+            var thrown = Assert.Throws<NotSupportedException>(() => texture.GetData(new long[4]));
 
             output.WriteLine(thrown.Message);
-            Assert.Contains("cna_texture2d_get_data", thrown.Message, StringComparison.Ordinal);
+            Assert.Contains("CNA_TextureDataType", thrown.Message, StringComparison.Ordinal);
         });
     }
 
