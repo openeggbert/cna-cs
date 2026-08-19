@@ -90,7 +90,7 @@ public class PlatformSurfaceTests(ITestOutputHelper output, NativeGameFixture fi
             // TouchCollection is a value type, so it cannot be null -- the assertion that means
             // something is that it is the read-only snapshot XNA specifies.
             Assert.True(state.IsReadOnly, "A touch snapshot must be read-only.");
-            Assert.Equal(0, state.Count);
+            Assert.Empty(state);
         });
     }
 
