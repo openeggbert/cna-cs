@@ -131,9 +131,26 @@ the correct order meanwhile, self-healingly.
 ## Corrections — read before trusting a "cannot be done" note below
 
 A header audit on 2026-08-18 checked every claim in this repository that some
-capability was absent from the C API. Ten were false. The historical entries
-further down are left as the record of what was believed at the time, so this
-list is where the current truth lives:
+capability was absent from the C API. Ten were false, and the count has since
+grown. The historical entries further down are left as the record of what was
+believed at the time, so this list is where the current truth lives.
+
+**Six shapes, and the instrument differs for each.** The transferable part is not
+the individual corrections but that "re-read the header" only catches the first
+one:
+
+| Shape | Example | What finds it |
+| --- | --- | --- |
+| Factually wrong about the ABI | `MediaLibrary` "has no C ABI exposure"; `media_library.h` has 148 functions | Re-reading the header |
+| True but not conclusive | `GetVertexBuffers` "cannot be answered" -- true about bare handles, and `GetRenderTargets` twenty lines up solves the same problem | Noticing the problem is solved nearby |
+| Outlived its premise | The `.cnj` factory row upstream, true until a later slice gave C a type it could name | Re-checking the *reason*, not the conclusion |
+| True symptom, confident wrong cause | `PreparingDeviceSettings` "the collection delivers a const reference" -- it holds settings by pointer | Nothing textual. Naming a cause answers the follow-up question before anyone asks it, which is why this shape is the most durable |
+| A claim about *this* binding its own code contradicts | `EffectParameter` "has no GraphicsDevice" -- every construction site passes one | Reading call sites. No sweep here points inward |
+| True of one member, written down about the class | "Custom shaders are blocked" -- true of `COMPILED_EFFECTS`, false of `CUSTOM_EFFECTS` | Enumerating the capability, not the category |
+
+Two questions worth asking of any such note: *is the stated reason true?* and
+*does it force the conclusion?* They are different, and the second catches shapes
+two through six.
 
 | Claim, as recorded | Reality |
 | --- | --- |
