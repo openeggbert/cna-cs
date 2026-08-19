@@ -18,8 +18,11 @@ public static class CnaAbi
     /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.3.0).
     ///
     /// 0.1.0 -> 0.2.0 was the content-reader registration, SpriteFont and launch-parameter routes.
-    /// 0.3.0 -> 0.4.0 added the <c>.cnj</c> loader registration, and 0.4.0 -> 0.5.0 the native-window
-    /// accessor, both additively.
+    /// 0.3.0 -> 0.4.0 added the <c>.cnj</c> loader registration and 0.4.0 -> 0.5.0 the native-window
+    /// accessor, both additively. 0.5.0 -> 0.6.0 is <em>not</em> additive: an empty shader source is
+    /// now refused with <c>INVALID_ARGUMENT</c> before any renderer sees it, where SOFTWARE used to
+    /// throw (reported as <c>INTERNAL</c>, blaming CNA for the caller's input) and SDL_RENDERER
+    /// used to return a handle for an effect with no source at all.
     /// 0.2.0 -> 0.3.0 is <em>not</em> additive: every route taking a <c>CNA_Bool</c> now refuses a
     /// byte outside {0, 1} with <c>INVALID_ARGUMENT</c>. Sixty-six of ninety-four used to accept
     /// one and then disagree about what it meant -- read as <c>!= CNA_FALSE</c> in some places and
@@ -35,7 +38,7 @@ public static class CnaAbi
     /// <c>CNA_C_API_0.1</c> and deliberately does <em>not</em> track this. Moving a version node on
     /// a minor bump would break every already-linked consumer.
     /// </summary>
-    public const uint ExpectedVersion = (0u << 16) | (5u << 8) | 0u;
+    public const uint ExpectedVersion = (0u << 16) | (6u << 8) | 0u;
 
     private static bool _checked;
 

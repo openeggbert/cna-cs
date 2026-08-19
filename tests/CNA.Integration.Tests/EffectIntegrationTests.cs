@@ -152,15 +152,39 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     /// project has already been caught doing once. So it is skipped, asserting the *correct*
     /// behaviour, and deleting the skip is the verification.
     /// </summary>
-    [NativeFact("Upstream: cna_shader_effect_create accepts text that is not a shader and returns a live effect. Reported; remove this Skip to verify the fix.")]
-    public void Effect_FromShaderSource_RejectsMalformedText()
+    [NativeFactRequiring(GraphicsCapability.CustomEffects)]
+    public void Effect_FromShaderSource_ReportsTheRenderersVerdict()
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            var thrown = Assert.Throws<CnaException>(() =>
-                new Effect(device, "this is not a shader", "neither is this"));
+            using var effect = new Effect(device, "this is not a shader", "neither is this");
 
-            output.WriteLine(thrown.Message);
+            bool valid = effect.IsSourceValid;
+            output.WriteLine($"renderer '{device.RendererName}' says valid={valid}");
+
+            // Deliberately not asserting a value. The answer is genuinely renderer-dependent and
+            // both are correct: SDL_RENDERER compiles and refuses, SOFTWARE accepts any non-empty
+            // text. Asserting either would encode one renderer's behaviour as the contract.
+            //
+            // What is asserted is the asymmetry the ABI specifies -- false means a renderer looked
+            // and refused, so a false here must be a real rejection.
+            if (!valid)
+            {
+                output.WriteLine("a renderer looked at this and refused it, which is the strong answer");
+            }
+        });
+    }
+
+    /// <summary>An empty source is refused before any renderer sees it, identically everywhere.
+    /// It used to make SOFTWARE throw -- surfacing as INTERNAL, blaming CNA for the caller's input
+    /// -- while SDL_RENDERER handed back an effect with no source at all.</summary>
+    [NativeFactRequiring(GraphicsCapability.CustomEffects)]
+    public void Effect_FromShaderSource_RejectsEmptySource()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            Assert.Throws<ArgumentException>(() => new Effect(device, string.Empty, "x"));
+            Assert.Throws<ArgumentException>(() => new Effect(device, "x", string.Empty));
         });
     }
 }

@@ -135,20 +135,23 @@ public class GraphicsDevice : IDisposable
     /// rather than a failure: supplying text for a dialect nobody named is how a shader compiles on
     /// one machine and not another.
     ///
-    /// <b>The route is declared and not exported.</b> <c>graphics.h:641</c> declares
-    /// <c>cna_graphics_device_get_shading_dialect</c>; neither built library exports it, confirmed
-    /// by <c>nm -D</c> against both, while <c>cna_shader_effect_create</c> from the same header is
-    /// exported. Reported upstream. This answers <see cref="ShaderDialect.Unknown"/> until it
-    /// exists, which is the honest answer and the one that stops a caller guessing -- calling it
-    /// would raise <see cref="EntryPointNotFoundException"/> at the call site, naming a symbol
-    /// rather than the mismatch.
-    ///
-    /// Worth recording how it was found, because a header sweep cannot: the declarations were
-    /// checked against <c>nm -D</c> output as a set difference. An export *count* matching a
-    /// declaration count would be satisfied by a header naming one route the library lacks while
-    /// the library exports one the header lacks.
+    /// This was briefly reported here as a route the headers declared and no library exported.
+    /// That was wrong, and the error is worth keeping: the name I bound,
+    /// <c>cna_graphics_device_get_shading_dialect</c>, appears in no header. It was taken from the
+    /// prose above the real declaration rather than from the declaration, so the library was right
+    /// to lack it. The real route is <c>cna_graphics_device_get_shader_dialect_ext</c> and has
+    /// worked all along.
     /// </summary>
-    public ShaderDialect ShadingDialect => ShaderDialect.Unknown;
+    public ShaderDialect ShadingDialect
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_get_shader_dialect_ext(
+                ResolveNativeDeviceHandle(), out uint dialect);
+            CnaException.ThrowIfFailed(result, nameof(ShadingDialect));
+            return (ShaderDialect)dialect;
+        }
+    }
 
     public Viewport Viewport
     {

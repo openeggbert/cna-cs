@@ -2619,15 +2619,33 @@ internal static partial class Native
         out CnaHandle effect);
 
     /// <summary>
-    /// <c>graphics.h:634</c>. Which dialect a source-based effect's text must be written in.
+    /// <c>graphics.h:661</c>. Which dialect a source-based effect's text must be written in.
     ///
     /// Required rather than optional: source is renderer-specific text, and the header is explicit
     /// that the renderer identity is not a safe way to infer it. Guessing from the name is wrong in
     /// a build carrying more than one backend.
+    ///
+    /// <b>This was first declared as <c>cna_graphics_device_get_shading_dialect</c>, which exists
+    /// in no header.</b> That name was taken from the prose at <c>graphics.h:634</c> -- "gets the
+    /// shading dialect a custom effect's sources must be written in" -- rather than from the
+    /// declaration eight lines below it, and the grep that "found" it had the invented name in the
+    /// pattern. Every declaration here must be copied from a <c>CNA_C_API</c> line, never
+    /// reconstructed from a sentence about one.
     /// </summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_get_shading_dialect(
+    internal static partial CnaResult cna_graphics_device_get_shader_dialect_ext(
         CnaHandle graphicsDevice, out uint outDialect);
+
+    /// <summary>
+    /// <c>effects.h:1465</c>. What the renderer concluded about a source effect's text.
+    ///
+    /// Read the answer asymmetrically, as the header instructs: <c>CNA_TRUE</c> means *nothing
+    /// rejected this source*, which is weaker than *this will draw* -- the software rasterizer
+    /// accepts any non-empty text and reports true. <c>CNA_FALSE</c> is the strong answer, because
+    /// it means a renderer looked and refused.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_shader_effect_is_valid(CnaHandle effect, out byte outIsValid);
 
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_effect_create_compiled(

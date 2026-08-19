@@ -94,9 +94,12 @@ public class Effect : IDisposable
     /// and the header is explicit that the renderer's identity is not a safe way to infer the
     /// dialect -- that inference is wrong in a build carrying more than one backend, which is
     /// exactly the case where it looks right.
+    ///
+    /// <b>Success does not mean the source compiled.</b> Check <see cref="IsSourceValid"/>
+    /// afterwards and read it the way the ABI specifies -- false is the strong answer.
     /// </summary>
-    /// <exception cref="CnaException">If the renderer has no source-effect support, or the sources
-    /// do not compile.</exception>
+    /// <exception cref="CnaException">If the renderer has no source-effect support, or either
+    /// source is empty.</exception>
     public Effect(GraphicsDevice graphicsDevice, string vertexShaderSource, string fragmentShaderSource)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
@@ -113,6 +116,32 @@ public class Effect : IDisposable
 
         CnaException.ThrowIfFailed(result, nameof(Effect));
         _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)));
+    }
+
+    /// <summary>
+    /// What the renderer concluded about a source-built effect's text.
+    ///
+    /// <b>Read this asymmetrically.</b> <see langword="false"/> is the strong answer -- a renderer
+    /// looked at the source and refused it. <see langword="true"/> means only that nothing rejected
+    /// it, which is weaker than "this will draw": the software rasterizer accepts any non-empty
+    /// text and reports true for a shader that cannot draw anything.
+    ///
+    /// The distinction is not pedantry. Constructing from deliberate nonsense succeeds on SOFTWARE
+    /// and reports valid, and fails the same check on SDL_RENDERER. A binding that treated
+    /// construction as verification -- as this one did until the route was found -- hands a game a
+    /// live effect for text that will never render, on exactly the renderer where it is hardest to
+    /// notice.
+    /// </summary>
+    public bool IsSourceValid
+    {
+        get
+        {
+            CnaResult result = Native.cna_shader_effect_is_valid(
+                new CnaHandle(NativeEffectHandleValue), out byte valid);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(IsSourceValid));
+            return valid != 0;
+        }
     }
 
     protected internal Effect(GraphicsDevice graphicsDevice, nint nativeHandleValue)
