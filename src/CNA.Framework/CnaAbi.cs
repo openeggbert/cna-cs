@@ -18,6 +18,7 @@ public static class CnaAbi
     /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.3.0).
     ///
     /// 0.1.0 -> 0.2.0 was the content-reader registration, SpriteFont and launch-parameter routes.
+    /// 0.3.0 -> 0.4.0 added the <c>.cnj</c> loader registration, additively.
     /// 0.2.0 -> 0.3.0 is <em>not</em> additive: every route taking a <c>CNA_Bool</c> now refuses a
     /// byte outside {0, 1} with <c>INVALID_ARGUMENT</c>. Sixty-six of ninety-four used to accept
     /// one and then disagree about what it meant -- read as <c>!= CNA_FALSE</c> in some places and
@@ -33,7 +34,7 @@ public static class CnaAbi
     /// <c>CNA_C_API_0.1</c> and deliberately does <em>not</em> track this. Moving a version node on
     /// a minor bump would break every already-linked consumer.
     /// </summary>
-    public const uint ExpectedVersion = (0u << 16) | (3u << 8) | 0u;
+    public const uint ExpectedVersion = (0u << 16) | (4u << 8) | 0u;
 
     private static bool _checked;
 
@@ -71,6 +72,20 @@ public static class CnaAbi
                 $"but this build of CNA.NET was written against {expectedMajor}.{expectedMinor}.{expectedPatch}. " +
                 "Major versions differ, so the two are not interoperable -- every struct layout and handle " +
                 "convention in this binding assumes the version it was built against.");
+        }
+
+        // A same-major library that is *older* than this binding is missing routes this binding
+        // binds, and the symptom is an EntryPointNotFoundException from whichever call happens to
+        // reach one first -- naming a symbol rather than the mismatch that caused it. The check is
+        // a floor rather than an equality for the reason ABI_VERSIONING.md gives and the installed
+        // CMake package enforces with SameMajorVersion: a *newer* minor is additive and fine.
+        if (nativeMinor < expectedMinor || (nativeMinor == expectedMinor && nativePatch < expectedPatch))
+        {
+            throw new CnaException(
+                $"The loaded cna-native library implements C ABI {nativeMajor}.{nativeMinor}.{nativePatch}, " +
+                $"older than the {expectedMajor}.{expectedMinor}.{expectedPatch} this build of CNA.NET was " +
+                "written against. A newer minor is additive and fine; an older one is missing routes this " +
+                "binding calls, which would otherwise surface later as a missing entry point.");
         }
 
         _checked = true;

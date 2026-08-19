@@ -25,4 +25,17 @@ internal readonly unsafe struct CnaStringView
         Data = data;
         ByteLength = byteLength;
     }
+
+    /// <summary>
+    /// Copies the view into a managed string.
+    ///
+    /// Bounded by <see cref="ByteLength"/> rather than by a terminator, which is load-bearing: the
+    /// ABI documents these as borrowed and <b>not</b> NUL-terminated, so scanning for one reads
+    /// past the buffer. Copying is also the point -- the bytes are only valid for the duration of
+    /// the call that handed them over.
+    /// </summary>
+    public string ToManagedString() =>
+        Data is null || ByteLength == 0
+            ? string.Empty
+            : System.Text.Encoding.UTF8.GetString(Data, checked((int)ByteLength));
 }

@@ -895,6 +895,27 @@ internal static partial class Native
     internal static partial CnaResult cna_content_manager_load_foreign_ext(
         CnaHandle contentManager, CnaStringView assetName, out nint outObject);
 
+    /// <summary>
+    /// <c>content.h</c>. Registers a loader for one <c>"type"</c> value in a <c>.cnj</c> descriptor
+    /// -- the <c>.cnj</c> counterpart of <c>cna_content_type_reader_manager_register</c>.
+    ///
+    /// Together they close what <c>cna_content_manager_load_foreign_ext</c>'s own header used to
+    /// note as a limit: a registered reader answers for an <c>.xnb</c>, this answers for a
+    /// <c>.cnj</c>, and the load route needs no type argument and does not care which produced the
+    /// object.
+    ///
+    /// <b>Per manager, and no unregister</b>, unlike the reader registry which is process-wide and
+    /// hands back a releasable handle. The canonical table belongs to the content manager and goes
+    /// with it, so the registration's lifetime is the manager's -- which means the context must
+    /// outlive the manager, not merely the call.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_content_manager_register_cnj_loader_ext(
+        CnaHandle contentManager,
+        CnaStringView typeName,
+        delegate* unmanaged[Cdecl]<nint, CnaStringView, nint*, CnaResult> callback,
+        nint context);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_content_type_reader_manager_create_reader(CnaStringView canonicalName, out CnaHandle outTypeReader);
 

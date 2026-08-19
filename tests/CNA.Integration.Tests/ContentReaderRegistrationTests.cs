@@ -123,4 +123,69 @@ public class ContentReaderRegistrationTests(ITestOutputHelper output, NativeGame
         Assert.IsType<CnaException>(caught);
     }
 
+    private sealed class StubCnjLoader : CnjLoader
+    {
+        public string? SawJson { get; private set; }
+
+        public override object Load(string descriptorJson)
+        {
+            SawJson = descriptorJson;
+            return new Marker(descriptorJson.Length);
+        }
+    }
+
+    private sealed record Marker(int JsonLength);
+
+    /// <summary>
+    /// The <c>.cnj</c> loader registry, added upstream after this project's framing about
+    /// limitation-asserting claims prompted an audit that found the row saying it was impossible
+    /// had outlived its own premise.
+    ///
+    /// It is the counterpart of the reader registry above, with one deliberate difference worth
+    /// asserting: registration is per content manager and has no unregister, because native's table
+    /// belongs to the manager and dies with it.
+    /// </summary>
+    [NativeFact]
+    public void RegisterCnjLoader_ReachesNative_AndRefusesADuplicateTypeName()
+    {
+        fixture.InsideAFrame(game =>
+        {
+            var loader = new StubCnjLoader();
+            CnjLoaderRegistration registration =
+                game.Content.RegisterCnjLoader("CnaIntegrationTestsMarker", loader);
+
+            Assert.Equal("CnaIntegrationTestsMarker", registration.TypeName);
+
+            // Per-manager and already taken: the second attempt must be refused rather than
+            // silently shadowing the first, the same rule the reader registry follows.
+            var duplicate = Assert.Throws<CnaException>(() =>
+                game.Content.RegisterCnjLoader("CnaIntegrationTestsMarker", new StubCnjLoader()));
+
+            output.WriteLine(duplicate.Message);
+            Assert.Contains("InvalidState", duplicate.Message, StringComparison.Ordinal);
+        });
+    }
+
+    /// <summary>A descriptor naming a type nothing is registered for must fail the load rather than
+    /// fall back -- the same rule a compiled asset naming an unregistered reader follows.</summary>
+    [NativeFact]
+    public void LoadForeign_WithNoRegisteredCnjType_Fails()
+    {
+        Exception? caught = null;
+
+        fixture.InsideAFrame(game =>
+        {
+            try
+            {
+                game.Content.LoadForeign<object>("no-such-cnj-descriptor");
+            }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+        });
+
+        Assert.NotNull(caught);
+        output.WriteLine($"{caught!.GetType().Name}: {caught.Message}");
+    }
 }

@@ -114,6 +114,15 @@ public class ContentManager : IDisposable
         if (disposing)
         {
             Unload();
+
+            // Native's .cnj table goes with the manager, so this is the moment the roots it holds
+            // stop being reachable from native and can be freed.
+            foreach (CnjLoaderRegistration registration in _cnjLoaders)
+            {
+                registration.ReleaseRoots();
+            }
+
+            _cnjLoaders.Clear();
         }
     }
 
@@ -394,6 +403,35 @@ public class ContentManager : IDisposable
     /// <exception cref="ContentLoadException">If the reader produced something else -- a wrong
     /// registration is far easier to make than to notice, and an invalid cast deeper in the caller
     /// would not say which asset caused it.</exception>
+    private readonly List<CnjLoaderRegistration> _cnjLoaders = [];
+
+    /// <summary>
+    /// Registers a <see cref="CnjLoader"/> for descriptors whose <c>"type"</c> is
+    /// <paramref name="typeName"/>, then load them through <see cref="LoadForeign{T}"/>.
+    ///
+    /// The <c>.cnj</c> half of custom content. <see cref="ContentTypeReaderRegistration"/> covers
+    /// compiled <c>.xnb</c> assets; this covers loose descriptors, and
+    /// <see cref="LoadForeign{T}"/> takes either without being told which produced the object --
+    /// which also closes the limit that route's own header used to carry, that only compiled assets
+    /// could reach a registered reader.
+    ///
+    /// <b>Registered against this manager, and not revocable.</b> Native's table belongs to the
+    /// content manager and dies with it, so there is no unregister to expose and the returned
+    /// object is not disposable. <see cref="Dispose(bool)"/> releases the managed roots at the same
+    /// moment native drops the table.
+    /// </summary>
+    /// <exception cref="CnaException">If <paramref name="typeName"/> is already registered on this
+    /// manager. A descriptor naming nothing registered fails its load rather than falling back --
+    /// the same rule a compiled asset naming an unregistered reader follows.</exception>
+    public CnjLoaderRegistration RegisterCnjLoader(string typeName, CnjLoader loader)
+    {
+        CnjLoaderRegistration registration =
+            CnjLoaderRegistration.Register(_nativeHandleValue, typeName, loader);
+
+        _cnjLoaders.Add(registration);
+        return registration;
+    }
+
     public T LoadForeign<T>(string assetName)
         where T : class
     {

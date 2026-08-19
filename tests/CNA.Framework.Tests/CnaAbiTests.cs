@@ -30,8 +30,9 @@ public class CnaAbiTests
 
     /// <summary>
     /// The constant this binding compares against must be the version it was written for, now
-    /// 0.3.0 -- 0.2.0 added the content-reader registration, SpriteFont and launch-parameter
-    /// routes; 0.3.0 tightened CNA_Bool to reject any byte outside {0, 1}.
+    /// 0.4.0 -- 0.2.0 added the content-reader registration, SpriteFont and launch-parameter
+    /// routes, 0.3.0 tightened CNA_Bool to reject any byte outside {0, 1}, and 0.4.0 added the
+    /// <c>.cnj</c> loader registration.
     ///
     /// Updating this alongside the constant is the point: a constant that drifts silently would
     /// make the compatibility check pass against a library it should reject. Only the *major*
@@ -41,7 +42,7 @@ public class CnaAbiTests
     [Fact]
     public void ExpectedVersion_IsTheAbiThisBindingWasWrittenAgainst()
     {
-        Assert.Equal((0, 3, 0), CnaAbi.Decode(CnaAbi.ExpectedVersion));
+        Assert.Equal((0, 4, 0), CnaAbi.Decode(CnaAbi.ExpectedVersion));
     }
 
     /// <summary>Round-trips every field independently, so a mask that swallowed a neighbouring
