@@ -57,6 +57,32 @@ catches, which is why there are four rather than one:
 `md2.py` is the shared parser (`cpp_public`, `normalise`, `cs_file_members`), not
 a script to run on its own.
 
+## These gates have been tested against a planted failure
+
+A gate that has never failed has not been tested. All three checks in `sweep.py` were verified on
+2026-08-19 by planting a defect and confirming each fired, then removing it and confirming clean:
+
+| Planted | Reported |
+| --- | --- |
+| A declaration naming a symbol in no header | `NOT IN HEADERS (1): ['cna_planted_gate_probe_that_does_not_exist']` |
+| The same, against the built libraries | `2855 exports, 1 declaration(s) absent` |
+| A real symbol declared with one parameter too many | `ARITY MISMATCH (1): [('cna_shader_effect_has_renderer', 3, 2)]` |
+
+Worth repeating whenever one of them is changed. A green run proves the script executed, not that
+it can still see anything.
+
+## Why the parser keys on `CNA_C_API` and not on the name
+
+A doc comment that mentions a route in prose is indistinguishable from a declaration to any pattern
+built from the *name*. That is not hypothetical: a route was once bound into this repository under
+a name that exists in no header, taken from the sentence above the real declaration — and the grep
+that "confirmed" it had the invented name in its own pattern, so it matched the prose. A search
+containing its own answer confirms nothing.
+
+The trap is in the material rather than in any one binding, and upstream keeps that prose
+deliberately (rewriting every doc sentence that names a route is the wrong trade). So the defence
+belongs here: match the declaration syntax, never the identifier.
+
 ## Triaging the output
 
 Neither `unbound.py` nor `md2run.py` returns zero, and neither should — most of

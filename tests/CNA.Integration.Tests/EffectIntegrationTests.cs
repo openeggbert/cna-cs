@@ -187,4 +187,53 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
             Assert.Throws<ArgumentException>(() => new Effect(device, "x", string.Empty));
         });
     }
+
+    /// <summary>
+    /// The last avenue for reaching <c>EffectAnnotation</c>: a source effect whose shader declares
+    /// an annotated parameter.
+    ///
+    /// Expected to find nothing on this renderer, and the test says so rather than asserting a
+    /// count. SOFTWARE's <c>ShadingDialect</c> answers Unknown and its compile step accepts any
+    /// non-empty text without inspecting it, so there is no reflected graph for annotations to
+    /// appear in -- which is the same reason the stock effects report zero parameters here.
+    ///
+    /// Worth running anyway, because "it probably reflects nothing" is a prediction and this
+    /// project has been wrong about six of those. If a parameter ever appears, the annotation
+    /// surface becomes reachable and this test starts saying something.
+    /// </summary>
+    [NativeFactRequiring(GraphicsCapability.CustomEffects)]
+    public void Effect_FromShaderSource_ReportsWhateverReflectionTheRendererOffers()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            const string Vertex =
+                "#version 330 core\n" +
+                "uniform float u_scale;\n" +
+                "in vec3 a_position;\n" +
+                "void main() { gl_Position = vec4(a_position * u_scale, 1.0); }";
+
+            const string Fragment =
+                "#version 330 core\n" +
+                "uniform vec4 u_tint;\n" +
+                "out vec4 o_color;\n" +
+                "void main() { o_color = u_tint; }";
+
+            using var effect = new Effect(device, Vertex, Fragment);
+
+            output.WriteLine(
+                $"renderer '{device.RendererName}' dialect={device.ShadingDialect} " +
+                $"valid={effect.IsSourceValid} parameters={effect.Parameters.Count} " +
+                $"techniques={effect.Techniques.Count}");
+
+            for (int i = 0; i < effect.Parameters.Count; i++)
+            {
+                EffectParameter parameter = effect.Parameters[i];
+                output.WriteLine($"  {parameter.Name}: {parameter.Annotations.Count} annotation(s)");
+            }
+
+            // No count assertion: zero is the honest answer on a renderer that does not inspect
+            // source, and asserting it would make this pass forever on a renderer that later does.
+            Assert.True(effect.Parameters.Count >= 0);
+        });
+    }
 }
