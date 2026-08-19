@@ -73,6 +73,8 @@ public abstract class MediaLibraryObject : IDisposable
         // The other order would ask native to flag an object through a handle already given back.
         // Failure is deliberately ignored: Dispose must not throw, and a library torn down first
         // makes this an ordinary, harmless failure rather than something a caller can act on.
+        DisposeCachedChildren();
+
         _dispose(NativeHandle);
         GC.KeepAlive(this);
         _handle.Dispose();
@@ -130,6 +132,46 @@ public abstract class MediaLibraryObject : IDisposable
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, context);
         return wrap(value);
+    }
+
+    private readonly Dictionary<string, IDisposable> _cachedChildren = [];
+
+    /// <summary>
+    /// The same read, but each property answers one wrapper for the life of this object.
+    ///
+    /// Every one of these getters mints a <em>new owned</em> native handle, so returning a fresh
+    /// wrapper per read leaked one native collection per call --
+    /// <c>library.Pictures.Count</c> in a loop leaks per iteration. Identical in shape to the leak
+    /// already fixed in the effect family, and identical in consequence: a media library is a
+    /// game-child resource, so a game cannot be destroyed while the leaked collections are alive,
+    /// and the failure surfaces as an unrelated game failing to create.
+    ///
+    /// Keyed on the caller's property name, which is why every call site passes
+    /// <c>nameof(...)</c>. Released with this object, and released rather than *disposed* where the
+    /// element is library-owned -- see <see cref="ReleaseHandleOnly"/> for why the two differ.
+    /// </summary>
+    private protected TResult ReadCachedChild<TResult>(
+        RequiredFunc getter, Func<CnaHandle, TResult> wrap, string context)
+        where TResult : class, IDisposable
+    {
+        if (_cachedChildren.TryGetValue(context, out IDisposable? existing))
+        {
+            return (TResult)existing;
+        }
+
+        TResult created = ReadRequired(getter, wrap, context);
+        _cachedChildren[context] = created;
+        return created;
+    }
+
+    private protected void DisposeCachedChildren()
+    {
+        foreach (IDisposable child in _cachedChildren.Values)
+        {
+            child.Dispose();
+        }
+
+        _cachedChildren.Clear();
     }
 
     private protected delegate CnaResult RequiredFunc(CnaHandle handle, out CnaHandle outValue);

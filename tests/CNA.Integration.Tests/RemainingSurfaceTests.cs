@@ -1,3 +1,4 @@
+using CNA.Content;
 using CNA.Graphics;
 using CNA.Media;
 using Xunit;
@@ -225,6 +226,75 @@ public class RemainingSurfaceTests(ITestOutputHelper output, NativeGameFixture f
 
             output.WriteLine($"name='{texture.Name}' disposed={texture.IsDisposed}");
             Assert.False(texture.IsDisposed);
+        });
+    }
+
+    /// <summary>
+    /// The picture album tree, which is the one media hierarchy with real content here: this
+    /// machine has no music but seventeen pictures, and the first reported album 'Camera'.
+    ///
+    /// Reaching it exercises the shared collection machinery -- ReadOnlyMediaCollection and
+    /// MediaLibraryObject underneath every media collection -- against actual elements rather than
+    /// an empty set, which is the only place that happens.
+    /// </summary>
+    [NativeFact]
+    public void MediaLibrary_PictureAlbums_WalkTheTree()
+    {
+        fixture.InsideAFrame(_ =>
+        {
+            using var library = new MediaLibrary();
+
+            PictureCollection pictures = library.Pictures;
+            if (pictures.Count == 0)
+            {
+                output.WriteLine("no pictures on this machine; nothing to walk");
+                return;
+            }
+
+            PictureAlbum? album = pictures[0].Album;
+            if (album is null)
+            {
+                output.WriteLine("pictures exist but report no album");
+                return;
+            }
+
+            output.WriteLine(
+                $"album '{album.Name}' has {album.Pictures.Count} picture(s) and {album.Albums.Count} sub-album(s); " +
+                $"parent={album.Parent?.Name ?? "none"}");
+
+            Assert.NotNull(album.Name);
+            Assert.True(album.Pictures.Count >= 0);
+
+            // Same wrapper twice: the per-index cache is what stops a library-owned element being
+            // disposed by two owners.
+            Assert.Same(album.Pictures, album.Pictures);
+        });
+    }
+
+    /// <summary>
+    /// A content type reader built from the registry by canonical name. This is the read-only view
+    /// of a reader the registry already holds -- distinct from ManagedContentTypeReader, which is
+    /// the derivable one, and reachable because the built-in readers register themselves.
+    /// </summary>
+    [NativeFact]
+    public void ContentTypeReader_IsCreatableForABuiltInReader()
+    {
+        fixture.InsideAFrame(_ =>
+        {
+            const string TextureReader =
+                "Microsoft.Xna.Framework.Content.Texture2DReader, Microsoft.Xna.Framework.Graphics, " +
+                "Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553";
+
+            if (!ContentTypeReaderManager.IsRegistered(TextureReader))
+            {
+                output.WriteLine("the Texture2D reader is not registered in this build; nothing to create");
+                return;
+            }
+
+            using ContentTypeReader reader = ContentTypeReaderManager.CreateReader(TextureReader);
+
+            output.WriteLine($"target='{reader.TargetTypeName}' version={reader.TypeVersion}");
+            Assert.False(string.IsNullOrEmpty(reader.TargetTypeName));
         });
     }
 }

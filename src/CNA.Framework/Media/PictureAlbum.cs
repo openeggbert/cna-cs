@@ -24,10 +24,10 @@ public class PictureAlbum : MediaLibraryObject, IEquatable<PictureAlbum>
     public PictureAlbum? Parent =>
         ReadOptional(Native.cna_picture_album_get_parent, h => new PictureAlbum(h), nameof(Parent));
 
-    public PictureAlbumCollection Albums => ReadRequired(
+    public PictureAlbumCollection Albums => ReadCachedChild(
         Native.cna_picture_album_get_albums, h => new PictureAlbumCollection(h), nameof(Albums));
 
-    public PictureCollection Pictures => ReadRequired(
+    public PictureCollection Pictures => ReadCachedChild(
         Native.cna_picture_album_get_pictures, h => new PictureCollection(h), nameof(Pictures));
 
     public bool Equals(PictureAlbum? other) => NativeEquals(Native.cna_picture_album_equals, other);

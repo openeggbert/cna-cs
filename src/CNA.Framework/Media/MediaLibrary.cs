@@ -244,27 +244,54 @@ public class MediaLibrary : IDisposable
             return;
         }
 
+        foreach (IDisposable collection in _collections.Values)
+        {
+            collection.Dispose();
+        }
+
+        _collections.Clear();
+
         Native.cna_media_library_dispose(NativeHandle);
         GC.KeepAlive(this);
         _handle.Dispose();
         GC.SuppressFinalize(this);
     }
 
+    private readonly Dictionary<string, IDisposable> _collections = [];
+
     /// <summary>
-    /// Reads one of the library's collections.
+    /// Reads one collection, once, and answers the same wrapper afterwards.
     ///
-    /// Deliberately builds a fresh wrapper on every property read rather than caching one, and the
-    /// caller owns disposing it. Each read takes a new native collection handle, and a cached
-    /// wrapper would have to outlive reads that no longer want it while still holding element
-    /// handles from earlier ones. Callers that enumerate in a loop should hold the collection in a
-    /// local, which is what XNA code does anyway.
+    /// Each of these getters mints a <em>new owned</em> native handle, so returning a fresh wrapper
+    /// per read leaked one native collection per call -- <c>library.Pictures.Count</c> in a loop
+    /// leaks per iteration. The doc that used to sit here reasoned the other way: it said a cached
+    /// wrapper "would have to outlive reads that no longer want it while still holding element
+    /// handles from earlier ones", and told callers to hold the collection in a local.
+    ///
+    /// That was the wrong trade and the same one already corrected in the effect family. The cost
+    /// of caching is one live collection per property for the library's lifetime; the cost of not
+    /// caching is unbounded, and a media library is a game-child resource -- so the leak stops the
+    /// game being destroyed and surfaces later as an unrelated game failing to create. Telling
+    /// callers to hold a local is asking them to work around it.
+    ///
+    /// The element handles a collection hands out are released with it, and released rather than
+    /// disposed, because they are library-owned -- see <c>MediaLibraryObject.ReleaseHandleOnly</c>.
     /// </summary>
     private TCollection Read<TCollection>(CollectionFunc getter, Func<CnaHandle, TCollection> wrap, string context)
+        where TCollection : class, IDisposable
     {
+        if (_collections.TryGetValue(context, out IDisposable? existing))
+        {
+            return (TCollection)existing;
+        }
+
         CnaResult result = getter(NativeHandle, out CnaHandle collection);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, context);
-        return wrap(collection);
+
+        TCollection created = wrap(collection);
+        _collections[context] = created;
+        return created;
     }
 
     private delegate CnaResult CollectionFunc(CnaHandle library, out CnaHandle outCollection);
