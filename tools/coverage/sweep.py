@@ -34,11 +34,35 @@ for p in sorted(glob.glob(H+'*.h')):
         ps=[x.strip() for x in ' '.join(params.split()).split(',') if x.strip() and x.strip()!='void']
         hdr[name]=(ps, doc or '', os.path.basename(p))
 
+def split_params(text):
+    """Split a C# parameter list on top-level commas only.
+
+    A function-pointer parameter carries its own commas --
+    `delegate* unmanaged[Cdecl]<nint, CnaStringView, nint*, CnaResult>` is one parameter with three
+    of them -- so a naive split reports a callback-taking route as having four extra arguments.
+    That is a false positive, and a false positive in a verification tool is worse than no tool:
+    it trains the reader to skim past the one line that will eventually be real."""
+    out, depth, current = [], 0, []
+    for ch in text:
+        if ch in '<([':
+            depth += 1
+        elif ch in '>)]':
+            depth -= 1
+        if ch == ',' and depth == 0:
+            out.append(''.join(current).strip())
+            current = []
+        else:
+            current.append(ch)
+    tail = ''.join(current).strip()
+    if tail:
+        out.append(tail)
+    return [x for x in out if x]
+
 src=open(CS).read()
 decls={}
 for m in re.finditer(r'internal static (?:unsafe )?partial \w+ (cna_\w+)\s*\(([^;]*?)\)\s*;', src, re.S):
     name=m.group(1)
-    ps=[x.strip() for x in ' '.join(m.group(2).split()).split(',') if x.strip()]
+    ps=split_params(' '.join(m.group(2).split()))
     decls[name]=ps
 
 missing=[n for n in decls if n not in hdr]
