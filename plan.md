@@ -73,6 +73,12 @@ signature and throw, naming what is missing — never omit. Members currently in
 that state: `Texture2D.GetData`, `GraphicsDevice.GetVertexBuffers`,
 `RenderTarget2D.ContentLost`, `Effect.Clone` on the abstract base.
 
+**A doc comment is not an implementation.** The `out`-versus-`ref` sweep reads each route's
+`@param` text, and for four routes that text was misleading -- see the Corrections row below. When
+the sweep reports a versioned struct passed by `out`, confirm against
+`modules/c-api/src/*.cpp` whether the body calls `HasSupportedOutputHeader`, not just what the
+header says the parameter receives.
+
 **Verified against the binary, 2026-08-18** — all 807 P/Invoke declarations
 resolve against every built `libcna_c_api.so` (five variants: headless,
 software, sdl-renderer, opengles3, and cnanext's own). Zero absent. Until now
@@ -145,6 +151,7 @@ list is where the current truth lives:
 | `Texture2D.GetData`: "no route to verify that an arbitrary element type matches that format ... needs a format-and-element-size query upstream" | `cna_texture_validate_get_data_format(format, element_size)` is exactly that query, and sits in the same header ~100 lines from the read it was guarding. Implemented; the round trip is covered by an integration test. |
 | `VertexBuffer`/`IndexBuffer` `SetData` with a nonzero `offsetInBytes`: "not supported by the real cna C API ... has no native-buffer offset parameter at all" | `cna_vertex_buffer_set_data_raw_at` and `cna_index_buffer_set_data_at` take a byte offset into **the buffer**, which is exactly what XNA's `offsetInBytes` means. Both implemented and covered by round-trip tests that check neighbouring elements are untouched. |
 | `VertexBuffer.GetData<T>`: "the C API has no raw-bytes vertex readback, only a typed one over its built-in layouts" | `cna_vertex_buffer_get_data_raw` exists, and its own header doc says it was added because that asymmetry "had no reason behind it". Any custom layout, nonzero offset or custom stride now routes through it. |
+| The ten versioned structs passed by `out` are "all documented as receiving a complete version-one value, so `out` is right" | **Four of the ten were wrong.** `cna_graphics_device_get_blend_state`/`_depth_stencil_state`/`_rasterizer_state`/`_sampler_state` call `HasSupportedOutputHeader` on the pointer *before* writing, so an `out` -- which skips the parameterless constructor and so the version stamp -- is refused with INVALID_ARGUMENT. The doc says output; the implementation requires a caller-initialised header. Now `ref` with a seeded value. The other six really are pure outputs, checked against the C++ rather than the doc. |
 | `GraphicsDevice.GetVertexBuffers`: "cannot be answered -- native reports bare handles and this binding cannot map one back to the managed VertexBuffer" | Every word true, and none of it makes the question unanswerable. `GetRenderTargets`, twenty lines up in the same file, has the identical limitation and answers from a cache cross-checked against native's count. Implemented the same way. **The lesson is narrower than the other eleven: the claim was not wrong about the ABI, it was wrong that the ABI decided the outcome.** |
 | `ContentManager.Load<Effect>` fell through to "Unsupported content type" | `cna_content_manager_load_effect` exists and reads all three shapes (compiled `.xnb`, `.cnj` naming a stock effect, `.cnj` carrying shader source). Bound; a missing asset now fails as `Io`, not as an unsupported type. |
 

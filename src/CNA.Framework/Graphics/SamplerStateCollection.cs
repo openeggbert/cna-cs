@@ -36,8 +36,11 @@ public class SamplerStateCollection
         get
         {
             ValidateSlot(index);
+            // Seeded, not defaulted: the route validates this header before writing, so an
+            // unstamped structure is refused. See the declaration for how that was found.
+            var native = CnaSamplerState.Versioned();
             CnaResult result = Native.cna_graphics_device_get_sampler_state(
-                _graphicsDevice.ResolveNativeDeviceHandle(), _stage, (uint)index, out CnaSamplerState native);
+                _graphicsDevice.ResolveNativeDeviceHandle(), _stage, (uint)index, ref native);
             CnaException.ThrowIfFailed(result, nameof(SamplerStateCollection));
             return Wrap(SamplerState.FromNative(native));
         }

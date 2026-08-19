@@ -1013,7 +1013,9 @@ public class GraphicsDevice : IDisposable
 
     protected virtual BlendState QueryBlendState()
     {
-        CnaResult queryResult = Native.cna_graphics_device_get_blend_state(ResolveNativeDeviceHandle(), out CnaBlendState native);
+        var native = CnaBlendState.Versioned();
+        CnaResult queryResult = Native.cna_graphics_device_get_blend_state(
+                ResolveNativeDeviceHandle(), ref native);
         CnaException.ThrowIfFailed(queryResult, nameof(BlendState));
         return BlendState.FromNative(native);
     }
@@ -1036,7 +1038,9 @@ public class GraphicsDevice : IDisposable
 
     protected virtual DepthStencilState QueryDepthStencilState()
     {
-        CnaResult queryResult = Native.cna_graphics_device_get_depth_stencil_state(ResolveNativeDeviceHandle(), out CnaDepthStencilState native);
+        var native = CnaDepthStencilState.Versioned();
+        CnaResult queryResult = Native.cna_graphics_device_get_depth_stencil_state(
+                ResolveNativeDeviceHandle(), ref native);
         CnaException.ThrowIfFailed(queryResult, nameof(DepthStencilState));
         return DepthStencilState.FromNative(native);
     }
@@ -1059,7 +1063,9 @@ public class GraphicsDevice : IDisposable
 
     protected virtual RasterizerState QueryRasterizerState()
     {
-        CnaResult queryResult = Native.cna_graphics_device_get_rasterizer_state(ResolveNativeDeviceHandle(), out CnaRasterizerState native);
+        var native = CnaRasterizerState.Versioned();
+        CnaResult queryResult = Native.cna_graphics_device_get_rasterizer_state(
+                ResolveNativeDeviceHandle(), ref native);
         CnaException.ThrowIfFailed(queryResult, nameof(RasterizerState));
         return RasterizerState.FromNative(native);
     }

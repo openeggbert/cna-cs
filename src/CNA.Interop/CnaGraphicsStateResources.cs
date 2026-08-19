@@ -44,6 +44,23 @@ internal enum CnaRasterizerStatePreset : uint
 [StructLayout(LayoutKind.Sequential)]
 internal struct CnaBlendState
 {
+    /// <summary>
+    /// A zeroed value carrying the version stamp this ABI requires of a <em>caller-initialised</em>
+    /// structure.
+    ///
+    /// Needed on the read path, which is not obvious from the header: the four
+    /// <c>cna_graphics_device_get_*_state</c> routes document <c>out_state</c> as "receives a
+    /// complete version-one descriptor", which reads as a pure output -- and their implementation
+    /// calls <c>HasSupportedOutputHeader</c> on the pointer first, so an unstamped structure is
+    /// rejected with INVALID_ARGUMENT before anything is written. The four matching <c>_init</c>
+    /// routes really are pure outputs and do not do this.
+    /// </summary>
+    public static unsafe CnaBlendState Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaBlendState),
+        StructVersion = 1,
+    };
+
     public uint StructSize;
     public uint StructVersion;
     public uint AlphaBlendFunction;
@@ -65,6 +82,23 @@ internal struct CnaBlendState
 [StructLayout(LayoutKind.Sequential)]
 internal struct CnaDepthStencilState
 {
+    /// <summary>
+    /// A zeroed value carrying the version stamp this ABI requires of a <em>caller-initialised</em>
+    /// structure.
+    ///
+    /// Needed on the read path, which is not obvious from the header: the four
+    /// <c>cna_graphics_device_get_*_state</c> routes document <c>out_state</c> as "receives a
+    /// complete version-one descriptor", which reads as a pure output -- and their implementation
+    /// calls <c>HasSupportedOutputHeader</c> on the pointer first, so an unstamped structure is
+    /// rejected with INVALID_ARGUMENT before anything is written. The four matching <c>_init</c>
+    /// routes really are pure outputs and do not do this.
+    /// </summary>
+    public static unsafe CnaDepthStencilState Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaDepthStencilState),
+        StructVersion = 1,
+    };
+
     public uint StructSize;
     public uint StructVersion;
     public byte DepthBufferEnable;
@@ -113,6 +147,23 @@ internal enum CnaShaderStage : uint
 [StructLayout(LayoutKind.Sequential)]
 internal struct CnaSamplerState
 {
+    /// <summary>
+    /// A zeroed value carrying the version stamp this ABI requires of a <em>caller-initialised</em>
+    /// structure.
+    ///
+    /// Needed on the read path, which is not obvious from the header: the four
+    /// <c>cna_graphics_device_get_*_state</c> routes document <c>out_state</c> as "receives a
+    /// complete version-one descriptor", which reads as a pure output -- and their implementation
+    /// calls <c>HasSupportedOutputHeader</c> on the pointer first, so an unstamped structure is
+    /// rejected with INVALID_ARGUMENT before anything is written. The four matching <c>_init</c>
+    /// routes really are pure outputs and do not do this.
+    /// </summary>
+    public static unsafe CnaSamplerState Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaSamplerState),
+        StructVersion = 1,
+    };
+
     /// <summary>Matches <c>CNA_MAX_SAMPLERS</c> (<c>graphics_state.h:220</c>) -- the entry count of
     /// each of a device's sampler collections.</summary>
     public const int MaxSamplers = 16;
@@ -134,6 +185,23 @@ internal struct CnaSamplerState
 [StructLayout(LayoutKind.Sequential)]
 internal struct CnaRasterizerState
 {
+    /// <summary>
+    /// A zeroed value carrying the version stamp this ABI requires of a <em>caller-initialised</em>
+    /// structure.
+    ///
+    /// Needed on the read path, which is not obvious from the header: the four
+    /// <c>cna_graphics_device_get_*_state</c> routes document <c>out_state</c> as "receives a
+    /// complete version-one descriptor", which reads as a pure output -- and their implementation
+    /// calls <c>HasSupportedOutputHeader</c> on the pointer first, so an unstamped structure is
+    /// rejected with INVALID_ARGUMENT before anything is written. The four matching <c>_init</c>
+    /// routes really are pure outputs and do not do this.
+    /// </summary>
+    public static unsafe CnaRasterizerState Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaRasterizerState),
+        StructVersion = 1,
+    };
+
     public uint StructSize;
     public uint StructVersion;
     public uint CullMode;

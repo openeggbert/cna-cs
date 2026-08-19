@@ -238,8 +238,13 @@ internal static partial class Native
 
     /// <summary>Matches <c>cna_graphics_device_get_blend_state</c> exactly
     /// (<c>graphics_state.h:393</c>).</summary>
+    /// <summary>/// <b>Passed by <c>ref</c>, not <c>out</c>, despite the header calling it an output.</b> The
+    /// implementation validates the caller-supplied header (<c>HasSupportedOutputHeader</c>) before
+    /// writing anything, so an <c>out</c> -- which skips the parameterless constructor and so the
+    /// version stamp -- is rejected with INVALID_ARGUMENT. Found by calling it: the setter worked
+    /// and the getter answered "the sampler-state query is invalid".</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_get_blend_state(CnaHandle device, out CnaBlendState outState);
+    internal static partial CnaResult cna_graphics_device_get_blend_state(CnaHandle device, ref CnaBlendState outState);
 
     /// <summary>Matches <c>cna_graphics_device_set_blend_state</c> exactly
     /// (<c>graphics_state.h:404</c>) -- <paramref name="state"/> is "copied during the call" per
@@ -248,14 +253,24 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_blend_state(CnaHandle device, in CnaBlendState state);
 
+    /// <summary>/// <b>Passed by <c>ref</c>, not <c>out</c>, despite the header calling it an output.</b> The
+    /// implementation validates the caller-supplied header (<c>HasSupportedOutputHeader</c>) before
+    /// writing anything, so an <c>out</c> -- which skips the parameterless constructor and so the
+    /// version stamp -- is rejected with INVALID_ARGUMENT. Found by calling it: the setter worked
+    /// and the getter answered "the sampler-state query is invalid".</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_get_depth_stencil_state(CnaHandle device, out CnaDepthStencilState outState);
+    internal static partial CnaResult cna_graphics_device_get_depth_stencil_state(CnaHandle device, ref CnaDepthStencilState outState);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_depth_stencil_state(CnaHandle device, in CnaDepthStencilState state);
 
+    /// <summary>/// <b>Passed by <c>ref</c>, not <c>out</c>, despite the header calling it an output.</b> The
+    /// implementation validates the caller-supplied header (<c>HasSupportedOutputHeader</c>) before
+    /// writing anything, so an <c>out</c> -- which skips the parameterless constructor and so the
+    /// version stamp -- is rejected with INVALID_ARGUMENT. Found by calling it: the setter worked
+    /// and the getter answered "the sampler-state query is invalid".</summary>
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_graphics_device_get_rasterizer_state(CnaHandle device, out CnaRasterizerState outState);
+    internal static partial CnaResult cna_graphics_device_get_rasterizer_state(CnaHandle device, ref CnaRasterizerState outState);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_rasterizer_state(CnaHandle device, in CnaRasterizerState state);
@@ -381,7 +396,7 @@ internal static partial class Native
     /// than one current value.</summary>
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_get_sampler_state(
-        CnaHandle device, CnaShaderStage stage, uint slot, out CnaSamplerState outState);
+        CnaHandle device, CnaShaderStage stage, uint slot, ref CnaSamplerState outState);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_sampler_state(
