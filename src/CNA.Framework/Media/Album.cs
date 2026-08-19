@@ -33,7 +33,7 @@ public class Album : MediaLibraryObject, IEquatable<Album>
 
     public bool HasArt => ReadBool(Native.cna_album_get_has_art, nameof(HasArt));
 
-    public SongCollection Songs => ReadRequired(Native.cna_album_get_songs, h => new SongCollection(h), nameof(Songs));
+    public SongCollection Songs => ReadCachedChild(Native.cna_album_get_songs, h => new SongCollection(h), nameof(Songs));
 
     /// <summary>The album's cover art as an image stream. Throws for an album with no art, matching
     /// real XNA's documented contract -- <see cref="HasArt"/> is how a caller asks first.</summary>

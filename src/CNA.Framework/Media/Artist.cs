@@ -15,10 +15,10 @@ public class Artist : MediaLibraryObject, IEquatable<Artist>
     public unsafe string Name => ReadName(Native.cna_artist_get_name_size, Native.cna_artist_copy_name, nameof(Name));
 
     public AlbumCollection Albums =>
-        ReadRequired(Native.cna_artist_get_albums, h => new AlbumCollection(h), nameof(Albums));
+        ReadCachedChild(Native.cna_artist_get_albums, h => new AlbumCollection(h), nameof(Albums));
 
     public SongCollection Songs =>
-        ReadRequired(Native.cna_artist_get_songs, h => new SongCollection(h), nameof(Songs));
+        ReadCachedChild(Native.cna_artist_get_songs, h => new SongCollection(h), nameof(Songs));
 
     /// <summary>By name -- delegated to <c>cna_artist_equals</c>, see
     /// <see cref="MediaLibraryObject"/>.</summary>

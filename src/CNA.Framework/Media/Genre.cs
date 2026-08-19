@@ -14,10 +14,10 @@ public class Genre : MediaLibraryObject, IEquatable<Genre>
     public unsafe string Name => ReadName(Native.cna_genre_get_name_size, Native.cna_genre_copy_name, nameof(Name));
 
     public AlbumCollection Albums =>
-        ReadRequired(Native.cna_genre_get_albums, h => new AlbumCollection(h), nameof(Albums));
+        ReadCachedChild(Native.cna_genre_get_albums, h => new AlbumCollection(h), nameof(Albums));
 
     public SongCollection Songs =>
-        ReadRequired(Native.cna_genre_get_songs, h => new SongCollection(h), nameof(Songs));
+        ReadCachedChild(Native.cna_genre_get_songs, h => new SongCollection(h), nameof(Songs));
 
     public bool Equals(Genre? other) => NativeEquals(Native.cna_genre_equals, other);
 

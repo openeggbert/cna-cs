@@ -297,4 +297,47 @@ public class RemainingSurfaceTests(ITestOutputHelper output, NativeGameFixture f
             Assert.False(string.IsNullOrEmpty(reader.TargetTypeName));
         });
     }
+
+    /// <summary>
+    /// Every cached collection property answers the same wrapper twice.
+    ///
+    /// One line per property, and it is the only thing that distinguishes a cache from a leak from
+    /// the outside. Each of these getters mints a new owned native handle, so a property that
+    /// answers a different object each read leaks one per call -- which stops the game being
+    /// destroyed, because these are game-child resources, and then surfaces as an unrelated game
+    /// failing to create.
+    ///
+    /// Written after exactly that was found in the media family by an almost-afterthought
+    /// Assert.Same on two reads of album.Pictures. Cheap enough to apply to every family rather
+    /// than wait for the next one to be found by accident.
+    /// </summary>
+    [NativeFact]
+    public void CachedCollectionProperties_AnswerTheSameWrapperTwice()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            using var library = new MediaLibrary();
+
+            Assert.Same(library.Songs, library.Songs);
+            Assert.Same(library.Albums, library.Albums);
+            Assert.Same(library.Artists, library.Artists);
+            Assert.Same(library.Genres, library.Genres);
+            Assert.Same(library.Playlists, library.Playlists);
+            Assert.Same(library.Pictures, library.Pictures);
+
+            if (library.Pictures.Count > 0 && library.Pictures[0].Album is { } album)
+            {
+                Assert.Same(album.Pictures, album.Pictures);
+                Assert.Same(album.Albums, album.Albums);
+            }
+
+            using var effect = new BasicEffect(device);
+            Assert.Same(effect.Parameters, effect.Parameters);
+            Assert.Same(effect.Techniques, effect.Techniques);
+            Assert.Same(effect.CurrentTechnique, effect.CurrentTechnique);
+            Assert.Same(effect.CurrentTechnique.Passes, effect.CurrentTechnique.Passes);
+
+            output.WriteLine("every cached collection property answered one wrapper");
+        });
+    }
 }

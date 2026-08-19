@@ -17,7 +17,7 @@ public class Playlist : MediaLibraryObject, IEquatable<Playlist>
     public TimeSpan Duration => TimeSpan.FromTicks(ReadTicks(Native.cna_playlist_get_duration, nameof(Duration)));
 
     public SongCollection Songs =>
-        ReadRequired(Native.cna_playlist_get_songs, h => new SongCollection(h), nameof(Songs));
+        ReadCachedChild(Native.cna_playlist_get_songs, h => new SongCollection(h), nameof(Songs));
 
     public bool Equals(Playlist? other) => NativeEquals(Native.cna_playlist_equals, other);
 
