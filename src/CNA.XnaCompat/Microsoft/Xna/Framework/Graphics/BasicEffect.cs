@@ -207,7 +207,7 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights, C
 
     /// <summary>Clones both halves: the native effect and a matching compat wrapper around it. See
     /// <see cref="Effect.Clone"/> for why the base cannot do this.</summary>
-    public override CNA.Graphics.Effect Clone() =>
+    public override Effect Clone() =>
         new BasicEffect((GraphicsDevice)GraphicsDevice, (CNA.Graphics.BasicEffect)Typed.Clone());
 
     /// <summary>Adopts an already-cloned inner effect. Private: only <see cref="Clone"/> has

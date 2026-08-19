@@ -20,6 +20,18 @@ FRAMEWORK = REPO + '/src/CNA.Framework'
 EXERCISED = [REPO + '/tests/CNA.Integration.Tests', REPO + '/../cna-cs-template']
 
 
+# KNOWN LIMITATION, stated because it hid a real gap for the whole of this work.
+#
+# This matches bare identifiers, and both layers name their types identically -- Texture2D exists in
+# CNA.Graphics and in Microsoft.Xna.Framework.Graphics. So a compat type counted as covered when
+# only its CNA counterpart had ever executed, and for a long time that was every one of them: the
+# integration tests were written entirely against CNA.* while a ported game uses the compat layer.
+#
+# Running the compat layer for the first time found four gaps in it immediately, none of which this
+# script could see. Fixing the measurement properly means resolving types rather than matching
+# names, which is a real parser; until then, treat a covered compat type as "covered on at least one
+# layer" and check tests/CNA.Integration.Tests/CompatLayerIntegrationTests.cs for what the compat
+# side actually exercises.
 def identifiers(paths):
     seen = set()
     for root in paths:

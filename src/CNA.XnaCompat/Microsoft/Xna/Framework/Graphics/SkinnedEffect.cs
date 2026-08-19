@@ -236,7 +236,7 @@ public class SkinnedEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights,
 
     /// <summary>Clones both halves: the native effect and a matching compat wrapper around it. See
     /// <see cref="Effect.Clone"/> for why the base cannot do this.</summary>
-    public override CNA.Graphics.Effect Clone() =>
+    public override Effect Clone() =>
         new SkinnedEffect((GraphicsDevice)GraphicsDevice, (CNA.Graphics.SkinnedEffect)Typed.Clone());
 
     /// <summary>Adopts an already-cloned inner effect. Private: only <see cref="Clone"/> has

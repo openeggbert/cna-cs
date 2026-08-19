@@ -76,9 +76,18 @@ public class Effect : CNA.Graphics.Effect
     /// deriving from it, so cloning has to build both halves: the native clone and a matching compat
     /// wrapper around it. Only a concrete effect knows which pair to build, and every concrete
     /// compat effect overrides this.
+    ///
+    /// <b>Returns this namespace's <see cref="Effect"/>, not the CNA one</b>, through a covariant
+    /// return. It used to return the base type, so ported source writing
+    /// <c>Effect clone = effect.Clone();</c> did not compile -- it got a
+    /// <c>CNA.Graphics.Effect</c> where it wanted this one, and needed a cast XNA never asks for.
+    /// Found the first time the compat layer was compiled against, which was also the first time it
+    /// ran: a member whose *return type* is wrong is invisible to a type-level diff and to any test
+    /// written against the other layer.
     /// </summary>
-    public override CNA.Graphics.Effect Clone() =>
+    public override Effect Clone() =>
         throw new NotSupportedException(
             $"{GetType().Name} does not implement Clone. Cloning a compat effect needs both the " +
             "native clone and a matching compat wrapper, which only the concrete effect type can build.");
+
 }

@@ -182,6 +182,49 @@ public class Texture2D : Texture
     public void GetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
         GetData(0, null, data, startIndex, elementCount);
 
+    /// <summary>
+    /// The shared body of every <c>GetData</c> overload's native call, reusable by CNA.XnaCompat's
+    /// parallel <c>Texture2D</c> -- the same reason <see cref="SetDataRgba8"/> is internal.
+    ///
+    /// Compat's <c>Texture2D</c> derives from *its own* <c>Texture</c> rather than from this type,
+    /// so it inherits nothing here and every member has to be re-offered explicitly. That is why
+    /// <c>GetData</c> existed on this layer for some time and was simply absent from the one a
+    /// ported game uses.
+    /// </summary>
+    internal static unsafe void GetDataInto<T>(
+        nint handleValue, SurfaceFormat format, int level, Rectangle? rect,
+        T[] data, int startIndex, int elementCount)
+        where T : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        uint dataType = TextureDataType.Of<T>();
+
+        CnaResult validation = Native.cna_texture_validate_get_data_format((uint)format, sizeof(T));
+        CnaException.ThrowIfFailed(validation, nameof(GetData));
+
+        CnaTexture2DTransfer transfer = CnaTexture2DTransfer.Versioned();
+        transfer.Level = level;
+        transfer.StartIndex = (ulong)startIndex;
+        transfer.ElementCount = (ulong)elementCount;
+
+        if (rect is { } region)
+        {
+            transfer.HasRectangle = 1;
+            transfer.Rectangle = new CnaRectangle(region.X, region.Y, region.Width, region.Height);
+        }
+
+        fixed (T* destination = data)
+        {
+            CnaResult result = Native.cna_texture2d_get_data(
+                new CnaHandle(handleValue), dataType, &transfer, destination, (ulong)data.Length, out _);
+            CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
+    }
+
     /// <summary>See <see cref="GetData{T}(T[])"/>.</summary>
     public unsafe void GetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
         where T : unmanaged
