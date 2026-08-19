@@ -13,57 +13,15 @@ namespace CNA.Integration.Tests;
 /// (<c>cna_game_get_graphics_device</c> fails otherwise), so everything here runs inside a frame
 /// rather than standalone. That is a constraint of the ABI, not a choice.
 /// </summary>
-public class GraphicsIntegrationTests(ITestOutputHelper output)
+[Collection(NativeGameCollection.Name)]
+public class GraphicsIntegrationTests(ITestOutputHelper output, NativeGameFixture fixture)
 {
-    /// <summary>Runs <paramref name="body"/> inside a real frame, with a real device, and surfaces
-    /// whatever it threw as a test failure rather than letting it unwind through native.</summary>
-    private static void InsideAFrame(Action<GraphicsDevice> body)
-    {
-        using var game = new FrameRunner(body);
 
-        for (int i = 0; i < 4 && !game.Ran; i++)
-        {
-            game.RunOneFrame();
-        }
-
-        if (game.Failure is { } failure)
-        {
-            throw new Xunit.Sdk.XunitException($"The body threw inside the frame: {failure}");
-        }
-
-        Assert.True(game.Ran, "The frame never ran, so nothing was exercised.");
-    }
-
-    private sealed class FrameRunner(Action<GraphicsDevice> body) : CNA.Game
-    {
-        public bool Ran { get; private set; }
-
-        public Exception? Failure { get; private set; }
-
-        protected override void Update(GameTime gameTime)
-        {
-            if (!Ran)
-            {
-                Ran = true;
-                try
-                {
-                    body(GraphicsDevice);
-                }
-                catch (Exception ex)
-                {
-                    Failure = ex;
-                }
-            }
-
-            Exit();
-            base.Update(gameTime);
-        }
-    }
 
     [NativeFact]
     public void GraphicsDevice_IsReachable_AndReportsAViewport()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             Assert.NotNull(device);
 
@@ -85,7 +43,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void Texture2D_SetData_UploadsWithoutCorruption()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             using var texture = new Texture2D(device, 2, 2);
 
@@ -116,7 +74,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void Texture2D_SetThenGetData_RoundTrips()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             using var texture = new Texture2D(device, 2, 2);
 
@@ -144,7 +102,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void Texture2D_GetData_RefusesAnUnmappedElementType()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             using var texture = new Texture2D(device, 2, 2);
             texture.SetData(new Color[4]);
@@ -168,7 +126,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void GraphicsDevice_SupportsCapability_AnswersForEveryIdentity()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             output.WriteLine($"renderer '{device.RendererName}'");
 
@@ -191,7 +149,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void GraphicsDevice_Clear_Succeeds()
     {
-        InsideAFrame(device => device.Clear(Color.CornflowerBlue));
+        fixture.InsideAFrameWithDevice(device => device.Clear(Color.CornflowerBlue));
     }
 
     /// <summary>A full SpriteBatch pass: Begin, one Draw, End. This is the whole 2D pipeline, and
@@ -199,7 +157,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void SpriteBatch_BeginDrawEnd_Succeeds()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             using var texture = new Texture2D(device, 1, 1);
             texture.SetData([Color.White]);
@@ -218,7 +176,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void GraphicsAdapter_EnumeratesAtLeastOneAdapter()
     {
-        InsideAFrame(_ =>
+        fixture.InsideAFrameWithDevice(_ =>
         {
             IReadOnlyList<GraphicsAdapter> adapters = GraphicsAdapter.Adapters;
 
@@ -235,7 +193,7 @@ public class GraphicsIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void TitleLocation_ReturnsARealDirectory()
     {
-        InsideAFrame(_ =>
+        fixture.InsideAFrameWithDevice(_ =>
         {
             string path = TitleLocation.Path;
             output.WriteLine($"TitleLocation.Path = '{path}'");

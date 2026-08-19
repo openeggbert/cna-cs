@@ -13,50 +13,10 @@ namespace CNA.Integration.Tests;
 /// writes the right bytes to the wrong place, which no compiler and no managed test can catch --
 /// only reading the buffer back does.
 /// </summary>
-public class BufferIntegrationTests(ITestOutputHelper output)
+[Collection(NativeGameCollection.Name)]
+public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture fixture)
 {
-    private sealed class FrameRunner(Action<GraphicsDevice> body) : CNA.Game
-    {
-        public bool Ran { get; private set; }
 
-        public Exception? Failure { get; private set; }
-
-        protected override void Update(GameTime gameTime)
-        {
-            if (!Ran)
-            {
-                Ran = true;
-                try
-                {
-                    body(GraphicsDevice);
-                }
-                catch (Exception ex)
-                {
-                    Failure = ex;
-                }
-            }
-
-            Exit();
-            base.Update(gameTime);
-        }
-    }
-
-    private static void InsideAFrame(Action<GraphicsDevice> body)
-    {
-        using var game = new FrameRunner(body);
-
-        for (int i = 0; i < 4 && !game.Ran; i++)
-        {
-            game.RunOneFrame();
-        }
-
-        if (game.Failure is { } failure)
-        {
-            throw new Xunit.Sdk.XunitException($"The body threw inside the frame: {failure}");
-        }
-
-        Assert.True(game.Ran, "The frame never ran, so nothing was exercised.");
-    }
 
     private static VertexPositionColor Vertex(float x) =>
         new(new Vector3(x, x, x), new Color((int)x, 0, 0, 255));
@@ -64,7 +24,7 @@ public class BufferIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void VertexBuffer_SetThenGetData_RoundTrips()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             VertexPositionColor[] written = [Vertex(1f), Vertex(2f), Vertex(3f), Vertex(4f)];
 
@@ -92,7 +52,7 @@ public class BufferIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void VertexBuffer_SetData_WithNonzeroOffset_RewritesOnlyThatWindow()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             VertexPositionColor[] original = [Vertex(1f), Vertex(2f), Vertex(3f), Vertex(4f)];
             int stride = VertexPositionColor.VertexDeclaration.VertexStride;
@@ -122,7 +82,7 @@ public class BufferIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void VertexBuffer_GetData_ReadsBackACustomLayout()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             VertexPositionColor[] written = [Vertex(5f), Vertex(6f)];
             int stride = VertexPositionColor.VertexDeclaration.VertexStride;
@@ -143,7 +103,7 @@ public class BufferIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void IndexBuffer_SetData_WithNonzeroOffset_RewritesOnlyThatWindow()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             ushort[] original = [10, 11, 12, 13];
 

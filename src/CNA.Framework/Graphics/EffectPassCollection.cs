@@ -41,8 +41,50 @@ public class EffectPassCollection : IEnumerable<EffectPass>, IDisposable
 
     /// <summary>See the element type's own doc comment: this collection view is an owned native
     /// handle, released by its SafeHandle whether or not a caller disposes it.</summary>
+    /// <summary>
+    /// Per-index wrapper cache. Each read of the native accessor mints a *new owned* handle, so
+    /// returning a fresh wrapper per read leaked one native object per call -- and
+    /// `effect.CurrentTechnique.Passes[0].Apply()`, which is ordinary XNA written once per frame,
+    /// leaked three.
+    ///
+    /// That is not merely untidy. Native refuses to destroy a game while a resource created against
+    /// it is alive, so the leak surfaced as `cna_game_destroy` answering INVALID_STATE and the
+    /// *next* game failing to create. Relying on SafeHandle finalizers could not fix it: XNA's
+    /// EffectTechnique and EffectPass are not IDisposable, no ported game disposes them, and the GC
+    /// has no idea about native's ordering rule.
+    ///
+    /// Same shape ReadOnlyMediaCollection already uses for library-owned elements: one wrapper per
+    /// index, owned by this collection, released with it.
+    /// </summary>
+    private readonly Dictionary<int, EffectPass> _byIndex = [];
+
+    private int _syntheticKey = -1;
+
+    /// <summary>By-name lookups have no stable index to key on, so each gets its own negative slot.
+    /// They still land in the cache, which is what matters: the collection owns them and releases
+    /// them, rather than leaving a native object for a finalizer that runs too late.</summary>
+    private int NextSyntheticKey() => _syntheticKey--;
+
+    private EffectPass Adopt(int key, CnaHandle handle)
+    {
+        if (_byIndex.TryGetValue(key, out EffectPass? existing))
+        {
+            return existing;
+        }
+
+        var created = new EffectPass(handle);
+        _byIndex[key] = created;
+        return created;
+    }
+
     public void Dispose()
     {
+        foreach (EffectPass cached in _byIndex.Values)
+        {
+            cached.Dispose();
+        }
+
+        _byIndex.Clear();
         _ownedHandle.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -66,7 +108,7 @@ public class EffectPassCollection : IEnumerable<EffectPass>, IDisposable
             CnaResult result = Native.cna_effect_pass_collection_get_at(_handle, (ulong)index, out CnaHandle element);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectPassCollection));
-            return new EffectPass(element);
+            return Adopt(index, element);
         }
     }
 
@@ -86,7 +128,7 @@ public class EffectPassCollection : IEnumerable<EffectPass>, IDisposable
                 GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectPassCollection));
 
-            return found != 0 ? new EffectPass(element) : null;
+            return found != 0 ? Adopt(NextSyntheticKey(), element) : null;
         }
     }
 

@@ -20,50 +20,10 @@ namespace CNA.Integration.Tests;
 /// Deliberately shallow. A subsystem that answers plausibly here is not proven correct; it is
 /// proven reachable. That is still the difference between "compiles" and "runs".
 /// </summary>
-public class SubsystemSmokeTests(ITestOutputHelper output)
+[Collection(NativeGameCollection.Name)]
+public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fixture)
 {
-    private sealed class FrameRunner(Action<CNA.Game> body) : CNA.Game
-    {
-        public bool Ran { get; private set; }
 
-        public Exception? Failure { get; private set; }
-
-        protected override void Update(GameTime gameTime)
-        {
-            if (!Ran)
-            {
-                Ran = true;
-                try
-                {
-                    body(this);
-                }
-                catch (Exception ex)
-                {
-                    Failure = ex;
-                }
-            }
-
-            Exit();
-            base.Update(gameTime);
-        }
-    }
-
-    private static void InsideAFrame(Action<CNA.Game> body)
-    {
-        using var game = new FrameRunner(body);
-
-        for (int i = 0; i < 4 && !game.Ran; i++)
-        {
-            game.RunOneFrame();
-        }
-
-        if (game.Failure is { } failure)
-        {
-            throw new Xunit.Sdk.XunitException($"The body threw inside the frame: {failure}");
-        }
-
-        Assert.True(game.Ran, "The frame never ran, so nothing was exercised.");
-    }
 
     /// <summary>Input state readers. All three are pure reads of a device snapshot, so they work
     /// headless -- the values are meaningless without a device, but a crash or a garbled struct is
@@ -71,7 +31,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void Input_AllThreeDevices_ReportState()
     {
-        InsideAFrame(_ =>
+        fixture.InsideAFrameWithDevice(_ =>
         {
             KeyboardState keyboard = Keyboard.GetState();
             Assert.NotNull(keyboard.GetPressedKeys());
@@ -92,7 +52,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void RenderTarget2D_CreatesAndReportsItsProperties()
     {
-        InsideAFrame(game =>
+        fixture.InsideAFrame(game =>
         {
             using var target = new RenderTarget2D(game.GraphicsDevice, 64, 32);
 
@@ -110,7 +70,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void GraphicsDevice_SetAndClearRenderTarget()
     {
-        InsideAFrame(game =>
+        fixture.InsideAFrame(game =>
         {
             GraphicsDevice device = game.GraphicsDevice;
             using var target = new RenderTarget2D(device, 32, 32);
@@ -129,7 +89,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void GraphicsDevice_StateObjects_RoundTrip()
     {
-        InsideAFrame(game =>
+        fixture.InsideAFrame(game =>
         {
             GraphicsDevice device = game.GraphicsDevice;
 
@@ -151,7 +111,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void SoundEffect_CreatesFromPcm_AndReportsDuration()
     {
-        InsideAFrame(_ =>
+        fixture.InsideAFrameWithDevice(_ =>
         {
             // A tenth of a second of silence, 16-bit mono at 44.1 kHz.
             var pcm = new byte[44100 / 10 * 2];
@@ -167,7 +127,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void SoundEffect_GlobalMixerSettings_RoundTrip()
     {
-        InsideAFrame(_ =>
+        fixture.InsideAFrameWithDevice(_ =>
         {
             SoundEffect.MasterVolume = 0.5f;
             Assert.Equal(0.5f, SoundEffect.MasterVolume, 1e-4f);
@@ -182,7 +142,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void MediaPlayer_ReportsItsGlobalState()
     {
-        InsideAFrame(_ =>
+        fixture.InsideAFrameWithDevice(_ =>
         {
             output.WriteLine($"state={MediaPlayer.State} volume={MediaPlayer.Volume} muted={MediaPlayer.IsMuted}");
 
@@ -277,7 +237,7 @@ public class SubsystemSmokeTests(ITestOutputHelper output)
     [NativeFact]
     public void GameWindow_TitleRoundTrips()
     {
-        InsideAFrame(game =>
+        fixture.InsideAFrame(game =>
         {
             game.Window.Title = "cna-cs integration";
             Assert.Equal("cna-cs integration", game.Window.Title);

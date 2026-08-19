@@ -49,6 +49,21 @@ public class Game : IDisposable
 
     private readonly CnaHandle _nativeHandle;
     private readonly byte[] _callbackErrorBuffer = GC.AllocateArray<byte>(CallbackErrorBufferSize, pinned: true);
+    /// <summary>Why the previous game could not be released, if it could not. Static because the
+    /// consequence is global: native allows one C-owned game at a time, so a game that fails to
+    /// release blocks the next one -- and the next one is where the message is finally useful.</summary>
+    private static string? _lastDestroyFailure;
+
+    /// <summary>
+    /// The handle of a game whose destroy was refused, kept so the attempt can be repeated.
+    ///
+    /// Safe to retry precisely because the refusal is a precondition failure: native answers
+    /// INVALID_STATE when a resource created against the game is still alive, and nothing has been
+    /// released at that point. Retrying a destroy that *succeeded* would be undefined -- so this is
+    /// only ever set when the call failed.
+    /// </summary>
+    private static CnaHandle _undestroyedGame = CnaHandle.Zero;
+
     private GCHandle _selfHandle;
     private bool _graphicsDeviceInitialized;
     private bool _disposed;
@@ -83,10 +98,35 @@ public class Game : IDisposable
         CnaAbi.EnsureCompatible();
 
         CnaResult result = Native.cna_game_create(in createInfo, out _nativeHandle);
+
+        // A previous game that refused to be destroyed still holds the one C-owned slot, and the
+        // usual reason is timing rather than a real leak: wrappers whose XNA counterparts are not
+        // IDisposable -- EffectTechnique, EffectPass and friends -- are reclaimed by SafeHandle's
+        // critical finalizer, which had not run yet when the game was disposed.
+        //
+        // So reclaim and try once more, rather than reporting a failure whose cause has already
+        // resolved itself. Retrying the *destroy* is safe here for the reason _undestroyedGame
+        // documents: it only holds a handle whose destroy was refused, and a refusal releases
+        // nothing.
+        if (result.IsFailure() && _undestroyedGame != CnaHandle.Zero)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
+            if (Native.cna_game_destroy(_undestroyedGame).IsSuccess())
+            {
+                _undestroyedGame = CnaHandle.Zero;
+                _lastDestroyFailure = null;
+                result = Native.cna_game_create(in createInfo, out _nativeHandle);
+            }
+        }
+
         if (result.IsFailure())
         {
             _selfHandle.Free();
-            CnaException.ThrowIfFailed(result, "cna_game_create");
+            CnaException.ThrowIfFailed(
+                result,
+                _lastDestroyFailure is { } previous ? $"cna_game_create ({previous})" : "cna_game_create");
         }
 
         var hooks = new CnaGameFrameHooks
@@ -616,7 +656,53 @@ public class Game : IDisposable
             _eventBridges[i] = null;
         }
 
-        Native.cna_game_destroy(_nativeHandle);
+        // Reconcile with native's ordering rule before destroying: a game cannot be destroyed
+        // while a resource created against it is still alive.
+        //
+        // Several native-backed wrappers are deliberately never disposed by callers, because their
+        // XNA counterparts are not IDisposable and no ported game would dispose them --
+        // EffectTechnique, EffectPass and the collections behind them are the clearest case. They
+        // are reclaimed by SafeHandle's critical finalizer, which is fine for memory and says
+        // nothing about ordering: the GC has no idea native cares.
+        //
+        // So the finalizers are forced, and the destroy is retried, because one round is not
+        // enough -- an object can become unreachable *during* a finalizer pass and need the next
+        // one. Bounded at three rounds: if it still refuses, something is genuinely still alive and
+        // looping would only hide it.
+        //
+        // Measured without this: `effect.CurrentTechnique.Passes[0].Apply()`, ordinary XNA written
+        // once per frame, left live handles behind; cna_game_destroy answered INVALID_STATE; the
+        // slot stayed occupied; and the next game failed to create with an error naming neither the
+        // cause nor the culprit. Every integration test passed alone and up to nineteen failed
+        // together, varying with test order.
+        // Finalizers first, then a single destroy. Deliberately not retried around the destroy:
+        // a second cna_game_destroy on a handle the first call may already have consumed is
+        // undefined, and measuring it showed exactly that -- failures rose from six to nearly forty
+        // and drifted between runs.
+        if (disposing)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        }
+
+        CnaResult destroyResult = Native.cna_game_destroy(_nativeHandle);
+
+        // Recorded rather than thrown -- disposal must not throw -- and read by the constructor,
+        // which is where the information is finally actionable. Discarding it is what made the
+        // failure baffling in the first place.
+        if (destroyResult.IsFailure())
+        {
+            _undestroyedGame = _nativeHandle;
+            _lastDestroyFailure =
+                $"a previous game failed to release: cna_game_destroy answered {destroyResult}, which " +
+                "native reports when a resource created against that game outlived it";
+        }
+        else
+        {
+            _undestroyedGame = CnaHandle.Zero;
+            _lastDestroyFailure = null;
+        }
 
         if (CnaAmbientGame.Current == _nativeHandle)
         {

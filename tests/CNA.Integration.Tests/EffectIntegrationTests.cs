@@ -15,50 +15,10 @@ namespace CNA.Integration.Tests;
 /// renderer they assert the documented failure, and if it is present they assert it works. What they
 /// will not do is let a claim about it sit unchecked again.
 /// </summary>
-public class EffectIntegrationTests(ITestOutputHelper output)
+[Collection(NativeGameCollection.Name)]
+public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture fixture)
 {
-    private sealed class FrameRunner(Action<GraphicsDevice> body) : CNA.Game
-    {
-        public bool Ran { get; private set; }
 
-        public Exception? Failure { get; private set; }
-
-        protected override void Update(GameTime gameTime)
-        {
-            if (!Ran)
-            {
-                Ran = true;
-                try
-                {
-                    body(GraphicsDevice);
-                }
-                catch (Exception ex)
-                {
-                    Failure = ex;
-                }
-            }
-
-            Exit();
-            base.Update(gameTime);
-        }
-    }
-
-    private static void InsideAFrame(Action<GraphicsDevice> body)
-    {
-        using var game = new FrameRunner(body);
-
-        for (int i = 0; i < 4 && !game.Ran; i++)
-        {
-            game.RunOneFrame();
-        }
-
-        if (game.Failure is { } failure)
-        {
-            throw new Xunit.Sdk.XunitException($"The body threw inside the frame: {failure}");
-        }
-
-        Assert.True(game.Ran, "The frame never ran, so nothing was exercised.");
-    }
 
     /// <summary>
     /// The constructor exists and reaches native. Garbage bytes are the input on purpose: no
@@ -73,7 +33,7 @@ public class EffectIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void Effect_FromBytecode_ReachesNativeAndJudgesTheInput()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             byte[] notAnEffect = [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
 
@@ -92,7 +52,7 @@ public class EffectIntegrationTests(ITestOutputHelper output)
     [NativeFact]
     public void Effect_FromBytecode_RejectsEmptyAndNullInput()
     {
-        InsideAFrame(device =>
+        fixture.InsideAFrameWithDevice(device =>
         {
             Assert.Throws<ArgumentNullException>(() => new Effect(device, null!));
             Assert.Throws<ArgumentException>(() => new Effect(device, []));
@@ -112,13 +72,17 @@ public class EffectIntegrationTests(ITestOutputHelper output)
     {
         Exception? caught = null;
 
-        using (var probe = new ContentProbe(ex => caught = ex))
+        fixture.InsideAFrame(game =>
         {
-            for (int i = 0; i < 4 && !probe.Ran; i++)
+            try
             {
-                probe.RunOneFrame();
+                game.Content.Load<Effect>("no-such-effect-asset");
             }
-        }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+        });
 
         Assert.NotNull(caught);
         output.WriteLine($"{caught!.GetType().Name}: {caught.Message}");
@@ -127,27 +91,4 @@ public class EffectIntegrationTests(ITestOutputHelper output)
         Assert.Contains("Io", caught.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    private sealed class ContentProbe(Action<Exception> report) : CNA.Game
-    {
-        public bool Ran { get; private set; }
-
-        protected override void Update(GameTime gameTime)
-        {
-            if (!Ran)
-            {
-                Ran = true;
-                try
-                {
-                    Content.Load<Effect>("no-such-effect-asset");
-                }
-                catch (Exception ex)
-                {
-                    report(ex);
-                }
-            }
-
-            Exit();
-            base.Update(gameTime);
-        }
-    }
 }

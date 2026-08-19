@@ -16,6 +16,7 @@ namespace CNA.Integration.Tests;
 /// rather than just "it broke": load the library, read the ABI version, construct a Game, run
 /// frames, shut down.
 /// </summary>
+[Collection(OwnGameCollection.Name)]
 public class GameLifecycleTests(ITestOutputHelper output)
 {
     /// <summary>A game that records what it was asked to do, and asks to exit after a fixed number
@@ -141,6 +142,7 @@ public class GameLifecycleTests(ITestOutputHelper output)
     [NativeFact]
     public void Game_ConstructAndDispose_IsRepeatable()
     {
+
         for (int i = 0; i < 3; i++)
         {
             using var game = new ProbeGame(framesToRun: 1);

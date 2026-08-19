@@ -14,7 +14,8 @@ namespace CNA.Integration.Tests;
 /// needs a fixture built by the XNA content pipeline, which this repository has no way to produce;
 /// that is stated here rather than papered over with a test that proves less than it appears to.
 /// </summary>
-public class ContentReaderRegistrationTests(ITestOutputHelper output)
+[Collection(NativeGameCollection.Name)]
+public class ContentReaderRegistrationTests(ITestOutputHelper output, NativeGameFixture fixture)
 {
     private sealed class StubReader : ManagedContentTypeReader
     {
@@ -105,40 +106,21 @@ public class ContentReaderRegistrationTests(ITestOutputHelper output)
     {
         Exception? caught = null;
 
-        using (var probe = new ForeignProbe(ex => caught = ex))
+        fixture.InsideAFrame(game =>
         {
-            for (int i = 0; i < 4 && !probe.Ran; i++)
+            try
             {
-                probe.RunOneFrame();
+                game.Content.LoadForeign<object>("no-such-foreign-asset");
             }
-        }
+            catch (Exception ex)
+            {
+                caught = ex;
+            }
+        });
 
         Assert.NotNull(caught);
         output.WriteLine($"{caught!.GetType().Name}: {caught.Message}");
         Assert.IsType<CnaException>(caught);
     }
 
-    private sealed class ForeignProbe(Action<Exception> report) : CNA.Game
-    {
-        public bool Ran { get; private set; }
-
-        protected override void Update(GameTime gameTime)
-        {
-            if (!Ran)
-            {
-                Ran = true;
-                try
-                {
-                    Content.LoadForeign<object>("no-such-foreign-asset");
-                }
-                catch (Exception ex)
-                {
-                    report(ex);
-                }
-            }
-
-            Exit();
-            base.Update(gameTime);
-        }
-    }
 }

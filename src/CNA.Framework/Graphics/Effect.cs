@@ -128,6 +128,11 @@ public class Effect : IDisposable
     private EffectParameterCollection? _parameters;
     private EffectTechniqueCollection? _techniques;
 
+    /// <summary>Cached and owned for the same reason as the two above: each read of
+    /// <c>cna_effect_get_current_technique</c> mints a new owned handle, and an XNA game reads
+    /// <c>CurrentTechnique</c> once per frame without ever disposing what it gets back.</summary>
+    private EffectTechnique? _currentTechnique;
+
     /// <summary>Cached: each read of the underlying native call mints a new owned handle (see
     /// <see cref="EffectParameterCollection"/>), so re-resolving per access would churn native
     /// handles for a collection whose identity never changes over an effect's life.</summary>
@@ -166,9 +171,15 @@ public class Effect : IDisposable
     {
         get
         {
+            if (_currentTechnique is not null)
+            {
+                return _currentTechnique;
+            }
+
             CnaResult result = Native.cna_effect_get_current_technique(NativeEffectHandle, out CnaHandle technique);
             CnaException.ThrowIfFailed(result, nameof(CurrentTechnique));
-            return new EffectTechnique(technique);
+            _currentTechnique = new EffectTechnique(technique);
+            return _currentTechnique;
         }
         set
         {
@@ -176,6 +187,11 @@ public class Effect : IDisposable
             CnaResult result = Native.cna_effect_set_current_technique(NativeEffectHandle, value.NativeHandle);
             GC.KeepAlive(value);
             CnaException.ThrowIfFailed(result, nameof(CurrentTechnique));
+
+            // The cached wrapper described the *previous* technique, so it is released rather than
+            // reused: keeping it would answer the old technique's name and passes forever.
+            _currentTechnique?.Dispose();
+            _currentTechnique = null;
         }
     }
 
@@ -224,6 +240,7 @@ public class Effect : IDisposable
     {
         _parameters?.Dispose();
         _techniques?.Dispose();
+        _currentTechnique?.Dispose();
         _ownedHandle?.Dispose();
     }
 }

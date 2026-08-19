@@ -51,6 +51,9 @@ public class EffectTechnique : IDisposable
 
     public void Dispose()
     {
+        _passes?.Dispose();
+        _passes = null;
+
         _ownedHandle.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -66,14 +69,25 @@ public class EffectTechnique : IDisposable
         }
     }
 
+    private EffectPassCollection? _passes;
+
+    /// <summary>Cached and owned, for the reason <see cref="EffectPassCollection"/> spells out: the
+    /// native accessor mints a new owned handle per read, and nothing in a ported XNA game ever
+    /// disposes a pass collection.</summary>
     public EffectPassCollection Passes
     {
         get
         {
+            if (_passes is not null)
+            {
+                return _passes;
+            }
+
             CnaResult result = Native.cna_effect_technique_get_passes(NativeHandle, out CnaHandle collection);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Passes));
-            return new EffectPassCollection(collection);
+            _passes = new EffectPassCollection(collection);
+            return _passes;
         }
     }
 

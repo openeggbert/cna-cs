@@ -41,8 +41,50 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
 
     /// <summary>See the element type's own doc comment: this collection view is an owned native
     /// handle, released by its SafeHandle whether or not a caller disposes it.</summary>
+    /// <summary>
+    /// Per-index wrapper cache. Each read of the native accessor mints a *new owned* handle, so
+    /// returning a fresh wrapper per read leaked one native object per call -- and
+    /// `effect.CurrentTechnique.Passes[0].Apply()`, which is ordinary XNA written once per frame,
+    /// leaked three.
+    ///
+    /// That is not merely untidy. Native refuses to destroy a game while a resource created against
+    /// it is alive, so the leak surfaced as `cna_game_destroy` answering INVALID_STATE and the
+    /// *next* game failing to create. Relying on SafeHandle finalizers could not fix it: XNA's
+    /// EffectTechnique and EffectPass are not IDisposable, no ported game disposes them, and the GC
+    /// has no idea about native's ordering rule.
+    ///
+    /// Same shape ReadOnlyMediaCollection already uses for library-owned elements: one wrapper per
+    /// index, owned by this collection, released with it.
+    /// </summary>
+    private readonly Dictionary<int, EffectTechnique> _byIndex = [];
+
+    private int _syntheticKey = -1;
+
+    /// <summary>By-name lookups have no stable index to key on, so each gets its own negative slot.
+    /// They still land in the cache, which is what matters: the collection owns them and releases
+    /// them, rather than leaving a native object for a finalizer that runs too late.</summary>
+    private int NextSyntheticKey() => _syntheticKey--;
+
+    private EffectTechnique Adopt(int key, CnaHandle handle)
+    {
+        if (_byIndex.TryGetValue(key, out EffectTechnique? existing))
+        {
+            return existing;
+        }
+
+        var created = new EffectTechnique(handle);
+        _byIndex[key] = created;
+        return created;
+    }
+
     public void Dispose()
     {
+        foreach (EffectTechnique cached in _byIndex.Values)
+        {
+            cached.Dispose();
+        }
+
+        _byIndex.Clear();
         _ownedHandle.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -66,7 +108,7 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
             CnaResult result = Native.cna_effect_technique_collection_get_at(_handle, (ulong)index, out CnaHandle element);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectTechniqueCollection));
-            return new EffectTechnique(element);
+            return Adopt(index, element);
         }
     }
 
@@ -86,7 +128,7 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
                 GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectTechniqueCollection));
 
-            return found != 0 ? new EffectTechnique(element) : null;
+            return found != 0 ? Adopt(NextSyntheticKey(), element) : null;
         }
     }
 

@@ -1,3 +1,4 @@
+using CNA.Integration.Tests;
 using Xunit;
 
 // The native runtime allows exactly one C-owned game at a time -- `cna_game_create` answers
@@ -10,3 +11,7 @@ using Xunit;
 // the reason this file exists rather than a per-class collection attribute -- every test here
 // touches the same single global runtime, not just the ones that share a fixture.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
+
+// See CollectionOrderer: which collection runs first decides whether the single C-owned game slot
+// is free for the tests that create their own.
+[assembly: TestCollectionOrderer(CollectionOrderer.TypeName, CollectionOrderer.AssemblyName)]
