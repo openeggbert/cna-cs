@@ -27,6 +27,40 @@ what is missing is everything between "it works here" and "someone else can use 
 4. **Only linux-x64 has ever run.** `NativeLibraryResolver`'s Windows and macOS branches are
    compiled and have never executed. Cross-platform validation is the rest of Phase 6.
 
+## Known problems
+
+Found by running `cna-cs-template` under Xvfb with a real X11 window rather than the headless dummy
+driver, which is why they had not shown up before: the smoke test exits through the game's own
+`Exit()`, and that path is clean.
+
+### A game cannot be stopped with Ctrl-C
+
+SIGINT is ignored. Measured twice on each of two runs: the process was still running ten seconds
+after the signal and needed `SIGKILL`. Anyone who starts a game from a terminal has no way to stop
+it short of killing it.
+
+Not a divergence from the model — XNA has no signal concept and FNA installs no handler either — but
+it is the first thing a developer does, and it does nothing.
+
+### SIGTERM aborts instead of shutting down
+
+Exit code 134 (SIGABRT), with `pure virtual method called` and `terminate called without an active
+exception` on stderr. Reproduced twice out of two.
+
+**Hypothesis, not yet confirmed:** .NET runs managed shutdown on SIGTERM, so `SafeHandle` critical
+finalizers run `cna_*_destroy` on native objects while the native game loop is still on the stack —
+a virtual call lands on a partially destroyed C++ object. It fits the symptom and the ownership
+model, and it has not been verified against the native side; whoever picks this up should confirm
+before treating the cause as known. This project has recorded a *confident wrong cause* attached to
+a true symptom before, and that is the hardest kind of claim to dislodge.
+
+### What is *not* affected
+
+The normal path is clean, and that bounds how serious the two above are. 600 frames through a real
+X11 window on both renderers, exiting through the game's own `Exit()`: code 0, no diagnostics, on
+SOFTWARE and SDL_RENDERER alike. Three-frame runs prove startup and teardown and nothing between
+them, which is why `CNA_SMOKE_FRAMES` now exists.
+
 ## What works but should be said out loud to a user
 
 - **`CompiledEffects` is false on both available renderers.** The compiled-`.fx` route is bound and
