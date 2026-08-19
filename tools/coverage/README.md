@@ -10,11 +10,22 @@ functions that exist in no header at all.
 Run them from anywhere; they locate both trees themselves.
 
 ```
-python3 tools/coverage/sweep.py       # P/Invoke declarations vs headers
-python3 tools/coverage/unbound.py     # header functions with no binding
-python3 tools/coverage/typesweep.py   # C++ types with no C# counterpart
-python3 tools/coverage/md2run.py      # member-level diff, both layers
+python3 tools/coverage/sweep.py            # P/Invoke declarations vs headers
+python3 tools/coverage/unbound.py          # header functions with no binding
+python3 tools/coverage/typesweep.py        # C++ types with no C# counterpart
+python3 tools/coverage/md2run.py           # member-level diff, both layers
+python3 tools/coverage/runtimecoverage.py  # which compat types have actually executed
 ```
+
+`runtimecoverage.py` is the only one that measures *running* rather than *presence*, and it
+deliberately refuses to report a single number. A flat "N of 223 types have run" was steering the
+work badly: most of the compat surface has no native side to exercise -- math and packed-vector
+types are managed by design invariant 3, enums are verified by parity tests, an interface runs only
+through its implementors -- so counting them as uncovered both understated the position and implied
+it could be improved by writing tests that would prove nothing.
+
+The number that means something is native-backed coverage: types whose source names a native call
+or holds a handle, and which therefore have an ABI contract no managed test can check.
 
 ## Locating the headers
 

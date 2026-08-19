@@ -66,8 +66,16 @@ public class EffectReflectionTests(ITestOutputHelper output, NativeGameFixture f
         });
     }
 
-    /// <summary>Parameters by index and by name, and a value round trip. This is the path a game
-    /// takes for every custom shader uniform it sets.</summary>
+    /// <summary>
+    /// Parameters by index and by name. The path a game takes for every custom shader uniform.
+    ///
+    /// <b>Measured: the stock effects expose zero reflection parameters on these renderers</b>, and
+    /// that is consistent rather than a fault. A stock effect's state is set through typed
+    /// properties -- DiffuseColor, FogStart -- not through named parameters, and both builds report
+    /// CompiledEffects as false, so there is no reflected graph to enumerate. Asserted as
+    /// "reachable and self-consistent" rather than as a count, because a count would encode this
+    /// renderer's answer as the contract.
+    /// </summary>
     [NativeFact]
     public void BasicEffect_Parameters_AreEnumerableAndAddressable()
     {
