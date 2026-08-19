@@ -15,18 +15,25 @@ public static class CnaAbi
 {
     /// <summary>
     /// The ABI this binding was written against
-    /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.2.0).
+    /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.3.0).
     ///
-    /// Bumped from 0.1.0 when upstream added the content-reader registration, SpriteFont and
-    /// launch-parameter routes. Only the major component gates compatibility, so this was never a
-    /// blocker -- it is kept accurate so the integration test's log line
-    /// ("native ABI x, binding expects y") stays worth reading.
+    /// 0.1.0 -> 0.2.0 was the content-reader registration, SpriteFont and launch-parameter routes.
+    /// 0.2.0 -> 0.3.0 is <em>not</em> additive: every route taking a <c>CNA_Bool</c> now refuses a
+    /// byte outside {0, 1} with <c>INVALID_ARGUMENT</c>. Sixty-six of ninety-four used to accept
+    /// one and then disagree about what it meant -- read as <c>!= CNA_FALSE</c> in some places and
+    /// <c>== CNA_TRUE</c> in others, so 9 was true in one route and false in another.
+    ///
+    /// This binding is unaffected, and that was checked rather than assumed: every Bool it emits
+    /// comes from <c>value ? (byte)1 : (byte)0</c> or a literal, and every Bool it reads is
+    /// compared <c>!= 0</c>. Only the major component gates compatibility, so none of this ever
+    /// blocked anything -- the constant is kept accurate so the integration test's
+    /// "native ABI x, binding expects y" line stays worth reading.
     ///
     /// Not to be confused with the ELF symbol version the library exports, which is
     /// <c>CNA_C_API_0.1</c> and deliberately does <em>not</em> track this. Moving a version node on
     /// a minor bump would break every already-linked consumer.
     /// </summary>
-    public const uint ExpectedVersion = (0u << 16) | (2u << 8) | 0u;
+    public const uint ExpectedVersion = (0u << 16) | (3u << 8) | 0u;
 
     private static bool _checked;
 
