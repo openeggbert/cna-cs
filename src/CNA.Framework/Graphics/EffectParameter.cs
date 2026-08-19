@@ -21,10 +21,20 @@ public class EffectParameter : IDisposable
 {
     private readonly NativeResourceHandle _ownedHandle;
 
-    private readonly GraphicsDevice? _graphicsDevice;
+    /// <summary>
+    /// Non-nullable, and that is the fix rather than the assumption.
+    ///
+    /// This was nullable so a parameter reached through a nested element or structure-member
+    /// collection could report that it had no device. It always has one: every construction site
+    /// passes it -- <c>Effect.Parameters</c> from the effect, and both nested collections from the
+    /// parent parameter -- so the null case was unreachable and the throw guarding it was dead code
+    /// describing a situation that cannot arise.
+    /// </summary>
+    private readonly GraphicsDevice _graphicsDevice;
 
-    internal EffectParameter(CnaHandle handle, GraphicsDevice? graphicsDevice = null)
+    internal EffectParameter(CnaHandle handle, GraphicsDevice graphicsDevice)
     {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
         _graphicsDevice = graphicsDevice;
         _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_parameter_destroy(new CnaHandle(h)));
     }
@@ -272,28 +282,19 @@ public class EffectParameter : IDisposable
     /// here it is the caller's.
     /// </summary>
     public Texture2D? GetValueTexture2D() =>
-        ReadTexture(CnaEffectTextureType.Texture2D, h => new Texture2D(_graphicsDevice!, h));
+        ReadTexture(CnaEffectTextureType.Texture2D, h => new Texture2D(_graphicsDevice, h));
 
     /// <summary>See <see cref="GetValueTexture2D"/>.</summary>
     public Texture3D? GetValueTexture3D() =>
-        ReadTexture(CnaEffectTextureType.Texture3D, h => Texture3D.FromNativeHandle(_graphicsDevice!, h));
+        ReadTexture(CnaEffectTextureType.Texture3D, h => Texture3D.FromNativeHandle(_graphicsDevice, h));
 
     /// <summary>See <see cref="GetValueTexture2D"/>.</summary>
     public TextureCube? GetValueTextureCube() =>
-        ReadTexture(CnaEffectTextureType.TextureCube, h => TextureCube.FromNativeHandle(_graphicsDevice!, h));
+        ReadTexture(CnaEffectTextureType.TextureCube, h => TextureCube.FromNativeHandle(_graphicsDevice, h));
 
     private T? ReadTexture<T>(CnaEffectTextureType textureType, Func<nint, T> wrap)
         where T : Texture
     {
-        if (_graphicsDevice is null)
-        {
-            throw new NotSupportedException(
-                "This EffectParameter was reached without a GraphicsDevice -- through a nested " +
-                "element or structure member collection -- so it cannot build a Texture wrapper, " +
-                "which needs one. Read the texture from a parameter obtained directly from " +
-                "Effect.Parameters instead.");
-        }
-
         CnaResult result = Native.cna_effect_parameter_get_value_texture(_handle, textureType, out CnaHandle texture);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, "cna_effect_parameter_get_value_texture");

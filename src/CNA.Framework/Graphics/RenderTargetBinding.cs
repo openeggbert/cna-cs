@@ -25,9 +25,15 @@ public readonly struct RenderTargetBinding : IEquatable<RenderTargetBinding>
     /// <see cref="RenderTarget2D"/>, so a tighter type here would make the compat binding
     /// unconstructible.
     ///
-    /// <paramref name="arraySlice"/> must be zero: the ABI's binding struct is version one, which
-    /// "supports only zero", and accepting another value would bind the wrong subresource rather
-    /// than fail.
+    /// <paramref name="arraySlice"/> must be zero, and the reason matters more than the rule.
+    /// This used to cite the binding struct's version -- "version one supports only zero" -- which
+    /// says the limit will lift with a version two. It will not. Canonical <c>SetRenderTargets</c>
+    /// refuses a nonzero slice for a <c>RenderTarget2D</c> outright, so this is XNA's own behaviour
+    /// rather than a stage this ABI is passing through; upstream corrected the header's wording
+    /// (CBIND-070) after this project quoted it back as a limitation.
+    ///
+    /// The distinction is not academic: a caller told "version one" waits for version two, and a
+    /// caller told "the API refuses it" writes different code.
     /// </summary>
     public RenderTargetBinding(Texture renderTarget, int arraySlice = 0)
     {
@@ -37,7 +43,10 @@ public readonly struct RenderTargetBinding : IEquatable<RenderTargetBinding>
         if (arraySlice != 0)
         {
             throw new NotSupportedException(
-                "Only array slice 0 is supported -- CNA_RenderTargetBinding version one supports no other.");
+                $"A RenderTarget2D binding cannot select array slice {arraySlice}. XNA's own " +
+                "SetRenderTargets refuses a nonzero slice for a 2D target, and the C API answers " +
+                "NOT_SUPPORTED to match -- this is not a limit of the current ABI version that a " +
+                "later one will lift. Bind a cube face through the CubeMapFace constructor instead.");
         }
 
         RenderTarget = renderTarget;
@@ -45,8 +54,15 @@ public readonly struct RenderTargetBinding : IEquatable<RenderTargetBinding>
         CubeMapFace = CubeMapFace.PositiveX;
     }
 
-    /// <summary>Binds one face of a cube target. See the 2D constructor for why
-    /// <paramref name="renderTarget"/> is a <see cref="Texture"/>.</summary>
+    /// <summary>
+    /// Binds one face of a cube target. See the 2D constructor for why
+    /// <paramref name="renderTarget"/> is a <see cref="Texture"/>.
+    ///
+    /// The array slice is fixed at zero here rather than offered: for a cube target the field means
+    /// nothing, because the face selects the subresource. Native still requires it to be zero
+    /// rather than ignoring it, so that a caller who set it believing otherwise is told -- which is
+    /// why this constructor does not take one at all.
+    /// </summary>
     public RenderTargetBinding(Texture renderTarget, CubeMapFace cubeMapFace)
     {
         ArgumentNullException.ThrowIfNull(renderTarget);

@@ -15,15 +15,16 @@ public class EffectParameterCollection : IEnumerable<EffectParameter>, IDisposab
 {
     private readonly NativeResourceHandle _ownedHandle;
 
-    private readonly GraphicsDevice? _graphicsDevice;
+    private readonly GraphicsDevice _graphicsDevice;
 
     /// <summary>The device is threaded through purely so
     /// <see cref="EffectParameter.GetValueTexture2D"/> and its siblings can build a real texture
     /// wrapper -- a <see cref="Texture"/> is a <see cref="GraphicsResource"/> and needs one.
-    /// Nullable because a collection reached through nested elements or structure members may not
-    /// carry it; those parameters report that rather than guessing a device.</summary>
-    internal EffectParameterCollection(CnaHandle handle, GraphicsDevice? graphicsDevice = null)
+    /// Required, not optional: every construction site has a device to pass, so an optional
+    /// parameter only made it possible to forget one.</summary>
+    internal EffectParameterCollection(CnaHandle handle, GraphicsDevice graphicsDevice)
     {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
         _graphicsDevice = graphicsDevice;
         _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_parameter_collection_destroy(new CnaHandle(h)));
     }

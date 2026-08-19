@@ -192,4 +192,36 @@ public class EffectReflectionTests(ITestOutputHelper output, NativeGameFixture f
                 $"ambient {effect.AmbientLightColor}, light0 dir {effect.DirectionalLight0.Direction}");
         });
     }
+
+    /// <summary>
+    /// A parameter reached through a nested collection still knows its device.
+    ///
+    /// This guarded a NotSupportedException saying a nested parameter "cannot build a Texture
+    /// wrapper, which needs one". Every construction site passes the device -- Effect.Parameters
+    /// from the effect, both nested collections from the parent -- so the null case was
+    /// unreachable and the throw described a situation that could not arise. The type is
+    /// non-nullable now, which turns the guarantee into one the compiler keeps.
+    ///
+    /// Stock effects expose no parameters on these renderers, so this asserts what it can: that
+    /// walking into Elements and StructureMembers answers rather than failing.
+    /// </summary>
+    [NativeFact]
+    public void EffectParameter_NestedCollections_AreReachable()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            using var effect = new BasicEffect(device);
+
+            EffectParameterCollection parameters = effect.Parameters;
+            output.WriteLine($"{parameters.Count} parameter(s)");
+
+            for (int i = 0; i < parameters.Count; i++)
+            {
+                EffectParameter parameter = parameters[i];
+                output.WriteLine(
+                    $"  {parameter.Name}: {parameter.Elements.Count} element(s), " +
+                    $"{parameter.StructureMembers.Count} member(s)");
+            }
+        });
+    }
 }
