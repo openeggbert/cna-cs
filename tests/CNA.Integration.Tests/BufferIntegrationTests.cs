@@ -100,6 +100,38 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         });
     }
 
+    /// <summary>
+    /// <c>GetVertexBuffers</c> answers, and its cross-check against native's count fires when the
+    /// two disagree.
+    ///
+    /// This member threw until the render-target precedent in the same file was noticed. Both face
+    /// the identical limitation -- native reports bare handles that cannot be mapped back to a
+    /// managed wrapper -- and the answer is the same: report what this object bound, and verify the
+    /// count so a rebind from elsewhere surfaces instead of being papered over.
+    /// </summary>
+    [Native3DFact]
+    public void GraphicsDevice_GetVertexBuffers_ReportsWhatWasBound()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            Assert.Empty(device.GetVertexBuffers());
+
+            using var buffer = new VertexBuffer(
+                device, VertexPositionColor.VertexDeclaration, 3, BufferUsage.None);
+            buffer.SetData([Vertex(1f), Vertex(2f), Vertex(3f)]);
+
+            device.SetVertexBuffer(buffer);
+
+            VertexBufferBinding[] bound = device.GetVertexBuffers();
+            Assert.Single(bound);
+            Assert.Same(buffer, bound[0].VertexBuffer);
+            output.WriteLine($"{bound.Length} binding(s); count says {device.VertexBufferCount}");
+
+            device.SetVertexBuffer(null);
+            Assert.Empty(device.GetVertexBuffers());
+        });
+    }
+
     [Native3DFact]
     public void IndexBuffer_SetData_WithNonzeroOffset_RewritesOnlyThatWindow()
     {

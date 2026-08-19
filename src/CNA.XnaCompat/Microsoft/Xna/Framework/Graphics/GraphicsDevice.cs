@@ -77,6 +77,22 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         base.SetVertexBuffers(converted);
     }
 
+    /// <summary>Re-typed: <see cref="VertexBufferBinding"/> is a separate value type per namespace,
+    /// so the base's array would hand a compat game <c>CNA.Graphics</c> bindings it cannot use.
+    /// The base does the cross-check against native's count; this only converts.</summary>
+    public new VertexBufferBinding[] GetVertexBuffers()
+    {
+        CNA.Graphics.VertexBufferBinding[] bindings = base.GetVertexBuffers();
+        var converted = new VertexBufferBinding[bindings.Length];
+
+        for (int i = 0; i < converted.Length; i++)
+        {
+            converted[i] = VertexBufferBinding.FromFramework(bindings[i]);
+        }
+
+        return converted;
+    }
+
     public new GraphicsAdapter Adapter => (GraphicsAdapter)base.Adapter;
 
     protected override CNA.Graphics.GraphicsAdapter CreateAdapter(uint adapterIndex) => new GraphicsAdapter(this, adapterIndex);

@@ -21,6 +21,11 @@ public class GraphicsDevice : IDisposable
     /// <see cref="GetRenderTargets"/> for why the answer is kept here rather than read back.</summary>
     private RenderTargetBinding[] _boundRenderTargets = [];
 
+    /// <summary>What <see cref="SetVertexBuffer"/>/<see cref="SetVertexBuffers"/> last bound, for
+    /// the reason <see cref="GetVertexBuffers"/> gives -- the same shape
+    /// <see cref="_boundRenderTargets"/> already uses.</summary>
+    private VertexBufferBinding[] _boundVertexBuffers = [];
+
     /// <summary>
     /// The raw native *game* handle value -- not the device handle; see this class's own doc
     /// comment for why holding a cached device handle across calls is unsafe under the real ABI.
@@ -444,18 +449,43 @@ public class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Matches real XNA's <c>GetVertexBuffers</c>. Throws.
+    /// Matches real XNA's <c>GetVertexBuffers</c>: the bindings currently in effect.
     ///
-    /// <c>cna_graphics_device_copy_vertex_buffers</c> answers bare handles, and this binding has no
-    /// way to map one back to the managed <see cref="VertexBuffer"/> that owns it -- so the
-    /// bindings it returned would carry null buffers, which is worse than saying so.
-    /// <see cref="VertexBufferCount"/> is the part that can be answered.
+    /// <b>This threw until the render-target precedent was noticed.</b> The message said the
+    /// question "cannot be answered" because <c>cna_graphics_device_copy_vertex_buffers</c> reports
+    /// bare handles that cannot be mapped back to their managed <see cref="VertexBuffer"/>. All of
+    /// that is true and none of it makes the question unanswerable -- <see cref="GetRenderTargets"/>
+    /// has the identical limitation and solves it the same way, twenty lines up in this file:
+    /// answer from what this object bound, and cross-check the count against native so a rebind
+    /// from elsewhere is reported rather than papered over.
+    ///
+    /// The cross-check is what makes it honest rather than a guess. If something bound vertex
+    /// buffers outside this object -- canonical CNA code, which the header notes reports
+    /// <c>CNA_INVALID_HANDLE</c> for exactly that reason -- the counts disagree and this throws
+    /// instead of returning a stale array.
     /// </summary>
-    public VertexBufferBinding[] GetVertexBuffers() =>
-        throw new NotSupportedException(
-            "GraphicsDevice.GetVertexBuffers cannot be answered: native reports bare handles and " +
-            "this binding cannot map one back to the managed VertexBuffer that owns it. Use " +
-            "VertexBufferCount, or track the bindings you set.");
+    /// <exception cref="InvalidOperationException">If the device reports a different number of
+    /// bound buffers than this object last set.</exception>
+    public VertexBufferBinding[] GetVertexBuffers()
+    {
+        CnaResult result = Native.cna_graphics_device_get_vertex_buffer_count(
+            ResolveNativeDeviceHandle(), out ulong count);
+        CnaException.ThrowIfFailed(result, nameof(GetVertexBuffers));
+
+        if (count == 0 || _boundVertexBuffers.Length == 0)
+        {
+            return [];
+        }
+
+        if ((ulong)_boundVertexBuffers.Length != count)
+        {
+            throw new InvalidOperationException(
+                $"The device reports {count} bound vertex buffer(s) but this object last bound " +
+                $"{_boundVertexBuffers.Length}. Something rebound them outside SetVertexBuffer(s).");
+        }
+
+        return (VertexBufferBinding[])_boundVertexBuffers.Clone();
+    }
 
     /// <summary>Raised when a graphics resource is created on this device. The native callback
     /// carries the resource handle; it is not surfaced, because a bare handle cannot be mapped back
@@ -917,6 +947,10 @@ public class GraphicsDevice : IDisposable
         CnaResult result = Native.cna_graphics_device_set_vertex_buffer(ResolveNativeDeviceHandle(), handle);
         GC.KeepAlive(vertexBuffer);
         CnaException.ThrowIfFailed(result, nameof(SetVertexBuffer));
+
+        // Load-bearing, not bookkeeping -- see GetVertexBuffers, which cross-checks this against
+        // native's count. Recorded after the call so a failed bind does not rewrite the record.
+        _boundVertexBuffers = vertexBuffer is null ? [] : [new VertexBufferBinding(vertexBuffer)];
     }
 
     /// <summary>Matches real XNA's <c>SetVertexBuffers(params VertexBufferBinding[])</c> -- the
@@ -929,6 +963,7 @@ public class GraphicsDevice : IDisposable
         {
             CnaResult emptyResult = Native.cna_graphics_device_set_vertex_buffers(ResolveNativeDeviceHandle(), null, 0);
             CnaException.ThrowIfFailed(emptyResult, nameof(SetVertexBuffers));
+            _boundVertexBuffers = [];
             return;
         }
 
@@ -947,6 +982,7 @@ public class GraphicsDevice : IDisposable
             // objects (and so their SafeHandles) reachable across the call.
             GC.KeepAlive(vertexBuffers);
             CnaException.ThrowIfFailed(result, nameof(SetVertexBuffers));
+            _boundVertexBuffers = (VertexBufferBinding[])vertexBuffers.Clone();
         }
     }
 
