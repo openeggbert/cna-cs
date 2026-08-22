@@ -6,7 +6,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public EnvironmentMapEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice, new CNA.Graphics.EnvironmentMapEffect(graphicsDevice))
+        : base(graphicsDevice, new CNA.Graphics.EnvironmentMapEffect(graphicsDevice.Framework))
     {
     }
 

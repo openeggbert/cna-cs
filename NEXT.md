@@ -11,6 +11,72 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Game/device/window facade and managed XNB reader repair (2026-08-22)
+
+This run started from the previous strict-gate baseline, **not** the earlier audit baseline: 1,467
+unallowlisted differences and 118 public `CNA.*` signature leaks (the historical pre-repair figure
+was 1,834/164). The final strict Windows XNA 4.0 runtime report is **1,246 differences and 101
+leaks**, with the checked-in allowlist still exactly empty.
+
+| Strict diagnostic | Start | Final | Change |
+| --- | ---: | ---: | ---: |
+| Total differences | 1,467 | 1,246 | -221 |
+| CNA leaks | 118 | 101 | -17 |
+| Missing types | 23 | 18 | -5 |
+| Missing members | 688 | 554 | -134 |
+| Base mismatches | 55 | 45 | -10 |
+| Interface mismatches | 39 | 34 | -5 |
+| Unexpected members | 185 | 150 | -35 |
+| Parameter-name mismatches | 242 | 241 | -1 |
+
+The `Game`/device/window group is now a coherent public XNA facade rather than a collection of
+`CNA.*` subclasses. `Game`, `GameWindow`, `GameServiceContainer`, `GraphicsDeviceManager`,
+`GraphicsDeviceInformation`, `PreparingDeviceSettingsEventArgs`, `GraphicsAdapter`,
+`PresentationParameters`, and `GraphicsDevice` use XNA base types and declared members; private
+backend objects retain the native handles. `GraphicsDeviceManager` now has the XNA protected
+extension points, explicit `IGraphicsDeviceManager` methods, service registration and disposal
+event. `GraphicsDevice` has the XNA constructor/readback/present/disposal/event surface and no
+public CNA base. The direct-public-`CNA.*`-inheritance smell count fell from about 36 to 27; the
+remaining types are intentionally left for coherent later groups rather than mechanically erased.
+
+Native ownership was exercised, not merely reasoned about. An initial headless runtime run found a
+stale callback crash during game destruction. The facade now releases its device/manager
+subscriptions before destroying the native game, while the backend has an internal
+event-subscription release path that does not illegally borrow a device outside a lifecycle
+callback. The available native library also proved that its resource-created/destroyed callback ABI
+crashes on the *first* callback; those public XNA events remain declared but are deliberately not
+wired to that unsafe native callback until its ABI is corrected. This is a safety boundary, not an
+allowlisted metadata exception.
+
+The content system is now real managed XNB machinery for custom types: `ContentReader` is sealed
+and derives from `BinaryReader`; abstract/non-generic and generic `ContentTypeReader` contracts,
+reader-table reflection activation, reader initialization/type versions, raw/object and
+existing-instance paths, shared resources, disposable tracking, and XNB LZX handling are all
+implemented. `ContentManager.Load<MyType>()` uses this managed route for custom types while native
+texture/model/effect/sound loading remains on the CNA backend. A hand-written XNB regression uses
+a custom `ContentTypeReader<TestContent>`, an existing instance, a shared resource and disposable
+unload tracking through ordinary `Content.Load<Envelope>()`.
+
+Final evidence for this entry:
+
+- `CNA.XnaCompat.CompileProbe` rebuilds with the Game/device/window facade and
+  `ContentReader : BinaryReader` / custom-reader contracts; the compat, managed-test and
+  integration targets all rebuild cleanly;
+- managed compat regressions: **171 passed, 0 failed, 0 skipped**;
+- native headless facade regressions: **10 passed, 0 failed**. The one Texture3D-specific compat
+  test is not counted because this renderer explicitly lacks `Texture3D` capability;
+- fresh `dotnet new cna-game` generation and CNA build: **0 warnings, 0 errors**; generated CNA
+  runtime: **60-frame smoke passed** and **600-frame stability passed**;
+- generated-template MonoGame source build and Xvfb 60-frame run: passed; Kni source build and
+  Xvfb 60-frame run: passed; FNA source build passed, but runtime cleanly exited 2 because its
+  configured `FNA.dll` dependency could not load. No upstream `cna` source was modified.
+
+The exact final verifier category counts are: 45 base mismatches, 101 CNA leaks, 34 interface
+mismatches, 554 missing members, 18 missing types, 241 parameter-name mismatches and 150
+unexpected members. It is therefore still incorrect to claim API completeness. The next coherent
+structural groups are models, audio/XACT, media/storage, collections and exception facades; parameter
+name cleanup remains deliberately secondary.
+
 ## Signature audit, facade hierarchy repair, and real template product (2026-08-22)
 
 This session invalidated the old "complete XNA 4.0 API surface" claim with compiled metadata. A

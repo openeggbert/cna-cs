@@ -21,19 +21,19 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class Texture2D : Texture
 {
     public Texture2D(GraphicsDevice graphicsDevice, int width, int height)
-        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice, width, height))
+        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice.Framework, width, height))
     {
     }
 
     public Texture2D(GraphicsDevice graphicsDevice, int width, int height, bool mipMap, SurfaceFormat format)
         : this(graphicsDevice, new CNA.Graphics.Texture2D(
-            graphicsDevice, width, height, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
+            graphicsDevice.Framework, width, height, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
     {
     }
 
     /// <summary>Wraps an already-loaded native handle -- used by <c>ContentManager</c>.</summary>
     internal Texture2D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
-        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice, nativeHandleValue))
+        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice.Framework, nativeHandleValue))
     {
     }
 
@@ -129,7 +129,7 @@ public class Texture2D : Texture
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         ArgumentNullException.ThrowIfNull(stream);
 
-        using CNA.Graphics.Texture2D decoded = CNA.Graphics.Texture2D.FromStream(graphicsDevice, stream);
+        using CNA.Graphics.Texture2D decoded = CNA.Graphics.Texture2D.FromStream(graphicsDevice.Framework, stream);
         return new Texture2D(graphicsDevice, decoded.DetachNativeHandle());
     }
 
@@ -140,7 +140,7 @@ public class Texture2D : Texture
         ArgumentNullException.ThrowIfNull(stream);
 
         using CNA.Graphics.Texture2D decoded =
-            CNA.Graphics.Texture2D.FromStream(graphicsDevice, stream, width, height, zoom);
+            CNA.Graphics.Texture2D.FromStream(graphicsDevice.Framework, stream, width, height, zoom);
         return new Texture2D(graphicsDevice, decoded.DetachNativeHandle());
     }
 

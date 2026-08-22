@@ -18,7 +18,7 @@ public class Effect : GraphicsResource
     }
 
     public Effect(GraphicsDevice graphicsDevice, byte[] effectCode)
-        : this(graphicsDevice, new CNA.Graphics.Effect(graphicsDevice, effectCode))
+        : this(graphicsDevice, new CNA.Graphics.Effect(graphicsDevice.Framework, effectCode))
     {
     }
 

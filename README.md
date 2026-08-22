@@ -1,7 +1,7 @@
 # CNA.NET
 
 > **Status: functional but not XNA API-complete or release-ready.** The current strict XNA 4.0
-> Windows runtime metadata comparison reports 1,467 unallowlisted differences, including 118
+> Windows runtime metadata comparison reports 1,246 unallowlisted differences, including 101
 > accidental `CNA.*` signature leaks.
 
 CNA.NET is the C#/.NET binding for [CNA](https://github.com/openeggbert/cna), a native C++ game
@@ -28,9 +28,10 @@ Binary compatibility with Microsoft's strong-named assemblies is not the primary
 As of 2026-08-22:
 
 - Debug and Release solution builds: 0 warnings, 0 errors;
-- managed tests: 532 framework + 169 compat, all passing;
-- native tests: 103/103 passing in Debug and Release on Linux x64, Xvfb, ABI 0.6.0 OPENGLES3;
-- strict metadata profile: 257 reference types versus 239 target types, 1,467 failures, 0
+- managed XNA-compat tests: 171/171 passing;
+- native facade tests: 10/10 passing on the available Linux x64 headless CNA runtime; its
+  Texture3D-specific test is capability-limited and is not counted;
+- strict metadata profile: 257 reference types versus 244 target types, 1,246 failures, 0
   allowlisted;
 - compile-time hierarchy corpus: passes unchanged on XNA, CNA, FNA, and MonoGame; records one Kni
   hierarchy difference (`VertexDeclaration` is not a `GraphicsResource` there);

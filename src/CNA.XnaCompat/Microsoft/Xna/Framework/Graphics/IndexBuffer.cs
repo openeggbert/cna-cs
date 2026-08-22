@@ -38,7 +38,7 @@ public class IndexBuffer : GraphicsResource
         : base(graphicsDevice)
     {
         _frameworkBuffer = new CNA.Graphics.IndexBuffer(
-            graphicsDevice,
+            graphicsDevice.Framework,
             (CNA.Graphics.IndexElementSize)(int)indexElementSize,
             indexCount,
             (CNA.Graphics.BufferUsage)(int)bufferUsage,

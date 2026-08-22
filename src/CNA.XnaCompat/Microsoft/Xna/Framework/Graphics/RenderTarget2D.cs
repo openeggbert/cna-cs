@@ -18,7 +18,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class RenderTarget2D : Texture2D, IDynamicGraphicsResource
 {
     public RenderTarget2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(graphicsDevice, new CNA.Graphics.RenderTarget2D(graphicsDevice, width, height))
+        : base(graphicsDevice, new CNA.Graphics.RenderTarget2D(graphicsDevice.Framework, width, height))
     {
     }
 
@@ -45,7 +45,7 @@ public class RenderTarget2D : Texture2D, IDynamicGraphicsResource
         int preferredMultiSampleCount,
         RenderTargetUsage usage)
         : base(graphicsDevice, new CNA.Graphics.RenderTarget2D(
-            graphicsDevice,
+            graphicsDevice.Framework,
             width,
             height,
             mipMap,

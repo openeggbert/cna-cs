@@ -5,20 +5,20 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class TextureCube : Texture
 {
     internal TextureCube(GraphicsDevice graphicsDevice, int size)
-        : this(graphicsDevice, new CNA.Graphics.TextureCube(graphicsDevice, size))
+        : this(graphicsDevice, new CNA.Graphics.TextureCube(graphicsDevice.Framework, size))
     {
     }
 
     public TextureCube(GraphicsDevice graphicsDevice, int size, bool mipMap, SurfaceFormat format)
         : this(graphicsDevice, new CNA.Graphics.TextureCube(
-            graphicsDevice, size, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
+            graphicsDevice.Framework, size, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
     {
     }
 
     /// <summary>Forwards an already-created handle, for <see cref="RenderTargetCube"/> -- see the
     /// base class's own equivalent constructor.</summary>
     internal TextureCube(GraphicsDevice graphicsDevice, nint nativeHandleValue)
-        : this(graphicsDevice, new CNA.Graphics.TextureCube(graphicsDevice, nativeHandleValue))
+        : this(graphicsDevice, new CNA.Graphics.TextureCube(graphicsDevice.Framework, nativeHandleValue))
     {
     }
 

@@ -92,7 +92,7 @@ public class GameComponent : IGameComponent, IUpdateable, IDisposable
         private readonly GameComponent _owner;
 
         internal UpdateAdapter(GameComponent owner, Game game)
-            : base(game)
+            : base(game.Backend)
         {
             _owner = owner;
         }
@@ -108,7 +108,7 @@ public class GameComponent : IGameComponent, IUpdateable, IDisposable
         private readonly GameComponent _owner;
 
         internal DrawableAdapter(GameComponent owner, Game game)
-            : base(game)
+            : base(game.Backend)
         {
             _owner = owner;
         }

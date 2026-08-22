@@ -24,7 +24,7 @@ public class RenderTargetCube : TextureCube, IDynamicGraphicsResource
         int preferredMultiSampleCount,
         RenderTargetUsage usage)
         : base(graphicsDevice, new CNA.Graphics.RenderTargetCube(
-            graphicsDevice,
+            graphicsDevice.Framework,
             size,
             mipMap,
             (CNA.Graphics.SurfaceFormat)(int)preferredFormat,

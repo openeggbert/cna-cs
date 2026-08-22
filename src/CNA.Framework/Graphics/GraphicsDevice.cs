@@ -44,6 +44,14 @@ public class GraphicsDevice : IDisposable
         NativeGameHandleValue = nativeGameHandleValue;
     }
 
+    /// <summary>
+    /// Creates the native-backed implementation used by the XNA facade. Keeping this factory
+    /// internal lets the facade compose the device without widening this implementation's public
+    /// constructor surface or exposing an interop handle.
+    /// </summary>
+    internal static GraphicsDevice CreateFacadeBackend(nint nativeGameHandleValue) =>
+        new(nativeGameHandleValue);
+
     /// <summary>Resolves a fresh, currently-valid native device handle for this call only -- see
     /// this class's own doc comment. Every other native-backed resource type in
     /// <c>CNA.Framework</c> that needs a device handle to create itself calls this too (through the
@@ -737,7 +745,7 @@ public class GraphicsDevice : IDisposable
     /// builds on, <c>protected</c> for the same reason
     /// <see cref="DrawUserPrimitivesRaw"/> is -- CNA.XnaCompat's vertex structs are separate types
     /// and must reach the same native call.</summary>
-    protected unsafe void DrawUserIndexedPrimitivesRaw(
+    internal unsafe void DrawUserIndexedPrimitivesRaw(
         PrimitiveType primitiveType,
         void* vertexData,
         UserVertexSource vertexSource,
@@ -803,7 +811,7 @@ public class GraphicsDevice : IDisposable
     /// <see cref="UserVertexSource.RawStream"/>: the header states that a raw stream without one
     /// uses the implicit <c>VertexPositionColor</c> layout, and that a typed source without one
     /// uses its own type's declaration.</summary>
-    protected unsafe void DrawUserPrimitivesRaw(
+    internal unsafe void DrawUserPrimitivesRaw(
         PrimitiveType primitiveType,
         void* vertexData,
         UserVertexSource vertexSource,
@@ -1195,6 +1203,26 @@ public class GraphicsDevice : IDisposable
 
         _deviceDisposed = true;
 
+        ReleaseEventSubscriptions();
+
+        if (!disposing)
+        {
+            return;
+        }
+
+        // Deliberately unchecked: Dispose must not throw, and a device already torn down by its
+        // game makes this an ordinary, harmless failure.
+        Native.cna_graphics_device_dispose(ResolveNativeDeviceHandle());
+    }
+
+    /// <summary>
+    /// Releases only the managed roots used by native event subscriptions. A game's device handle
+    /// is borrowable during lifecycle callbacks only, but the subscriptions must be detached before
+    /// its owner destroys the game outside one. The XNA facade uses this exact path during game
+    /// teardown; ordinary explicit device disposal still follows <see cref="Dispose(bool)"/>.
+    /// </summary>
+    internal void ReleaseEventSubscriptions()
+    {
         for (int i = 0; i < _deviceEventBridges.Length; i++)
         {
             _deviceEventBridges[i]?.Dispose();
@@ -1205,15 +1233,6 @@ public class GraphicsDevice : IDisposable
         _resourceCreatedBridge = null;
         _resourceDestroyedBridge?.Dispose();
         _resourceDestroyedBridge = null;
-
-        if (!disposing)
-        {
-            return;
-        }
-
-        // Deliberately unchecked: Dispose must not throw, and a device already torn down by its
-        // game makes this an ordinary, harmless failure.
-        Native.cna_graphics_device_dispose(ResolveNativeDeviceHandle());
     }
 
     private bool _deviceDisposed;

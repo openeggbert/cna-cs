@@ -7,7 +7,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class SamplerStateCollection : CNA.Graphics.SamplerStateCollection
 {
     internal SamplerStateCollection(GraphicsDevice graphicsDevice, bool vertexStage)
-        : base(graphicsDevice, vertexStage)
+        : base(graphicsDevice.Framework, vertexStage)
     {
     }
 

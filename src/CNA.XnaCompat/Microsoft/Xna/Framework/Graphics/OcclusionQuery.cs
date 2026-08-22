@@ -5,10 +5,13 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// inherited unchanged; only <see cref="GraphicsDevice"/> needs re-typing.</summary>
 public class OcclusionQuery : CNA.Graphics.OcclusionQuery
 {
+    private readonly GraphicsDevice _graphicsDevice;
+
     public OcclusionQuery(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+        : base(graphicsDevice.Framework)
     {
+        _graphicsDevice = graphicsDevice;
     }
 
-    public new GraphicsDevice GraphicsDevice => (GraphicsDevice)base.GraphicsDevice;
+    public new GraphicsDevice GraphicsDevice => _graphicsDevice;
 }

@@ -9,18 +9,18 @@ public class Texture3D : Texture
     /// out of a shader parameter. <c>protected internal</c> so <see cref="EffectParameter"/> can
     /// reach it, matching <see cref="Texture2D"/>'s own raw-handle constructor.</summary>
     internal Texture3D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
-        : this(graphicsDevice, new CNA.Graphics.Texture3D(graphicsDevice, nativeHandleValue))
+        : this(graphicsDevice, new CNA.Graphics.Texture3D(graphicsDevice.Framework, nativeHandleValue))
     {
     }
 
     internal Texture3D(GraphicsDevice graphicsDevice, int width, int height, int depth)
-        : this(graphicsDevice, new CNA.Graphics.Texture3D(graphicsDevice, width, height, depth))
+        : this(graphicsDevice, new CNA.Graphics.Texture3D(graphicsDevice.Framework, width, height, depth))
     {
     }
 
     public Texture3D(GraphicsDevice graphicsDevice, int width, int height, int depth, bool mipMap, SurfaceFormat format)
         : this(graphicsDevice, new CNA.Graphics.Texture3D(
-            graphicsDevice, width, height, depth, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
+            graphicsDevice.Framework, width, height, depth, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
     {
     }
 

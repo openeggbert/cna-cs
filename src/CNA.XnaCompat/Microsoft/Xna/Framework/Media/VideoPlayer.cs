@@ -20,7 +20,9 @@ public class VideoPlayer : CNA.Media.VideoPlayer
             return null;
         }
 
-        return new Graphics.Texture2D((Graphics.GraphicsDevice)texture.GraphicsDevice, texture);
+        Graphics.GraphicsDevice device = Graphics.GraphicsDevice.FromFramework(texture.GraphicsDevice)
+            ?? throw new InvalidOperationException("The video frame has no XNA facade graphics device.");
+        return new Graphics.Texture2D(device, texture);
     }
 
     public void Play(Video video) => base.Play(video);

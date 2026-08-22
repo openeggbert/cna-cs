@@ -142,7 +142,7 @@ public sealed class GameComponentCollection : Collection<IGameComponent>
         private readonly IUpdateable? _updateable;
 
         internal InterfaceComponentAdapter(Game game, IGameComponent component)
-            : base(game)
+            : base(game.Backend)
         {
             _component = component;
             _updateable = component as IUpdateable;
@@ -183,7 +183,7 @@ public sealed class GameComponentCollection : Collection<IGameComponent>
         private readonly IDrawable _drawable;
 
         internal InterfaceDrawableAdapter(Game game, IGameComponent component)
-            : base(game)
+            : base(game.Backend)
         {
             _component = component;
             _updateable = component as IUpdateable;

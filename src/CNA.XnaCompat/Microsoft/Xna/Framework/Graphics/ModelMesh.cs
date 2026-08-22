@@ -53,7 +53,7 @@ public sealed class ModelMesh : CNA.Graphics.ModelMesh
     }
 
     internal ModelMesh(GraphicsDevice graphicsDevice, string name, IReadOnlyList<ModelMeshPart> parts)
-        : base(graphicsDevice, name, parts)
+        : base(graphicsDevice.Framework, name, parts)
     {
         MeshParts = new ModelMeshPartCollection(new List<ModelMeshPart>(parts));
         Effects = new ModelEffectCollection(base.Effects);

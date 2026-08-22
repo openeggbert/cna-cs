@@ -6,7 +6,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class SkinnedEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public SkinnedEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice, new CNA.Graphics.SkinnedEffect(graphicsDevice))
+        : base(graphicsDevice, new CNA.Graphics.SkinnedEffect(graphicsDevice.Framework))
     {
     }
 

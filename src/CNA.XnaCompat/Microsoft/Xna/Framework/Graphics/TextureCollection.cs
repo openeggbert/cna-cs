@@ -7,7 +7,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class TextureCollection : CNA.Graphics.TextureCollection
 {
     internal TextureCollection(GraphicsDevice graphicsDevice, bool vertexStage)
-        : base(graphicsDevice, vertexStage)
+        : base(graphicsDevice.Framework, vertexStage)
     {
     }
 

@@ -69,7 +69,7 @@ public sealed class Model : CNA.Graphics.Model
         IReadOnlyList<ModelMesh> meshes,
         IReadOnlyList<ModelBone> meshParentBones,
         int rootBoneIndex = 0)
-        : base(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex)
+        : base(graphicsDevice.Framework, bones, meshes, meshParentBones, rootBoneIndex)
     {
         Bones = new ModelBoneCollection(new List<ModelBone>(bones));
         Meshes = new ModelMeshCollection(new List<ModelMesh>(meshes));

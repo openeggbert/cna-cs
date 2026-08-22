@@ -1,17 +1,54 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>
-/// XNA 4.0-compatible <c>GraphicsDevice</c>. A pure subclass -- <c>Clear(Color)</c> is inherited
-/// unchanged from <see cref="CNA.Graphics.GraphicsDevice"/> and resolves correctly
-/// against this namespace's <see cref="Color"/> argument through that struct's implicit
-/// conversion operator, so no override is needed here. See docs/architecture.md.
+/// XNA 4.0-compatible <c>GraphicsDevice</c>. Its native implementation is private so the public
+/// XNA device no longer inherits CNA's members, interfaces, or base type.
 /// </summary>
-public class GraphicsDevice : CNA.Graphics.GraphicsDevice
+public class GraphicsDevice : IDisposable
 {
-    protected internal GraphicsDevice(nint nativeGameHandleValue)
-        : base(nativeGameHandleValue)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        CNA.Graphics.GraphicsDevice,
+        GraphicsDevice> FrameworkFacades = new();
+
+    private readonly CNA.Graphics.GraphicsDevice _framework;
+    private bool _disposed;
+
+    internal GraphicsDevice(nint nativeGameHandleValue)
+        : this(CNA.Graphics.GraphicsDevice.CreateFacadeBackend(nativeGameHandleValue))
     {
     }
+
+    /// <summary>
+    /// XNA's public device constructor. CNA's backend creates devices as part of a live game, so
+    /// an adapter obtained from a device is adopted rather than creating a second unmanaged device
+    /// for the same native game.
+    /// </summary>
+    public GraphicsDevice(
+        GraphicsAdapter adapter,
+        GraphicsProfile graphicsProfile,
+        PresentationParameters presentationParameters)
+        : this((adapter ?? throw new ArgumentNullException(nameof(adapter))).Framework.OwningGraphicsDevice
+            ?? throw new NotSupportedException(
+                "CNA can construct a GraphicsDevice only from an adapter associated with a live game."))
+    {
+        ArgumentNullException.ThrowIfNull(presentationParameters);
+        _ = graphicsProfile;
+        _framework.PresentationParameters = presentationParameters.Framework;
+    }
+
+    private GraphicsDevice(CNA.Graphics.GraphicsDevice framework)
+    {
+        ArgumentNullException.ThrowIfNull(framework);
+        _framework = framework;
+        FrameworkFacades.Add(_framework, this);
+    }
+
+    internal CNA.Graphics.GraphicsDevice Framework => _framework;
+
+    internal static GraphicsDevice? FromFramework(CNA.Graphics.GraphicsDevice? framework) =>
+        framework is not null && FrameworkFacades.TryGetValue(framework, out GraphicsDevice? facade)
+            ? facade
+            : null;
 
     /// <summary>
     /// <c>SetVertexBuffer</c> is inherited unchanged (its <c>VertexBuffer</c> argument upcasts,
@@ -30,51 +67,253 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     /// <see cref="Microsoft.Xna.Framework.Audio.SoundEffectInstance.State"/> already uses.
     /// </summary>
     internal bool SupportsCnaCapabilityCore(CNA.XnaCompat.Extensions.CnaGraphicsCapability capability) =>
-        base.SupportsCapability((CNA.Graphics.GraphicsCapability)(uint)capability);
+        _framework.SupportsCapability((CNA.Graphics.GraphicsCapability)(uint)capability);
 
-    internal string CnaRendererName => base.RendererName;
+    internal string CnaRendererName => _framework.RendererName;
 
-    public new IndexBuffer? Indices
+    public IndexBuffer? Indices
     {
-        get => IndexBuffer.FromFramework(base.Indices);
-        set => base.Indices = value?.FrameworkBuffer;
+        get => IndexBuffer.FromFramework(_framework.Indices);
+        set => _framework.Indices = value?.FrameworkBuffer;
     }
 
     public void SetVertexBuffer(VertexBuffer? vertexBuffer) =>
-        base.SetVertexBuffer(vertexBuffer?.FrameworkBuffer);
+        _framework.SetVertexBuffer(vertexBuffer?.FrameworkBuffer);
+
+    public void SetVertexBuffer(VertexBuffer? vertexBuffer, int vertexOffset)
+    {
+        if (vertexBuffer is null)
+        {
+            _framework.SetVertexBuffer(null);
+            return;
+        }
+
+        _framework.SetVertexBuffers(new CNA.Graphics.VertexBufferBinding(
+            vertexBuffer.FrameworkBuffer,
+            vertexOffset));
+    }
 
     public void SetRenderTarget(RenderTarget2D? renderTarget) =>
-        base.SetRenderTarget(renderTarget?.FrameworkTexture as CNA.Graphics.Texture2D);
+        _framework.SetRenderTarget(renderTarget?.FrameworkTexture as CNA.Graphics.Texture2D);
 
     public void SetRenderTarget(RenderTargetCube? renderTarget, CubeMapFace cubeMapFace) =>
-        base.SetRenderTarget(
+        _framework.SetRenderTarget(
             renderTarget?.FrameworkTexture as CNA.Graphics.RenderTargetCube,
             (CNA.Graphics.CubeMapFace)(int)cubeMapFace);
 
     public void DrawPrimitives(PrimitiveType primitiveType, int startVertex, int primitiveCount) =>
-        base.DrawPrimitives((CNA.Graphics.PrimitiveType)(int)primitiveType, startVertex, primitiveCount);
+        _framework.DrawPrimitives((CNA.Graphics.PrimitiveType)(int)primitiveType, startVertex, primitiveCount);
 
     public void DrawIndexedPrimitives(
         PrimitiveType primitiveType, int baseVertex, int minVertexIndex, int numVertices, int startIndex, int primitiveCount) =>
-        base.DrawIndexedPrimitives(
+        _framework.DrawIndexedPrimitives(
             (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex, numVertices, startIndex, primitiveCount);
 
-    public void Clear(ClearOptions options, Color color, float depth, int stencil) =>
-        base.Clear((CNA.Graphics.ClearOptions)(int)options, color, depth, stencil);
+    public void Clear(Color color) => _framework.Clear((CNA.Color)color);
 
-    public new Viewport Viewport
+    public void Clear(ClearOptions options, Color color, float depth, int stencil) =>
+        _framework.Clear((CNA.Graphics.ClearOptions)(int)options, (CNA.Color)color, depth, stencil);
+
+    public void Clear(ClearOptions options, Vector4 color, float depth, int stencil) =>
+        Clear(options, new Color(color.X, color.Y, color.Z, color.W), depth, stencil);
+
+    public Viewport Viewport
     {
-        get => Viewport.FromNative(base.Viewport);
-        set => base.Viewport = value.ToNative();
+        get => Viewport.FromNative(_framework.Viewport);
+        set => _framework.Viewport = value.ToNative();
     }
 
-    public new GraphicsProfile GraphicsProfile => (GraphicsProfile)base.GraphicsProfile;
+    public GraphicsProfile GraphicsProfile => (GraphicsProfile)_framework.GraphicsProfile;
+
+    public bool IsDisposed => _disposed || _framework.IsDisposed;
+
+    public int MultiSampleMask
+    {
+        get => _framework.MultiSampleMask;
+        set => _framework.MultiSampleMask = value;
+    }
+
+    public int ReferenceStencil
+    {
+        get => _framework.ReferenceStencil;
+        set => _framework.ReferenceStencil = value;
+    }
+
+    private EventHandler<EventArgs>? _disposing;
+    private EventHandler<EventArgs>? _deviceLost;
+    private EventHandler<EventArgs>? _deviceReset;
+    private EventHandler<EventArgs>? _deviceResetting;
+    private EventHandler<ResourceCreatedEventArgs>? _resourceCreated;
+    private EventHandler<ResourceDestroyedEventArgs>? _resourceDestroyed;
+
+    public event EventHandler<EventArgs>? Disposing
+    {
+        add
+        {
+            if (_disposing is null)
+            {
+                _framework.Disposing += OnFrameworkDisposing;
+            }
+
+            _disposing += value;
+        }
+        remove
+        {
+            _disposing -= value;
+            if (_disposing is null)
+            {
+                _framework.Disposing -= OnFrameworkDisposing;
+            }
+        }
+    }
+
+    public event EventHandler<EventArgs>? DeviceLost
+    {
+        add
+        {
+            if (_deviceLost is null)
+            {
+                _framework.DeviceLost += OnFrameworkDeviceLost;
+            }
+
+            _deviceLost += value;
+        }
+        remove
+        {
+            _deviceLost -= value;
+            if (_deviceLost is null)
+            {
+                _framework.DeviceLost -= OnFrameworkDeviceLost;
+            }
+        }
+    }
+
+    public event EventHandler<EventArgs>? DeviceReset
+    {
+        add
+        {
+            if (_deviceReset is null)
+            {
+                _framework.DeviceReset += OnFrameworkDeviceReset;
+            }
+
+            _deviceReset += value;
+        }
+        remove
+        {
+            _deviceReset -= value;
+            if (_deviceReset is null)
+            {
+                _framework.DeviceReset -= OnFrameworkDeviceReset;
+            }
+        }
+    }
+
+    public event EventHandler<EventArgs>? DeviceResetting
+    {
+        add
+        {
+            if (_deviceResetting is null)
+            {
+                _framework.DeviceResetting += OnFrameworkDeviceResetting;
+            }
+
+            _deviceResetting += value;
+        }
+        remove
+        {
+            _deviceResetting -= value;
+            if (_deviceResetting is null)
+            {
+                _framework.DeviceResetting -= OnFrameworkDeviceResetting;
+            }
+        }
+    }
+
+    public event EventHandler<ResourceCreatedEventArgs>? ResourceCreated
+    {
+        add => _resourceCreated += value;
+        remove => _resourceCreated -= value;
+    }
+
+    public event EventHandler<ResourceDestroyedEventArgs>? ResourceDestroyed
+    {
+        add => _resourceDestroyed += value;
+        remove => _resourceDestroyed -= value;
+    }
+
+    public void Present() => _framework.Present();
+
+    public void Present(Rectangle? sourceRectangle, Rectangle? destinationRectangle, IntPtr overrideWindowHandle) =>
+        _framework.Present();
+
+    public void Reset() => _framework.Reset();
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool arg0)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        DetachBackendEvents();
+        if (arg0)
+        {
+            _framework.Dispose();
+        }
+    }
+
+    internal void DisposeFromOwningGame()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        DetachBackendEvents();
+        _framework.ReleaseEventSubscriptions();
+        _disposed = true;
+    }
+
+    private void DetachBackendEvents()
+    {
+        if (_disposing is not null) _framework.Disposing -= OnFrameworkDisposing;
+        if (_deviceLost is not null) _framework.DeviceLost -= OnFrameworkDeviceLost;
+        if (_deviceReset is not null) _framework.DeviceReset -= OnFrameworkDeviceReset;
+        if (_deviceResetting is not null) _framework.DeviceResetting -= OnFrameworkDeviceResetting;
+        _disposing = null;
+        _deviceLost = null;
+        _deviceReset = null;
+        _deviceResetting = null;
+        _resourceCreated = null;
+        _resourceDestroyed = null;
+    }
+
+    private void OnFrameworkDisposing(object? sender, EventArgs args) => _disposing?.Invoke(this, args);
+
+    private void OnFrameworkDeviceLost(object? sender, EventArgs args) => _deviceLost?.Invoke(this, args);
+
+    private void OnFrameworkDeviceReset(object? sender, EventArgs args) => _deviceReset?.Invoke(this, args);
+
+    private void OnFrameworkDeviceResetting(object? sender, EventArgs args) => _deviceResetting?.Invoke(this, args);
+
+    ~GraphicsDevice()
+    {
+        Dispose(false);
+    }
 
     public void SetVertexBuffers(params VertexBufferBinding[]? vertexBuffers)
     {
         if (vertexBuffers is null)
         {
-            base.SetVertexBuffers(null);
+            _framework.SetVertexBuffers(null);
             return;
         }
 
@@ -84,15 +323,15 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
             converted[i] = vertexBuffers[i].ToFramework();
         }
 
-        base.SetVertexBuffers(converted);
+        _framework.SetVertexBuffers(converted);
     }
 
     /// <summary>Re-typed: <see cref="VertexBufferBinding"/> is a separate value type per namespace,
     /// so the base's array would hand a compat game <c>CNA.Graphics</c> bindings it cannot use.
     /// The base does the cross-check against native's count; this only converts.</summary>
-    public new VertexBufferBinding[] GetVertexBuffers()
+    public VertexBufferBinding[] GetVertexBuffers()
     {
-        CNA.Graphics.VertexBufferBinding[] bindings = base.GetVertexBuffers();
+        CNA.Graphics.VertexBufferBinding[] bindings = _framework.GetVertexBuffers();
         var converted = new VertexBufferBinding[bindings.Length];
 
         for (int i = 0; i < converted.Length; i++)
@@ -103,104 +342,109 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         return converted;
     }
 
-    public new GraphicsAdapter Adapter => (GraphicsAdapter)base.Adapter;
+    public GraphicsAdapter Adapter => GraphicsAdapter.FromFramework(_framework.Adapter);
 
-    protected override CNA.Graphics.GraphicsAdapter CreateAdapter(uint adapterIndex) => new GraphicsAdapter(this, adapterIndex);
-
-    public new PresentationParameters PresentationParameters
+    public PresentationParameters PresentationParameters
     {
-        get => (PresentationParameters)base.PresentationParameters;
-        set => base.PresentationParameters = value;
+        get => new(_framework.PresentationParameters);
     }
 
-    protected override CNA.Graphics.PresentationParameters WrapPresentationParameters(CNA.Graphics.PresentationParameters parameters) =>
-        new PresentationParameters(parameters);
-
-    public new DisplayMode DisplayMode => DisplayMode.FromFramework(base.DisplayMode);
+    public DisplayMode DisplayMode => DisplayMode.FromFramework(_framework.DisplayMode);
 
     /// <summary>Same downcast pass-through pattern as <see cref="Indices"/>, but for a property
     /// whose base default is a real, non-null value. The facade wraps the backend descriptor
     /// instead of relying on an invalid cross-hierarchy cast.</summary>
-    public new BlendState BlendState
+    public BlendState BlendState
     {
-        get => new(base.BlendState);
-        set => base.BlendState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
+        get => new(_framework.BlendState);
+        set => _framework.BlendState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
 
-    public new DepthStencilState DepthStencilState
+    public DepthStencilState DepthStencilState
     {
-        get => new(base.DepthStencilState);
-        set => base.DepthStencilState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
+        get => new(_framework.DepthStencilState);
+        set => _framework.DepthStencilState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
 
-    public new RasterizerState RasterizerState
+    public RasterizerState RasterizerState
     {
-        get => new(base.RasterizerState);
-        set => base.RasterizerState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
+        get => new(_framework.RasterizerState);
+        set => _framework.RasterizerState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
 
-    public new SamplerStateCollection SamplerStates => (SamplerStateCollection)base.SamplerStates;
+    public SamplerStateCollection SamplerStates => new(this, vertexStage: false);
 
-    public new SamplerStateCollection VertexSamplerStates => (SamplerStateCollection)base.VertexSamplerStates;
+    public SamplerStateCollection VertexSamplerStates => new(this, vertexStage: true);
 
-    protected override CNA.Graphics.SamplerStateCollection CreateSamplerStateCollection(bool vertexStage) =>
-        new SamplerStateCollection(this, vertexStage);
+    public TextureCollection Textures => new(this, vertexStage: false);
 
-    public new TextureCollection Textures => (TextureCollection)base.Textures;
-
-    public new TextureCollection VertexTextures => (TextureCollection)base.VertexTextures;
-
-    protected override CNA.Graphics.TextureCollection CreateTextureCollection(bool vertexStage) =>
-        new TextureCollection(this, vertexStage);
+    public TextureCollection VertexTextures => new(this, vertexStage: true);
 
     /// <summary>Re-typed: <c>Rectangle</c> is a separate struct per namespace. Everything else the
     /// device gained -- <c>Present</c>, <c>Reset</c>, <c>MultiSampleMask</c>,
     /// <c>ReferenceStencil</c>, <c>IsDisposed</c>, <c>DrawInstancedPrimitives</c>, the four
     /// events -- is inherited unchanged, since none of those types diverge.</summary>
-    public new Rectangle ScissorRectangle
+    public Rectangle ScissorRectangle
     {
-        get => base.ScissorRectangle;
-        set => base.ScissorRectangle = value;
+        get => _framework.ScissorRectangle;
+        set => _framework.ScissorRectangle = value;
     }
 
     /// <summary>Re-typed: <c>Color</c> is a separate struct per namespace.</summary>
-    public new Color BlendFactor
+    public Color BlendFactor
     {
-        get => base.BlendFactor;
-        set => base.BlendFactor = value;
+        get => _framework.BlendFactor;
+        set => _framework.BlendFactor = value;
     }
 
-    /// <summary>Re-typed: <c>Color</c> and <c>Rectangle</c> are separate structs per
-    /// namespace.</summary>
-    public void GetBackBufferData(Color[] data)
+    /// <summary>
+    /// Copies the back buffer into a caller-provided XNA-compatible pixel buffer. The native CNA
+    /// ABI exposes this readback as packed <see cref="Color"/> values, so that representation is
+    /// currently the supported generic element type. Keeping the XNA generic overload family is
+    /// nevertheless essential: existing XNA callers bind to these signatures, not CNA's former
+    /// Color-only convenience members.
+    /// </summary>
+    public void GetBackBufferData<T>(T[] data)
+        where T : struct =>
+        GetBackBufferData(null, data, 0, data?.Length ?? 0);
+
+    public void GetBackBufferData<T>(T[] data, int startIndex, int elementCount)
+        where T : struct =>
+        GetBackBufferData(null, data, startIndex, elementCount);
+
+    public void GetBackBufferData<T>(Rectangle? rect, T[] data, int startIndex, int elementCount)
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
-        GetBackBufferData(null, data, 0, data.Length);
-    }
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
 
-    /// <summary>See <see cref="GetBackBufferData(Color[])"/>.</summary>
-    public void GetBackBufferData(Rectangle? rect, Color[] data, int startIndex, int elementCount)
-    {
-        ArgumentNullException.ThrowIfNull(data);
+        if (typeof(T) != typeof(Color))
+        {
+            throw new NotSupportedException(
+                "CNA currently exposes back-buffer readback as Microsoft.Xna.Framework.Color values.");
+        }
 
-        var converted = new CNA.Color[data.Length];
-        base.GetBackBufferData(
+        Color[] colors = (Color[])(object)data;
+        var converted = new CNA.Color[colors.Length];
+        _framework.GetBackBufferData(
             rect is { } r ? (CNA.Rectangle)r : null, converted, startIndex, elementCount);
 
-        for (int i = 0; i < data.Length; i++)
+        for (int i = startIndex; i < startIndex + elementCount; i++)
         {
-            data[i] = converted[i];
+            colors[i] = converted[i];
         }
     }
 
     /// <summary>Re-typed: <c>GraphicsDeviceStatus</c> is a separate enum per namespace.</summary>
-    public new GraphicsDeviceStatus GraphicsDeviceStatus => (GraphicsDeviceStatus)(int)base.GraphicsDeviceStatus;
+    public GraphicsDeviceStatus GraphicsDeviceStatus => (GraphicsDeviceStatus)(int)_framework.GraphicsDeviceStatus;
 
     /// <summary>Re-typed: takes this namespace's own <see cref="PresentationParameters"/>.</summary>
     public void Reset(PresentationParameters presentationParameters)
     {
         ArgumentNullException.ThrowIfNull(presentationParameters);
-        base.Reset(presentationParameters);
+        _framework.Reset(presentationParameters.Framework);
     }
 
     /// <summary>Re-typed: takes this namespace's own <see cref="PresentationParameters"/> and
@@ -209,7 +453,7 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     {
         ArgumentNullException.ThrowIfNull(presentationParameters);
         ArgumentNullException.ThrowIfNull(graphicsAdapter);
-        base.Reset(presentationParameters, graphicsAdapter);
+        _framework.Reset(presentationParameters.Framework, graphicsAdapter.Framework);
     }
 
     /// <summary>Re-typed: <c>PrimitiveType</c> is a separate enum per namespace.</summary>
@@ -221,7 +465,7 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         int startIndex,
         int primitiveCount,
         int instanceCount) =>
-        base.DrawInstancedPrimitives(
+        _framework.DrawInstancedPrimitives(
             (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex,
             numVertices, startIndex, primitiveCount, instanceCount);
 
@@ -233,7 +477,7 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     {
         if (renderTargets is null || renderTargets.Length == 0)
         {
-            base.SetRenderTargets();
+            _framework.SetRenderTargets();
             return;
         }
 
@@ -243,12 +487,12 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
             converted[i] = renderTargets[i].Framework;
         }
 
-        base.SetRenderTargets(converted);
+        _framework.SetRenderTargets(converted);
     }
 
-    public new RenderTargetBinding[] GetRenderTargets()
+    public RenderTargetBinding[] GetRenderTargets()
     {
-        CNA.Graphics.RenderTargetBinding[] source = base.GetRenderTargets();
+        CNA.Graphics.RenderTargetBinding[] source = _framework.GetRenderTargets();
         var result = new RenderTargetBinding[source.Length];
         for (int i = 0; i < source.Length; i++)
         {
@@ -376,7 +620,7 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
             vertexData, System.Runtime.InteropServices.GCHandleType.Pinned);
         try
         {
-            DrawUserPrimitivesRaw(
+            _framework.DrawUserPrimitivesRaw(
                 (CNA.Graphics.PrimitiveType)(int)primitiveType,
                 (void*)pin.AddrOfPinnedObject(),
                 vertexDeclaration is null && typedSource is { } source
@@ -418,7 +662,7 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
             indexData, System.Runtime.InteropServices.GCHandleType.Pinned);
         try
         {
-            DrawUserIndexedPrimitivesRaw(
+            _framework.DrawUserIndexedPrimitivesRaw(
                 (CNA.Graphics.PrimitiveType)(int)primitiveType,
                 (void*)vertexPin.AddrOfPinnedObject(),
                 vertexDeclaration is null && typedSource is { } source

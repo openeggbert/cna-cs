@@ -67,6 +67,30 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// Exercises the complete Game/device/window facade construction order. In particular the
+    /// manager is created while the outer XNA game is still in its constructor, whereas its CNA
+    /// backend is private; this is the path that used to depend on public inheritance.
+    /// </summary>
+    private sealed class FacadeGroupProbe : XnaGame
+    {
+        public FacadeGroupProbe()
+        {
+            Manager = new GraphicsDeviceManager(this);
+        }
+
+        public GraphicsDeviceManager Manager { get; }
+
+        public bool Updated { get; private set; }
+
+        protected override void Update(GameTime gameTime)
+        {
+            Updated = true;
+            Exit();
+            base.Update(gameTime);
+        }
+    }
+
     private static void InsideACompatFrame(Action<CompatProbe> body)
     {
         using var game = new CompatProbe(body);
@@ -105,6 +129,24 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         });
     }
 
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatGameFacade_DeviceManagerAndWindowRemainFacadeTypedAcrossAFrame()
+    {
+        using var game = new FacadeGroupProbe();
+
+        game.RunOneFrame();
+
+        Assert.True(game.Updated);
+        Assert.Same(
+            game.Manager,
+            game.Services.GetService(typeof(IGraphicsDeviceService)));
+        Assert.Same(
+            game.Manager,
+            game.Services.GetService(typeof(IGraphicsDeviceManager)));
+        Assert.IsType<Microsoft.Xna.Framework.Graphics.GraphicsDevice>(game.Manager.GraphicsDevice);
+        Assert.IsAssignableFrom<Microsoft.Xna.Framework.GameWindow>(game.Window);
+    }
+
     /// <summary>A texture created and uploaded through the compat types, with the compat
     /// <see cref="Color"/> -- a duplicated value type, not the CNA one.</summary>
     [global::CNA.Integration.Tests.NativeFact]
@@ -138,8 +180,12 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
     {
         InsideACompatFrame(game =>
         {
-            global::CNA.Integration.Tests.CnaNativeProbe.RequireCapability(
-                game.GraphicsDevice, global::CNA.Graphics.GraphicsCapability.Texture3D);
+            if (!global::CNA.XnaCompat.Extensions.CnaGraphicsDeviceExtensions.SupportsCnaCapability(
+                    game.GraphicsDevice,
+                    global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.Texture3D))
+            {
+                throw Xunit.Sdk.SkipException.ForSkip("The active renderer does not support Texture3D.");
+            }
 
             using var texture = new Texture3D(game.GraphicsDevice, 1, 1, 1, false, SurfaceFormat.Color);
             texture.SetData<uint>([0xFFFFFFFFu]);

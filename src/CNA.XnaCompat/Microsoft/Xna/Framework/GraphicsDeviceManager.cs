@@ -1,71 +1,201 @@
 namespace Microsoft.Xna.Framework;
 
-/// <summary>XNA 4.0-compatible <c>GraphicsDeviceManager</c>. Mostly a pure subclass -- the
-/// int/bool preferences and <c>ApplyChanges</c>/<c>ToggleFullScreen</c> are inherited unchanged
-/// from <see cref="CNA.GraphicsDeviceManager"/>; only the members whose enum or device types
-/// differ per namespace need re-typing.</summary>
-public class GraphicsDeviceManager : CNA.GraphicsDeviceManager, Graphics.IGraphicsDeviceService, IGraphicsDeviceManager
+/// <summary>
+/// XNA's graphics-device manager. The native manager remains private; publishing it as a base
+/// class previously made every XNA game inherit CNA-only members and interfaces.
+/// </summary>
+public class GraphicsDeviceManager : Graphics.IGraphicsDeviceService, IGraphicsDeviceManager, IDisposable
 {
+    /// <summary>Minimum default back-buffer width used by the XNA device manager.</summary>
+    public static readonly int DefaultBackBufferWidth = 800;
+
+    /// <summary>Minimum default back-buffer height used by the XNA device manager.</summary>
+    public static readonly int DefaultBackBufferHeight = 480;
+
+    private readonly CNA.GraphicsDeviceManager _backend;
+    private bool _disposed;
+    private EventHandler<PreparingDeviceSettingsEventArgs>? _preparingDeviceSettings;
+
     public GraphicsDeviceManager(Game game)
-        : base(game)
     {
+        ArgumentNullException.ThrowIfNull(game);
+        Game = game;
+        _backend = new CNA.GraphicsDeviceManager(game.Backend);
+        _backend.DeviceCreated += (_, args) => OnDeviceCreated(this, args);
+        _backend.DeviceDisposing += (_, args) => OnDeviceDisposing(this, args);
+        _backend.DeviceReset += (_, args) => OnDeviceReset(this, args);
+        _backend.DeviceResetting += (_, args) => OnDeviceResetting(this, args);
+        _backend.PreparingDeviceSettings += OnPreparingDeviceSettings;
+        game.RegisterGraphicsDeviceManager(this);
+        game.Services.AddService(typeof(IGraphicsDeviceManager), this);
+        game.Services.AddService(typeof(Graphics.IGraphicsDeviceService), this);
     }
 
-    public new Graphics.GraphicsDevice GraphicsDevice => (Graphics.GraphicsDevice)base.GraphicsDevice;
+    internal Game Game { get; }
 
-    public new Graphics.SurfaceFormat PreferredBackBufferFormat
+    public int PreferredBackBufferWidth
     {
-        get => (Graphics.SurfaceFormat)(int)base.PreferredBackBufferFormat;
-        set => base.PreferredBackBufferFormat = (CNA.Graphics.SurfaceFormat)(int)value;
+        get => _backend.PreferredBackBufferWidth;
+        set => _backend.PreferredBackBufferWidth = value;
     }
 
-    public new Graphics.DepthFormat PreferredDepthStencilFormat
+    public int PreferredBackBufferHeight
     {
-        get => (Graphics.DepthFormat)(int)base.PreferredDepthStencilFormat;
-        set => base.PreferredDepthStencilFormat = (CNA.Graphics.DepthFormat)(int)value;
+        get => _backend.PreferredBackBufferHeight;
+        set => _backend.PreferredBackBufferHeight = value;
     }
 
-    public new Graphics.GraphicsProfile GraphicsProfile
+    public Graphics.SurfaceFormat PreferredBackBufferFormat
     {
-        get => (Graphics.GraphicsProfile)(int)base.GraphicsProfile;
-        set => base.GraphicsProfile = (CNA.Graphics.GraphicsProfile)(int)value;
+        get => (Graphics.SurfaceFormat)(int)_backend.PreferredBackBufferFormat;
+        set => _backend.PreferredBackBufferFormat = (CNA.Graphics.SurfaceFormat)(int)value;
     }
 
-    public new DisplayOrientation SupportedOrientations
+    public Graphics.DepthFormat PreferredDepthStencilFormat
     {
-        get => (DisplayOrientation)(int)base.SupportedOrientations;
-        set => base.SupportedOrientations = (CNA.DisplayOrientation)(int)value;
+        get => (Graphics.DepthFormat)(int)_backend.PreferredDepthStencilFormat;
+        set => _backend.PreferredDepthStencilFormat = (CNA.Graphics.DepthFormat)(int)value;
     }
 
-    /// <summary>The compat <see cref="Graphics.IGraphicsDeviceService"/> contract, satisfied by the same
-    /// object that already satisfies the CNA one -- registered into <c>Game.Services</c> by
-    /// the base constructor, so a component can look up either. The events forward to the base's,
-    /// which WP15 made real -- they now come from
-    /// <c>cna_graphics_device_manager_subscribe</c>, so a compat subscriber is subscribed to
-    /// native, not to a placeholder.</summary>
-    Graphics.GraphicsDevice Graphics.IGraphicsDeviceService.GraphicsDevice => GraphicsDevice;
-
-    event EventHandler<EventArgs>? Graphics.IGraphicsDeviceService.DeviceCreated
+    public bool IsFullScreen
     {
-        add => base.DeviceCreated += value;
-        remove => base.DeviceCreated -= value;
+        get => _backend.IsFullScreen;
+        set => _backend.IsFullScreen = value;
     }
 
-    event EventHandler<EventArgs>? Graphics.IGraphicsDeviceService.DeviceDisposing
+    public bool PreferMultiSampling
     {
-        add => base.DeviceDisposing += value;
-        remove => base.DeviceDisposing -= value;
+        get => _backend.PreferMultiSampling;
+        set => _backend.PreferMultiSampling = value;
     }
 
-    event EventHandler<EventArgs>? Graphics.IGraphicsDeviceService.DeviceReset
+    public bool SynchronizeWithVerticalRetrace
     {
-        add => base.DeviceReset += value;
-        remove => base.DeviceReset -= value;
+        get => _backend.SynchronizeWithVerticalRetrace;
+        set => _backend.SynchronizeWithVerticalRetrace = value;
     }
 
-    event EventHandler<EventArgs>? Graphics.IGraphicsDeviceService.DeviceResetting
+    public Graphics.GraphicsProfile GraphicsProfile
     {
-        add => base.DeviceResetting += value;
-        remove => base.DeviceResetting -= value;
+        get => (Graphics.GraphicsProfile)(int)_backend.GraphicsProfile;
+        set => _backend.GraphicsProfile = (CNA.Graphics.GraphicsProfile)(int)value;
+    }
+
+    public DisplayOrientation SupportedOrientations
+    {
+        get => (DisplayOrientation)(int)_backend.SupportedOrientations;
+        set => _backend.SupportedOrientations = (CNA.DisplayOrientation)(int)value;
+    }
+
+    public Graphics.GraphicsDevice GraphicsDevice => Game.GraphicsDevice;
+
+    public event EventHandler<PreparingDeviceSettingsEventArgs>? PreparingDeviceSettings
+    {
+        add => _preparingDeviceSettings += value;
+        remove => _preparingDeviceSettings -= value;
+    }
+
+    public event EventHandler<EventArgs>? DeviceCreated;
+
+    public event EventHandler<EventArgs>? DeviceDisposing;
+
+    public event EventHandler<EventArgs>? DeviceReset;
+
+    public event EventHandler<EventArgs>? DeviceResetting;
+
+    public event EventHandler<EventArgs>? Disposed;
+
+    public void ApplyChanges() => _backend.ApplyChanges();
+
+    public void ToggleFullScreen() => _backend.ToggleFullScreen();
+
+    protected virtual bool CanResetDevice(GraphicsDeviceInformation newDeviceInfo)
+    {
+        ArgumentNullException.ThrowIfNull(newDeviceInfo);
+        return !GraphicsDevice.IsDisposed && GraphicsDevice.GraphicsProfile == newDeviceInfo.GraphicsProfile;
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposing || _disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _backend.Dispose();
+        if (ReferenceEquals(Game.Services.GetService(typeof(IGraphicsDeviceManager)), this))
+        {
+            Game.Services.RemoveService(typeof(IGraphicsDeviceManager));
+        }
+
+        if (ReferenceEquals(Game.Services.GetService(typeof(Graphics.IGraphicsDeviceService)), this))
+        {
+            Game.Services.RemoveService(typeof(Graphics.IGraphicsDeviceService));
+        }
+
+        Game.UnregisterGraphicsDeviceManager(this);
+        Disposed?.Invoke(this, EventArgs.Empty);
+    }
+
+    internal void DisposeFromGame() => Dispose(true);
+
+    protected virtual GraphicsDeviceInformation FindBestDevice(bool anySuitableDevice)
+    {
+        var information = new GraphicsDeviceInformation
+        {
+            Adapter = Graphics.GraphicsAdapter.DefaultAdapter,
+            GraphicsProfile = GraphicsProfile,
+            PresentationParameters = new Graphics.PresentationParameters
+            {
+                BackBufferWidth = PreferredBackBufferWidth,
+                BackBufferHeight = PreferredBackBufferHeight,
+                BackBufferFormat = PreferredBackBufferFormat,
+                DepthStencilFormat = PreferredDepthStencilFormat,
+                IsFullScreen = IsFullScreen,
+            },
+        };
+
+        _ = anySuitableDevice;
+        return information;
+    }
+
+    protected virtual void OnDeviceCreated(object sender, EventArgs args) =>
+        DeviceCreated?.Invoke(sender, args);
+
+    protected virtual void OnDeviceDisposing(object sender, EventArgs args) =>
+        DeviceDisposing?.Invoke(sender, args);
+
+    protected virtual void OnDeviceReset(object sender, EventArgs args) =>
+        DeviceReset?.Invoke(sender, args);
+
+    protected virtual void OnDeviceResetting(object sender, EventArgs args) =>
+        DeviceResetting?.Invoke(sender, args);
+
+    protected virtual void OnPreparingDeviceSettings(object sender, PreparingDeviceSettingsEventArgs args) =>
+        _preparingDeviceSettings?.Invoke(sender, args);
+
+    protected virtual void RankDevices(List<GraphicsDeviceInformation> foundDevices)
+    {
+        ArgumentNullException.ThrowIfNull(foundDevices);
+    }
+
+    void IDisposable.Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    bool IGraphicsDeviceManager.BeginDraw() => _backend.BeginDraw();
+
+    void IGraphicsDeviceManager.CreateDevice() => _backend.CreateDevice();
+
+    void IGraphicsDeviceManager.EndDraw() => _backend.EndDraw();
+
+    private void OnPreparingDeviceSettings(object? sender, CNA.PreparingDeviceSettingsEventArgs args)
+    {
+        GraphicsDeviceInformation information = GraphicsDeviceInformation.FromFramework(args.GraphicsDeviceInformation);
+        OnPreparingDeviceSettings(this, new PreparingDeviceSettingsEventArgs(information));
+        information.CopyTo(args.GraphicsDeviceInformation);
     }
 }

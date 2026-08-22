@@ -38,6 +38,13 @@ public class GraphicsAdapter
         AdapterIndex = adapterIndex;
     }
 
+    /// <summary>
+    /// The device that supplied this adapter, when this adapter came from a live device rather
+    /// than the ambient static enumeration. The strict XNA facade uses this internally for the
+    /// public GraphicsDevice constructor without exposing a CNA type in its own API.
+    /// </summary>
+    internal GraphicsDevice? OwningGraphicsDevice => _graphicsDevice;
+
     /// <summary>This adapter's device handle: the one it was constructed with, or the ambient
     /// game's when it was constructed without.</summary>
     private CnaHandle DeviceHandle => _graphicsDevice?.ResolveNativeDeviceHandle() ?? AmbientDeviceHandle();

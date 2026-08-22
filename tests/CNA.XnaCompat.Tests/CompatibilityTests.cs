@@ -253,4 +253,33 @@ public class CompatibilityTests
         Assert.Equal(8, corners.Length);
         Assert.True(frustum.Contains(Microsoft.Xna.Framework.Vector3.Zero));
     }
+
+    [Fact]
+    public void GameDeviceWindowFacadeTypes_DoNotExposeCnaImplementationBases()
+    {
+        Type[] facadeTypes =
+        [
+            typeof(Microsoft.Xna.Framework.Game),
+            typeof(Microsoft.Xna.Framework.GameWindow),
+            typeof(Microsoft.Xna.Framework.GraphicsDeviceManager),
+            typeof(Microsoft.Xna.Framework.GraphicsDeviceInformation),
+            typeof(Microsoft.Xna.Framework.GameServiceContainer),
+            typeof(Microsoft.Xna.Framework.Graphics.GraphicsDevice),
+            typeof(Microsoft.Xna.Framework.Graphics.GraphicsAdapter),
+            typeof(Microsoft.Xna.Framework.Graphics.PresentationParameters),
+        ];
+
+        foreach (Type facadeType in facadeTypes)
+        {
+            Assert.Equal(typeof(object), facadeType.BaseType);
+        }
+
+        Assert.Equal(
+            typeof(EventArgs),
+            typeof(Microsoft.Xna.Framework.PreparingDeviceSettingsEventArgs).BaseType);
+
+        Assert.True(typeof(Microsoft.Xna.Framework.GameWindow).IsAbstract);
+        Assert.Contains(typeof(IDisposable), typeof(Microsoft.Xna.Framework.Game).GetInterfaces());
+        Assert.Contains(typeof(IDisposable), typeof(Microsoft.Xna.Framework.Graphics.GraphicsDevice).GetInterfaces());
+    }
 }

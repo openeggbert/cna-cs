@@ -1,41 +1,48 @@
 namespace Microsoft.Xna.Framework.Content;
 
-/// <summary>
-/// XNA 4.0-compatible <c>ContentTypeReader</c>.
-///
-/// A thin re-typing wrapper rather than a subclass: <see cref="CNA.Content.ContentTypeReader"/>
-/// wraps a native handle it obtained from the registry, and its only constructor takes that raw
-/// handle -- which CNA.XnaCompat must never name (design invariant #5). Wrapping the finished
-/// object keeps the handle entirely on the CNA side.
-/// </summary>
-public class ContentTypeReader : IDisposable
+/// <summary>Base class for a reader of one managed content type.</summary>
+public abstract class ContentTypeReader
 {
-    private readonly CNA.Content.ContentTypeReader _reader;
+    private readonly Type _targetType;
 
-    internal ContentTypeReader(CNA.Content.ContentTypeReader reader)
+    /// <summary>Initializes a reader for <paramref name="targetType"/>.</summary>
+    protected ContentTypeReader(Type targetType)
     {
-        _reader = reader;
+        ArgumentNullException.ThrowIfNull(targetType);
+        _targetType = targetType;
     }
 
-    public string TargetTypeName => _reader.TargetTypeName;
+    /// <summary>Gets the managed type this reader produces.</summary>
+    public Type TargetType => _targetType;
 
-    public int TypeVersion => _reader.TypeVersion;
+    /// <summary>Gets the format version understood by this reader.</summary>
+    public virtual int TypeVersion => 0;
 
-    public bool CanDeserializeIntoExistingObject => _reader.CanDeserializeIntoExistingObject;
+    /// <summary>Whether this reader can populate an existing instance.</summary>
+    public virtual bool CanDeserializeIntoExistingObject => false;
 
-    public bool SupportsVersion(int serializedVersion) => _reader.SupportsVersion(serializedVersion);
-
-    public void Initialize() => _reader.Initialize();
-
-    public bool ReadUntyped(ContentReader reader)
+    /// <summary>Initializes the reader after its containing XNB table has been built.</summary>
+    protected internal virtual void Initialize(ContentTypeReaderManager manager)
     {
-        ArgumentNullException.ThrowIfNull(reader);
-        return _reader.ReadUntyped(reader.Framework);
+        ArgumentNullException.ThrowIfNull(manager);
     }
 
-    public void Dispose()
+    /// <summary>Reads one object, optionally into <paramref name="existingInstance"/>.</summary>
+    protected internal abstract object Read(ContentReader input, object? existingInstance);
+}
+
+/// <summary>Strongly typed base class for a custom content reader.</summary>
+public abstract class ContentTypeReader<T> : ContentTypeReader
+{
+    /// <summary>Initializes a reader for <typeparamref name="T"/>.</summary>
+    protected ContentTypeReader()
+        : base(typeof(T))
     {
-        _reader.Dispose();
-        GC.SuppressFinalize(this);
     }
+
+    protected internal override object Read(ContentReader input, object? existingInstance) =>
+        Read(input, existingInstance is null ? default! : (T)existingInstance)!;
+
+    /// <summary>Reads one <typeparamref name="T"/> value, optionally reusing an existing instance.</summary>
+    protected internal abstract T Read(ContentReader input, T existingInstance);
 }

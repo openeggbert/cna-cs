@@ -45,7 +45,7 @@ public class VertexBuffer : GraphicsResource
     {
         _vertexDeclaration = vertexDeclaration;
         _frameworkBuffer = new CNA.Graphics.VertexBuffer(
-            graphicsDevice,
+            graphicsDevice.Framework,
             ToFramework(vertexDeclaration),
             vertexCount,
             (CNA.Graphics.BufferUsage)(int)bufferUsage,

@@ -141,7 +141,7 @@ public class EffectParameter
     /// <c>Effect</c> that created it -- but the cast is checked rather than assumed, because
     /// <c>GraphicsResource.GraphicsDevice</c> is public and this class cannot prove otherwise.</summary>
     private static GraphicsDevice GraphicsDeviceOf(CNA.Graphics.Texture texture) =>
-        texture.GraphicsDevice as GraphicsDevice
+        GraphicsDevice.FromFramework(texture.GraphicsDevice)
         ?? throw new InvalidOperationException(
             "This effect parameter's texture belongs to a CNA.Graphics.GraphicsDevice rather than a " +
             "compat one, so it cannot be re-typed into this namespace.");

@@ -174,6 +174,16 @@ public class ContentManager : IDisposable
 
     private T LoadCore<T>(string assetName)
     {
+        // XNA content is table-driven. The native CNA loaders remain the best route for the
+        // native-backed built-ins below, but a user-defined T has no CNA type identity to dispatch
+        // on. Read those XNB files here through the real public ContentReader/ContentTypeReader
+        // contract instead of requiring a non-XNA LoadForeign<T>() escape hatch.
+        if (!IsNativeBackedBuiltIn(typeof(T)))
+        {
+            using Stream stream = OpenStream(assetName);
+            return ManagedXnbContentLoader.Load<T>(this, stream, assetName, RecordDisposableObject);
+        }
+
         CNA.Content.ContentManager backend = GetBackend();
 
         if (typeof(T) == typeof(Graphics.Texture2D))
@@ -216,11 +226,19 @@ public class ContentManager : IDisposable
         {
             Graphics.GraphicsDevice device = RequireGraphicsDevice<T>(backend, assetName);
             return (T)(object)Graphics.Effect.Adopt(
-                device, new CNA.Graphics.Effect(device, backend.LoadNativeEffectHandle(assetName)));
+                device, new CNA.Graphics.Effect(device.Framework, backend.LoadNativeEffectHandle(assetName)));
         }
 
-        throw new NotSupportedException($"Unsupported content type {typeof(T)}.");
+        throw new ContentLoadException($"Unsupported built-in content type {typeof(T)}.");
     }
+
+    private static bool IsNativeBackedBuiltIn(Type type) =>
+        type == typeof(Graphics.Texture2D) ||
+        type == typeof(Graphics.SpriteFont) ||
+        type == typeof(Graphics.TextureCube) ||
+        type == typeof(Audio.SoundEffect) ||
+        type == typeof(Graphics.Model) ||
+        type == typeof(Graphics.Effect);
 
     private CNA.Content.ContentManager GetBackend()
     {
@@ -237,7 +255,7 @@ public class ContentManager : IDisposable
                 "No Microsoft.Xna.Framework.Graphics.IGraphicsDeviceService is available for content loading.");
         }
 
-        _backend = CNA.Content.ContentManager.CreateOwned(graphicsDeviceService.GraphicsDevice, _rootDirectory);
+        _backend = CNA.Content.ContentManager.CreateOwned(graphicsDeviceService.GraphicsDevice.Framework, _rootDirectory);
         BackendFacades.Add(_backend, this);
         return _backend;
     }
@@ -251,7 +269,7 @@ public class ContentManager : IDisposable
     private static Graphics.GraphicsDevice RequireGraphicsDevice<T>(
         CNA.Content.ContentManager backend,
         string assetName) =>
-        backend.GraphicsDevice as Graphics.GraphicsDevice ?? throw new ContentLoadException(
+        Graphics.GraphicsDevice.FromFramework(backend.GraphicsDevice) ?? throw new ContentLoadException(
             $"Cannot load {typeof(T).Name} '{assetName}': no compatible GraphicsDevice is available.");
 
     private Graphics.Model LoadCompatModel(CNA.Content.ContentManager backend, string assetName)

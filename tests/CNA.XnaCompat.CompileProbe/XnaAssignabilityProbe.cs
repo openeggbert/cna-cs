@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using System.Collections.Generic;
+using System.IO;
 using System.Resources;
 
 namespace XnaCompatibilityCompileProbe;
@@ -82,4 +83,49 @@ internal static class XnaAssignabilityProbe
         IServiceProvider services,
         ResourceManager resources) =>
         new ResourceContentManager(services, resources);
+
+    internal static void ContentReaderHierarchy(
+        ContentReader contentReader,
+        ContentTypeReader contentTypeReader,
+        ContentTypeReader<ProbeContent> genericContentTypeReader)
+    {
+        BinaryReader binaryReader = contentReader;
+        ContentTypeReader untyped = genericContentTypeReader;
+        Type targetType = contentTypeReader.TargetType;
+
+        _ = (binaryReader, untyped, targetType);
+    }
+
+    internal static void GameDeviceWindowFacade(
+        Game game,
+        GraphicsDeviceManager manager,
+        GameWindow window,
+        GraphicsDeviceInformation information)
+    {
+        IDisposable disposable = game;
+        IGraphicsDeviceManager managerContract = manager;
+        IGraphicsDeviceService deviceService = manager;
+        GameServiceContainer services = game.Services;
+        GameWindow gameWindow = game.Window;
+        GraphicsAdapter adapter = GraphicsAdapter.DefaultAdapter;
+
+        game.Content = new ContentManager(services);
+        manager.PreparingDeviceSettings += (_, args) =>
+            args.GraphicsDeviceInformation.PresentationParameters.MultiSampleCount = 4;
+        information.Adapter = adapter;
+
+        _ = (disposable, managerContract, deviceService, window, gameWindow, information);
+    }
+
+    internal sealed class ProbeContent
+    {
+    }
+
+    // This is the signature XNA games use for a custom reader. Keeping it in the cross-engine
+    // compile corpus catches a facade that merely exposes similarly named wrapper methods.
+    private sealed class ProbeContentReader : ContentTypeReader<ProbeContent>
+    {
+        protected override ProbeContent Read(ContentReader input, ProbeContent existingInstance) =>
+            existingInstance ?? new ProbeContent();
+    }
 }

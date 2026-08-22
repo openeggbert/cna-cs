@@ -6,7 +6,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class AlphaTestEffect : Effect, IEffectMatrices, IEffectFog
 {
     public AlphaTestEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice, new CNA.Graphics.AlphaTestEffect(graphicsDevice))
+        : base(graphicsDevice, new CNA.Graphics.AlphaTestEffect(graphicsDevice.Framework))
     {
     }
 

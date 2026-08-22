@@ -7,11 +7,13 @@ namespace Microsoft.Xna.Framework.Media;
 public class Video : CNA.Media.Video
 {
     public Video(Graphics.GraphicsDevice graphicsDevice, string fileName)
-        : base(graphicsDevice, fileName)
+        : base(graphicsDevice.Framework, fileName)
     {
     }
 
-    public new Graphics.GraphicsDevice GraphicsDevice => (Graphics.GraphicsDevice)base.GraphicsDevice;
+    public new Graphics.GraphicsDevice GraphicsDevice =>
+        Graphics.GraphicsDevice.FromFramework(base.GraphicsDevice) ?? throw new InvalidOperationException(
+            "The video was not created for an XNA facade graphics device.");
 
     public new VideoSoundtrackType VideoSoundtrackType => (VideoSoundtrackType)(int)base.VideoSoundtrackType;
 }
