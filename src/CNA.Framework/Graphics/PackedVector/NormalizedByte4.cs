@@ -29,17 +29,17 @@ public struct NormalizedByte4 : IPackedVector<uint>, IEquatable<NormalizedByte4>
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y, vector.Z, vector.W);
 
     public readonly Vector4 ToVector4() => new Vector4(
-            (sbyte)(PackedValue & 0xFF) / 127f,
-            (sbyte)((PackedValue >> 8) & 0xFF) / 127f,
-            (sbyte)((PackedValue >> 16) & 0xFF) / 127f,
-            (sbyte)((PackedValue >> 24) & 0xFF) / 127f);
+            PackUtils.UnpackSNorm(255u, PackedValue),
+            PackUtils.UnpackSNorm(255u, PackedValue >> 8),
+            PackUtils.UnpackSNorm(255u, PackedValue >> 16),
+            PackUtils.UnpackSNorm(255u, PackedValue >> 24));
 
     private static uint Pack(float x, float y, float z, float w)
     {
-        uint xi = (byte)(sbyte)MathF.Round(Math.Clamp(x, -1f, 1f) * 127f, MidpointRounding.AwayFromZero);
-        uint yi = (byte)(sbyte)MathF.Round(Math.Clamp(y, -1f, 1f) * 127f, MidpointRounding.AwayFromZero);
-        uint zi = (byte)(sbyte)MathF.Round(Math.Clamp(z, -1f, 1f) * 127f, MidpointRounding.AwayFromZero);
-        uint wi = (byte)(sbyte)MathF.Round(Math.Clamp(w, -1f, 1f) * 127f, MidpointRounding.AwayFromZero);
+        uint xi = PackUtils.PackSNorm(255u, x);
+        uint yi = PackUtils.PackSNorm(255u, y);
+        uint zi = PackUtils.PackSNorm(255u, z);
+        uint wi = PackUtils.PackSNorm(255u, w);
         return xi | (yi << 8) | (zi << 16) | (wi << 24);
     }
 
@@ -49,7 +49,7 @@ public struct NormalizedByte4 : IPackedVector<uint>, IEquatable<NormalizedByte4>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(NormalizedByte4 a, NormalizedByte4 b) => a.PackedValue == b.PackedValue;
 

@@ -62,15 +62,16 @@ public class SpriteBatch : GraphicsResource
             depthStencilState?.Framework,
             rasterizerState?.Framework,
             effect?.Inner,
-            transformMatrix);
+            transformMatrix.ToFramework());
 
     public void End() => _inner.End();
 
     public void Draw(Texture2D texture, Vector2 position, Color color) =>
-        _inner.Draw(Backend(texture), position, color);
+        _inner.Draw(Backend(texture), position.ToFramework(), color.ToFramework());
 
     public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color) =>
-        _inner.Draw(Backend(texture), position, sourceRectangle, color);
+        _inner.Draw(
+            Backend(texture), position.ToFramework(), sourceRectangle.ToFramework(), color.ToFramework());
 
     public void Draw(
         Texture2D texture,
@@ -83,7 +84,13 @@ public class SpriteBatch : GraphicsResource
         SpriteEffects effects,
         float layerDepth) =>
         _inner.Draw(
-            Backend(texture), position, sourceRectangle, color, rotation, origin, scale,
+            Backend(texture),
+            position.ToFramework(),
+            sourceRectangle.ToFramework(),
+            color.ToFramework(),
+            rotation,
+            origin.ToFramework(),
+            scale,
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
     public void Draw(
@@ -97,18 +104,28 @@ public class SpriteBatch : GraphicsResource
         SpriteEffects effects,
         float layerDepth) =>
         _inner.Draw(
-            Backend(texture), position, sourceRectangle, color, rotation, origin, scale,
+            Backend(texture),
+            position.ToFramework(),
+            sourceRectangle.ToFramework(),
+            color.ToFramework(),
+            rotation,
+            origin.ToFramework(),
+            scale.ToFramework(),
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
     public void Draw(Texture2D texture, Rectangle destinationRectangle, Color color) =>
-        _inner.Draw(Backend(texture), destinationRectangle, color);
+        _inner.Draw(Backend(texture), destinationRectangle.ToFramework(), color.ToFramework());
 
     public void Draw(
         Texture2D texture,
         Rectangle destinationRectangle,
         Rectangle? sourceRectangle,
         Color color) =>
-        _inner.Draw(Backend(texture), destinationRectangle, sourceRectangle, color);
+        _inner.Draw(
+            Backend(texture),
+            destinationRectangle.ToFramework(),
+            sourceRectangle.ToFramework(),
+            color.ToFramework());
 
     public void Draw(
         Texture2D texture,
@@ -120,16 +137,21 @@ public class SpriteBatch : GraphicsResource
         SpriteEffects effects,
         float layerDepth) =>
         _inner.Draw(
-            Backend(texture), destinationRectangle, sourceRectangle, color, rotation, origin,
+            Backend(texture),
+            destinationRectangle.ToFramework(),
+            sourceRectangle.ToFramework(),
+            color.ToFramework(),
+            rotation,
+            origin.ToFramework(),
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
     public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color) =>
-        _inner.DrawString(spriteFont, text, position, color);
+        _inner.DrawString(spriteFont.Framework, text, position.ToFramework(), color.ToFramework());
 
     public void DrawString(SpriteFont spriteFont, StringBuilder text, Vector2 position, Color color)
     {
         ArgumentNullException.ThrowIfNull(text);
-        _inner.DrawString(spriteFont, text.ToString(), position, color);
+        _inner.DrawString(spriteFont.Framework, text.ToString(), position.ToFramework(), color.ToFramework());
     }
 
     public void DrawString(
@@ -143,7 +165,13 @@ public class SpriteBatch : GraphicsResource
         SpriteEffects effects,
         float layerDepth) =>
         _inner.DrawString(
-            spriteFont, text, position, color, rotation, origin, scale,
+            spriteFont.Framework,
+            text,
+            position.ToFramework(),
+            color.ToFramework(),
+            rotation,
+            origin.ToFramework(),
+            scale,
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
     public void DrawString(
@@ -172,7 +200,13 @@ public class SpriteBatch : GraphicsResource
         SpriteEffects effects,
         float layerDepth) =>
         _inner.DrawString(
-            spriteFont, text, position, color, rotation, origin, scale,
+            spriteFont.Framework,
+            text,
+            position.ToFramework(),
+            color.ToFramework(),
+            rotation,
+            origin.ToFramework(),
+            scale.ToFramework(),
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
     public void DrawString(

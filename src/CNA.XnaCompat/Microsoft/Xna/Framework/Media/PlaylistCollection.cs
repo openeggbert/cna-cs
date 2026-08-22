@@ -1,11 +1,31 @@
+using System.Collections;
+
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>PlaylistCollection</c>: a compat-typed view over <c>CNA.Media.PlaylistCollection</c>. See
-/// <see cref="ReadOnlyMediaCollection{TCompat,TBase}"/> for how the re-typing works.</summary>
-public sealed class PlaylistCollection : ReadOnlyMediaCollection<Playlist, CNA.Media.Playlist>
+public sealed class PlaylistCollection : IEnumerable<Playlist>, IDisposable
 {
+    private readonly MediaCollectionAdapter<Playlist, CNA.Media.Playlist> _collection;
+
     internal PlaylistCollection(CNA.Media.PlaylistCollection inner)
-        : base(inner, item => new Playlist(item))
     {
+        _collection = new(inner, item => new Playlist(item));
     }
+
+    ~PlaylistCollection() => _collection?.Dispose();
+
+    public int Count => _collection.Count;
+
+    public bool IsDisposed => _collection.IsDisposed;
+
+    public Playlist this[int index] => _collection.GetItem(index);
+
+    public void Dispose()
+    {
+        _collection.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public IEnumerator<Playlist> GetEnumerator() => _collection.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => _collection.GetNonGenericEnumerator();
 }

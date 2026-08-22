@@ -1,11 +1,31 @@
+using System.Collections;
+
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>PictureCollection</c>: a compat-typed view over <c>CNA.Media.PictureCollection</c>. See
-/// <see cref="ReadOnlyMediaCollection{TCompat,TBase}"/> for how the re-typing works.</summary>
-public sealed class PictureCollection : ReadOnlyMediaCollection<Picture, CNA.Media.Picture>
+public sealed class PictureCollection : IEnumerable<Picture>, IDisposable
 {
+    private readonly MediaCollectionAdapter<Picture, CNA.Media.Picture> _collection;
+
     internal PictureCollection(CNA.Media.PictureCollection inner)
-        : base(inner, item => new Picture(item))
     {
+        _collection = new(inner, item => new Picture(item));
     }
+
+    ~PictureCollection() => _collection?.Dispose();
+
+    public int Count => _collection.Count;
+
+    public bool IsDisposed => _collection.IsDisposed;
+
+    public Picture this[int index] => _collection.GetItem(index);
+
+    public void Dispose()
+    {
+        _collection.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public IEnumerator<Picture> GetEnumerator() => _collection.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => _collection.GetNonGenericEnumerator();
 }

@@ -8,7 +8,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// parameters are native-backed views that build the base type. Wrapping keeps the compat surface
 /// honest without duplicating any of the value marshalling.
 /// </summary>
-public class EffectParameter
+public sealed class EffectParameter
 {
     private readonly CNA.Graphics.EffectParameter _parameter;
 
@@ -43,27 +43,41 @@ public class EffectParameter
 
     public string GetValueString() => _parameter.GetValueString();
 
-    public Matrix GetValueMatrix() => _parameter.GetValueMatrix();
+    public Matrix GetValueMatrix() => _parameter.GetValueMatrix().ToCompat();
 
-    public Quaternion GetValueQuaternion() => _parameter.GetValueQuaternion();
+    public Quaternion GetValueQuaternion() => _parameter.GetValueQuaternion().ToCompat();
 
-    public Vector2 GetValueVector2() => _parameter.GetValueVector2();
+    public Vector2 GetValueVector2() => _parameter.GetValueVector2().ToCompat();
 
-    public Vector3 GetValueVector3() => _parameter.GetValueVector3();
+    public Vector3 GetValueVector3() => _parameter.GetValueVector3().ToCompat();
 
-    public Vector4 GetValueVector4() => _parameter.GetValueVector4();
+    public Vector4 GetValueVector4() => _parameter.GetValueVector4().ToCompat();
 
-    public Matrix[] GetValueMatrixArray(int count) => Convert(_parameter.GetValueMatrixArray(count), static m => (Matrix)m);
+    public Matrix[] GetValueMatrixArray(int count) =>
+        Convert(_parameter.GetValueMatrixArray(count), static value => value.ToCompat());
 
-    public Vector2[] GetValueVector2Array(int count) => Convert(_parameter.GetValueVector2Array(count), static v => (Vector2)v);
+    public Vector2[] GetValueVector2Array(int count) =>
+        Convert(_parameter.GetValueVector2Array(count), static value => value.ToCompat());
 
-    public Vector3[] GetValueVector3Array(int count) => Convert(_parameter.GetValueVector3Array(count), static v => (Vector3)v);
+    public Vector3[] GetValueVector3Array(int count) =>
+        Convert(_parameter.GetValueVector3Array(count), static value => value.ToCompat());
 
-    public Vector4[] GetValueVector4Array(int count) => Convert(_parameter.GetValueVector4Array(count), static v => (Vector4)v);
+    public Vector4[] GetValueVector4Array(int count) =>
+        Convert(_parameter.GetValueVector4Array(count), static value => value.ToCompat());
 
     public float[] GetValueSingleArray(int count) => _parameter.GetValueSingleArray(count);
 
     public int[] GetValueInt32Array(int count) => _parameter.GetValueInt32Array(count);
+
+    public bool[] GetValueBooleanArray(int count) => _parameter.GetValueBooleanArray(count);
+
+    public Quaternion[] GetValueQuaternionArray(int count) =>
+        Convert(_parameter.GetValueQuaternionArray(count), static value => value.ToCompat());
+
+    public Matrix GetValueMatrixTranspose() => _parameter.GetValueMatrixTranspose().ToCompat();
+
+    public Matrix[] GetValueMatrixTransposeArray(int count) =>
+        Convert(_parameter.GetValueMatrixTransposeArray(count), static value => value.ToCompat());
 
     public void SetValue(bool value) => _parameter.SetValue(value);
 
@@ -73,15 +87,15 @@ public class EffectParameter
 
     public void SetValue(string value) => _parameter.SetValue(value);
 
-    public void SetValue(Matrix value) => _parameter.SetValue(value);
+    public void SetValue(Matrix value) => _parameter.SetValue(value.ToFramework());
 
-    public void SetValue(Quaternion value) => _parameter.SetValue(value);
+    public void SetValue(Quaternion value) => _parameter.SetValue(value.ToFramework());
 
-    public void SetValue(Vector2 value) => _parameter.SetValue(value);
+    public void SetValue(Vector2 value) => _parameter.SetValue(value.ToFramework());
 
-    public void SetValue(Vector3 value) => _parameter.SetValue(value);
+    public void SetValue(Vector3 value) => _parameter.SetValue(value.ToFramework());
 
-    public void SetValue(Vector4 value) => _parameter.SetValue(value);
+    public void SetValue(Vector4 value) => _parameter.SetValue(value.ToFramework());
 
     public void SetValue(Texture? value) => _parameter.SetValue(value?.FrameworkTexture);
 
@@ -89,16 +103,30 @@ public class EffectParameter
 
     public void SetValue(int[] value) => _parameter.SetValue(value);
 
-    public void SetValue(Matrix[] value) => _parameter.SetValue(Convert(value, static m => (CNA.Matrix)m));
+    public void SetValue(bool[] value) => _parameter.SetValue(value);
 
-    public void SetValue(Vector2[] value) => _parameter.SetValue(Convert(value, static v => (CNA.Vector2)v));
+    public void SetValue(Quaternion[] value) =>
+        _parameter.SetValue(Convert(value, static item => item.ToFramework()));
 
-    public void SetValue(Vector3[] value) => _parameter.SetValue(Convert(value, static v => (CNA.Vector3)v));
+    public void SetValue(Matrix[] value) =>
+        _parameter.SetValue(Convert(value, static item => item.ToFramework()));
 
-    public void SetValue(Vector4[] value) => _parameter.SetValue(Convert(value, static v => (CNA.Vector4)v));
+    public void SetValue(Vector2[] value) =>
+        _parameter.SetValue(Convert(value, static item => item.ToFramework()));
+
+    public void SetValue(Vector3[] value) =>
+        _parameter.SetValue(Convert(value, static item => item.ToFramework()));
+
+    public void SetValue(Vector4[] value) =>
+        _parameter.SetValue(Convert(value, static item => item.ToFramework()));
+
+    public void SetValueTranspose(Matrix value) => _parameter.SetValueTranspose(value.ToFramework());
+
+    public void SetValueTranspose(Matrix[] value) =>
+        _parameter.SetValueTranspose(Convert(value, static item => item.ToFramework()));
 
     /// <summary>Element-wise conversion, not collection-level -- the value types convert
-    /// implicitly per element but arrays of them do not, the same limitation
+    /// explicitly per element but arrays of them do not, the same limitation
     /// <c>ContentManager</c>'s own converters document.</summary>
     private static TOut[] Convert<TIn, TOut>(TIn[] source, Func<TIn, TOut> convert)
     {

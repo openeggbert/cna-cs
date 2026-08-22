@@ -1,11 +1,31 @@
+using System.Collections;
+
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>AlbumCollection</c>: a compat-typed view over <c>CNA.Media.AlbumCollection</c>. See
-/// <see cref="ReadOnlyMediaCollection{TCompat,TBase}"/> for how the re-typing works.</summary>
-public sealed class AlbumCollection : ReadOnlyMediaCollection<Album, CNA.Media.Album>
+public sealed class AlbumCollection : IEnumerable<Album>, IDisposable
 {
+    private readonly MediaCollectionAdapter<Album, CNA.Media.Album> _collection;
+
     internal AlbumCollection(CNA.Media.AlbumCollection inner)
-        : base(inner, item => new Album(item))
     {
+        _collection = new(inner, item => new Album(item));
     }
+
+    ~AlbumCollection() => _collection?.Dispose();
+
+    public int Count => _collection.Count;
+
+    public bool IsDisposed => _collection.IsDisposed;
+
+    public Album this[int index] => _collection.GetItem(index);
+
+    public void Dispose()
+    {
+        _collection.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public IEnumerator<Album> GetEnumerator() => _collection.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => _collection.GetNonGenericEnumerator();
 }

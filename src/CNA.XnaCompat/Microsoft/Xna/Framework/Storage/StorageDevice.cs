@@ -5,7 +5,7 @@ namespace Microsoft.Xna.Framework.Storage;
 /// constructor is private (instances come from the selector) -- so the static entry points forward
 /// and the instance ones wrap. See the base type's doc comment for why both the
 /// <c>Begin</c>/<c>End</c> pairs and the synchronous methods exist.</summary>
-public class StorageDevice
+public sealed class StorageDevice
 {
     private readonly CNA.Storage.StorageDevice _device;
 
@@ -20,15 +20,38 @@ public class StorageDevice
 
     public long TotalSpace => _device.TotalSpace;
 
-    public static StorageDevice ShowSelector() => new(CNA.Storage.StorageDevice.ShowSelector());
+    public static event EventHandler<EventArgs>? DeviceChanged
+    {
+        add => CNA.Storage.StorageDevice.DeviceChanged += value;
+        remove => CNA.Storage.StorageDevice.DeviceChanged -= value;
+    }
+
+    internal static StorageDevice ShowSelector() => new(CNA.Storage.StorageDevice.ShowSelector());
 
     public static IAsyncResult BeginShowSelector(AsyncCallback? callback, object? state) =>
         CNA.Storage.StorageDevice.BeginShowSelector(callback, state);
 
+    public static IAsyncResult BeginShowSelector(
+        PlayerIndex player, AsyncCallback? callback, object? state) =>
+        CNA.Storage.StorageDevice.BeginShowSelector((CNA.PlayerIndex)(int)player, callback, state);
+
+    public static IAsyncResult BeginShowSelector(
+        int sizeInBytes, int directoryCount, AsyncCallback? callback, object? state) =>
+        CNA.Storage.StorageDevice.BeginShowSelector(sizeInBytes, directoryCount, callback, state);
+
+    public static IAsyncResult BeginShowSelector(
+        PlayerIndex player,
+        int sizeInBytes,
+        int directoryCount,
+        AsyncCallback? callback,
+        object? state) =>
+        CNA.Storage.StorageDevice.BeginShowSelector(
+            (CNA.PlayerIndex)(int)player, sizeInBytes, directoryCount, callback, state);
+
     public static StorageDevice EndShowSelector(IAsyncResult result) =>
         new(CNA.Storage.StorageDevice.EndShowSelector(result));
 
-    public StorageContainer OpenContainer(string displayName) => new(_device.OpenContainer(displayName), this);
+    internal StorageContainer OpenContainer(string displayName) => new(_device.OpenContainer(displayName), this);
 
     public IAsyncResult BeginOpenContainer(string displayName, AsyncCallback? callback, object? state) =>
         _device.BeginOpenContainer(displayName, callback, state);

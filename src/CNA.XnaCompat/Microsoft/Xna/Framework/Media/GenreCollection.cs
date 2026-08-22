@@ -1,11 +1,31 @@
+using System.Collections;
+
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>GenreCollection</c>: a compat-typed view over <c>CNA.Media.GenreCollection</c>. See
-/// <see cref="ReadOnlyMediaCollection{TCompat,TBase}"/> for how the re-typing works.</summary>
-public sealed class GenreCollection : ReadOnlyMediaCollection<Genre, CNA.Media.Genre>
+public sealed class GenreCollection : IEnumerable<Genre>, IDisposable
 {
+    private readonly MediaCollectionAdapter<Genre, CNA.Media.Genre> _collection;
+
     internal GenreCollection(CNA.Media.GenreCollection inner)
-        : base(inner, item => new Genre(item))
     {
+        _collection = new(inner, item => new Genre(item));
     }
+
+    ~GenreCollection() => _collection?.Dispose();
+
+    public int Count => _collection.Count;
+
+    public bool IsDisposed => _collection.IsDisposed;
+
+    public Genre this[int index] => _collection.GetItem(index);
+
+    public void Dispose()
+    {
+        _collection.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public IEnumerator<Genre> GetEnumerator() => _collection.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => _collection.GetNonGenericEnumerator();
 }

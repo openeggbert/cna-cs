@@ -2,7 +2,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>Matches real XNA's <c>ResourceCreatedEventArgs</c>: reports the resource a
 /// <c>GraphicsDevice</c> just created, through its <c>ResourceCreated</c> event.</summary>
-public class ResourceCreatedEventArgs : EventArgs
+public sealed class ResourceCreatedEventArgs : EventArgs
 {
     internal ResourceCreatedEventArgs(object? resource)
     {
@@ -20,7 +20,7 @@ public class ResourceCreatedEventArgs : EventArgs
 /// <see cref="Name"/> and <see cref="Tag"/> rather than the object itself, exactly as XNA does --
 /// by the time the event fires the resource is gone, so handing out a reference to it would invite
 /// use-after-dispose.</summary>
-public class ResourceDestroyedEventArgs : EventArgs
+public sealed class ResourceDestroyedEventArgs : EventArgs
 {
     internal ResourceDestroyedEventArgs(string? name, object? tag)
     {

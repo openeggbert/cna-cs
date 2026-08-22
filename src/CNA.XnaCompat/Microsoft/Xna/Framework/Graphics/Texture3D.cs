@@ -110,7 +110,7 @@ public class Texture3D : Texture
 
         for (int i = 0; i < values.Length; i++)
         {
-            data[startIndex + i] = (T)(object)(Color)values[i];
+            data[startIndex + i] = (T)(object)values[i].ToCompat();
         }
     }
 
@@ -120,7 +120,7 @@ public class Texture3D : Texture
         var result = new CNA.Color[source.Length];
         for (int i = 0; i < result.Length; i++)
         {
-            result[i] = (Color)(object)source[i];
+            result[i] = ((Color)(object)source[i]).ToFramework();
         }
 
         return result;

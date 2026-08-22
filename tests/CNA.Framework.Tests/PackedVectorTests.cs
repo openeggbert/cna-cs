@@ -12,9 +12,9 @@ namespace CNA.Tests;
 /// Each expectation below is derived from the engine's own
 /// <c>Microsoft/Xna/Framework/Graphics/PackedVector/*.hpp</c>, not from the format name. The three
 /// things most likely to be got wrong, and therefore pinned explicitly, are: channel *order* (the
-/// BGRA formats do not store R first), the asymmetric rounding (signed-normalized formats round
-/// half away from zero, unsigned-normalized round half up, and the unnormalized ones truncate), and
-/// which components a narrow format leaves at their defaults.
+/// BGRA formats do not store R first), XNA's clamp-then-<see cref="Math.Round(double)"/> nearest-even
+/// quantization (including unnormalized integer formats), and which components a narrow format
+/// leaves at their defaults.
 /// </summary>
 public class PackedVectorTests
 {
@@ -45,9 +45,9 @@ public class PackedVectorTests
     }
 
     [Fact]
-    public void Alpha8_RoundsHalfUp()
+    public void Alpha8_RoundsScaledTieToEven()
     {
-        // 0.5 * 255 = 127.5, +0.5 truncated = 128.
+        // 0.5 * 255 = 127.5, whose nearest even integer is 128.
         Assert.Equal(128, new Alpha8(0.5f).PackedValue);
     }
 
@@ -97,22 +97,23 @@ public class PackedVectorTests
     /// threshold at 0.5.</summary>
     [Theory]
     [InlineData(0.49f, 0f)]
-    [InlineData(0.5f, 1f)]
+    [InlineData(0.5f, 0f)]
+    [InlineData(0.5001f, 1f)]
     [InlineData(1f, 1f)]
     public void Bgra5551_AlphaIsOneBit(float alpha, float expected)
     {
         Assert.Equal(expected, new Bgra5551(0f, 0f, 0f, alpha).ToVector4().W);
     }
 
-    /// <summary>Byte4's components are [0, 255], not [0, 1] -- and truncate rather than round,
-    /// matching the engine's plain cast.</summary>
+    /// <summary>Byte4's components are [0, 255], not [0, 1], and use XNA's nearest-even
+    /// quantization.</summary>
     [Fact]
-    public void Byte4_IsUnnormalizedAndTruncates()
+    public void Byte4_IsUnnormalizedAndRoundsTiesToEven()
     {
-        var value = new Byte4(1.9f, 2f, 3f, 4f);
+        var value = new Byte4(1.5f, 2.5f, 3.5f, 4.5f);
 
-        Assert.Equal(1u | (2u << 8) | (3u << 16) | (4u << 24), value.PackedValue);
-        Assert.Equal(1f, value.ToVector4().X);
+        Assert.Equal(2u | (2u << 8) | (4u << 16) | (4u << 24), value.PackedValue);
+        Assert.Equal(2f, value.ToVector4().X);
     }
 
     [Fact]
@@ -153,17 +154,15 @@ public class PackedVectorTests
         Assert.Equal(4f, expanded.W);
     }
 
-    /// <summary>Signed-normalized formats round half *away from zero*, unlike the unsigned ones
-    /// which round half up. Both directions are checked, because a single shared rounding helper
-    /// would pass one and fail the other.</summary>
+    /// <summary>Signed-normalized formats scale first and then use nearest-even rounding. A tie
+    /// whose lower integer is even distinguishes that rule from half-away-from-zero.</summary>
     [Fact]
-    public void NormalizedByte2_RoundsHalfAwayFromZero()
+    public void NormalizedByte2_RoundsTiesToEven()
     {
-        // 0.5/127 lands exactly on 63.5 -> 64, and its negative on -63.5 -> -64.
-        const float half = 63.5f / 127f;
+        const float half = 62.5f / 127f;
 
-        Assert.Equal(64, (sbyte)(new NormalizedByte2(half, 0f).PackedValue & 0xFF));
-        Assert.Equal(-64, (sbyte)(new NormalizedByte2(-half, 0f).PackedValue & 0xFF));
+        Assert.Equal(62, (sbyte)(new NormalizedByte2(half, 0f).PackedValue & 0xFF));
+        Assert.Equal(-62, (sbyte)(new NormalizedByte2(-half, 0f).PackedValue & 0xFF));
     }
 
     [Fact]
@@ -255,10 +254,12 @@ public class PackedVectorTests
     }
 
     [Fact]
-    public void Short2_TruncatesTowardZero()
+    public void Short2_RoundsTiesToEven()
     {
-        Assert.Equal(1, (short)(new Short2(1.9f, 0f).PackedValue & 0xFFFF));
-        Assert.Equal(-1, (short)(new Short2(-1.9f, 0f).PackedValue & 0xFFFF));
+        var value = new Short2(1.5f, -2.5f);
+
+        Assert.Equal(2, (short)(value.PackedValue & 0xFFFF));
+        Assert.Equal(-2, (short)((value.PackedValue >> 16) & 0xFFFF));
     }
 
     [Fact]

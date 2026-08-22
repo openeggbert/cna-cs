@@ -32,6 +32,8 @@ public readonly struct VertexBufferBinding
 
     public int InstanceFrequency { get; }
 
+    public static implicit operator VertexBufferBinding(VertexBuffer vertexBuffer) => new(vertexBuffer);
+
     internal CNA.Graphics.VertexBufferBinding ToFramework() =>
         new(VertexBuffer.FrameworkBuffer, VertexOffset, InstanceFrequency);
 

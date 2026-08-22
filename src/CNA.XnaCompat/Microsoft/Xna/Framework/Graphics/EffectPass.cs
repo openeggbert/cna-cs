@@ -2,7 +2,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>XNA 4.0-compatible <c>EffectPass</c>. A thin re-typing wrapper -- see
 /// <see cref="EffectParameter"/>.</summary>
-public class EffectPass
+public sealed class EffectPass
 {
     private readonly CNA.Graphics.EffectPass _pass;
 

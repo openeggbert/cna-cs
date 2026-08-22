@@ -1,40 +1,32 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>DisplayMode</c>. See <see cref="Microsoft.Xna.Framework.Color"/>
-/// for why this duplicates <see cref="CNA.Graphics.DisplayMode"/> rather than subclassing it
-/// (structs cannot inherit).</summary>
-public readonly struct DisplayMode : IEquatable<DisplayMode>
+public class DisplayMode
 {
-    internal DisplayMode(int width, int height, float aspectRatio, SurfaceFormat format)
+    private readonly int _width;
+    private readonly int _height;
+    private readonly SurfaceFormat _format;
+
+    internal DisplayMode(int width, int height, SurfaceFormat format)
     {
-        Width = width;
-        Height = height;
-        AspectRatio = aspectRatio;
-        Format = format;
+        _width = width;
+        _height = height;
+        _format = format;
     }
 
-    public int Width { get; }
+    public SurfaceFormat Format => _format;
 
-    public int Height { get; }
+    public int Height => _height;
 
-    public float AspectRatio { get; }
+    public int Width => _width;
 
-    public SurfaceFormat Format { get; }
+    public float AspectRatio => _height == 0 || _width == 0 ? 0f : (float)_width / _height;
 
-    public Rectangle TitleSafeArea => new(Width / 10, Height / 10, Width - (Width / 5), Height - (Height / 5));
+    public Rectangle TitleSafeArea =>
+        new(_width / 10, _height / 10, _width - (_width / 5), _height - (_height / 5));
 
     internal static DisplayMode FromFramework(CNA.Graphics.DisplayMode source) =>
-        new(source.Width, source.Height, source.AspectRatio, (SurfaceFormat)(int)source.Format);
+        new(source.Width, source.Height, (SurfaceFormat)(int)source.Format);
 
-    public bool Equals(DisplayMode other) => Width == other.Width && Height == other.Height && Format == other.Format;
-
-    public override bool Equals(object? obj) => obj is DisplayMode other && Equals(other);
-
-    public override int GetHashCode() => HashCode.Combine(Width, Height, Format);
-
-    public static bool operator ==(DisplayMode a, DisplayMode b) => a.Equals(b);
-
-    public static bool operator !=(DisplayMode a, DisplayMode b) => !a.Equals(b);
-
-    public override string ToString() => $"{{Width:{Width} Height:{Height} Format:{Format} AspectRatio:{AspectRatio}}}";
+    public override string ToString() =>
+        $"{{Width:{Width} Height:{Height} Format:{Format} AspectRatio:{AspectRatio}}}";
 }

@@ -74,7 +74,7 @@ public class Texture2D : Texture
             NativeHandleValue,
             CompatTextureDataType.Of<T>(),
             level,
-            rect is { } region ? (CNA.Rectangle)region : null,
+            rect.ToFramework(),
             data,
             startIndex,
             elementCount);

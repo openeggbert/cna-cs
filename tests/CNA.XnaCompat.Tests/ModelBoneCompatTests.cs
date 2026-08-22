@@ -1,24 +1,29 @@
 using Xunit;
 using XnaModelBone = Microsoft.Xna.Framework.Graphics.ModelBone;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 
 namespace CNA.XnaCompat.Tests;
 
 /// <summary>
-/// <see cref="XnaModelBone"/> is the only new-this-pass compat graphics type reachable from this
-/// test project: its constructor takes no <c>GraphicsDevice</c>. <c>Model</c>/<c>ModelMesh</c> both
-/// need one, and (same limitation already documented on compat <c>VertexBuffer</c>/<c>IndexBuffer</c>/
-/// <c>BasicEffect</c>) this project has no <c>InternalsVisibleTo</c> grant to reach compat
-/// <c>GraphicsDevice</c>'s <c>protected internal</c> constructor -- so neither is exercisable here.
-/// <see cref="Microsoft.Xna.Framework.Graphics.ModelBoneCollection"/>'s own <c>internal</c>
-/// constructor is unreachable too, but its full public surface is exercised indirectly through
-/// <see cref="XnaModelBone.Children"/>, which real code always reaches it through anyway.
+/// Exercises the internal model-builder seam while separately asserting that XNA consumers cannot
+/// see that construction surface.
 /// </summary>
 public class ModelBoneCompatTests
 {
     [Fact]
+    public void ConstructionHooks_AreNotPublic()
+    {
+        Assert.Empty(typeof(XnaModelBone).GetConstructors());
+        Assert.Null(typeof(XnaModelBone).GetMethod(
+            "AddChild",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance));
+    }
+
+    [Fact]
     public void Constructor_SetsIndexAndName()
     {
-        var bone = new XnaModelBone(3, "Head");
+        XnaModelBone bone = CreateBone(3, "Head");
 
         Assert.Equal(3, bone.Index);
         Assert.Equal("Head", bone.Name);
@@ -27,15 +32,15 @@ public class ModelBoneCompatTests
     [Fact]
     public void Constructor_ChildrenStartsEmpty()
     {
-        var bone = new XnaModelBone(0, "Root");
+        XnaModelBone bone = CreateBone(0, "Root");
 
-        Assert.Equal(0, bone.Children.Count);
+        Assert.Empty(bone.Children);
     }
 
     [Fact]
     public void Constructor_ParentStartsNull()
     {
-        var bone = new XnaModelBone(0, "Root");
+        XnaModelBone bone = CreateBone(0, "Root");
 
         Assert.Null(bone.Parent);
     }
@@ -43,12 +48,12 @@ public class ModelBoneCompatTests
     [Fact]
     public void AddChild_AddsToChildrenAndSetsParent()
     {
-        var parent = new XnaModelBone(0, "Root");
-        var child = new XnaModelBone(1, "Head");
+        XnaModelBone parent = CreateBone(0, "Root");
+        XnaModelBone child = CreateBone(1, "Head");
 
-        parent.AddChild(child);
+        AddChild(parent, child);
 
-        Assert.Equal(1, parent.Children.Count);
+        Assert.Single(parent.Children);
         Assert.Same(child, parent.Children[0]);
         Assert.Same(parent, child.Parent);
     }
@@ -56,17 +61,17 @@ public class ModelBoneCompatTests
     [Fact]
     public void AddChild_NullChild_ThrowsArgumentNullException()
     {
-        var bone = new XnaModelBone(0, "Root");
+        XnaModelBone bone = CreateBone(0, "Root");
 
-        Assert.Throws<ArgumentNullException>(() => bone.AddChild(null!));
+        Assert.Throws<ArgumentNullException>(() => AddChild(bone, null!));
     }
 
     [Fact]
     public void Children_NameIndexer_FindsChildByName()
     {
-        var parent = new XnaModelBone(0, "Root");
-        var child = new XnaModelBone(1, "Head");
-        parent.AddChild(child);
+        XnaModelBone parent = CreateBone(0, "Root");
+        XnaModelBone child = CreateBone(1, "Head");
+        AddChild(parent, child);
 
         Assert.Same(child, parent.Children["Head"]);
     }
@@ -74,7 +79,7 @@ public class ModelBoneCompatTests
     [Fact]
     public void Children_NameIndexer_UnknownName_ThrowsKeyNotFoundException()
     {
-        var parent = new XnaModelBone(0, "Root");
+        XnaModelBone parent = CreateBone(0, "Root");
 
         Assert.Throws<KeyNotFoundException>(() => parent.Children["NoSuchBone"]);
     }
@@ -82,9 +87,9 @@ public class ModelBoneCompatTests
     [Fact]
     public void Children_TryGetValue_FindsAndMissesCorrectly()
     {
-        var parent = new XnaModelBone(0, "Root");
-        var child = new XnaModelBone(1, "Head");
-        parent.AddChild(child);
+        XnaModelBone parent = CreateBone(0, "Root");
+        XnaModelBone child = CreateBone(1, "Head");
+        AddChild(parent, child);
 
         Assert.True(parent.Children.TryGetValue("Head", out XnaModelBone? found));
         Assert.Same(child, found);
@@ -95,23 +100,23 @@ public class ModelBoneCompatTests
     [Fact]
     public void Children_Contains_ReflectsMembership()
     {
-        var parent = new XnaModelBone(0, "Root");
-        var child = new XnaModelBone(1, "Head");
-        var stranger = new XnaModelBone(2, "Unrelated");
-        parent.AddChild(child);
+        XnaModelBone parent = CreateBone(0, "Root");
+        XnaModelBone child = CreateBone(1, "Head");
+        XnaModelBone stranger = CreateBone(2, "Unrelated");
+        AddChild(parent, child);
 
-        Assert.True(parent.Children.Contains(child));
-        Assert.False(parent.Children.Contains(stranger));
+        Assert.Contains(child, parent.Children);
+        Assert.DoesNotContain(stranger, parent.Children);
     }
 
     [Fact]
     public void Children_Enumerable_YieldsEveryChildInOrder()
     {
-        var parent = new XnaModelBone(0, "Root");
-        var first = new XnaModelBone(1, "Left");
-        var second = new XnaModelBone(2, "Right");
-        parent.AddChild(first);
-        parent.AddChild(second);
+        XnaModelBone parent = CreateBone(0, "Root");
+        XnaModelBone first = CreateBone(1, "Left");
+        XnaModelBone second = CreateBone(2, "Right");
+        AddChild(parent, first);
+        AddChild(parent, second);
 
         Assert.Equal([first, second], parent.Children);
     }
@@ -119,14 +124,37 @@ public class ModelBoneCompatTests
     [Fact]
     public void AddChild_MultipleChildren_AllGetSameParent()
     {
-        var parent = new XnaModelBone(0, "Root");
-        var first = new XnaModelBone(1, "Left");
-        var second = new XnaModelBone(2, "Right");
+        XnaModelBone parent = CreateBone(0, "Root");
+        XnaModelBone first = CreateBone(1, "Left");
+        XnaModelBone second = CreateBone(2, "Right");
 
-        parent.AddChild(first);
-        parent.AddChild(second);
+        AddChild(parent, first);
+        AddChild(parent, second);
 
         Assert.Same(parent, first.Parent);
         Assert.Same(parent, second.Parent);
+    }
+
+    private static XnaModelBone CreateBone(int index, string name) =>
+        (XnaModelBone)Activator.CreateInstance(
+            typeof(XnaModelBone),
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            args: [index, name],
+            culture: null)!;
+
+    private static void AddChild(XnaModelBone parent, XnaModelBone child)
+    {
+        MethodInfo method = typeof(XnaModelBone).GetMethod(
+            "AddChild",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        try
+        {
+            method.Invoke(parent, [child]);
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+        }
     }
 }

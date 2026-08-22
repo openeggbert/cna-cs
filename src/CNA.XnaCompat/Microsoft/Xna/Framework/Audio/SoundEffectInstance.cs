@@ -60,14 +60,21 @@ public class SoundEffectInstance : IDisposable
     {
         ArgumentNullException.ThrowIfNull(listener);
         ArgumentNullException.ThrowIfNull(emitter);
-        _inner.Apply3D(listener, emitter);
+        _inner.Apply3D(listener.ToFramework(), emitter.ToFramework());
     }
 
     public void Apply3D(AudioListener[] listeners, AudioEmitter emitter)
     {
         ArgumentNullException.ThrowIfNull(listeners);
         ArgumentNullException.ThrowIfNull(emitter);
-        _inner.Apply3D(listeners, emitter);
+        var frameworkListeners = new CNA.Audio.AudioListener[listeners.Length];
+        for (int i = 0; i < listeners.Length; i++)
+        {
+            ArgumentNullException.ThrowIfNull(listeners[i]);
+            frameworkListeners[i] = listeners[i].ToFramework();
+        }
+
+        _inner.Apply3D(frameworkListeners, emitter.ToFramework());
     }
 
     public void Dispose()
@@ -84,6 +91,6 @@ public class SoundEffectInstance : IDisposable
         }
 
         _disposed = true;
-        _inner.Dispose();
+        _inner?.Dispose();
     }
 }

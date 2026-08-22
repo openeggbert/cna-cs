@@ -6,7 +6,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// re-types each element on the way out -- see <see cref="EffectParameter"/> for why these
 /// reflection types wrap rather than subclass. Holds no state of its own, so it cannot go stale
 /// relative to the effect.</summary>
-public class EffectTechniqueCollection : IEnumerable<EffectTechnique>
+public sealed class EffectTechniqueCollection : IEnumerable<EffectTechnique>
 {
     private readonly CNA.Graphics.EffectTechniqueCollection _collection;
 
@@ -28,13 +28,18 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>
         }
     }
 
-    public IEnumerator<EffectTechnique> GetEnumerator()
+    public List<EffectTechnique>.Enumerator GetEnumerator()
     {
+        var techniques = new List<EffectTechnique>(_collection.Count);
         foreach (CNA.Graphics.EffectTechnique element in _collection)
         {
-            yield return new EffectTechnique(element);
+            techniques.Add(new EffectTechnique(element));
         }
+
+        return techniques.GetEnumerator();
     }
+
+    IEnumerator<EffectTechnique> IEnumerable<EffectTechnique>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

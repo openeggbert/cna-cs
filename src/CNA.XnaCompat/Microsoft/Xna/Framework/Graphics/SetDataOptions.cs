@@ -1,8 +1,7 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>See CNA.Graphics.SetDataOptions; values kept numerically identical to it. A distinct
-/// enum type, not a type alias -- same "cast by value across the CNA/XnaCompat boundary"
-/// pattern as <see cref="SpriteEffects"/>.</summary>
+/// <summary>XNA 4.0 resource-update flags. Values map directly to the CNA counterpart.</summary>
+[Flags]
 public enum SetDataOptions
 {
     None = 0,

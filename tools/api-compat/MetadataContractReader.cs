@@ -71,13 +71,65 @@ internal sealed class MetadataContractReader
         // contract interfaces; discard inaccessible interfaces from the selected namespace.
         foreach ((string name, TypeContract type) in contract.Types.ToArray())
         {
-            string[] visibleInterfaces = type.Interfaces
+            string[] visibleInterfaces = ExpandKnownInterfaceClosure(type.Interfaces
                 .Where(@interface => !IsContractType(@interface) || contract.Types.ContainsKey(@interface))
-                .ToArray();
+                .ToArray());
             contract.Types[name] = type with { Interfaces = visibleInterfaces };
         }
 
         return contract;
+    }
+
+    /// <summary>
+    /// InterfaceImpl rows are not a stable source-level contract across C# compiler generations.
+    /// The XNA compiler often emitted only IEnumerable&lt;T&gt;, while Roslyn also emits its inherited
+    /// non-generic IEnumerable row; reflection exposes both in either case. Compare the effective
+    /// BCL interface closure so redundant rows do not become false compatibility failures, while a
+    /// genuinely missing derived interface (for example IList&lt;T&gt;) still fails.
+    /// </summary>
+    private static string[] ExpandKnownInterfaceClosure(IEnumerable<string> interfaces)
+    {
+        var result = new HashSet<string>(interfaces, StringComparer.Ordinal);
+        var pending = new Queue<string>(result);
+
+        while (pending.TryDequeue(out string? current))
+        {
+            AddGenericBase(current, "System.Collections.Generic.IList`1", "System.Collections.Generic.ICollection`1");
+            AddGenericBase(current, "System.Collections.Generic.ISet`1", "System.Collections.Generic.ICollection`1");
+            AddGenericBase(current, "System.Collections.Generic.ICollection`1", "System.Collections.Generic.IEnumerable`1");
+            AddGenericBase(current, "System.Collections.Generic.IReadOnlyList`1", "System.Collections.Generic.IReadOnlyCollection`1");
+            AddGenericBase(current, "System.Collections.Generic.IReadOnlyCollection`1", "System.Collections.Generic.IEnumerable`1");
+
+            if (current.StartsWith("System.Collections.Generic.IEnumerable`1<", StringComparison.Ordinal))
+            {
+                Add("System.Collections.IEnumerable");
+            }
+
+            if (current.StartsWith("System.Collections.Generic.IEnumerator`1<", StringComparison.Ordinal))
+            {
+                Add("System.Collections.IEnumerator");
+                Add("System.IDisposable");
+            }
+        }
+
+        return result.Order(StringComparer.Ordinal).ToArray();
+
+        void AddGenericBase(string current, string derivedDefinition, string baseDefinition)
+        {
+            string prefix = derivedDefinition + "<";
+            if (current.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                Add(baseDefinition + current[derivedDefinition.Length..]);
+            }
+        }
+
+        void Add(string value)
+        {
+            if (result.Add(value))
+            {
+                pending.Enqueue(value);
+            }
+        }
     }
 
     private TypeContract ReadType(

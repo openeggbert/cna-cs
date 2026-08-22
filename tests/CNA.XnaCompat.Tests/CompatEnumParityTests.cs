@@ -4,12 +4,10 @@ using Xunit;
 namespace CNA.XnaCompat.Tests;
 
 /// <summary>
-/// Every enum in <c>Microsoft.Xna.Framework.*</c> is a *duplicate* of a <c>CNA.*</c> one rather
-/// than an alias (C# forbids user-defined conversions on enums, so the two namespaces cast by
-/// value across the boundary -- see <c>SpriteEffects</c>'s own doc comment). That duplication is
-/// only safe while the two stay numerically identical, and nothing in the compiler enforces it:
-/// a member added, removed, renamed, or renumbered on one side alone is a silent wrong value at
-/// every cast site, not a build error.
+/// Every enum in <c>Microsoft.Xna.Framework.*</c> is a duplicate rather than an alias. Most CNA
+/// counterparts deliberately share the same values, but the strict facade must follow XNA even
+/// where the CNA/native representation differs. Those exceptions are enumerated with reasons
+/// below so this test rejects both accidental new divergence and obsolete exceptions.
 ///
 /// Rather than restating every member by hand (which would itself drift), this walks the compat
 /// assembly by reflection, pairs each enum with its same-named <c>CNA.*</c> counterpart, and
@@ -25,6 +23,57 @@ public class CompatEnumParityTests
     {
         // (none today -- every compat enum currently mirrors a CNA.* one)
     };
+
+    private static readonly Dictionary<string, string> KnownMemberDivergences = new()
+    {
+        [typeof(Microsoft.Xna.Framework.Graphics.BlendFunction).FullName!] =
+            "XNA assigns Min=3 and Max=4; the CNA/native enum uses Max=3 and Min=4.",
+        [typeof(Microsoft.Xna.Framework.Graphics.SurfaceFormat).FullName!] =
+            "CNA adds post-XNA formats; the strict facade exposes only XNA's 0-19 set.",
+        [typeof(Microsoft.Xna.Framework.Input.Buttons).FullName!] =
+            "XNA includes virtual thumbstick-direction and trigger flags absent from CNA's physical-button enum.",
+        [typeof(Microsoft.Xna.Framework.Input.GamePadType).FullName!] =
+            "XNA assigns BigButtonPad=0x300 while CNA's native ABI represents it as 9.",
+        [typeof(Microsoft.Xna.Framework.Input.Keys).FullName!] =
+            "The strict facade follows the exact XNA key set; CNA also exposes native-only key names.",
+    };
+
+    private static readonly Dictionary<string, string> KnownFlagsAttributeDivergences = new()
+    {
+        [typeof(Microsoft.Xna.Framework.Graphics.BufferUsage).FullName!] =
+            "XNA marks BufferUsage with FlagsAttribute; the CNA counterpart currently does not.",
+        [typeof(Microsoft.Xna.Framework.Graphics.SetDataOptions).FullName!] =
+            "XNA marks SetDataOptions with FlagsAttribute; the CNA counterpart currently does not.",
+    };
+
+    [Theory]
+    [InlineData(CNA.Graphics.BlendFunction.Min, Microsoft.Xna.Framework.Graphics.BlendFunction.Min)]
+    [InlineData(CNA.Graphics.BlendFunction.Max, Microsoft.Xna.Framework.Graphics.BlendFunction.Max)]
+    [InlineData(CNA.Graphics.BlendFunction.Add, Microsoft.Xna.Framework.Graphics.BlendFunction.Add)]
+    public void BlendFunctionConversions_MapSemanticsRatherThanDivergentOrdinals(
+        CNA.Graphics.BlendFunction framework,
+        Microsoft.Xna.Framework.Graphics.BlendFunction compat)
+    {
+        Assert.Equal(
+            compat,
+            InvokeInternalConversion<CNA.Graphics.BlendFunction, Microsoft.Xna.Framework.Graphics.BlendFunction>(
+                "Microsoft.Xna.Framework.Graphics.BlendFunctionConversions", "ToCompat", framework));
+        Assert.Equal(
+            framework,
+            InvokeInternalConversion<Microsoft.Xna.Framework.Graphics.BlendFunction, CNA.Graphics.BlendFunction>(
+                "Microsoft.Xna.Framework.Graphics.BlendFunctionConversions", "ToFramework", compat));
+    }
+
+    [Theory]
+    [InlineData(CNA.Input.GamePadType.BigButtonPad, Microsoft.Xna.Framework.Input.GamePadType.BigButtonPad)]
+    [InlineData(CNA.Input.GamePadType.GamePad, Microsoft.Xna.Framework.Input.GamePadType.GamePad)]
+    public void GamePadTypeConversion_MapsTheDivergentBigButtonPadOrdinal(
+        CNA.Input.GamePadType framework,
+        Microsoft.Xna.Framework.Input.GamePadType compat) =>
+        Assert.Equal(
+            compat,
+            InvokeInternalConversion<CNA.Input.GamePadType, Microsoft.Xna.Framework.Input.GamePadType>(
+                "Microsoft.Xna.Framework.Input.GamePadTypeConversions", "ToCompat", framework));
 
     public static TheoryData<Type> CompatEnums()
     {
@@ -42,7 +91,7 @@ public class CompatEnumParityTests
 
     [Theory]
     [MemberData(nameof(CompatEnums))]
-    public void CompatEnum_HasIdenticalMembersAndValues_ToItsCnaCounterpart(Type compatEnum)
+    public void CompatEnum_MatchesItsCnaCounterpart_ExceptForReviewedXnaDifferences(Type compatEnum)
     {
         Type? cnaEnum = FindCnaCounterpart(compatEnum);
 
@@ -58,7 +107,11 @@ public class CompatEnumParityTests
         Dictionary<string, long> compatMembers = ReadMembers(compatEnum);
         Dictionary<string, long> cnaMembers = ReadMembers(cnaEnum);
 
-        Assert.Equal(cnaMembers.OrderBy(p => p.Key, StringComparer.Ordinal), compatMembers.OrderBy(p => p.Key, StringComparer.Ordinal));
+        bool membersAreIdentical = cnaMembers.OrderBy(p => p.Key, StringComparer.Ordinal)
+            .SequenceEqual(compatMembers.OrderBy(p => p.Key, StringComparer.Ordinal));
+        bool divergenceIsExpected = KnownMemberDivergences.ContainsKey(compatEnum.FullName!);
+
+        Assert.Equal(!divergenceIsExpected, membersAreIdentical);
     }
 
     /// <summary>The <c>[Flags]</c> attribute has to travel with the duplicate too -- it changes
@@ -66,7 +119,7 @@ public class CompatEnumParityTests
     /// value comparison above cannot see.</summary>
     [Theory]
     [MemberData(nameof(CompatEnums))]
-    public void CompatEnum_FlagsAttribute_MatchesItsCnaCounterpart(Type compatEnum)
+    public void CompatEnum_FlagsAttribute_MatchesItsCnaCounterpart_ExceptForReviewedXnaDifferences(Type compatEnum)
     {
         Type? cnaEnum = FindCnaCounterpart(compatEnum);
         if (cnaEnum is null)
@@ -74,9 +127,12 @@ public class CompatEnumParityTests
             return;
         }
 
-        Assert.Equal(
-            cnaEnum.IsDefined(typeof(FlagsAttribute), inherit: false),
-            compatEnum.IsDefined(typeof(FlagsAttribute), inherit: false));
+        bool attributesAreIdentical =
+            cnaEnum.IsDefined(typeof(FlagsAttribute), inherit: false) ==
+            compatEnum.IsDefined(typeof(FlagsAttribute), inherit: false);
+        bool divergenceIsExpected = KnownFlagsAttributeDivergences.ContainsKey(compatEnum.FullName!);
+
+        Assert.Equal(!divergenceIsExpected, attributesAreIdentical);
     }
 
     /// <summary>Pairs by simple name across the two namespace trees. The compat tree mirrors the
@@ -97,4 +153,16 @@ public class CompatEnumParityTests
                 f => f.Name,
                 f => Convert.ToInt64(f.GetRawConstantValue(), System.Globalization.CultureInfo.InvariantCulture),
                 StringComparer.Ordinal);
+
+    private static TOutput InvokeInternalConversion<TInput, TOutput>(
+        string typeName,
+        string methodName,
+        TInput value)
+    {
+        Type converter = typeof(Microsoft.Xna.Framework.Graphics.SpriteEffects).Assembly.GetType(
+            typeName,
+            throwOnError: true)!;
+        MethodInfo method = converter.GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic)!;
+        return Assert.IsType<TOutput>(method.Invoke(null, [value]));
+    }
 }

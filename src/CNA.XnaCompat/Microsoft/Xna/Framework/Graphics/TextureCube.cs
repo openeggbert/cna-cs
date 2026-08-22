@@ -66,7 +66,7 @@ public class TextureCube : Texture
         ArgumentNullException.ThrowIfNull(data);
         FrameworkTextureCube.SetData(
             (CNA.Graphics.CubeMapFace)(int)cubeMapFace, level,
-            rect is null ? null : (CNA.Rectangle)rect.Value,
+            rect.ToFramework(),
             ConvertColors(data), startIndex, elementCount);
     }
 
@@ -100,7 +100,7 @@ public class TextureCube : Texture
 
         CNA.Color[] values = FrameworkTextureCube.GetData(
             (CNA.Graphics.CubeMapFace)(int)cubeMapFace, level,
-            rect is null ? null : (CNA.Rectangle)rect.Value);
+            rect.ToFramework());
         if (values.Length > elementCount)
         {
             throw new ArgumentException("The destination window is too small for the requested face.", nameof(elementCount));
@@ -108,7 +108,7 @@ public class TextureCube : Texture
 
         for (int i = 0; i < values.Length; i++)
         {
-            data[startIndex + i] = (T)(object)(Color)values[i];
+            data[startIndex + i] = (T)(object)values[i].ToCompat();
         }
     }
 
@@ -118,7 +118,7 @@ public class TextureCube : Texture
         var result = new CNA.Color[source.Length];
         for (int i = 0; i < result.Length; i++)
         {
-            result[i] = (Color)(object)source[i];
+            result[i] = ((Color)(object)source[i]).ToFramework();
         }
 
         return result;

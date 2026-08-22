@@ -1,43 +1,33 @@
+using System.Collections;
+
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>
-/// XNA 4.0-compatible <c>SongCollection</c>: a compat-typed view over
-/// <c>CNA.Media.SongCollection</c>.
-///
-/// The public list-taking constructor exists because real XNA's own is content-pipeline-only and
-/// this project has no content pipeline -- the same reasoning <c>CNA.Media.SongCollection</c>
-/// records. It builds a real native collection, so one constructed here and one read out of a
-/// <see cref="MediaLibrary"/> behave identically.
-/// </summary>
-public sealed class SongCollection : ReadOnlyMediaCollection<Song, CNA.Media.Song>
+public sealed class SongCollection : IEnumerable<Song>, IDisposable
 {
-    public SongCollection(IReadOnlyList<Song> songs)
-        : this(ToBase(songs))
-    {
-    }
+    private readonly MediaCollectionAdapter<Song, CNA.Media.Song> _collection;
 
     internal SongCollection(CNA.Media.SongCollection inner)
-        : base(inner, song => new Song(song))
     {
+        _collection = new(inner, item => new Song(item));
     }
 
-    /// <summary>Unwraps each compat song for the native collection. Not covariance: a compat
-    /// <see cref="Song"/> is no longer a <c>CNA.Media.Song</c> -- see that type's own doc comment
-    /// for why the whole family moved to composition.</summary>
-    private static CNA.Media.SongCollection ToBase(IReadOnlyList<Song> songs)
+    ~SongCollection() => _collection?.Dispose();
+
+    internal CNA.Media.SongCollection Inner => (CNA.Media.SongCollection)_collection.Inner;
+
+    public int Count => _collection.Count;
+
+    public bool IsDisposed => _collection.IsDisposed;
+
+    public Song this[int index] => _collection.GetItem(index);
+
+    public void Dispose()
     {
-        ArgumentNullException.ThrowIfNull(songs);
-
-        var inner = new CNA.Media.Song[songs.Count];
-        for (int i = 0; i < inner.Length; i++)
-        {
-            inner[i] = songs[i].Inner;
-        }
-
-        return new CNA.Media.SongCollection(inner);
+        _collection.Dispose();
+        GC.SuppressFinalize(this);
     }
 
-    /// <summary>The underlying native collection, re-typed for the <c>CNA.Media</c> routes
-    /// <see cref="MediaPlayer"/> forwards to.</summary>
-    internal new CNA.Media.SongCollection Inner => (CNA.Media.SongCollection)base.Inner;
+    public IEnumerator<Song> GetEnumerator() => _collection.GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => _collection.GetNonGenericEnumerator();
 }

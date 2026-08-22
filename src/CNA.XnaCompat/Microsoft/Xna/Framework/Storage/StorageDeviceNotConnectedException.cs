@@ -1,9 +1,10 @@
+using System.Runtime.InteropServices;
+using System.Runtime.Serialization;
+
 namespace Microsoft.Xna.Framework.Storage;
 
-/// <summary>XNA 4.0-compatible <c>StorageDeviceNotConnectedException</c>. Subclasses its
-/// <c>CNA.Storage</c> counterpart -- see
-/// <c>Microsoft.Xna.Framework.Graphics.DeviceLostException</c> for why.</summary>
-public class StorageDeviceNotConnectedException : CNA.Storage.StorageDeviceNotConnectedException
+[Serializable]
+public class StorageDeviceNotConnectedException : ExternalException
 {
     public StorageDeviceNotConnectedException()
     {
@@ -18,4 +19,11 @@ public class StorageDeviceNotConnectedException : CNA.Storage.StorageDeviceNotCo
         : base(message, innerException)
     {
     }
+
+#pragma warning disable SYSLIB0051 // Required by the XNA 4.0 serializable exception contract.
+    protected StorageDeviceNotConnectedException(SerializationInfo info, StreamingContext context)
+        : base(info, context)
+    {
+    }
+#pragma warning restore SYSLIB0051
 }

@@ -7,6 +7,7 @@ namespace Microsoft.Xna.Framework.Storage;
 public class StorageContainer : IDisposable
 {
     private readonly CNA.Storage.StorageContainer _container;
+    private bool _disposed;
 
     internal StorageContainer(CNA.Storage.StorageContainer container, StorageDevice storageDevice)
     {
@@ -18,7 +19,9 @@ public class StorageContainer : IDisposable
 
     public string DisplayName => _container.DisplayName;
 
-    public bool IsDisposed => _container.IsDisposed;
+    public bool IsDisposed => _disposed || _container.IsDisposed;
+
+    public event EventHandler<EventArgs>? Disposing;
 
     public void CreateDirectory(string directory) => _container.CreateDirectory(directory);
 
@@ -42,9 +45,35 @@ public class StorageContainer : IDisposable
 
     public Stream OpenFile(string file, FileMode fileMode) => _container.OpenFile(file, fileMode);
 
+    public Stream OpenFile(string file, FileMode fileMode, FileAccess fileAccess) =>
+        _container.OpenFile(file, fileMode, fileAccess);
+
+    public Stream OpenFile(string file, FileMode fileMode, FileAccess fileAccess, FileShare fileShare) =>
+        _container.OpenFile(file, fileMode, fileAccess, fileShare);
+
+    ~StorageContainer()
+    {
+        Dispose(false);
+    }
+
     public void Dispose()
     {
-        _container.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        if (disposing)
+        {
+            _container.Dispose();
+            Disposing?.Invoke(this, EventArgs.Empty);
+        }
     }
 }

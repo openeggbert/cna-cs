@@ -28,14 +28,14 @@ public struct Bgra4444 : IPackedVector<ushort>, IEquatable<Bgra4444>
 
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y, vector.Z, vector.W);
 
-    public readonly Vector4 ToVector4() => new Vector4(((PackedValue >> 8) & 0xF) / 15f, ((PackedValue >> 4) & 0xF) / 15f, (PackedValue & 0xF) / 15f, ((PackedValue >> 12) & 0xF) / 15f);
+    public readonly Vector4 ToVector4() => new Vector4(PackUtils.UnpackUNorm(15u, (uint)PackedValue >> 8), PackUtils.UnpackUNorm(15u, (uint)PackedValue >> 4), PackUtils.UnpackUNorm(15u, PackedValue), PackUtils.UnpackUNorm(15u, (uint)PackedValue >> 12));
 
     private static ushort Pack(float r, float g, float b, float a)
     {
-        uint ri = (uint)(Math.Clamp(r, 0f, 1f) * 15f + 0.5f);
-        uint gi = (uint)(Math.Clamp(g, 0f, 1f) * 15f + 0.5f);
-        uint bi = (uint)(Math.Clamp(b, 0f, 1f) * 15f + 0.5f);
-        uint ai = (uint)(Math.Clamp(a, 0f, 1f) * 15f + 0.5f);
+        uint ri = PackUtils.PackUNorm(15f, r);
+        uint gi = PackUtils.PackUNorm(15f, g);
+        uint bi = PackUtils.PackUNorm(15f, b);
+        uint ai = PackUtils.PackUNorm(15f, a);
         return (ushort)((ai << 12) | (ri << 8) | (gi << 4) | bi);
     }
 
@@ -45,7 +45,7 @@ public struct Bgra4444 : IPackedVector<ushort>, IEquatable<Bgra4444>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Bgra4444 a, Bgra4444 b) => a.PackedValue == b.PackedValue;
 

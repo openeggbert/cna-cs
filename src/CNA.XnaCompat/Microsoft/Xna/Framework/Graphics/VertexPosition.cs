@@ -1,7 +1,7 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>Matches real XNA's <c>VertexPosition</c> exactly (layout: <c>Position</c> at offset 0).</summary>
-public struct VertexPosition : IVertexType, IEquatable<VertexPosition>
+internal struct VertexPosition : IVertexType, IEquatable<VertexPosition>
 {
     public static readonly VertexDeclaration VertexDeclaration = new(
         new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0));

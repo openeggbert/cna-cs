@@ -6,7 +6,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// re-types each element on the way out -- see <see cref="EffectParameter"/> for why these
 /// reflection types wrap rather than subclass. Holds no state of its own, so it cannot go stale
 /// relative to the effect.</summary>
-public class EffectPassCollection : IEnumerable<EffectPass>
+public sealed class EffectPassCollection : IEnumerable<EffectPass>
 {
     private readonly CNA.Graphics.EffectPassCollection _collection;
 
@@ -28,13 +28,18 @@ public class EffectPassCollection : IEnumerable<EffectPass>
         }
     }
 
-    public IEnumerator<EffectPass> GetEnumerator()
+    public List<EffectPass>.Enumerator GetEnumerator()
     {
+        var passes = new List<EffectPass>(_collection.Count);
         foreach (CNA.Graphics.EffectPass element in _collection)
         {
-            yield return new EffectPass(element);
+            passes.Add(new EffectPass(element));
         }
+
+        return passes.GetEnumerator();
     }
+
+    IEnumerator<EffectPass> IEnumerable<EffectPass>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

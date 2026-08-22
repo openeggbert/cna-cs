@@ -7,6 +7,7 @@ namespace Microsoft.Xna.Framework;
 /// same type as the CNA ones"). A future codegen tool
 /// (tools/binding-generator/) is the intended long-term fix for this duplication.
 /// </summary>
+[System.ComponentModel.TypeConverter(typeof(Design.Vector2Converter))]
 public struct Vector2 : IEquatable<Vector2>
 {
     public float X;
@@ -29,18 +30,15 @@ public struct Vector2 : IEquatable<Vector2>
     public static Vector2 UnitX => new(1f, 0f);
     public static Vector2 UnitY => new(0f, 1f);
 
-    public readonly float Length() => MathF.Sqrt(X * X + Y * Y);
+    public readonly float Length() => (float)Math.Sqrt((X * X) + (Y * Y));
 
     public readonly float LengthSquared() => X * X + Y * Y;
 
     public void Normalize()
     {
-        float length = Length();
-        if (length >= float.Epsilon)
-        {
-            X /= length;
-            Y /= length;
-        }
+        float factor = 1f / (float)Math.Sqrt((X * X) + (Y * Y));
+        X *= factor;
+        Y *= factor;
     }
 
     public static Vector2 Normalize(Vector2 value)
@@ -49,24 +47,30 @@ public struct Vector2 : IEquatable<Vector2>
         return value;
     }
 
-    public static float Distance(Vector2 a, Vector2 b) => (a - b).Length();
+    public static float Distance(Vector2 value1, Vector2 value2) => (value1 - value2).Length();
 
-    public static float DistanceSquared(Vector2 a, Vector2 b) => (a - b).LengthSquared();
+    public static float DistanceSquared(Vector2 value1, Vector2 value2) => (value1 - value2).LengthSquared();
 
-    public static float Dot(Vector2 a, Vector2 b) => a.X * b.X + a.Y * b.Y;
+    public static float Dot(Vector2 value1, Vector2 value2) => (value1.X * value2.X) + (value1.Y * value2.Y);
 
-    public static Vector2 Lerp(Vector2 a, Vector2 b, float amount) =>
-        new(a.X + ((b.X - a.X) * amount), a.Y + ((b.Y - a.Y) * amount));
+    public static Vector2 Lerp(Vector2 value1, Vector2 value2, float amount) =>
+        new(value1.X + ((value2.X - value1.X) * amount), value1.Y + ((value2.Y - value1.Y) * amount));
 
-    public static Vector2 Min(Vector2 a, Vector2 b) => new(MathF.Min(a.X, b.X), MathF.Min(a.Y, b.Y));
+    public static Vector2 Min(Vector2 value1, Vector2 value2) =>
+        new(value1.X < value2.X ? value1.X : value2.X,
+            value1.Y < value2.Y ? value1.Y : value2.Y);
 
-    public static Vector2 Max(Vector2 a, Vector2 b) => new(MathF.Max(a.X, b.X), MathF.Max(a.Y, b.Y));
+    public static Vector2 Max(Vector2 value1, Vector2 value2) =>
+        new(value1.X > value2.X ? value1.X : value2.X,
+            value1.Y > value2.Y ? value1.Y : value2.Y);
 
-    public static Vector2 Clamp(Vector2 value, Vector2 min, Vector2 max) => Min(Max(value, min), max);
+    public static Vector2 Clamp(Vector2 value1, Vector2 min, Vector2 max) => new(
+        MathHelper.Clamp(value1.X, min.X, max.X),
+        MathHelper.Clamp(value1.Y, min.Y, max.Y));
 
-    public static Vector2 SmoothStep(Vector2 a, Vector2 b, float amount) => new(
-        MathHelper.SmoothStep(a.X, b.X, amount),
-        MathHelper.SmoothStep(a.Y, b.Y, amount));
+    public static Vector2 SmoothStep(Vector2 value1, Vector2 value2, float amount) => new(
+        MathHelper.SmoothStep(value1.X, value2.X, amount),
+        MathHelper.SmoothStep(value1.Y, value2.Y, amount));
 
     public static Vector2 Barycentric(Vector2 value1, Vector2 value2, Vector2 value3, float amount1, float amount2) => new(
         MathHelper.Barycentric(value1.X, value2.X, value3.X, amount1, amount2),
@@ -80,21 +84,258 @@ public struct Vector2 : IEquatable<Vector2>
         MathHelper.Hermite(value1.X, tangent1.X, value2.X, tangent2.X, amount),
         MathHelper.Hermite(value1.Y, tangent1.Y, value2.Y, tangent2.Y, amount));
 
-    public static Vector2 operator +(Vector2 a, Vector2 b) => new(a.X + b.X, a.Y + b.Y);
-    public static Vector2 operator -(Vector2 a, Vector2 b) => new(a.X - b.X, a.Y - b.Y);
+    public static Vector2 Add(Vector2 value1, Vector2 value2) => value1 + value2;
+
+    public static void Add(ref Vector2 value1, ref Vector2 value2, out Vector2 result) =>
+        result = value1 + value2;
+
+    public static void Barycentric(
+        ref Vector2 value1,
+        ref Vector2 value2,
+        ref Vector2 value3,
+        float amount1,
+        float amount2,
+        out Vector2 result) => result = Barycentric(value1, value2, value3, amount1, amount2);
+
+    public static void CatmullRom(
+        ref Vector2 value1,
+        ref Vector2 value2,
+        ref Vector2 value3,
+        ref Vector2 value4,
+        float amount,
+        out Vector2 result) => result = CatmullRom(value1, value2, value3, value4, amount);
+
+    public static void Clamp(ref Vector2 value1, ref Vector2 min, ref Vector2 max, out Vector2 result) =>
+        result = Clamp(value1, min, max);
+
+    public static void Distance(ref Vector2 value1, ref Vector2 value2, out float result) =>
+        result = Distance(value1, value2);
+
+    public static void DistanceSquared(ref Vector2 value1, ref Vector2 value2, out float result) =>
+        result = DistanceSquared(value1, value2);
+
+    public static Vector2 Divide(Vector2 value1, Vector2 value2) => value1 / value2;
+
+    public static Vector2 Divide(Vector2 value1, float divider) => value1 / divider;
+
+    public static void Divide(ref Vector2 value1, float divider, out Vector2 result) =>
+        result = value1 / divider;
+
+    public static void Divide(ref Vector2 value1, ref Vector2 value2, out Vector2 result) =>
+        result = value1 / value2;
+
+    public static void Dot(ref Vector2 value1, ref Vector2 value2, out float result) =>
+        result = Dot(value1, value2);
+
+    public static void Hermite(
+        ref Vector2 value1,
+        ref Vector2 tangent1,
+        ref Vector2 value2,
+        ref Vector2 tangent2,
+        float amount,
+        out Vector2 result) => result = Hermite(value1, tangent1, value2, tangent2, amount);
+
+    public static void Lerp(ref Vector2 value1, ref Vector2 value2, float amount, out Vector2 result) =>
+        result = Lerp(value1, value2, amount);
+
+    public static void Max(ref Vector2 value1, ref Vector2 value2, out Vector2 result) =>
+        result = Max(value1, value2);
+
+    public static void Min(ref Vector2 value1, ref Vector2 value2, out Vector2 result) =>
+        result = Min(value1, value2);
+
+    public static Vector2 Multiply(Vector2 value1, Vector2 value2) => value1 * value2;
+
+    public static Vector2 Multiply(Vector2 value1, float scaleFactor) => value1 * scaleFactor;
+
+    public static void Multiply(ref Vector2 value1, float scaleFactor, out Vector2 result) =>
+        result = value1 * scaleFactor;
+
+    public static void Multiply(ref Vector2 value1, ref Vector2 value2, out Vector2 result) =>
+        result = value1 * value2;
+
+    public static Vector2 Negate(Vector2 value) => -value;
+
+    public static void Negate(ref Vector2 value, out Vector2 result) => result = -value;
+
+    public static void Normalize(ref Vector2 value, out Vector2 result) => result = Normalize(value);
+
+    public static Vector2 Reflect(Vector2 vector, Vector2 normal)
+    {
+        float factor = 2f * Dot(vector, normal);
+        return new Vector2(vector.X - (factor * normal.X), vector.Y - (factor * normal.Y));
+    }
+
+    public static void Reflect(ref Vector2 vector, ref Vector2 normal, out Vector2 result) =>
+        result = Reflect(vector, normal);
+
+    public static void SmoothStep(ref Vector2 value1, ref Vector2 value2, float amount, out Vector2 result) =>
+        result = SmoothStep(value1, value2, amount);
+
+    public static Vector2 Subtract(Vector2 value1, Vector2 value2) => value1 - value2;
+
+    public static void Subtract(ref Vector2 value1, ref Vector2 value2, out Vector2 result) =>
+        result = value1 - value2;
+
+    public static Vector2 Transform(Vector2 position, Matrix matrix)
+    {
+        Transform(ref position, ref matrix, out Vector2 result);
+        return result;
+    }
+
+    public static void Transform(ref Vector2 position, ref Matrix matrix, out Vector2 result)
+    {
+        float x = (position.X * matrix.M11) + (position.Y * matrix.M21) + matrix.M41;
+        float y = (position.X * matrix.M12) + (position.Y * matrix.M22) + matrix.M42;
+        result = new Vector2(x, y);
+    }
+
+    public static Vector2 Transform(Vector2 value, Quaternion rotation)
+    {
+        Transform(ref value, ref rotation, out Vector2 result);
+        return result;
+    }
+
+    public static void Transform(ref Vector2 value, ref Quaternion rotation, out Vector2 result)
+    {
+        float x2 = rotation.X + rotation.X;
+        float y2 = rotation.Y + rotation.Y;
+        float z2 = rotation.Z + rotation.Z;
+        float wz2 = rotation.W * z2;
+        float xx2 = rotation.X * x2;
+        float xy2 = rotation.X * y2;
+        float yy2 = rotation.Y * y2;
+        float zz2 = rotation.Z * z2;
+        result = new Vector2(
+            (value.X * (1f - yy2 - zz2)) + (value.Y * (xy2 - wz2)),
+            (value.X * (xy2 + wz2)) + (value.Y * (1f - xx2 - zz2)));
+    }
+
+    public static Vector2 TransformNormal(Vector2 normal, Matrix matrix)
+    {
+        TransformNormal(ref normal, ref matrix, out Vector2 result);
+        return result;
+    }
+
+    public static void TransformNormal(ref Vector2 normal, ref Matrix matrix, out Vector2 result)
+    {
+        float x = (normal.X * matrix.M11) + (normal.Y * matrix.M21);
+        float y = (normal.X * matrix.M12) + (normal.Y * matrix.M22);
+        result = new Vector2(x, y);
+    }
+
+    public static void Transform(
+        Vector2[] sourceArray,
+        int sourceIndex,
+        ref Matrix matrix,
+        Vector2[] destinationArray,
+        int destinationIndex,
+        int length)
+    {
+        ValidateTransformArrays(sourceArray, sourceIndex, destinationArray, destinationIndex, length);
+        for (int i = 0; i < length; i++)
+        {
+            Transform(ref sourceArray[sourceIndex + i], ref matrix, out destinationArray[destinationIndex + i]);
+        }
+    }
+
+    public static void Transform(Vector2[] sourceArray, ref Matrix matrix, Vector2[] destinationArray)
+    {
+        ArgumentNullException.ThrowIfNull(sourceArray);
+        Transform(sourceArray, 0, ref matrix, destinationArray, 0, sourceArray.Length);
+    }
+
+    public static void Transform(
+        Vector2[] sourceArray,
+        int sourceIndex,
+        ref Quaternion rotation,
+        Vector2[] destinationArray,
+        int destinationIndex,
+        int length)
+    {
+        ValidateTransformArrays(sourceArray, sourceIndex, destinationArray, destinationIndex, length);
+        for (int i = 0; i < length; i++)
+        {
+            Transform(ref sourceArray[sourceIndex + i], ref rotation, out destinationArray[destinationIndex + i]);
+        }
+    }
+
+    public static void Transform(Vector2[] sourceArray, ref Quaternion rotation, Vector2[] destinationArray)
+    {
+        ArgumentNullException.ThrowIfNull(sourceArray);
+        Transform(sourceArray, 0, ref rotation, destinationArray, 0, sourceArray.Length);
+    }
+
+    public static void TransformNormal(
+        Vector2[] sourceArray,
+        int sourceIndex,
+        ref Matrix matrix,
+        Vector2[] destinationArray,
+        int destinationIndex,
+        int length)
+    {
+        ValidateTransformArrays(sourceArray, sourceIndex, destinationArray, destinationIndex, length);
+        for (int i = 0; i < length; i++)
+        {
+            TransformNormal(ref sourceArray[sourceIndex + i], ref matrix, out destinationArray[destinationIndex + i]);
+        }
+    }
+
+    public static void TransformNormal(Vector2[] sourceArray, ref Matrix matrix, Vector2[] destinationArray)
+    {
+        ArgumentNullException.ThrowIfNull(sourceArray);
+        TransformNormal(sourceArray, 0, ref matrix, destinationArray, 0, sourceArray.Length);
+    }
+
+    private static void ValidateTransformArrays(
+        Vector2[] sourceArray,
+        int sourceIndex,
+        Vector2[] destinationArray,
+        int destinationIndex,
+        int length)
+    {
+        ArgumentNullException.ThrowIfNull(sourceArray);
+        ArgumentNullException.ThrowIfNull(destinationArray);
+        if ((long)sourceArray.Length < (long)sourceIndex + length)
+        {
+            throw new ArgumentException("The source array is too small.");
+        }
+
+        if ((long)destinationArray.Length < (long)destinationIndex + length)
+        {
+            throw new ArgumentException("The destination array is too small.");
+        }
+    }
+
+    public static Vector2 operator +(Vector2 value1, Vector2 value2) =>
+        new(value1.X + value2.X, value1.Y + value2.Y);
+    public static Vector2 operator -(Vector2 value1, Vector2 value2) =>
+        new(value1.X - value2.X, value1.Y - value2.Y);
     public static Vector2 operator -(Vector2 value) => new(-value.X, -value.Y);
-    public static Vector2 operator *(Vector2 a, float scalar) => new(a.X * scalar, a.Y * scalar);
-    public static Vector2 operator *(float scalar, Vector2 a) => new(a.X * scalar, a.Y * scalar);
-    public static Vector2 operator /(Vector2 a, float scalar) => new(a.X / scalar, a.Y / scalar);
+    public static Vector2 operator *(Vector2 value, float scaleFactor) =>
+        new(value.X * scaleFactor, value.Y * scaleFactor);
+    public static Vector2 operator *(float scaleFactor, Vector2 value) =>
+        new(value.X * scaleFactor, value.Y * scaleFactor);
+    public static Vector2 operator *(Vector2 value1, Vector2 value2) =>
+        new(value1.X * value2.X, value1.Y * value2.Y);
+    public static Vector2 operator /(Vector2 value1, float divider)
+    {
+        float factor = 1f / divider;
+        return new Vector2(value1.X * factor, value1.Y * factor);
+    }
+    public static Vector2 operator /(Vector2 value1, Vector2 value2) =>
+        new(value1.X / value2.X, value1.Y / value2.Y);
 
-    public static bool operator ==(Vector2 a, Vector2 b) => a.Equals(b);
-    public static bool operator !=(Vector2 a, Vector2 b) => !a.Equals(b);
+    public static bool operator ==(Vector2 value1, Vector2 value2) =>
+        value1.X == value2.X && value1.Y == value2.Y;
+    public static bool operator !=(Vector2 value1, Vector2 value2) => !(value1 == value2);
 
-    public readonly bool Equals(Vector2 other) => X.Equals(other.X) && Y.Equals(other.Y);
+    public readonly bool Equals(Vector2 other) => X == other.X && Y == other.Y;
     public override readonly bool Equals(object? obj) => obj is Vector2 other && Equals(other);
-    public override readonly int GetHashCode() => HashCode.Combine(X, Y);
+    public override readonly int GetHashCode() => X.GetHashCode() + Y.GetHashCode();
     public override readonly string ToString() => $"{{X:{X} Y:{Y}}}";
 
-    public static implicit operator CNA.Vector2(Vector2 value) => new(value.X, value.Y);
-    public static implicit operator Vector2(CNA.Vector2 value) => new(value.X, value.Y);
+    internal readonly CNA.Vector2 ToFramework() => new(X, Y);
+
+    internal static Vector2 FromFramework(CNA.Vector2 value) => new(value.X, value.Y);
 }

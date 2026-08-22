@@ -154,7 +154,7 @@ public class ContentManager : IDisposable
 
         try
         {
-            T result = LoadCore<T>(assetName);
+            T result = LoadCore<T>(assetName, recordDisposableObject);
             if (result is IDisposable disposable)
             {
                 recordDisposableObject?.Invoke(disposable);
@@ -172,7 +172,7 @@ public class ContentManager : IDisposable
         }
     }
 
-    private T LoadCore<T>(string assetName)
+    private T LoadCore<T>(string assetName, Action<IDisposable>? recordDisposableObject)
     {
         // XNA content is table-driven. The native CNA loaders remain the best route for the
         // native-backed built-ins below, but a user-defined T has no CNA type identity to dispatch
@@ -181,7 +181,7 @@ public class ContentManager : IDisposable
         if (!IsNativeBackedBuiltIn(typeof(T)))
         {
             using Stream stream = OpenStream(assetName);
-            return ManagedXnbContentLoader.Load<T>(this, stream, assetName, RecordDisposableObject);
+            return ManagedXnbContentLoader.Load<T>(this, stream, assetName, recordDisposableObject);
         }
 
         CNA.Content.ContentManager backend = GetBackend();
@@ -219,7 +219,9 @@ public class ContentManager : IDisposable
 
         if (typeof(T) == typeof(Graphics.Model))
         {
-            return (T)(object)LoadCompatModel(backend, assetName);
+            Graphics.Model model = LoadCompatModel(backend, assetName);
+            recordDisposableObject?.Invoke(model.OwnedResources);
+            return (T)(object)model;
         }
 
         if (typeof(T) == typeof(Graphics.Effect))
@@ -308,7 +310,7 @@ public class ContentManager : IDisposable
         var result = new Rectangle[rectangles.Count];
         for (int i = 0; i < rectangles.Count; i++)
         {
-            result[i] = rectangles[i];
+            result[i] = rectangles[i].ToCompat();
         }
 
         return result;
@@ -319,7 +321,7 @@ public class ContentManager : IDisposable
         var result = new Vector3[vectors.Count];
         for (int i = 0; i < vectors.Count; i++)
         {
-            result[i] = vectors[i];
+            result[i] = vectors[i].ToCompat();
         }
 
         return result;

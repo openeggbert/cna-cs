@@ -2,7 +2,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>XNA 4.0-compatible <c>EffectAnnotation</c>. A thin re-typing wrapper for the same
 /// reason <see cref="EffectParameter"/> is one.</summary>
-public class EffectAnnotation
+public sealed class EffectAnnotation
 {
     private readonly CNA.Graphics.EffectAnnotation _annotation;
 
@@ -31,11 +31,11 @@ public class EffectAnnotation
 
     public string GetValueString() => _annotation.GetValueString();
 
-    public Matrix GetValueMatrix() => _annotation.GetValueMatrix();
+    public Matrix GetValueMatrix() => _annotation.GetValueMatrix().ToCompat();
 
-    public Vector2 GetValueVector2() => _annotation.GetValueVector2();
+    public Vector2 GetValueVector2() => _annotation.GetValueVector2().ToCompat();
 
-    public Vector3 GetValueVector3() => _annotation.GetValueVector3();
+    public Vector3 GetValueVector3() => _annotation.GetValueVector3().ToCompat();
 
-    public Vector4 GetValueVector4() => _annotation.GetValueVector4();
+    public Vector4 GetValueVector4() => _annotation.GetValueVector4().ToCompat();
 }

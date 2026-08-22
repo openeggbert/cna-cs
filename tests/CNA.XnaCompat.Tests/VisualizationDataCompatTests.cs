@@ -4,10 +4,8 @@ using XnaVisualizationData = Microsoft.Xna.Framework.Media.VisualizationData;
 namespace CNA.XnaCompat.Tests;
 
 /// <summary>
-/// <see cref="XnaVisualizationData"/> has no explicit constructor of its own (a fully trivial
-/// subclass -- see its own doc comment), so the implicit default constructor is public and
-/// reachable here with no <c>InternalsVisibleTo</c> concern at all, unlike most other new compat
-/// types this session.
+/// The strict XNA facade exposes read-only collections while its internal CNA holder keeps the
+/// writable arrays needed by MediaPlayer.
 /// </summary>
 public class VisualizationDataCompatTests
 {
@@ -16,7 +14,7 @@ public class VisualizationDataCompatTests
     {
         var data = new XnaVisualizationData();
 
-        Assert.Equal(XnaVisualizationData.Size, data.Frequencies.Length);
+        Assert.Equal(CNA.Media.VisualizationData.Size, data.Frequencies.Count);
     }
 
     [Fact]
@@ -24,7 +22,7 @@ public class VisualizationDataCompatTests
     {
         var data = new XnaVisualizationData();
 
-        Assert.Equal(XnaVisualizationData.Size, data.Samples.Length);
+        Assert.Equal(CNA.Media.VisualizationData.Size, data.Samples.Count);
     }
 
     [Fact]

@@ -64,7 +64,7 @@ public class VertexDeclaration : GraphicsResource
         var result = new VertexElement[source.Length];
         for (int i = 0; i < source.Length; i++)
         {
-            result[i] = source[i];
+            result[i] = VertexElement.FromFramework(source[i]);
         }
 
         return result;
@@ -79,7 +79,7 @@ public class VertexDeclaration : GraphicsResource
         var result = new CNA.Graphics.VertexElement[elements.Length];
         for (int i = 0; i < elements.Length; i++)
         {
-            result[i] = elements[i];
+            result[i] = elements[i].ToFramework();
         }
 
         return result;

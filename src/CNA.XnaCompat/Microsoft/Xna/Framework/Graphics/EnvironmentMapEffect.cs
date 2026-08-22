@@ -5,8 +5,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// rather than inheriting from it, and how the two stay one native effect.</summary>
 public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
-    public EnvironmentMapEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice, new CNA.Graphics.EnvironmentMapEffect(graphicsDevice.Framework))
+    public EnvironmentMapEffect(GraphicsDevice device)
+        : base(device, new CNA.Graphics.EnvironmentMapEffect(device.Framework))
     {
     }
 
@@ -14,14 +14,14 @@ public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffect
 
     public Vector3 DiffuseColor
     {
-        get => Typed.DiffuseColor;
-        set => Typed.DiffuseColor = value;
+        get => Typed.DiffuseColor.ToCompat();
+        set => Typed.DiffuseColor = value.ToFramework();
     }
 
     public Vector3 EmissiveColor
     {
-        get => Typed.EmissiveColor;
-        set => Typed.EmissiveColor = value;
+        get => Typed.EmissiveColor.ToCompat();
+        set => Typed.EmissiveColor = value.ToFramework();
     }
 
     public float Alpha
@@ -38,8 +38,8 @@ public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffect
 
     public Vector3 EnvironmentMapSpecular
     {
-        get => Typed.EnvironmentMapSpecular;
-        set => Typed.EnvironmentMapSpecular = value;
+        get => Typed.EnvironmentMapSpecular.ToCompat();
+        set => Typed.EnvironmentMapSpecular = value.ToFramework();
     }
 
     public float FresnelFactor
@@ -62,20 +62,20 @@ public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffect
 
     public Matrix World
     {
-        get => Typed.World;
-        set => Typed.World = value;
+        get => Typed.World.ToCompat();
+        set => Typed.World = value.ToFramework();
     }
 
     public Matrix View
     {
-        get => Typed.View;
-        set => Typed.View = value;
+        get => Typed.View.ToCompat();
+        set => Typed.View = value.ToFramework();
     }
 
     public Matrix Projection
     {
-        get => Typed.Projection;
-        set => Typed.Projection = value;
+        get => Typed.Projection.ToCompat();
+        set => Typed.Projection = value.ToFramework();
     }
 
     public bool FogEnabled
@@ -86,8 +86,8 @@ public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffect
 
     public Vector3 FogColor
     {
-        get => Typed.FogColor;
-        set => Typed.FogColor = value;
+        get => Typed.FogColor.ToCompat();
+        set => Typed.FogColor = value.ToFramework();
     }
 
     public float FogStart
@@ -104,11 +104,11 @@ public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffect
 
     public Vector3 AmbientLightColor
     {
-        get => Typed.AmbientLightColor;
-        set => Typed.AmbientLightColor = value;
+        get => Typed.AmbientLightColor.ToCompat();
+        set => Typed.AmbientLightColor = value.ToFramework();
     }
 
-    public bool LightingEnabled
+    bool IEffectLights.LightingEnabled
     {
         get => Typed.LightingEnabled;
         set => Typed.LightingEnabled = value;
@@ -130,8 +130,16 @@ public class EnvironmentMapEffect : Effect, IEffectMatrices, IEffectFog, IEffect
 
     /// <summary>Clones both halves: the native effect and a matching compat wrapper around it. See
     /// <see cref="Effect.Clone"/> for why the base cannot do this.</summary>
-    public override Effect Clone() =>
-        new EnvironmentMapEffect((GraphicsDevice)GraphicsDevice, (CNA.Graphics.EnvironmentMapEffect)Typed.Clone());
+    public override Effect Clone() => new EnvironmentMapEffect(this);
+
+    protected EnvironmentMapEffect(EnvironmentMapEffect cloneSource)
+        : this(
+            (cloneSource ?? throw new ArgumentNullException(nameof(cloneSource))).GraphicsDevice,
+            (CNA.Graphics.EnvironmentMapEffect)cloneSource.Typed.Clone())
+    {
+    }
+
+    protected internal override void OnApply() => base.OnApply();
 
     /// <summary>Adopts an already-cloned inner effect. Private: only <see cref="Clone"/> has
     /// one.</summary>

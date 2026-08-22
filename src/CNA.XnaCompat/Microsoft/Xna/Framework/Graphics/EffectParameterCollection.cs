@@ -6,7 +6,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// re-types each element on the way out -- see <see cref="EffectParameter"/> for why these
 /// reflection types wrap rather than subclass. Holds no state of its own, so it cannot go stale
 /// relative to the effect.</summary>
-public class EffectParameterCollection : IEnumerable<EffectParameter>
+public sealed class EffectParameterCollection : IEnumerable<EffectParameter>
 {
     private readonly CNA.Graphics.EffectParameterCollection _collection;
 
@@ -28,13 +28,32 @@ public class EffectParameterCollection : IEnumerable<EffectParameter>
         }
     }
 
-    public IEnumerator<EffectParameter> GetEnumerator()
+    public EffectParameter? GetParameterBySemantic(string semantic)
     {
+        ArgumentNullException.ThrowIfNull(semantic);
         foreach (CNA.Graphics.EffectParameter element in _collection)
         {
-            yield return new EffectParameter(element);
+            if (string.Equals(element.Semantic, semantic, StringComparison.Ordinal))
+            {
+                return new EffectParameter(element);
+            }
         }
+
+        return null;
     }
+
+    public List<EffectParameter>.Enumerator GetEnumerator()
+    {
+        var parameters = new List<EffectParameter>(_collection.Count);
+        foreach (CNA.Graphics.EffectParameter element in _collection)
+        {
+            parameters.Add(new EffectParameter(element));
+        }
+
+        return parameters.GetEnumerator();
+    }
+
+    IEnumerator<EffectParameter> IEnumerable<EffectParameter>.GetEnumerator() => GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

@@ -1,19 +1,17 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>SamplerStateCollection</c>. Holds no state of its own -- the
-/// base class reads and writes straight through to native; this only re-types what comes back,
-/// through the base's own <c>Wrap</c> hook, and re-types the indexer so callers see this
-/// namespace's <see cref="SamplerState"/>.</summary>
-public class SamplerStateCollection : CNA.Graphics.SamplerStateCollection
+public sealed class SamplerStateCollection
 {
+    private readonly CNA.Graphics.SamplerStateCollection _collection;
+
     internal SamplerStateCollection(GraphicsDevice graphicsDevice, bool vertexStage)
-        : base(graphicsDevice.Framework, vertexStage)
     {
+        _collection = new CNA.Graphics.SamplerStateCollection(graphicsDevice.Framework, vertexStage);
     }
 
-    public new SamplerState this[int index]
+    public SamplerState this[int index]
     {
-        get => new(base[index]);
-        set => base[index] = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
+        get => new(_collection[index]);
+        set => _collection[index] = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
 }

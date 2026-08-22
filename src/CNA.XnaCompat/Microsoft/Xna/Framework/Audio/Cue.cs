@@ -3,20 +3,26 @@ namespace Microsoft.Xna.Framework.Audio;
 /// <summary>XNA 4.0-compatible <c>Cue</c>. A thin re-typing wrapper rather than a subclass,
 /// because <see cref="CNA.Audio.Cue"/>'s only constructor is internal (cues come from a sound
 /// bank lookup).</summary>
-public class Cue : IDisposable
+public sealed class Cue : IDisposable
 {
     private readonly CNA.Audio.Cue _cue;
+    private bool _disposed;
 
     internal Cue(CNA.Audio.Cue cue)
     {
         _cue = cue;
     }
 
+    ~Cue()
+    {
+        Dispose(false);
+    }
+
     public string Name => _cue.Name;
 
     public bool IsCreated => _cue.IsCreated;
 
-    public bool IsDisposed => _cue.IsDisposed;
+    public bool IsDisposed => _disposed || _cue.IsDisposed;
 
     public bool IsPaused => _cue.IsPaused;
 
@@ -38,7 +44,14 @@ public class Cue : IDisposable
 
     public void Stop(AudioStopOptions options) => _cue.Stop((CNA.Audio.AudioStopOptions)(int)options);
 
-    public void Apply3D(AudioListener listener, AudioEmitter emitter) => _cue.Apply3D(listener, emitter);
+    public event EventHandler<EventArgs>? Disposing;
+
+    public void Apply3D(AudioListener listener, AudioEmitter emitter)
+    {
+        ArgumentNullException.ThrowIfNull(listener);
+        ArgumentNullException.ThrowIfNull(emitter);
+        _cue.Apply3D(listener.ToFramework(), emitter.ToFramework());
+    }
 
     public float GetVariable(string name) => _cue.GetVariable(name);
 
@@ -46,7 +59,22 @@ public class Cue : IDisposable
 
     public void Dispose()
     {
-        _cue.Dispose();
+        Dispose(true);
         GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _cue?.Dispose();
+        if (disposing)
+        {
+            Disposing?.Invoke(this, EventArgs.Empty);
+        }
     }
 }

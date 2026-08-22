@@ -19,17 +19,17 @@ public class BlendState : GraphicsResource
     public static readonly BlendState Additive = new(CNA.Graphics.BlendState.CopyOf(CNA.Graphics.BlendState.Additive));
     public static readonly BlendState NonPremultiplied = new(CNA.Graphics.BlendState.CopyOf(CNA.Graphics.BlendState.NonPremultiplied));
 
-    public BlendFunction AlphaBlendFunction { get => (BlendFunction)(int)Framework.AlphaBlendFunction; set => Framework.AlphaBlendFunction = (CNA.Graphics.BlendFunction)(int)value; }
+    public BlendFunction AlphaBlendFunction { get => Framework.AlphaBlendFunction.ToCompat(); set => Framework.AlphaBlendFunction = value.ToFramework(); }
     public Blend AlphaDestinationBlend { get => (Blend)(int)Framework.AlphaDestinationBlend; set => Framework.AlphaDestinationBlend = (CNA.Graphics.Blend)(int)value; }
     public Blend AlphaSourceBlend { get => (Blend)(int)Framework.AlphaSourceBlend; set => Framework.AlphaSourceBlend = (CNA.Graphics.Blend)(int)value; }
-    public BlendFunction ColorBlendFunction { get => (BlendFunction)(int)Framework.ColorBlendFunction; set => Framework.ColorBlendFunction = (CNA.Graphics.BlendFunction)(int)value; }
+    public BlendFunction ColorBlendFunction { get => Framework.ColorBlendFunction.ToCompat(); set => Framework.ColorBlendFunction = value.ToFramework(); }
     public Blend ColorDestinationBlend { get => (Blend)(int)Framework.ColorDestinationBlend; set => Framework.ColorDestinationBlend = (CNA.Graphics.Blend)(int)value; }
     public Blend ColorSourceBlend { get => (Blend)(int)Framework.ColorSourceBlend; set => Framework.ColorSourceBlend = (CNA.Graphics.Blend)(int)value; }
     public ColorWriteChannels ColorWriteChannels { get => (ColorWriteChannels)(int)Framework.ColorWriteChannels; set => Framework.ColorWriteChannels = (CNA.Graphics.ColorWriteChannels)(int)value; }
     public ColorWriteChannels ColorWriteChannels1 { get => (ColorWriteChannels)(int)Framework.ColorWriteChannels1; set => Framework.ColorWriteChannels1 = (CNA.Graphics.ColorWriteChannels)(int)value; }
     public ColorWriteChannels ColorWriteChannels2 { get => (ColorWriteChannels)(int)Framework.ColorWriteChannels2; set => Framework.ColorWriteChannels2 = (CNA.Graphics.ColorWriteChannels)(int)value; }
     public ColorWriteChannels ColorWriteChannels3 { get => (ColorWriteChannels)(int)Framework.ColorWriteChannels3; set => Framework.ColorWriteChannels3 = (CNA.Graphics.ColorWriteChannels)(int)value; }
-    public Color BlendFactor { get => Framework.BlendFactor; set => Framework.BlendFactor = value; }
+    public Color BlendFactor { get => Framework.BlendFactor.ToCompat(); set => Framework.BlendFactor = value.ToFramework(); }
     public int MultiSampleMask { get => Framework.MultiSampleMask; set => Framework.MultiSampleMask = value; }
 
     protected override void Dispose(bool arg0) => base.Dispose(arg0);

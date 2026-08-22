@@ -15,4 +15,9 @@
     <ProjectReference Include="..\..\src\CNA.XnaCompat\CNA.XnaCompat.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\CNA.XnaCompat.CompileProbe\MathBehaviorCorpus.cs" Link="MathBehaviorCorpus.cs" />
+    <Compile Include="..\CNA.XnaCompat.CompileProbe\InputBehaviorCorpus.cs" Link="InputBehaviorCorpus.cs" />
+  </ItemGroup>
+
 </Project>

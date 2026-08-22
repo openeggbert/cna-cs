@@ -6,6 +6,8 @@ namespace Microsoft.Xna.Framework.Input.Touch;
 /// does.</summary>
 public static class TouchPanel
 {
+    private static nint? _windowHandleOverride;
+
     public static TouchCollection GetState() => TouchCollection.FromFramework(CNA.Input.Touch.TouchPanel.GetState());
 
     public static TouchPanelCapabilities GetCapabilities() =>
@@ -38,4 +40,10 @@ public static class TouchPanel
     public static bool IsGestureAvailable => CNA.Input.Touch.TouchPanel.IsGestureAvailable;
 
     public static GestureSample ReadGesture() => GestureSample.FromFramework(CNA.Input.Touch.TouchPanel.ReadGesture());
+
+    public static nint WindowHandle
+    {
+        get => _windowHandleOverride ?? CNA.Input.Touch.TouchPanel.WindowHandle;
+        set => _windowHandleOverride = value;
+    }
 }

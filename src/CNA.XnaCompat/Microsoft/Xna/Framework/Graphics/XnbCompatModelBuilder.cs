@@ -45,7 +45,7 @@ internal static class XnbCompatModelBuilder
         var bones = new List<ModelBone>(data.Bones.Count);
         foreach (XnbBoneData boneData in data.Bones)
         {
-            bones.Add(new ModelBone(boneData.Index, boneData.Name) { Transform = boneData.Transform });
+            bones.Add(new ModelBone(boneData.Index, boneData.Name) { Transform = boneData.Transform.ToCompat() });
         }
 
         foreach (XnbBoneData boneData in data.Bones)
@@ -71,7 +71,8 @@ internal static class XnbCompatModelBuilder
                     vertexBuffer, indexBuffer, partData.NumVertices, partData.PrimitiveCount, partData.StartIndex, partData.VertexOffset));
             }
 
-            var mesh = new ModelMesh(graphicsDevice, meshData.Name, parts) { BoundingSphere = meshData.BoundingSphere };
+            var mesh = new ModelMesh(graphicsDevice, meshData.Name, parts);
+            mesh.SetBoundingSphere(meshData.BoundingSphere.ToCompat());
             meshes.Add(mesh);
 
             // Same ordering requirement as CNA.Content.Xnb.XnbModelBuilder's own -- Effect
@@ -134,8 +135,8 @@ internal static class XnbCompatModelBuilder
     /// <summary>Converts a base <see cref="CNA.Graphics.VertexDeclaration"/> (all
     /// <c>CNA.Content.Xnb</c>/<c>CNA.Content.Cnj</c> ever produce, since neither namespace has any
     /// knowledge of <c>CNA.XnaCompat</c>) into this namespace's own -- element-wise, through
-    /// <see cref="VertexElement"/>'s own implicit conversion operators, the same "arrays of a
-    /// type with a user-defined conversion operator do not convert automatically" reason every
+    /// <see cref="VertexElement"/>'s internal conversion methods, the same "arrays of distinct
+    /// value types do not convert automatically" reason every
     /// other array conversion in this compat layer needs one. <c>internal</c>, reused by
     /// <see cref="CnjCompatModelBuilder"/> for the same reason <see cref="BuildVertexBuffer"/>/
     /// <see cref="BuildIndexBuffer"/> are.</summary>
@@ -145,7 +146,7 @@ internal static class XnbCompatModelBuilder
         var elements = new VertexElement[source.Length];
         for (int i = 0; i < source.Length; i++)
         {
-            elements[i] = source[i];
+            elements[i] = VertexElement.FromFramework(source[i]);
         }
 
         return new VertexDeclaration(declaration.VertexStride, elements);

@@ -56,7 +56,7 @@ internal static class CnjCompatModelBuilder
             for (int i = 0; i < data.Bones.Count; i++)
             {
                 CnjBoneData boneData = data.Bones[i];
-                var bone = new ModelBone(i, boneData.Name) { Transform = boneData.Transform };
+                var bone = new ModelBone(i, boneData.Name) { Transform = boneData.Transform.ToCompat() };
                 bones.Add(bone);
 
                 // Entry 0 is always the root -- its own recorded Parent value is unused, matching

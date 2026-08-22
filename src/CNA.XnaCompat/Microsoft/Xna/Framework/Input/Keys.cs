@@ -2,11 +2,8 @@ namespace Microsoft.Xna.Framework.Input;
 
 /// <summary>
 /// XNA 4.0-compatible <c>Keys</c>. Enums cannot inherit, so this is a separate enum from
-/// <see cref="CNA.Input.Keys"/>, kept numerically identical to it (both match real XNA's
-/// Windows virtual-key-code values) so casting between them is always a no-op value cast -- see
-/// <see cref="KeysExtensions.ToFrameworkKeys"/>. Kept in lockstep with
-/// <see cref="CNA.Input.Keys"/> -- see that file's doc comment for the members added since the
-/// initial pass and the confidence caveat on their exact ordinals.
+/// <see cref="CNA.Input.Keys"/>. Shared keys use the same Windows virtual-key values and convert by
+/// value, while the public member set follows XNA exactly rather than exposing CNA-only names.
 /// </summary>
 public enum Keys
 {
@@ -159,6 +156,7 @@ public enum Keys
     Oem8 = 223,
     OemBackslash = 226,
     ProcessKey = 229,
+    OemCopy = 242,
     OemAuto = 243,
     OemEnlW = 244,
     Attn = 246,
@@ -167,7 +165,6 @@ public enum Keys
     EraseEof = 249,
     Play = 250,
     Zoom = 251,
-    NoName = 252,
     Pa1 = 253,
     OemClear = 254,
 }

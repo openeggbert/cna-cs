@@ -23,13 +23,12 @@ public struct Alpha8 : IPackedVector<byte>, IEquatable<Alpha8>
 
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.W);
 
-    public readonly Vector4 ToVector4() => new Vector4(0f, 0f, 0f, PackedValue / 255f);
+    public readonly Vector4 ToVector4() => new Vector4(0f, 0f, 0f, PackUtils.UnpackUNorm(255u, PackedValue));
 
     /// <summary>The alpha channel expanded back to [0, 1].</summary>
-    public readonly float ToAlpha() => PackedValue / 255f;
+    public readonly float ToAlpha() => PackUtils.UnpackUNorm(255u, PackedValue);
 
-    private static byte Pack(float alpha)
-        => (byte)(Math.Clamp(alpha, 0f, 1f) * 255f + 0.5f);
+    private static byte Pack(float alpha) => (byte)PackUtils.PackUNorm(255f, alpha);
 
     public readonly bool Equals(Alpha8 other) => PackedValue == other.PackedValue;
 
@@ -37,7 +36,7 @@ public struct Alpha8 : IPackedVector<byte>, IEquatable<Alpha8>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X2", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Alpha8 a, Alpha8 b) => a.PackedValue == b.PackedValue;
 

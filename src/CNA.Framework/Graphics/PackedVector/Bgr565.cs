@@ -28,16 +28,16 @@ public struct Bgr565 : IPackedVector<ushort>, IEquatable<Bgr565>
 
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y, vector.Z);
 
-    public readonly Vector4 ToVector4() => new Vector4(((PackedValue >> 11) & 0x1F) / 31f, ((PackedValue >> 5) & 0x3F) / 63f, (PackedValue & 0x1F) / 31f, 1f);
+    public readonly Vector4 ToVector4() => new Vector4(PackUtils.UnpackUNorm(31u, (uint)PackedValue >> 11), PackUtils.UnpackUNorm(63u, (uint)PackedValue >> 5), PackUtils.UnpackUNorm(31u, PackedValue), 1f);
 
     /// <summary>The three channels expanded back to [0, 1].</summary>
-    public readonly Vector3 ToVector3() => new(((PackedValue >> 11) & 0x1F) / 31f, ((PackedValue >> 5) & 0x3F) / 63f, (PackedValue & 0x1F) / 31f);
+    public readonly Vector3 ToVector3() => new(PackUtils.UnpackUNorm(31u, (uint)PackedValue >> 11), PackUtils.UnpackUNorm(63u, (uint)PackedValue >> 5), PackUtils.UnpackUNorm(31u, PackedValue));
 
     private static ushort Pack(float r, float g, float b)
     {
-        uint ri = (uint)(Math.Clamp(r, 0f, 1f) * 31f + 0.5f);
-        uint gi = (uint)(Math.Clamp(g, 0f, 1f) * 63f + 0.5f);
-        uint bi = (uint)(Math.Clamp(b, 0f, 1f) * 31f + 0.5f);
+        uint ri = PackUtils.PackUNorm(31f, r);
+        uint gi = PackUtils.PackUNorm(63f, g);
+        uint bi = PackUtils.PackUNorm(31f, b);
         return (ushort)((ri << 11) | (gi << 5) | bi);
     }
 
@@ -47,7 +47,7 @@ public struct Bgr565 : IPackedVector<ushort>, IEquatable<Bgr565>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Bgr565 a, Bgr565 b) => a.PackedValue == b.PackedValue;
 

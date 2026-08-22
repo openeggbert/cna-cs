@@ -5,8 +5,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// rather than inheriting from it, and how the two stay one native effect.</summary>
 public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog
 {
-    public DualTextureEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice, new CNA.Graphics.DualTextureEffect(graphicsDevice.Framework))
+    public DualTextureEffect(GraphicsDevice device)
+        : base(device, new CNA.Graphics.DualTextureEffect(device.Framework))
     {
     }
 
@@ -14,8 +14,8 @@ public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog
 
     public Vector3 DiffuseColor
     {
-        get => Typed.DiffuseColor;
-        set => Typed.DiffuseColor = value;
+        get => Typed.DiffuseColor.ToCompat();
+        set => Typed.DiffuseColor = value.ToFramework();
     }
 
     public float Alpha
@@ -44,20 +44,20 @@ public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog
 
     public Matrix World
     {
-        get => Typed.World;
-        set => Typed.World = value;
+        get => Typed.World.ToCompat();
+        set => Typed.World = value.ToFramework();
     }
 
     public Matrix View
     {
-        get => Typed.View;
-        set => Typed.View = value;
+        get => Typed.View.ToCompat();
+        set => Typed.View = value.ToFramework();
     }
 
     public Matrix Projection
     {
-        get => Typed.Projection;
-        set => Typed.Projection = value;
+        get => Typed.Projection.ToCompat();
+        set => Typed.Projection = value.ToFramework();
     }
 
     public bool FogEnabled
@@ -68,8 +68,8 @@ public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog
 
     public Vector3 FogColor
     {
-        get => Typed.FogColor;
-        set => Typed.FogColor = value;
+        get => Typed.FogColor.ToCompat();
+        set => Typed.FogColor = value.ToFramework();
     }
 
     public float FogStart
@@ -86,8 +86,16 @@ public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog
 
     /// <summary>Clones both halves: the native effect and a matching compat wrapper around it. See
     /// <see cref="Effect.Clone"/> for why the base cannot do this.</summary>
-    public override Effect Clone() =>
-        new DualTextureEffect((GraphicsDevice)GraphicsDevice, (CNA.Graphics.DualTextureEffect)Typed.Clone());
+    public override Effect Clone() => new DualTextureEffect(this);
+
+    protected DualTextureEffect(DualTextureEffect cloneSource)
+        : this(
+            (cloneSource ?? throw new ArgumentNullException(nameof(cloneSource))).GraphicsDevice,
+            (CNA.Graphics.DualTextureEffect)cloneSource.Typed.Clone())
+    {
+    }
+
+    protected internal override void OnApply() => base.OnApply();
 
     /// <summary>Adopts an already-cloned inner effect. Private: only <see cref="Clone"/> has
     /// one.</summary>

@@ -1,17 +1,29 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>Album</c>: a compat-typed view over <c>CNA.Media.Album</c>. See
-/// <see cref="MediaLibraryObject{TBase}"/> for why this wraps rather than extends.</summary>
-public class Album : MediaLibraryObject<CNA.Media.Album>, IEquatable<Album>
+public sealed class Album : IDisposable, IEquatable<Album>
 {
+    private readonly MediaLibraryObjectAdapter<CNA.Media.Album> _object;
+    private SongCollection? _songs;
+
     internal Album(CNA.Media.Album inner)
-        : base(inner)
     {
+        _object = new(inner);
     }
+
+    ~Album()
+    {
+        _object?.ReleaseHandleOnly();
+    }
+
+    internal CNA.Media.Album Inner => _object.Inner;
+
+    public bool IsDisposed => _object.IsDisposed;
 
     public string Name => Inner.Name;
 
     public Artist? Artist => Inner.Artist is { } artist ? new Artist(artist) : null;
+
+    public SongCollection Songs => _songs ??= new SongCollection(Inner.Songs);
 
     public Genre? Genre => Inner.Genre is { } genre ? new Genre(genre) : null;
 
@@ -19,20 +31,25 @@ public class Album : MediaLibraryObject<CNA.Media.Album>, IEquatable<Album>
 
     public bool HasArt => Inner.HasArt;
 
-    public SongCollection Songs => new(Inner.Songs);
-
     public Stream GetAlbumArt() => Inner.GetAlbumArt();
 
     public Stream GetThumbnail() => Inner.GetThumbnail();
 
-    public bool Equals(Album? other) => other is not null && Inner.Equals(other.Inner);
+    public void Dispose()
+    {
+        _object.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public bool Equals(Album? other) => other is not null && _object.Equals(other._object);
 
     public override bool Equals(object? obj) => Equals(obj as Album);
 
-    public override int GetHashCode() => base.GetHashCode();
+    public override int GetHashCode() => _object.GetHashCodeValue();
 
-    public static bool operator ==(Album? left, Album? right) =>
-        left is null ? right is null : left.Equals(right);
+    public override string ToString() => Name;
 
-    public static bool operator !=(Album? left, Album? right) => !(left == right);
+    public static bool operator ==(Album? first, Album? second) => object.Equals(first, second);
+
+    public static bool operator !=(Album? first, Album? second) => !(first == second);
 }

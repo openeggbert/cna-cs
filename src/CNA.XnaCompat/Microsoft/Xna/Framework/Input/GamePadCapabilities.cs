@@ -38,7 +38,7 @@ public readonly struct GamePadCapabilities
     internal GamePadCapabilities(CNA.Input.GamePadCapabilities framework)
     {
         IsConnected = framework.IsConnected;
-        GamePadType = (GamePadType)(int)framework.GamePadType;
+        GamePadType = framework.GamePadType.ToCompat();
 
         HasAButton = framework.HasAButton;
         HasBButton = framework.HasBButton;

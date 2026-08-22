@@ -1,10 +1,9 @@
 name: build
 
-# Builds and tests the managed solution only. There is no native cna-native
-# library to link/run against yet (see plan.md "Hard dependency on
-# openeggbert/cna"), so this intentionally does not attempt to run
-# samples/HelloGame -- only that it builds, and that the CNA.Framework.Tests /
-# CNA.XnaCompat.Tests unit tests (which do not touch native code) pass.
+# Builds and tests the managed solution. This checkout does not include an ABI-matched native CNA
+# library or redistributable Microsoft XNA reference assemblies, so native integration and the
+# full strict comparison run in protected/dependency-provisioned jobs. The reference-independent
+# CNA-leak invariant is enforced here on every push and pull request.
 
 on:
   push:
@@ -29,3 +28,8 @@ jobs:
 
       - name: Test
         run: dotnet test CNA.sln --no-build --configuration Release
+
+      - name: Verify strict facade has no CNA signature leaks
+        run: >-
+          dotnet run --project tools/api-compat --configuration Release --no-build --
+          --leak-only --target src/CNA.XnaCompat/bin/Release/net8.0/CNA.XnaCompat.dll

@@ -1,19 +1,29 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>Video</c>. A pure subclass -- <c>Width</c>/<c>Height</c>/
-/// <c>FramesPerSecond</c>/<c>Duration</c>/<c>Dispose</c> are inherited unchanged from
-/// <see cref="CNA.Media.Video"/>; only the members whose types differ per namespace are
-/// re-typed.</summary>
-public class Video : CNA.Media.Video
+/// <summary>Represents a video asset loaded for an XNA graphics device.</summary>
+public sealed class Video
 {
-    public Video(Graphics.GraphicsDevice graphicsDevice, string fileName)
-        : base(graphicsDevice.Framework, fileName)
+    private readonly CNA.Media.Video _video;
+    private readonly Graphics.GraphicsDevice _graphicsDevice;
+
+    internal Video(Graphics.GraphicsDevice graphicsDevice, string fileName)
     {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        _graphicsDevice = graphicsDevice;
+        _video = new CNA.Media.Video(graphicsDevice.Framework, fileName);
     }
 
-    public new Graphics.GraphicsDevice GraphicsDevice =>
-        Graphics.GraphicsDevice.FromFramework(base.GraphicsDevice) ?? throw new InvalidOperationException(
-            "The video was not created for an XNA facade graphics device.");
+    internal CNA.Media.Video Framework => _video;
 
-    public new VideoSoundtrackType VideoSoundtrackType => (VideoSoundtrackType)(int)base.VideoSoundtrackType;
+    internal Graphics.GraphicsDevice GraphicsDevice => _graphicsDevice;
+
+    public TimeSpan Duration => _video.Duration;
+
+    public int Width => _video.Width;
+
+    public int Height => _video.Height;
+
+    public float FramesPerSecond => _video.FramesPerSecond;
+
+    public VideoSoundtrackType VideoSoundtrackType => (VideoSoundtrackType)(int)_video.VideoSoundtrackType;
 }

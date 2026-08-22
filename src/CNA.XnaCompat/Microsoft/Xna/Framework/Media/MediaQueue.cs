@@ -1,5 +1,3 @@
-using System.Collections;
-
 namespace Microsoft.Xna.Framework.Media;
 
 /// <summary>
@@ -12,7 +10,7 @@ namespace Microsoft.Xna.Framework.Media;
 /// copy, so a downcast queue could only ever have failed. Wrapping does not care what the base
 /// queue holds.
 /// </summary>
-public class MediaQueue : IEnumerable<Song>
+public sealed class MediaQueue
 {
     private readonly CNA.Media.MediaQueue _inner;
 
@@ -34,13 +32,4 @@ public class MediaQueue : IEnumerable<Song>
 
     public Song this[int index] => new(_inner[index]);
 
-    public IEnumerator<Song> GetEnumerator()
-    {
-        foreach (CNA.Media.Song song in _inner)
-        {
-            yield return new Song(song);
-        }
-    }
-
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

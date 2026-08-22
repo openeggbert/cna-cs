@@ -1,7 +1,7 @@
 namespace CNA.Graphics.PackedVector;
 
 /// <summary>
-/// Matches real XNA's <c>Byte4</c>: Four unsigned bytes. Unlike the normalized formats, the components are in [0, 255] rather than [0, 1] -- and are truncated, not rounded, matching the engine's own cast.
+/// Matches real XNA's <c>Byte4</c>: Four unsigned bytes. Unlike the normalized formats, the components are in [0, 255] rather than [0, 1].
 ///
 /// Managed, not a P/Invoke. <c>packed_vectors.h</c> does expose
 /// <c>cna_packed_vector_pack</c>/<c>_unpack</c> for all seventeen formats, but design invariant #3
@@ -32,10 +32,10 @@ public struct Byte4 : IPackedVector<uint>, IEquatable<Byte4>
 
     private static uint Pack(float x, float y, float z, float w)
     {
-        uint xi = (uint)Math.Clamp(x, 0f, 255f);
-        uint yi = (uint)Math.Clamp(y, 0f, 255f);
-        uint zi = (uint)Math.Clamp(z, 0f, 255f);
-        uint wi = (uint)Math.Clamp(w, 0f, 255f);
+        uint xi = PackUtils.PackUnsigned(255f, x);
+        uint yi = PackUtils.PackUnsigned(255f, y);
+        uint zi = PackUtils.PackUnsigned(255f, z);
+        uint wi = PackUtils.PackUnsigned(255f, w);
         return xi | (yi << 8) | (zi << 16) | (wi << 24);
     }
 
@@ -45,7 +45,7 @@ public struct Byte4 : IPackedVector<uint>, IEquatable<Byte4>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Byte4 a, Byte4 b) => a.PackedValue == b.PackedValue;
 

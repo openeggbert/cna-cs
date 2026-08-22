@@ -28,14 +28,14 @@ public struct Rg32 : IPackedVector<uint>, IEquatable<Rg32>
 
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y);
 
-    public readonly Vector4 ToVector4() => new Vector4((PackedValue & 0xFFFF) / 65535f, (PackedValue >> 16) / 65535f, 0f, 1f);
+    public readonly Vector4 ToVector4() => new Vector4(PackUtils.UnpackUNorm(65535u, PackedValue), PackUtils.UnpackUNorm(65535u, PackedValue >> 16), 0f, 1f);
 
-    public readonly Vector2 ToVector2() => new((PackedValue & 0xFFFF) / 65535f, (PackedValue >> 16) / 65535f);
+    public readonly Vector2 ToVector2() => new(PackUtils.UnpackUNorm(65535u, PackedValue), PackUtils.UnpackUNorm(65535u, PackedValue >> 16));
 
     private static uint Pack(float r, float g)
     {
-        uint ri = (uint)(Math.Clamp(r, 0f, 1f) * 65535f + 0.5f);
-        uint gi = (uint)(Math.Clamp(g, 0f, 1f) * 65535f + 0.5f);
+        uint ri = PackUtils.PackUNorm(65535f, r);
+        uint gi = PackUtils.PackUNorm(65535f, g);
         return ri | (gi << 16);
     }
 
@@ -45,7 +45,7 @@ public struct Rg32 : IPackedVector<uint>, IEquatable<Rg32>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Rg32 a, Rg32 b) => a.PackedValue == b.PackedValue;
 

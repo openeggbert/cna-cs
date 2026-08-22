@@ -12,40 +12,31 @@ namespace CNA.XnaCompat.Tests;
 
 /// <summary>
 /// These tests exercise no native CNA library -- they only check that the
-/// Microsoft.Xna.Framework-namespaced value types convert correctly to/from their CNA
-/// counterparts, and that the two parallel Keys enums stay numerically identical (see
-/// ../../src/CNA.XnaCompat/Microsoft/Xna/Framework/Input/Keys.cs). If either of these ever
-/// breaks, every native-backed API silently starts marshalling the wrong values.
+/// Microsoft.Xna.Framework-namespaced value types behave correctly, and that the two parallel
+/// shared Keys values remain numerically compatible (see
+/// ../../src/CNA.XnaCompat/Microsoft/Xna/Framework/Input/Keys.cs). If either of these ever breaks,
+/// native-backed APIs can silently start marshalling the wrong values.
 /// </summary>
 public class CompatibilityTests
 {
     [Fact]
-    public void Vector2_ImplicitlyConvertsToAndFromFrameworkVector2()
+    public void Vector2_StoresItsPublicComponents()
     {
         var xna = new XnaVector2(1f, 2f);
 
-        CNA.Vector2 framework = xna;
-        XnaVector2 roundTripped = framework;
-
-        Assert.Equal(1f, framework.X);
-        Assert.Equal(2f, framework.Y);
-        Assert.Equal(xna.X, roundTripped.X);
-        Assert.Equal(xna.Y, roundTripped.Y);
+        Assert.Equal(1f, xna.X);
+        Assert.Equal(2f, xna.Y);
     }
 
     [Fact]
-    public void Color_ImplicitlyConvertsToAndFromFrameworkColor()
+    public void Color_StoresItsPublicComponents()
     {
         var xna = new XnaColor(10, 20, 30, 40);
 
-        CNA.Color framework = xna;
-        XnaColor roundTripped = framework;
-
-        Assert.Equal(xna.R, framework.R);
-        Assert.Equal(xna.G, framework.G);
-        Assert.Equal(xna.B, framework.B);
-        Assert.Equal(xna.A, framework.A);
-        Assert.Equal(xna, roundTripped);
+        Assert.Equal(10, xna.R);
+        Assert.Equal(20, xna.G);
+        Assert.Equal(30, xna.B);
+        Assert.Equal(40, xna.A);
     }
 
     [Theory]
@@ -79,14 +70,11 @@ public class CompatibilityTests
     }
 
     [Fact]
-    public void Vector3_ImplicitlyConvertsAndDelegatesMath()
+    public void Vector3_DelegatesMathWithoutPublicCnaConversions()
     {
         var xna = new Microsoft.Xna.Framework.Vector3(3f, 4f, 0f);
 
-        CNA.Vector3 framework = xna;
-
         Assert.Equal(5f, xna.Length());
-        Assert.Equal(5f, framework.Length());
     }
 
     [Fact]
@@ -186,7 +174,7 @@ public class CompatibilityTests
     }
 
     [Fact]
-    public void VertexElement_ImplicitlyConvertsToAndFromFrameworkVertexElement()
+    public void VertexElement_StoresItsPublicFields()
     {
         var xna = new Microsoft.Xna.Framework.Graphics.VertexElement(
             12,
@@ -194,13 +182,9 @@ public class CompatibilityTests
             Microsoft.Xna.Framework.Graphics.VertexElementUsage.Color,
             0);
 
-        CNA.Graphics.VertexElement framework = xna;
-        Microsoft.Xna.Framework.Graphics.VertexElement roundTripped = framework;
-
-        Assert.Equal(12, framework.Offset);
-        Assert.Equal(CNA.Graphics.VertexElementFormat.Color, framework.VertexElementFormat);
-        Assert.Equal(CNA.Graphics.VertexElementUsage.Color, framework.VertexElementUsage);
-        Assert.Equal(xna, roundTripped);
+        Assert.Equal(12, xna.Offset);
+        Assert.Equal(Microsoft.Xna.Framework.Graphics.VertexElementFormat.Color, xna.VertexElementFormat);
+        Assert.Equal(Microsoft.Xna.Framework.Graphics.VertexElementUsage.Color, xna.VertexElementUsage);
     }
 
     /// <summary>Exhaustive (every defined member, not a hand-picked subset) parity check --
@@ -251,7 +235,9 @@ public class CompatibilityTests
         Microsoft.Xna.Framework.Vector3[] corners = frustum.GetCorners();
 
         Assert.Equal(8, corners.Length);
-        Assert.True(frustum.Contains(Microsoft.Xna.Framework.Vector3.Zero));
+        Assert.Equal(
+            Microsoft.Xna.Framework.ContainmentType.Contains,
+            frustum.Contains(Microsoft.Xna.Framework.Vector3.Zero));
     }
 
     [Fact]

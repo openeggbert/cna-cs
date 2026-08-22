@@ -1,8 +1,8 @@
 # CNA.NET
 
-> **Status: functional but not XNA API-complete or release-ready.** The current strict XNA 4.0
-> Windows runtime metadata comparison reports 1,246 unallowlisted differences, including 101
-> accidental `CNA.*` signature leaks.
+> **Status: exact public metadata for the selected XNA 4.0 Windows runtime profile; not yet
+> behaviorally complete or release-ready.** The strict comparison reports 257/257 types, zero
+> differences, zero CNA leaks, and an empty allowlist.
 
 CNA.NET is the C#/.NET binding for [CNA](https://github.com/openeggbert/cna), a native C++ game
 framework. Its intended path is:
@@ -28,22 +28,27 @@ Binary compatibility with Microsoft's strong-named assemblies is not the primary
 As of 2026-08-22:
 
 - Debug and Release solution builds: 0 warnings, 0 errors;
-- managed XNA-compat tests: 171/171 passing;
-- native facade tests: 10/10 passing on the available Linux x64 headless CNA runtime; its
-  Texture3D-specific test is capability-limited and is not counted;
-- strict metadata profile: 257 reference types versus 244 target types, 1,246 failures, 0
+- managed tests: 533/533 framework and 199/199 XNA-compat passing;
+- native integration tests: 104/104 passing in Debug and Release against an ABI 0.6.0 CNA library
+  under Xvfb on Linux x64;
+- strict metadata profile: 257 reference types versus 257 target types, 0 differences, 0
   allowlisted;
+- standalone public/protected CNA-type leak gate: 0 findings;
 - compile-time hierarchy corpus: passes unchanged on XNA, CNA, FNA, and MonoGame; records one Kni
   hierarchy difference (`VertexDeclaration` is not a `GraphicsResource` there);
+- deterministic behavior corpora: 83 math/geometry plus 23 input observations run on CNA, FNA,
+  and MonoGame; identical source compiles against XNA and direct XNA source/IL establishes the
+  strict edge semantics, while the Windows XNA runtime snapshot is still pending;
 - sibling template: CNA build, generated-project build, and 60/600-frame CNA runs pass;
 - FNA, MonoGame, and Kni template source builds pass; 60-frame MonoGame and Kni runs pass, while the
   configured FNA assembly reports unavailable at runtime with a clean exit code 2;
 - NuGet/RID packages: not yet available.
 
 The earlier name-level coverage claim that the XNA API was complete was false. The metadata tool
-now checks type identity and hierarchy, interfaces, modifiers, generics, parameters, properties,
-events, constants/enums, delegates, nested types, and relevant layout/attributes. See
-[`docs/xna-compatibility.md`](docs/xna-compatibility.md) for the exact profile and remaining groups.
+now proves exactness for the selected runtime profile by checking type identity and hierarchy,
+interfaces, modifiers, generics, parameters, properties, events, constants/enums, delegates,
+nested types, and relevant layout/attributes. Broader XNA product profiles and behavioral parity
+remain separate work; see [`docs/xna-compatibility.md`](docs/xna-compatibility.md).
 
 ## Build and test
 
@@ -102,8 +107,8 @@ template (`cna-game`).
 ## Architecture and packaging
 
 Public XNA hierarchy takes priority over implementation inheritance. Corrected families use
-composition and internal adapters so one native resource has one owner; remaining public
-inheritance from `CNA.*` is a tracked compatibility failure, not the intended end state.
+composition and internal adapters so one native resource has one owner. The selected strict
+profile now has no public `CNA.*` base types or public/protected CNA-type signature leaks.
 
 - [`docs/architecture.md`](docs/architecture.md) — layer and ownership rules.
 - [`docs/xna-compatibility.md`](docs/xna-compatibility.md) — measured profile and extension boundaries.

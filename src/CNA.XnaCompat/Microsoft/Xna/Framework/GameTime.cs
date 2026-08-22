@@ -17,16 +17,16 @@ public class GameTime
         ElapsedGameTime = elapsedGameTime;
     }
 
-    public GameTime(TimeSpan totalRealTime, TimeSpan elapsedRealTime, bool isRunningSlowly)
+    public GameTime(TimeSpan totalGameTime, TimeSpan elapsedGameTime, bool isRunningSlowly)
     {
-        TotalGameTime = totalRealTime;
-        ElapsedGameTime = elapsedRealTime;
+        TotalGameTime = totalGameTime;
+        ElapsedGameTime = elapsedGameTime;
         IsRunningSlowly = isRunningSlowly;
     }
 
-    public TimeSpan ElapsedGameTime { get; set; }
-    public bool IsRunningSlowly { get; set; }
-    public TimeSpan TotalGameTime { get; set; }
+    public TimeSpan ElapsedGameTime { get; internal set; }
+    public bool IsRunningSlowly { get; internal set; }
+    public TimeSpan TotalGameTime { get; internal set; }
 
     internal static GameTime FromFramework(CNA.GameTime framework) =>
         new(framework.TotalGameTime, framework.ElapsedGameTime, framework.IsRunningSlowly);

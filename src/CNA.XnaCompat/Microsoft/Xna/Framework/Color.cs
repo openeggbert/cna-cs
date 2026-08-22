@@ -1,32 +1,164 @@
+using Microsoft.Xna.Framework.Graphics.PackedVector;
+
 namespace Microsoft.Xna.Framework;
 
 /// <summary>
 /// XNA 4.0-compatible <c>Color</c>. See docs/architecture.md for why this duplicates
 /// <see cref="CNA.Color"/> rather than subclassing it (structs cannot inherit). Named
-/// colors here match real XNA's actual byte values (139 colors + Transparent). Packed-uint
-/// (<c>PackedValue</c>) layout parity with real XNA is Phase 4 (plan.md).
+/// colors here match real XNA's actual byte values (139 colors + Transparent).
 /// </summary>
-public struct Color : IEquatable<Color>
+[System.ComponentModel.TypeConverter(typeof(Design.ColorConverter))]
+public struct Color : IPackedVector<uint>, IEquatable<Color>
 {
-    public byte R;
-    public byte G;
-    public byte B;
-    public byte A;
+    private uint _packedValue;
 
-    public Color(byte r, byte g, byte b, byte a = 255)
-    {
-        R = r;
-        G = g;
-        B = b;
-        A = a;
-    }
-
-    public Color(float r, float g, float b, float a = 1f)
-        : this(ToByte(r), ToByte(g), ToByte(b), ToByte(a))
+    public Color(int r, int g, int b)
+        : this(r, g, b, 255)
     {
     }
 
-    private static byte ToByte(float value) => (byte)Math.Clamp(value * 255f, 0f, 255f);
+    public Color(int r, int g, int b, int a)
+    {
+        _packedValue = PackBytes(ClampToByte(r), ClampToByte(g), ClampToByte(b), ClampToByte(a));
+    }
+
+    public Color(float r, float g, float b)
+        : this(r, g, b, 1f)
+    {
+    }
+
+    public Color(float r, float g, float b, float a)
+    {
+        _packedValue = PackFloats(r, g, b, a);
+    }
+
+    public Color(Vector3 vector)
+        : this(vector.X, vector.Y, vector.Z, 1f)
+    {
+    }
+
+    public Color(Vector4 vector)
+        : this(vector.X, vector.Y, vector.Z, vector.W)
+    {
+    }
+
+    private Color(uint packedValue)
+    {
+        _packedValue = packedValue;
+    }
+
+    public byte R
+    {
+        readonly get => (byte)_packedValue;
+        set => _packedValue = (_packedValue & 0xFFFFFF00u) | value;
+    }
+
+    public byte G
+    {
+        readonly get => (byte)(_packedValue >> 8);
+        set => _packedValue = (_packedValue & 0xFFFF00FFu) | ((uint)value << 8);
+    }
+
+    public byte B
+    {
+        readonly get => (byte)(_packedValue >> 16);
+        set => _packedValue = (_packedValue & 0xFF00FFFFu) | ((uint)value << 16);
+    }
+
+    public byte A
+    {
+        readonly get => (byte)(_packedValue >> 24);
+        set => _packedValue = (_packedValue & 0x00FFFFFFu) | ((uint)value << 24);
+    }
+
+#pragma warning disable CS3021 // XNA carries this member attribute even without an assembly-level CLS declaration.
+    [CLSCompliant(false)]
+    public uint PackedValue
+    {
+        readonly get => _packedValue;
+        set => _packedValue = value;
+    }
+#pragma warning restore CS3021
+
+    void IPackedVector.PackFromVector4(Vector4 vector) => _packedValue = PackFloats(vector.X, vector.Y, vector.Z, vector.W);
+
+    public readonly Vector3 ToVector3() => new(R / 255f, G / 255f, B / 255f);
+
+    public readonly Vector4 ToVector4() => new(R / 255f, G / 255f, B / 255f, A / 255f);
+
+    public static Color FromNonPremultiplied(Vector4 vector) => new(
+        vector.X * vector.W,
+        vector.Y * vector.W,
+        vector.Z * vector.W,
+        vector.W);
+
+    public static Color FromNonPremultiplied(int r, int g, int b, int a) => new(
+        ClampToByte((long)r * a / 255),
+        ClampToByte((long)g * a / 255),
+        ClampToByte((long)b * a / 255),
+        ClampToByte(a));
+
+    public static Color Lerp(Color value1, Color value2, float amount)
+    {
+        int fraction = (int)PackUNorm(65536f, amount);
+        int r = value1.R + (((value2.R - value1.R) * fraction) >> 16);
+        int g = value1.G + (((value2.G - value1.G) * fraction) >> 16);
+        int b = value1.B + (((value2.B - value1.B) * fraction) >> 16);
+        int a = value1.A + (((value2.A - value1.A) * fraction) >> 16);
+        return new Color(PackBytes(r, g, b, a));
+    }
+
+    public static Color Multiply(Color value, float scale)
+    {
+        float scaled = scale * 65536f;
+        uint fixedScale = float.IsNaN(scaled) || scaled <= 0f
+            ? 0u
+            : scaled >= 16777215f
+                ? 16777215u
+                : (uint)scaled;
+
+        int r = Math.Min(255, (int)((value.R * fixedScale) >> 16));
+        int g = Math.Min(255, (int)((value.G * fixedScale) >> 16));
+        int b = Math.Min(255, (int)((value.B * fixedScale) >> 16));
+        int a = Math.Min(255, (int)((value.A * fixedScale) >> 16));
+        return new Color(PackBytes(r, g, b, a));
+    }
+
+    public static Color operator *(Color value, float scale) => Multiply(value, scale);
+
+    private static uint PackFloats(float r, float g, float b, float a) =>
+        PackUNorm(255f, r) |
+        (PackUNorm(255f, g) << 8) |
+        (PackUNorm(255f, b) << 16) |
+        (PackUNorm(255f, a) << 24);
+
+    private static uint PackUNorm(float bitmask, float value)
+    {
+        float scaled = value * bitmask;
+        if (float.IsNaN(scaled))
+        {
+            return 0;
+        }
+
+        if (scaled <= 0f)
+        {
+            return 0;
+        }
+
+        if (scaled >= bitmask)
+        {
+            return (uint)bitmask;
+        }
+
+        return (uint)Math.Round((double)scaled);
+    }
+
+    private static int ClampToByte(int value) => Math.Clamp(value, 0, 255);
+
+    private static int ClampToByte(long value) => value < 0 ? 0 : value > 255 ? 255 : (int)value;
+
+    private static uint PackBytes(int r, int g, int b, int a) =>
+        (uint)(r | (g << 8) | (b << 16) | (a << 24));
 
     /// <summary>Matches real XNA: white with zero alpha, not black with zero alpha.</summary>
     public static Color Transparent => new(255, 255, 255, 0);
@@ -175,11 +307,12 @@ public struct Color : IEquatable<Color>
     public static bool operator ==(Color a, Color b) => a.Equals(b);
     public static bool operator !=(Color a, Color b) => !a.Equals(b);
 
-    public readonly bool Equals(Color other) => R == other.R && G == other.G && B == other.B && A == other.A;
+    public readonly bool Equals(Color other) => _packedValue == other._packedValue;
     public override readonly bool Equals(object? obj) => obj is Color other && Equals(other);
-    public override readonly int GetHashCode() => HashCode.Combine(R, G, B, A);
+    public override readonly int GetHashCode() => _packedValue.GetHashCode();
     public override readonly string ToString() => $"{{R:{R} G:{G} B:{B} A:{A}}}";
 
-    public static implicit operator CNA.Color(Color value) => new(value.R, value.G, value.B, value.A);
-    public static implicit operator Color(CNA.Color value) => new(value.R, value.G, value.B, value.A);
+    internal readonly CNA.Color ToFramework() => new(R, G, B, A);
+
+    internal static Color FromFramework(CNA.Color value) => new(value.R, value.G, value.B, value.A);
 }

@@ -36,10 +36,10 @@ public struct Short4 : IPackedVector<ulong>, IEquatable<Short4>
 
     private static ulong Pack(float x, float y, float z, float w)
     {
-        ulong xi = (ushort)(short)Math.Clamp(x, -32768f, 32767f);
-        ulong yi = (ushort)(short)Math.Clamp(y, -32768f, 32767f);
-        ulong zi = (ushort)(short)Math.Clamp(z, -32768f, 32767f);
-        ulong wi = (ushort)(short)Math.Clamp(w, -32768f, 32767f);
+        ulong xi = PackUtils.PackSigned(65535u, x);
+        ulong yi = PackUtils.PackSigned(65535u, y);
+        ulong zi = PackUtils.PackSigned(65535u, z);
+        ulong wi = PackUtils.PackSigned(65535u, w);
         return xi | (yi << 16) | (zi << 32) | (wi << 48);
     }
 
@@ -49,7 +49,7 @@ public struct Short4 : IPackedVector<ulong>, IEquatable<Short4>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Short4 a, Short4 b) => a.PackedValue == b.PackedValue;
 

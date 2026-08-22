@@ -109,10 +109,10 @@ public class GraphicsDevice : IDisposable
         _framework.DrawIndexedPrimitives(
             (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex, numVertices, startIndex, primitiveCount);
 
-    public void Clear(Color color) => _framework.Clear((CNA.Color)color);
+    public void Clear(Color color) => _framework.Clear(color.ToFramework());
 
     public void Clear(ClearOptions options, Color color, float depth, int stencil) =>
-        _framework.Clear((CNA.Graphics.ClearOptions)(int)options, (CNA.Color)color, depth, stencil);
+        _framework.Clear((CNA.Graphics.ClearOptions)(int)options, color.ToFramework(), depth, stencil);
 
     public void Clear(ClearOptions options, Vector4 color, float depth, int stencil) =>
         Clear(options, new Color(color.X, color.Y, color.Z, color.W), depth, stencil);
@@ -386,15 +386,15 @@ public class GraphicsDevice : IDisposable
     /// events -- is inherited unchanged, since none of those types diverge.</summary>
     public Rectangle ScissorRectangle
     {
-        get => _framework.ScissorRectangle;
-        set => _framework.ScissorRectangle = value;
+        get => _framework.ScissorRectangle.ToCompat();
+        set => _framework.ScissorRectangle = value.ToFramework();
     }
 
     /// <summary>Re-typed: <c>Color</c> is a separate struct per namespace.</summary>
     public Color BlendFactor
     {
-        get => _framework.BlendFactor;
-        set => _framework.BlendFactor = value;
+        get => _framework.BlendFactor.ToCompat();
+        set => _framework.BlendFactor = value.ToFramework();
     }
 
     /// <summary>
@@ -429,11 +429,11 @@ public class GraphicsDevice : IDisposable
         Color[] colors = (Color[])(object)data;
         var converted = new CNA.Color[colors.Length];
         _framework.GetBackBufferData(
-            rect is { } r ? (CNA.Rectangle)r : null, converted, startIndex, elementCount);
+            rect.ToFramework(), converted, startIndex, elementCount);
 
         for (int i = startIndex; i < startIndex + elementCount; i++)
         {
-            colors[i] = converted[i];
+            colors[i] = converted[i].ToCompat();
         }
     }
 

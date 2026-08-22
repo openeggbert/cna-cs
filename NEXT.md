@@ -11,6 +11,212 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Math/geometry and input behavioral baseline expands to 106 observations (2026-08-22)
+
+This run began from the exact-metadata state below and treated every structural zero as a hard
+regression gate. The selected XNA 4.0 Windows runtime profile remains **257/257 types, 0 metadata
+diagnostics, 0 CNA leaks, 0 base/interface mismatches, and 0 allowlisted findings**. Work moved from
+public shape to observable value behavior, using the decompiled XNA source and direct monodis IL as
+the authority whenever FNA or MonoGame disagreed.
+
+The deterministic corpus grew from 18 math observations to **83 math/geometry plus 23 input
+observations (106 total)**. Identical source compiles against the Microsoft XNA reference DLLs and
+compiles/runs on CNA, FNA, and MonoGame; all three executable snapshots contain exactly 106 lines.
+The installed XNA assemblies still cannot execute on Linux because of their C++/CLI module
+initializer, so the independent Windows XNA runtime snapshot remains open. Alternative engines
+are retained as useful difference generators, not copied as the strict authority.
+
+The audit found and fixed several XNA-observable differences:
+
+- `Vector2`, `Vector3`, and `Vector4` scalar division now compute one rounded reciprocal and
+  multiply every component, matching XNA IL instead of performing independent divisions;
+- strict `Viewport.Project`/`Unproject` now use strict XNA matrix/vector arithmetic and epsilon
+  logic rather than CNA's Gauss-Jordan inversion path; singular unprojection consequently returns
+  XNA NaNs rather than leaking a backend exception;
+- matrix/quaternion/vector operation grouping, signed zeros, reflection ref-parameter mutation,
+  frustum plane/corner construction, and the XNA GJK intersection path were pinned to direct XNA
+  source/IL results;
+- the packed-vector family now uses XNA's clamp-then-`Math.Round` nearest-even quantization,
+  correct signed-normalized minima, binary16 infinity/NaN conversion, and exact hexadecimal/string
+  formatting. Three older framework assertions that still claimed truncation were corrected from
+  the authoritative XNA `PackUtils` implementation rather than weakening the production fix;
+- curve collection ordering/index exceptions, tangent epsilon handling, cycle/step edge cases,
+  hashes, and exact math/string results are now part of the strict regression corpus;
+- `GamePadState` constructor button arrays now retain only XNA-recognized physical buttons. Virtual
+  trigger/thumbstick flags and undefined bits are derived/filtered like XNA instead of becoming
+  synthetic physical state. Keyboard masking/order, mouse/game-pad hashes and strings, analog
+  clamping, touch equality/history/clone/enumerator edges are also pinned.
+
+The corpus deliberately records real comparator differences. Among them are FNA's direct scalar
+division, alternate matrix/viewport results, packed/color quantization, geometry boundaries,
+curve behavior, and FNA/MonoGame retention of constructor-supplied virtual game-pad flags.
+MonoGame also lacks XNA's public `Matrix.Transform(Matrix, Quaternion)` overload, so the shared
+runner probes that observation reflectively without removing the strict compile-time hierarchy
+assertions.
+
+Final evidence:
+
+- Debug and Release solution builds: **0 warnings, 0 errors**;
+- managed tests: **533/533 framework** and **199/199 compat**;
+- source-assignability plus behavior corpus: Microsoft XNA, CNA, FNA, and MonoGame compile; CNA,
+  FNA, and MonoGame each execute **106/106 observations**;
+- ABI 0.6 native integration under Xvfb: **104/104 in Debug and 104/104 in Release**;
+- strict verifier: exit 0, **257/257 types, 0 diagnostics, 0 allowed**;
+- standalone leak gate: exit 0, **0 diagnostics**;
+- checked-in allowlist: still exactly empty.
+
+Next work is no longer structural cleanup. Preserve all zeros, capture the 106-observation corpus
+on Windows XNA, then expand fixture-backed behavior across graphics state/resource validation,
+ownership/disposal and event order, content malformed/external-reference paths, native input
+polling/dead zones/packet/disconnect behavior, and audio/XACT/media/storage.
+
+## Selected XNA 4.0 runtime metadata reaches zero differences (2026-08-22)
+
+This run continued from the truthful 694-difference/zero-leak state below and completed the entire
+selected seven-assembly XNA 4.0 Windows runtime metadata contract. The final strict report is
+**257 reference types, 257 target types, 0 diagnostics, 0 CNA leaks, and 0 allowlisted findings**.
+The normal verifier now exits 0; this is no longer an audit-mode partial result.
+
+| Strict diagnostic | Start | Final | Change |
+| --- | ---: | ---: | ---: |
+| Total differences | 694 | 0 | -694 |
+| Target/reference types | 242/257 | 257/257 | +15 target types |
+| Missing types | 15 | 0 | -15 |
+| Missing members | 352 | 0 | -352 |
+| Interface mismatches | 11 | 0 | -11 |
+| Unexpected members | 59 | 0 | -59 |
+| Parameter-name mismatches | 201 | 0 | -201 |
+| CNA leaks | 0 | 0 | preserved |
+| Base mismatches | 0 | 0 | preserved |
+
+The remaining exact-metadata groups were closed coherently rather than by allowlisting:
+
+- all 13 `Microsoft.Xna.Framework.Design` converters, `GamerServicesComponent`, and
+  `TouchCollection.Enumerator` now have the reference type/member/interface shape; converter
+  regressions exercise `TypeDescriptor` and `InstanceDescriptor` behavior;
+- `Vector2/3/4`, `Quaternion`, `Matrix`, `Color`, `Rectangle`, `Plane`, `Ray`, bounding volumes,
+  and related math types now contain the complete ref/out/array/transform overload families and
+  exact names/modifiers. XNA edge behavior was corrected for zero normalization, color packing and
+  rounding, and quaternion multiplication/concatenation;
+- input enums, constructors, state equality/operators, mouse/keyboard/game-pad/touch members and
+  collection interfaces now match XNA. Virtual game-pad button flags and the XNA-only
+  `BigButtonPad=0x300` value stay in the facade while CNA/native values are translated internally;
+- graphics effects/reflection, vertex types, viewport/state metadata, enum values/attributes, and
+  the packed-vector family are exact. Packed-vector interface methods that XNA implements
+  explicitly are no longer accidental public members, and unsigned packed properties carry the
+  reference CLS attributes;
+- every residual return/property/field/constant/default/modifier/attribute and parameter-name
+  diagnostic was resolved. The verifier's interface comparison was also corrected to compare the
+  effective inherited-interface closure, preventing false direct-declaration mismatches.
+
+The compile probe now includes an executable deterministic math/geometry behavior corpus. Its 18
+observations emit IEEE-754 bit patterns for normalization edge cases, quaternion operations,
+transforms, ordinary and singular matrix inversion, color packing/lerp, plane transforms, and
+containment boundaries. The identical source builds with 0 warnings/errors against CNA.XnaCompat
+and the Microsoft XNA reference assemblies, and the executable corpus was captured on Linux for
+CNA, FNA, and MonoGame.
+
+The alternate implementations are useful comparators, not the XNA authority. Disassembly of the
+actual XNA assemblies resolved three differences: `Matrix.Invert` now follows XNA's fixed adjugate
+calculation and produces NaNs for a singular zero matrix; `BoundingSphere.Contains(Vector3)` now
+returns `Disjoint` for an exact surface point; and the float `Color` constructor's
+`00FF0080` NaN/infinity/half rounding result was confirmed as already correct even though FNA and
+MonoGame produce different values. One quaternion-vector transform observation remains two ULPs
+apart from FNA/MonoGame (`40253083` versus `40253081`); the XNA IL has the same apparent algebra,
+so that result remains explicitly unresolved until the corpus can run on Windows XNA. The
+installed XNA assemblies use a C++/CLI module initializer that Mono/.NET on Linux cannot execute.
+
+A stale enum-parity test initially failed after the strict corrections because it still required
+every compat enum to equal CNA's internal enum. It now explicitly records the small reviewed set of
+XNA/native representation differences and rejects both new divergences and obsolete exceptions.
+That check exposed a real behavior issue: XNA and CNA reverse the numeric Min/Max blend-operation
+ordinals, so `BlendState` now translates those values semantically; `GamePadCapabilities` likewise
+translates CNA's compact BigButtonPad value to XNA's 0x300 value.
+
+Final evidence:
+
+- Debug and Release solution builds: **0 warnings, 0 errors**;
+- managed tests: **532/532 framework** and **198/198 compat**;
+- CNA and Microsoft-XNA compile-probe builds: **0 warnings, 0 errors**;
+- deterministic 18-observation math corpus executes on CNA, FNA, and MonoGame; actual XNA IL was
+  used to adjudicate observed matrix, color, and containment differences;
+- ABI 0.6 native integration under Xvfb: **104/104 in Debug and 104/104 in Release**;
+- strict verifier: exit 0, **257/257 types, 0 diagnostics, 0 allowed**;
+- standalone leak gate: exit 0, **0 diagnostics**;
+- reference-independent GitHub CI now runs that leak gate on every push and pull request;
+- checked-in allowlist: still exactly empty.
+
+The normative `plan.md`, top-level README, and compatibility status now describe the zero-diff
+state. The next phase is behavioral compatibility: execute/archive the corpus on Windows XNA,
+expand differential coverage across input/graphics/content/audio/media/storage, preserve all
+metadata zeros as hard CI gates, and inventory additional XNA product profiles separately.
+
+## Structural facade completion and zero CNA leaks (2026-08-22)
+
+This run began by reconciling the normative `plan.md` with the actual 1,246-difference/101-leak
+baseline recorded by the preceding entry. The completed Game/device/window and managed
+`ContentReader` groups were removed from the pending list before implementation continued. The
+final strict Windows XNA 4.0 runtime report is **694 unallowlisted differences and zero CNA
+public/protected signature leaks**. The allowlist remains exactly empty.
+
+| Strict diagnostic | Start | Final | Change |
+| --- | ---: | ---: | ---: |
+| Total differences | 1,246 | 694 | -552 |
+| CNA leaks | 101 | 0 | -101 |
+| Missing types | 18 | 15 | -3 |
+| Missing members | 554 | 352 | -202 |
+| Base mismatches | 45 | 0 | -45 |
+| Interface mismatches | 34 | 11 | -23 |
+| Unexpected members | 150 | 59 | -91 |
+| Parameter-name mismatches | 241 | 201 | -40 |
+
+The model family is now facade-first. `Model`, `ModelBone`, `ModelMesh`, and `ModelMeshPart` wrap
+their CNA implementations without exposing CNA ancestry. Their collections use the exact XNA
+`ReadOnlyCollection<T>` bases and nested enumerator shapes instead of the public
+`NamedModelCollection<T>` helper. `ContentManager` tracks loaded model facades as owned resources,
+so removing inheritance did not weaken unload/disposal behavior.
+
+The complete strict Audio/XACT family was converted coherently: engine/category/listener/emitter,
+banks/cues, sound effects/instances, renderer details, and exception types now have XNA metadata
+and delegate internally. Media and Storage received the same treatment. Album/artist/genre/song,
+picture/playlist/video, media collections/player/library, storage device/container, and their
+exceptions no longer expose CNA bases or generic arguments. The public implementation-only
+`MediaLibraryObject<TBase>` and `ReadOnlyMediaCollection<TCompat,TBase>` bases were replaced by
+internal adapters while preserving one native owner per handle.
+
+All **60 public conversion operators** between strict XNA value types and `CNA.*` were removed.
+Their functionality moved to internal per-type conversion methods and
+`FrameworkValueConversions`, and every delegation call site was updated. This removed the public
+operators' leak and unexpected-member findings without giving up convenient implementation-side
+conversion. Structural isolation tests now reject any exported CNA base, public conversion
+operator mentioning CNA, or re-exported implementation helper.
+
+The remaining direct-inheritance group was also closed: `BoundingFrustum`, graphics exceptions,
+`OcclusionQuery`, sampler/texture collections, `SpriteFont`, `DisplayMode`, `LaunchParameters`, and
+the profile visibility of `VertexPosition`/`TitleLocation` were corrected. Consequently the strict
+report now has **zero base mismatches, zero CNA leaks, zero kind mismatches, zero layout mismatches,
+and zero unexpected types**. Public null-safe finalizer paths were tightened after an intentionally
+rejected ABI 0.1 library exposed that a partially constructed `Game` could otherwise throw on the
+finalizer thread.
+
+Final evidence:
+
+- Debug and Release solution builds: **0 warnings, 0 errors**;
+- managed tests: **532/532 framework** and **185/185 compat**;
+- compile probe: unchanged source builds against both Microsoft XNA and CNA with 0 warnings/errors;
+- ABI 0.6 native integration under Xvfb: **104/104 in Release and 104/104 in Debug**;
+- strict verifier: expected exit 1, **694 unallowlisted / 0 allowed**;
+- standalone leak gate: exit 0, **0 diagnostics**.
+
+The exact remaining strict counts are 352 missing members, 201 parameter-name mismatches, 59
+unexpected members, 16 member-attribute mismatches, 15 missing types, 11 interface mismatches, 11
+type-modifier mismatches, 7 member-modifier mismatches, 7 return-type mismatches, 6 property-accessor
+mismatches, 3 field-constant mismatches, 2 parameter-default mismatches, 2 type-attribute
+mismatches, 1 field-type mismatch, and 1 parameter mismatch. The next coherent work is the 13
+design converters plus `GamerServicesComponent` and `TouchCollection.Enumerator`, then the large
+math/geometry overload families, input state/touch contracts, and remaining graphics
+effect/vertex/packed-vector groups. Parameter-name cleanup remains last.
+
 ## Game/device/window facade and managed XNB reader repair (2026-08-22)
 
 This run started from the previous strict-gate baseline, **not** the earlier audit baseline: 1,467

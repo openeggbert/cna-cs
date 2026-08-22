@@ -29,17 +29,17 @@ public struct Rgba64 : IPackedVector<ulong>, IEquatable<Rgba64>
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y, vector.Z, vector.W);
 
     public readonly Vector4 ToVector4() => new Vector4(
-            (PackedValue & 0xFFFF) / 65535f,
-            ((PackedValue >> 16) & 0xFFFF) / 65535f,
-            ((PackedValue >> 32) & 0xFFFF) / 65535f,
-            ((PackedValue >> 48) & 0xFFFF) / 65535f);
+            PackUtils.UnpackUNorm(65535u, (uint)PackedValue),
+            PackUtils.UnpackUNorm(65535u, (uint)(PackedValue >> 16)),
+            PackUtils.UnpackUNorm(65535u, (uint)(PackedValue >> 32)),
+            PackUtils.UnpackUNorm(65535u, (uint)(PackedValue >> 48)));
 
     private static ulong Pack(float r, float g, float b, float a)
     {
-        ulong ri = (ulong)(Math.Clamp(r, 0f, 1f) * 65535f + 0.5f);
-        ulong gi = (ulong)(Math.Clamp(g, 0f, 1f) * 65535f + 0.5f);
-        ulong bi = (ulong)(Math.Clamp(b, 0f, 1f) * 65535f + 0.5f);
-        ulong ai = (ulong)(Math.Clamp(a, 0f, 1f) * 65535f + 0.5f);
+        ulong ri = PackUtils.PackUNorm(65535f, r);
+        ulong gi = PackUtils.PackUNorm(65535f, g);
+        ulong bi = PackUtils.PackUNorm(65535f, b);
+        ulong ai = PackUtils.PackUNorm(65535f, a);
         return ri | (gi << 16) | (bi << 32) | (ai << 48);
     }
 
@@ -49,7 +49,7 @@ public struct Rgba64 : IPackedVector<ulong>, IEquatable<Rgba64>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Rgba64 a, Rgba64 b) => a.PackedValue == b.PackedValue;
 

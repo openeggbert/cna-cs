@@ -154,12 +154,12 @@ public class Game : IDisposable
         _disposed = true;
         if (disposing)
         {
-            _content.Dispose();
-            _backend.DisposeCompatGraphicsDevice();
+            _content?.Dispose();
+            _backend?.DisposeCompatGraphicsDevice();
             _graphicsDeviceManager?.DisposeFromGame();
         }
 
-        _backend.Dispose();
+        _backend?.Dispose();
     }
 
     protected virtual void Update(GameTime gameTime)
@@ -275,7 +275,7 @@ public class Game : IDisposable
             set => _backend.AllowUserResizing = value;
         }
 
-        public override Rectangle ClientBounds => _backend.ClientBounds;
+        public override Rectangle ClientBounds => _backend.ClientBounds.ToCompat();
 
         public override DisplayOrientation CurrentOrientation =>
             (DisplayOrientation)(int)_backend.CurrentOrientation;

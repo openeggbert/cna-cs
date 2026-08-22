@@ -1,7 +1,7 @@
 namespace CNA.Graphics.PackedVector;
 
 /// <summary>
-/// Matches real XNA's <c>HalfSingle</c>: One IEEE 754 binary16 value. Conversion goes through <see cref="Half"/> rather than a hand-rolled bit shuffle -- design invariant #7, use the real BCL for a concept that is not CNA-specific.
+/// Matches real XNA's <c>HalfSingle</c>, including its historical 16-bit conversion semantics.
 ///
 /// Managed, not a P/Invoke. <c>packed_vectors.h</c> does expose
 /// <c>cna_packed_vector_pack</c>/<c>_unpack</c> for all seventeen formats, but design invariant #3
@@ -26,10 +26,9 @@ public struct HalfSingle : IPackedVector<ushort>, IEquatable<HalfSingle>
     public readonly Vector4 ToVector4() => new Vector4(ToSingle(), 0f, 0f, 1f);
 
     /// <summary>Expands the half back to single precision.</summary>
-    public readonly float ToSingle() => (float)BitConverter.UInt16BitsToHalf(PackedValue);
+    public readonly float ToSingle() => HalfUtils.Unpack(PackedValue);
 
-    private static ushort Pack(float single)
-        => BitConverter.HalfToUInt16Bits((Half)single);
+    private static ushort Pack(float single) => HalfUtils.Pack(single);
 
     public readonly bool Equals(HalfSingle other) => PackedValue == other.PackedValue;
 
@@ -37,7 +36,7 @@ public struct HalfSingle : IPackedVector<ushort>, IEquatable<HalfSingle>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(HalfSingle a, HalfSingle b) => a.PackedValue == b.PackedValue;
 

@@ -1,7 +1,7 @@
 namespace CNA.Graphics.PackedVector;
 
 /// <summary>
-/// Matches real XNA's <c>Short2</c>: Two signed shorts, unnormalized -- the components are whole numbers in [-32768, 32767], not [-1, 1]. Truncated rather than rounded, matching the engine's own cast.
+/// Matches real XNA's <c>Short2</c>: Two signed shorts, unnormalized -- the components are whole numbers in [-32768, 32767], not [-1, 1].
 ///
 /// Managed, not a P/Invoke. <c>packed_vectors.h</c> does expose
 /// <c>cna_packed_vector_pack</c>/<c>_unpack</c> for all seventeen formats, but design invariant #3
@@ -34,8 +34,8 @@ public struct Short2 : IPackedVector<uint>, IEquatable<Short2>
 
     private static uint Pack(float x, float y)
     {
-        uint xi = (ushort)(short)Math.Clamp(x, -32768f, 32767f);
-        uint yi = (ushort)(short)Math.Clamp(y, -32768f, 32767f);
+        uint xi = PackUtils.PackSigned(65535u, x);
+        uint yi = PackUtils.PackSigned(65535u, y);
         return xi | (yi << 16);
     }
 
@@ -45,7 +45,7 @@ public struct Short2 : IPackedVector<uint>, IEquatable<Short2>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Short2 a, Short2 b) => a.PackedValue == b.PackedValue;
 

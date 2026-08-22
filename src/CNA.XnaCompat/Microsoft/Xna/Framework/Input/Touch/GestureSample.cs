@@ -4,7 +4,7 @@ namespace Microsoft.Xna.Framework.Input.Touch;
 /// duplicates rather than subclasses.</summary>
 public readonly struct GestureSample
 {
-    internal GestureSample(
+    public GestureSample(
         GestureType gestureType, TimeSpan timestamp, Vector2 position, Vector2 position2, Vector2 delta, Vector2 delta2)
     {
         GestureType = gestureType;
@@ -30,8 +30,8 @@ public readonly struct GestureSample
     internal static GestureSample FromFramework(CNA.Input.Touch.GestureSample source) =>
         new((GestureType)(int)source.GestureType,
             source.Timestamp,
-            source.Position,
-            source.Position2,
-            source.Delta,
-            source.Delta2);
+            source.Position.ToCompat(),
+            source.Position2.ToCompat(),
+            source.Delta.ToCompat(),
+            source.Delta2.ToCompat());
 }

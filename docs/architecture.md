@@ -89,22 +89,22 @@ The target pattern is therefore:
 - borrowed and parent-owned handles are never promoted to owners;
 - CNA-only APIs live in `CNA.Framework` or an explicit extension namespace.
 
-Components, dynamic buffers/audio, content managers, curves, textures,
-render targets, effects, graphics states, vertex declarations and SpriteBatch
-already use this pattern. `Game`, `GraphicsDevice`, models, media/audio and
-several collections still inherit CNA types and are reported as failures by
-`tools/api-compat`; they are transitional defects, not architectural exceptions.
+Components, Game/device/window services, content readers/managers, models, audio/XACT, media,
+storage, curves, textures, render targets, effects, graphics states, vertex declarations,
+SpriteBatch, and the remaining strict collections now use this pattern. No exported type in the
+selected strict profile inherits a `CNA.*` type, and `tools/api-compat --leak-only` reports zero
+public/protected CNA-type signatures. The full seven-assembly strict comparison also reports
+257/257 types and zero metadata diagnostics with an empty allowlist.
 
 #### Why the XNA value types are not literally the same type as the `CNA` namespace ones
 
 C# structs cannot inherit from another struct, so `Microsoft.Xna.Framework.Vector2`
-cannot simply be a subclass of `CNA.Vector2` the way
-`Microsoft.Xna.Framework.Game` can subclass `CNA.Game`. For the handful of
-math value types, `CNA.XnaCompat` defines its own small struct with the same
-field layout and implicit conversion operators to/from the `CNA`-namespace
-version, so a `CNA.Graphics.GraphicsDevice.Clear(Color)` call still works
-seamlessly from XNA-style code. This is the one place in
-the solution with intentional, documented small duplication — see
+cannot be a subtype of `CNA.Vector2`. For the math and graphics value types,
+`CNA.XnaCompat` therefore defines its own struct with the XNA public contract. Internal conversion
+helpers translate to and from the `CNA` implementation at delegation boundaries. These helpers
+are deliberately not public operators: Microsoft XNA did not expose conversions to `CNA.*`, and
+doing so formerly added 120 strict metadata/leak findings. This is intentional, documented small
+duplication — see
 `analysis_binding.md` §74 ("simple value structs" and "repetitive resource
 wrappers" are exactly the kind of thing a future codegen tool
 (`tools/binding-generator/`) should generate instead of hand-writing).

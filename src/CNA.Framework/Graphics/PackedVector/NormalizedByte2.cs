@@ -1,7 +1,7 @@
 namespace CNA.Graphics.PackedVector;
 
 /// <summary>
-/// Matches real XNA's <c>NormalizedByte2</c>: Two signed bytes normalized to [-1, 1]. Rounds half away from zero, matching the engine's <c>lroundf</c>; the unsigned formats round half up instead, which is a real asymmetry rather than an oversight.
+/// Matches real XNA's <c>NormalizedByte2</c>: Two signed bytes normalized to [-1, 1].
 ///
 /// Managed, not a P/Invoke. <c>packed_vectors.h</c> does expose
 /// <c>cna_packed_vector_pack</c>/<c>_unpack</c> for all seventeen formats, but design invariant #3
@@ -28,14 +28,14 @@ public struct NormalizedByte2 : IPackedVector<ushort>, IEquatable<NormalizedByte
 
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y);
 
-    public readonly Vector4 ToVector4() => new Vector4((sbyte)(PackedValue & 0xFF) / 127f, (sbyte)((PackedValue >> 8) & 0xFF) / 127f, 0f, 1f);
+    public readonly Vector4 ToVector4() => new Vector4(PackUtils.UnpackSNorm(255u, PackedValue), PackUtils.UnpackSNorm(255u, (uint)PackedValue >> 8), 0f, 1f);
 
-    public readonly Vector2 ToVector2() => new((sbyte)(PackedValue & 0xFF) / 127f, (sbyte)((PackedValue >> 8) & 0xFF) / 127f);
+    public readonly Vector2 ToVector2() => new(PackUtils.UnpackSNorm(255u, PackedValue), PackUtils.UnpackSNorm(255u, (uint)PackedValue >> 8));
 
     private static ushort Pack(float x, float y)
     {
-        uint xi = (byte)(sbyte)MathF.Round(Math.Clamp(x, -1f, 1f) * 127f, MidpointRounding.AwayFromZero);
-        uint yi = (byte)(sbyte)MathF.Round(Math.Clamp(y, -1f, 1f) * 127f, MidpointRounding.AwayFromZero);
+        uint xi = PackUtils.PackSNorm(255u, x);
+        uint yi = PackUtils.PackSNorm(255u, y);
         return (ushort)(xi | (yi << 8));
     }
 
@@ -45,7 +45,7 @@ public struct NormalizedByte2 : IPackedVector<ushort>, IEquatable<NormalizedByte
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X4", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(NormalizedByte2 a, NormalizedByte2 b) => a.PackedValue == b.PackedValue;
 

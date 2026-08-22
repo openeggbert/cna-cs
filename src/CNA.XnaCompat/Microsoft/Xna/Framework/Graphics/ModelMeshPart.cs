@@ -1,59 +1,147 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>
-/// XNA 4.0-compatible <c>ModelMeshPart</c>. Extends <c>CNA.Graphics.ModelMeshPart</c> directly,
-/// fully inherited-unchanged: <c>VertexBuffer</c>/<c>IndexBuffer</c>/<c>Effect</c>/<c>NumVertices</c>/
-/// <c>PrimitiveCount</c>/<c>StartIndex</c>/<c>VertexOffset</c>/<c>Tag</c>/<c>SetVertexBuffer</c>/
-/// <c>SetIndexBuffer</c>/<c>SetVertexOffset</c>/<c>SetNumVertices</c>/<c>SetStartIndex</c>/
-/// <c>SetPrimitiveCount</c> all resolve correctly as-is. <c>VertexBuffer</c>/<c>IndexBuffer</c>'s
-/// *declared* type stays <c>CNA.Graphics</c>-namespaced (a compat-typed instance still upcasts
-/// through <c>SetVertexBuffer</c>/<c>SetIndexBuffer</c>'s inherited, base-typed parameters just
-/// fine, so no override is needed to actually *use* a compat <see cref="VertexBuffer"/>/
-/// <see cref="IndexBuffer"/> here); <c>Effect</c>'s declared type is <c>CNA.Graphics.Effect</c>
-/// regardless of whether this <see cref="ModelMeshPart"/> is compat-typed, since this compat layer
-/// has no separate compat <c>Effect</c> hierarchy at all (see <see cref="BasicEffect"/>'s own doc
-/// comment). This type exists so <see cref="ModelMeshPartCollection"/> (and, through it,
-/// <see cref="ModelMesh.MeshParts"/>) can hold a compat-namespaced element type -- the same
-/// "an explicit type declaration was the only thing that needed fixing" reasoning
-/// <c>BasicEffect.CurrentTechnique</c>'s own gap already established.
-///
-/// <c>ModelMesh.Effects</c>/<c>ModelEffectCollection</c> stay a documented, narrower gap,
-/// not mirrored by this pass -- see <see cref="ModelMesh"/>'s own doc comment for why.
-/// </summary>
-public sealed class ModelMeshPart : CNA.Graphics.ModelMeshPart
+/// <summary>Represents a batch of geometry within a model mesh.</summary>
+public sealed class ModelMeshPart
 {
+    private ModelMesh? _parent;
+    private Effect? _effect;
+    private IndexBuffer? _indexBuffer;
+    private VertexBuffer? _vertexBuffer;
+    private int _startIndex;
+    private int _primitiveCount;
+    private int _vertexOffset;
+    private int _numVertices;
+    private bool _ownsResources;
+    private bool _disposed;
+
     internal ModelMeshPart()
     {
     }
 
-    internal ModelMeshPart(VertexBuffer? vertexBuffer, IndexBuffer? indexBuffer, int numVertices, int primitiveCount, int startIndex, int vertexOffset)
-        : base(vertexBuffer?.FrameworkBuffer, indexBuffer?.FrameworkBuffer, numVertices, primitiveCount, startIndex, vertexOffset)
+    internal ModelMeshPart(
+        VertexBuffer? vertexBuffer,
+        IndexBuffer? indexBuffer,
+        int numVertices,
+        int primitiveCount,
+        int startIndex,
+        int vertexOffset)
     {
+        _vertexBuffer = vertexBuffer;
+        _indexBuffer = indexBuffer;
+        _numVertices = numVertices;
+        _primitiveCount = primitiveCount;
+        _startIndex = startIndex;
+        _vertexOffset = vertexOffset;
     }
 
-    public new Effect? Effect
+    public int StartIndex => _startIndex;
+
+    public int PrimitiveCount => _primitiveCount;
+
+    public int VertexOffset => _vertexOffset;
+
+    public int NumVertices => _numVertices;
+
+    public IndexBuffer? IndexBuffer => _indexBuffer;
+
+    public VertexBuffer? VertexBuffer => _vertexBuffer;
+
+    public Effect? Effect
     {
-        get => Effect.FromFramework(base.Effect);
-        set => base.Effect = value?.Inner;
+        get => _effect;
+        set
+        {
+            if (ReferenceEquals(value, _effect))
+            {
+                return;
+            }
+
+            bool oldEffectStillUsed = false;
+            bool newEffectAlreadyUsed = false;
+            if (_parent is not null)
+            {
+                foreach (ModelMeshPart part in _parent.MeshParts)
+                {
+                    if (ReferenceEquals(part, this))
+                    {
+                        continue;
+                    }
+
+                    if (ReferenceEquals(part.Effect, _effect))
+                    {
+                        oldEffectStillUsed = true;
+                    }
+                    else if (ReferenceEquals(part.Effect, value))
+                    {
+                        newEffectAlreadyUsed = true;
+                    }
+                }
+
+                if (!oldEffectStillUsed && _effect is not null)
+                {
+                    _parent.Effects.Remove(_effect);
+                }
+
+                if (!newEffectAlreadyUsed && value is not null)
+                {
+                    _parent.Effects.Add(value);
+                }
+            }
+
+            _effect = value;
+        }
     }
 
-    public new IndexBuffer? IndexBuffer =>
-        global::Microsoft.Xna.Framework.Graphics.IndexBuffer.FromFramework(base.IndexBuffer);
+    public object? Tag { get; set; }
 
-    public new VertexBuffer? VertexBuffer =>
-        global::Microsoft.Xna.Framework.Graphics.VertexBuffer.FromFramework(base.VertexBuffer);
+    internal void SetParent(ModelMesh parent) => _parent = parent;
 
-    public new int NumVertices => base.NumVertices;
+    internal void SetVertexOffset(int value) => _vertexOffset = value;
 
-    public new int PrimitiveCount => base.PrimitiveCount;
+    internal void SetNumVertices(int value) => _numVertices = value;
 
-    public new int StartIndex => base.StartIndex;
+    internal void SetStartIndex(int value) => _startIndex = value;
 
-    public new int VertexOffset => base.VertexOffset;
+    internal void SetPrimitiveCount(int value) => _primitiveCount = value;
 
-    public new object? Tag
+    internal void SetVertexBuffer(VertexBuffer? value) => _vertexBuffer = value;
+
+    internal void SetIndexBuffer(IndexBuffer? value) => _indexBuffer = value;
+
+    internal void Draw()
     {
-        get => base.Tag;
-        set => base.Tag = value;
+        if (NumVertices <= 0)
+        {
+            return;
+        }
+
+        GraphicsDevice graphicsDevice = VertexBuffer!.GraphicsDevice;
+        graphicsDevice.SetVertexBuffer(VertexBuffer, VertexOffset);
+        graphicsDevice.Indices = IndexBuffer;
+        graphicsDevice.DrawIndexedPrimitives(
+            PrimitiveType.TriangleList,
+            0,
+            0,
+            NumVertices,
+            StartIndex,
+            PrimitiveCount);
+    }
+
+    internal void MarkResourcesOwned() => _ownsResources = true;
+
+    internal void DisposeOwnedResources()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        if (_ownsResources)
+        {
+            VertexBuffer?.Dispose();
+            IndexBuffer?.Dispose();
+            Effect?.Dispose();
+        }
     }
 }

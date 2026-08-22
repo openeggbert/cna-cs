@@ -1,7 +1,9 @@
 # XNA compatibility status
 
-`CNA.XnaCompat` is intended to let XNA 4.0 game source recompile against CNA. The current build is
-useful but **not API-complete**. Compatibility claims in this repository are evidence-based:
+`CNA.XnaCompat` is intended to let XNA 4.0 game source recompile against CNA. Its public metadata is
+now exact for the selected seven-assembly Windows runtime profile; behavioral parity, additional
+XNA product profiles, native platform coverage, and release packaging remain incomplete.
+Compatibility claims in this repository are evidence-based:
 
 1. source compatibility;
 2. exact public metadata compatibility;
@@ -29,11 +31,11 @@ XNA_REFERENCE_PATH=/path/to/xna-reference-assemblies \
 As measured on 2026-08-22:
 
 - reference types: 257;
-- target types: 239;
-- unallowlisted diagnostics: 1,467;
-- accidental `CNA.*` public/protected signature findings: 118;
+- target types: 257;
+- unallowlisted diagnostics: 0;
+- accidental `CNA.*` public/protected signature findings: 0;
 - reviewed exceptions: 0;
-- verifier exit code: 1.
+- verifier exit code: 0.
 
 The tool compares type kind/access/base/interfaces/modifiers/generics/layout/attributes, members,
 parameters/modifiers/defaults, properties/indexers/accessors, events, fields/constants/enums,
@@ -41,7 +43,7 @@ delegates, and nested types. Its allowlist requires an exact diagnostic identity
 reports stale entries. The older regex/name counter remains useful only for discovery; it cannot
 establish XNA parity.
 
-## What was repaired in this audit
+## What has been repaired
 
 The public XNA hierarchy now takes priority over implementation reuse for these coherent groups:
 
@@ -53,29 +55,45 @@ The public XNA hierarchy now takes priority over implementation reuse for these 
 - `ModelEffectCollection : ReadOnlyCollection<Effect>`;
 - compat-generic `CurveKeyCollection`, including XNA's shallow clone behavior;
 - exact generic `DrawUser*` overload families;
+- the complete Game/device/window/service and managed content-reader groups;
+- model collections and model resource facades;
+- the complete strict Audio/XACT, Media, and Storage families;
+- graphics exceptions, `BoundingFrustum`, `OcclusionQuery`, `SpriteFont`, `DisplayMode`, and the
+  remaining strict graphics collections;
+- public implementation helper bases removed from the XNA namespace;
+- all public XNA-to-CNA conversion operators replaced by internal conversion helpers;
 - CNA renderer diagnostics moved out of the strict namespace to `CNA.XnaCompat.Extensions`.
 
-These changes use composition, internal adapters, and single-owner backends. They do not make the
-remaining 1,467 differences less real.
+The final completion pass also added the 13 design converters, `GamerServicesComponent`, the exact
+touch enumerator, complete math/geometry overload families, XNA input state/enums, graphics
+effects/vertex/viewport contracts, and exact packed-vector metadata. Modifiers, attributes,
+accessors, constants, parameter defaults and parameter names are all exact. These changes use
+composition, internal adapters, and single-owner backends.
 
-## Principal remaining contract failures
+## Remaining compatibility work
 
-- 55 wrong base types and 39 interface mismatches, concentrated in Game/device management,
-  models, audio/XACT, media, storage, and collections;
-- 118 CNA type leaks through strict-profile public/protected signatures;
-- 688 missing members and 23 missing types;
-- `ContentReader` has the wrong base and the generic `ContentTypeReader<T>` machinery is absent;
-- several kinds/layouts are wrong (`AudioCategory`, `RendererDetail`, `DisplayMode`);
-- public helper base types and inherited CNA-only members remain visible;
+- preserve strict metadata, CNA-leak, base-hierarchy, interface, unexpected-member, and allowlist
+  counts at zero as hard regression gates;
+- execute the combined 106-observation math/geometry and input corpus on a Windows XNA runtime.
+  CNA, FNA, and MonoGame snapshots already exist, and direct XNA source/IL has resolved the strict
+  operation order and edge semantics; the installed XNA C++/CLI assemblies cannot run on Linux;
+- expand differential behavior coverage for input, graphics state/resources, collections,
+  validation and exceptions, lifecycle/events, audio/XACT, media, storage, and disposal;
+- expand managed XNB fixtures and malformed/error paths;
 - GamerServices, networking, device/sensor, Xbox/Phone, and Content Pipeline scope needs separate
   authoritative inventories rather than blanket exclusion.
 
 ## Source compatibility corpus
 
-`tests/CNA.XnaCompat.CompileProbe` builds with the solution and currently locks in assignments for
-the repaired component, dynamic-buffer, dynamic-audio, content-manager, graphics-resource, curve,
-model-effect, state, vertex-declaration, and SpriteBatch relationships. It is the seed of a larger
-corpus, not proof that arbitrary games compile.
+`tests/CNA.XnaCompat.CompileProbe` builds with the solution and locks in assignments for the
+repaired component, dynamic-buffer, dynamic-audio, content-manager, graphics-resource, curve,
+model-effect, state, vertex-declaration, and SpriteBatch relationships. It also contains
+deterministic 83-observation math/geometry and 23-observation input behavior corpora. Their output
+records IEEE-754 bits, exact hash/string results, state flags, exception kinds, and collection edge
+semantics. The combined 106 observations run on CNA, FNA, and MonoGame; identical source compiles
+against XNA, whose native C++/CLI runtime still requires Windows. Direct XNA source/IL adjudicates
+the strict expected values. This remains a focused corpus, not proof that arbitrary games compile
+or behave identically.
 
 The identical compile-probe source passes against the local Microsoft XNA reference assemblies,
 CNA.XnaCompat, FNA, and MonoGame. It fails against Kni at one deliberate XNA assertion:
@@ -91,36 +109,50 @@ The same representative template source currently compiles against:
 | FNA | Pass with explicitly configured FNA.dll | Unavailable: configured assembly could not load; clean exit 2, no frame claim |
 | MonoGame DesktopGL 3.8.1.303 | Pass | Pass: 60 frames, llvmpipe, Linux x64 |
 | Kni 4.2.9001 + SDL2.GL 4.2.9001.1 | Template pass; strict corpus has one hierarchy failure | Pass: 60 frames, llvmpipe, Linux x64 |
-| Microsoft XNA reference assemblies | Metadata authority; compile-corpus expansion pending | Not run |
+| Microsoft XNA reference assemblies | Strict corpus passes with 0 warnings/errors | Runtime corpus still requires Windows XNA 4.0 |
 
 A build is not a runtime claim.
 
 ## Behavior and content
 
-The managed suites currently pass 532 framework and 169 compat tests. A current ABI 0.6.0 CNA
-library passes all 103 native integration tests in both Debug and Release under Xvfb. That proves
+The managed suites currently pass 533 framework and 199 compat tests. A current ABI 0.6.0 CNA
+library passes all 104 native integration tests in both Debug and Release under Xvfb. That proves
 the exercised routes, not all XNA behavior.
 
-Known high-priority content limitation: `ContentManager.Load<T>` handles selected built-ins, but
-the XNA reader type system and ordinary custom `Content.Load<MyType>()` path are not implemented.
-`LoadForeign<T>` is a CNA extension, not a source-compatible substitute. Managed reader machinery,
-shared resources, reader activation/versioning, external references, and exception behavior remain
-P0 work.
+The XNA reader type system and ordinary custom `Content.Load<MyType>()` path are implemented,
+including reader activation/versioning, shared resources, existing instances, disposable
+tracking, and LZX handling. Remaining content work is differential fixture breadth: external
+references, malformed tables, stream ownership, and exact exception behavior.
 
 Behavioral differential coverage is also incomplete for validation order, disposed behavior,
 lifecycle/event order, graphics state transitions, SpriteBatch rules, input transitions, audio,
 media, and storage. Unsupported exceptions are assessed case by case; their presence alone neither
 proves a bug nor compatibility.
 
+The expanded corpus corrected XNA's fixed-adjugate `Matrix.Invert` behavior (including NaNs for a
+singular zero matrix), reciprocal-once scalar vector division, XNA-local `Viewport.Project` and
+`Unproject`, exact frustum/GJK edge behavior, packed-vector conversion/formatting, curves, and
+exact-boundary `BoundingSphere.Contains(Vector3)` behavior. It also confirmed from XNA packing IL
+that `Color(0.5f, NaN, +Infinity, -Infinity)` produces `00FF0080`, despite different FNA and
+MonoGame results. Direct XNA IL fixes the arithmetic grouping for the observed quaternion/vector
+result; the Windows run remains necessary as an independent runtime snapshot, not as a reason to
+copy either alternate engine.
+
+The input corpus covers keyboard masking/order, mouse and game-pad state strings/hashes, analog
+clamping and virtual-button thresholds, physical-button filtering, and touch equality/clone/
+enumerator edge cases. Constructor-supplied virtual or undefined `Buttons` bits are deliberately
+filtered like XNA rather than retained as physical button state. Native polling, packet/disconnect,
+dead-zone provenance, and multi-player behavior still need fixture-backed coverage.
+
 ## Extension boundaries
 
 | Contract | Current status |
 | --- | --- |
-| Strict XNA 4.0 | Baseline; measured, incomplete, no allowlisted differences |
+| Strict XNA 4.0 | Exact public metadata for the selected Windows runtime profile; behavior and additional profiles remain incomplete |
 | FNA extensions | No deliberate extension subset promised yet; template baseline compiles |
 | MonoGame extensions | No deliberate extension subset promised yet; template baseline compiles |
 | Kni portability | Template baseline compiles; no extension or runtime claim |
-| CNA extensions | Renderer diagnostics are explicit in `CNA.XnaCompat.Extensions`; inherited CNA pollution remains a verifier failure |
+| CNA extensions | Renderer diagnostics are explicit in `CNA.XnaCompat.Extensions`; strict-profile CNA signature leaks are zero |
 
 New extensions require an authority, a source-portability use case, an explicit status
 (`implemented`, `unsupported`, `upstream blocker`, `not applicable`, or `planned`), and a home that

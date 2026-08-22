@@ -5,40 +5,37 @@ Last measured: 2026-08-22. Session history and superseded decisions live in
 
 ## Current verified state
 
-**Not release-ready and not API-complete.** `CNA.XnaCompat` runs useful XNA-style code on CNA, but
-its remaining public contract differences are systemic rather than cosmetic.
+**Not release-ready.** The selected seven-assembly XNA 4.0 Windows runtime profile is now public-
+metadata complete: the strict facade has the same 257 types and produces zero verifier
+diagnostics with an empty allowlist. Remaining compatibility work is behavioral, profile breadth,
+native-platform validation, content fixtures, packaging, and release engineering.
 
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 532 `CNA.Framework` + 169 `CNA.XnaCompat`, all passing |
-| Native integration | 103/103 passing in Debug and Release on Linux under Xvfb with an ABI 0.6.0 OPENGLES3 CNA library |
+| Managed tests | 533 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
+| Native integration | 104/104 passing in Debug and Release on Linux under Xvfb with an ABI 0.6.0 CNA library |
 | Compile probe | Identical source passes XNA, CNA, FNA, and MonoGame; Kni fails the XNA `VertexDeclaration : GraphicsResource` assignment |
-| XNA Windows runtime metadata | 257 reference types, 239 target types, 1,467 unallowlisted differences |
-| CNA public-type leakage | 118 findings in public/protected strict-profile signatures |
+| Behavior corpora | 83 deterministic math/geometry + 23 input observations run on CNA, FNA, and MonoGame; identical source compiles against XNA, while a Windows XNA runtime snapshot remains pending |
+| XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist |
+| CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
 | Template | CNA build, generated-project build, and real 60/600-frame CNA runs pass |
 | Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; configured FNA runtime reports unavailable with exit 2 |
 | Packages | None; all shipping projects remain `IsPackable=false` |
 | Tested platform | Linux x64 only in this run |
 
 The metadata result is produced by `tools/api-compat`, not by the legacy name counter. The current
-diagnostic breakdown is:
+hard invariants are:
 
 ```text
-BASE_TYPE_MISMATCH=55                 CNA_TYPE_LEAK=118
-FIELD_CONSTANT_MISMATCH=3             FIELD_TYPE_MISMATCH=1
-INTERFACE_MISMATCH=39                 MEMBER_ATTRIBUTE_MISMATCH=16
-MEMBER_MODIFIER_MISMATCH=14           MISSING_MEMBER=688
-MISSING_TYPE=23                       PARAMETER_DEFAULT_MISMATCH=2
-PARAMETER_MISMATCH=2                  PARAMETER_NAME_MISMATCH=242
-PROPERTY_ACCESSOR_MISMATCH=11         PROPERTY_TYPE_MISMATCH=2
-RETURN_TYPE_MISMATCH=9                TYPE_ATTRIBUTE_MISMATCH=2
-TYPE_KIND_MISMATCH=3                  TYPE_LAYOUT_MISMATCH=3
-TYPE_MODIFIER_MISMATCH=44             UNEXPECTED_MEMBER=185
-UNEXPECTED_TYPE=5
+TOTAL_DIAGNOSTICS=0                   ALLOWLIST_ENTRIES=0
+CNA_TYPE_LEAK=0                       BASE_TYPE_MISMATCH=0
+INTERFACE_MISMATCH=0                  MISSING_TYPE=0
+MISSING_MEMBER=0                      UNEXPECTED_TYPE=0
+UNEXPECTED_MEMBER=0                   PARAMETER_NAME_MISMATCH=0
 ```
 
-No current difference is allowlisted. The normal verifier exits 1, as the quality gate should.
+No difference is allowlisted. Both the normal strict verifier and the standalone leak gate exit 0.
 
 ## Compatibility definition
 
@@ -62,8 +59,7 @@ contract.
 
 ## Definition of done for the declared Windows runtime profile
 
-- Metadata comparison: 0 missing, mismatched, or unexpected items after a reviewed extension
-  allowlist; no stale allowlist entries.
+- Metadata comparison: 0 missing, mismatched, or unexpected items with the allowlist empty.
 - Public/protected CNA-type leak check: 0 accidental findings.
 - Every XNA inheritance/interface/generic assignment in the compile corpus builds unchanged.
 - Managed differential tests cover high-risk value, collection, lifecycle, content, graphics,
@@ -77,27 +73,54 @@ contract.
 
 ## P0 — public contract and ownership
 
-### 1. Continue facade-first hierarchy repair
+### 1. Facade-first hierarchy repair: structurally complete
 
 Use composition/internal adapters wherever inheriting a `CNA.*` implementation changes XNA's
-public hierarchy. The repaired groups include components, dynamic buffers, dynamic sound,
-`GraphicsResource`/textures/effects/states/SpriteBatch, content managers, and curves.
+public hierarchy. Every exported strict-profile type now has an XNA/BCL base rather than a
+`CNA.*` base, and the standalone public/protected leak gate is clean.
 
-Next coherent groups, ordered by impact:
+Completed on 2026-08-22 across the two facade-repair runs:
 
-1. `Game`, `GraphicsDeviceManager`, `GraphicsDevice`, `GameWindow`, and service/device-setting
-   types. Completion: exact metadata for the group and no inherited CNA members visible to source.
-2. Model types and their exact `ReadOnlyCollection<T>`/nested enumerator contracts. Completion:
-   no `CNA.Graphics.*` generic arguments or base types in the model family.
-3. Audio/XACT facades, exception bases, `AudioCategory` and `RendererDetail` kind/layout fixes.
-4. Media/storage facades and collection bases; remove public helper base types in the strict
-   namespace.
-5. Remaining graphics collections, adapters, exceptions, and `DisplayMode` kind mismatch.
-6. Missing design converters, serialization attributes, nested enumerators, and
-   `GamerServicesComponent` for the selected profile.
+1. `Game`, `GraphicsDeviceManager`, `GraphicsDevice`, `GameWindow`, and their service/device-setting
+   types are facade-first and no longer expose CNA implementation inheritance.
+2. The managed content-reader type system and ordinary custom `Content.Load<T>()` path are
+   implemented; its remaining work is fixture breadth and behavioral parity, not hierarchy repair.
+3. `Model`, `ModelBone`, `ModelMesh`, `ModelMeshPart`, their exact read-only collections, and nested
+   enumerators are composition facades. Loaded models are lifetime-tracked by `ContentManager`.
+4. The complete strict Audio/XACT family is facade-first, including exact exception bases and the
+   `AudioCategory`/`RendererDetail` kind/layout corrections.
+5. Media and Storage use composition and exact BCL/XNA collection bases. The public
+   `MediaLibraryObject<TBase>`, `ReadOnlyMediaCollection<TCompat,TBase>`, and
+   `NamedModelCollection<T>` implementation bases are no longer exported.
+6. All 60 public conversion operators connecting strict XNA value types to `CNA.*` were replaced
+   with internal conversion helpers; internal behavior is preserved without adding 120 public
+   contract findings.
+7. Remaining direct-inheritance graphics/core types were repaired, including `BoundingFrustum`,
+   `OcclusionQuery`, `SpriteFont`, state/texture collections, graphics exceptions, `DisplayMode`,
+   and `LaunchParameters`.
 
-After each group, run the strict verifier and record the reduced counts in `NEXT.md`. Completion is
-measured by metadata, not by matching names.
+The final metadata-completion run added all design converters, `GamerServicesComponent`, and the
+exact touch enumerator; completed vector, quaternion, matrix, color, plane, ray, rectangle and
+bounding-volume families; repaired input state/enums; and closed effects, vertex declarations,
+viewport, packed vectors, modifiers, attributes, accessors, constants and parameter names. The
+same compile corpus builds against both CNA and Microsoft XNA references, and deterministic
+math/geometry and input corpora now provide a cross-engine behavior baseline.
+
+Next work must preserve every zero above. Priorities are now:
+
+1. Execute and archive the 106-observation differential corpus on a Windows XNA 4.0 runtime. CNA,
+   FNA, and MonoGame snapshots are captured; direct XNA source/IL has already adjudicated operation
+   order and edge semantics for the strict expected values, but only Windows can execute the
+   installed XNA C++/CLI assemblies and provide the final runtime snapshot.
+2. Expand differential behavior coverage for graphics state and resource validation, collections,
+   disposal, exceptions, event order, audio/XACT, media, and storage. Deepen the initial input
+   corpus with native polling, dead-zone, packet-number, disconnect, and multi-player scenarios.
+3. Expand managed XNB fixtures and malformed/error-path coverage without changing the exact public
+   contract.
+4. Preserve the checked-in leak-only CI gate and add the full strict zero-diagnostic job where
+   protected XNA reference artifacts can be supplied legally.
+5. Inventory additional XNA profiles separately; never merge Phone, Xbox, networking, or Content
+   Pipeline types into the completed Windows runtime profile without an authoritative profile.
 
 ### 2. Resource ownership
 
@@ -115,20 +138,19 @@ Remaining criteria:
 
 ## P0 — content compatibility
 
-This is mostly managed work, not an upstream excuse. `ContentManager` now has the correct public
-base relationship, service-provider constructors, cache, unload, and resource-manager facade, but
-the reader type system is still structurally wrong.
+The structural managed work is complete. `ContentManager` has the correct public base relationship,
+service-provider constructors, cache, unload and resource-manager facade. `ContentReader` derives
+from `BinaryReader`; abstract and generic `ContentTypeReader` contracts, reader-table activation
+and versioning, shared resources, nested/existing objects, disposable tracking, LZX handling and
+ordinary custom `Content.Load<MyType>()` are implemented.
 
-Implement in this order:
+Remaining content work:
 
-1. Exact `ContentReader : BinaryReader`, abstract `ContentTypeReader`, generic
-   `ContentTypeReader<T>`, reader metadata, and serialization attributes.
-2. XNB reader table construction, type-reader activation and versioning.
-3. Shared resources, nested objects, external references, stream ownership, and deterministic
-   exception translation.
-4. Route `Content.Load<MyType>()` through managed readers; do not require `LoadForeign<T>`.
-5. Expand built-in reader fixtures over uncompressed and LZX XNBs; inventory MonoGame LZ4
+1. Expand built-in reader fixtures over uncompressed and LZX XNBs; inventory MonoGame LZ4
    separately as an extension.
+2. Add differential coverage for external references, stream ownership, malformed reader tables,
+   version mismatches and deterministic exception translation.
+3. Preserve the zero-diagnostic content surface while strengthening the managed reader path.
 
 Completion: a user-defined reader/content type loads through unchanged XNA-style source and the
 same fixture produces normalized equivalent results on an available reference implementation.
@@ -137,7 +159,7 @@ same fixture produces normalized equivalent results on an available reference im
 
 | Profile/family | Current treatment | Completion criterion |
 | --- | --- | --- |
-| XNA 4.0 Windows runtime | Active strict profile; 1,467 differences | Zero unreviewed diff |
+| XNA 4.0 Windows runtime | Metadata complete: 257/257 types, 0 differences, 0 CNA leaks | Preserve zero; complete behavioral corpus |
 | XACT runtime | Included in current seven-assembly profile | Exact API plus authored-bank tests where assets exist |
 | GamerServices | Only what selected Windows assemblies expose is currently measured | Inventory reference assemblies; provide compile-time API with deterministic unsupported behavior where services are extinct |
 | Networking/session APIs | Not yet inventoried against authoritative assemblies | Separate profile and explicit status per type |
@@ -158,6 +180,11 @@ classification rather than a mechanical replacement.
 - Add golden/differential tests for validation order, exception types, null/range/disposed cases,
   event order, collection mutation, math edge cases, graphics state, content caching, input
   transitions, audio/media state, and lifecycle ordering.
+- Keep alternate-engine results as comparators rather than authorities. The current 83-observation
+  math/geometry and 23-observation input corpora record real FNA/MonoGame differences in arithmetic
+  grouping, matrix/viewport edge cases, color/packed values, containment, curves, hashes, strings,
+  and input-state construction. Actual XNA metadata/source/IL, documentation, and ultimately the
+  Windows runtime snapshot decide strict behavior.
 - Preserve strict behavior in `CNA.XnaCompat` even where `CNA.Framework` intentionally differs.
   `CurveKeyCollection.Clone()` now demonstrates this: compat is shallow while the CNA API remains
   independently designed.
@@ -170,7 +197,7 @@ corpus, not a percentage inferred from source.
 `tools/coverage` now discovers repositories/libraries relatively or through `CNA_ROOT`,
 `CNA_NATIVE_LIBRARY`, and `CNA_NATIVE_DIR`; ELF, PE, and Mach-O symbol tools are separated. The
 latest header sweep found no declared imports absent from the selected headers and no arity
-mismatches. An older ABI 0.1.0 library was correctly rejected; ABI 0.6.0 passed all 103 integration
+mismatches. An older ABI 0.1.0 library was correctly rejected; ABI 0.6.0 passed all 104 integration
 tests.
 
 Next criteria:
@@ -186,7 +213,8 @@ Next criteria:
 
 Current evidence is deliberately narrow:
 
-- Strict XNA: measured and incomplete.
+- Strict XNA: exact public metadata for the selected Windows runtime profile; behavioral parity and
+  additional product profiles remain incomplete.
 - FNA: the template source compiles against a configured FNA.dll; no FNA extension subset is yet
   promised.
 - MonoGame: the template compiles and completes 60 frames against DesktopGL 3.8.1.303; extension
@@ -194,8 +222,8 @@ Current evidence is deliberately narrow:
 - Kni: the template compiles and completes 60 frames against the 4.2.9001 framework and
   4.2.9001.1 SDL2.GL backend, while the strict compile corpus records Kni's non-XNA
   `VertexDeclaration` ancestry; broader runtime matrix is pending.
-- CNA: renderer diagnostics moved to `CNA.XnaCompat.Extensions`; remaining inherited CNA pollution
-  is still reported by the metadata/leak tool.
+- CNA: renderer diagnostics live in `CNA.XnaCompat.Extensions`; the strict namespace now has zero
+  public/protected CNA-type leaks.
 
 For each proposed FNA/MonoGame addition, record authority, source-portability value, implementation
 status, and whether it belongs in an extension namespace/assembly. Do not merge APIs into a random
@@ -239,8 +267,9 @@ Target quality gate:
 7. alternate-engine build/runtime jobs when dependencies are available;
 8. package creation and isolated-consumer install test.
 
-The strict API job cannot be green today: it correctly exits 1 for 1,467 unallowlisted findings.
-Do not hide that with a blanket allowlist. CI reference assemblies must be supplied legally through
+The strict API job is green with zero diagnostics and an empty allowlist. Treat any future
+diagnostic—including a leak, hierarchy/interface regression, unexpected extension, or parameter
+name change—as a gate failure. CI reference assemblies must be supplied legally through
 `XNA_REFERENCE_PATH` or an equivalent protected artifact.
 
 ## Precise upstream CNA requirements
@@ -258,7 +287,8 @@ Managed work should continue around these. Do not modify upstream without author
 - The historical SIGTERM `pure virtual method called` shutdown report remains open until reproduced
   or disproved on the current native build.
 
-Custom managed content readers are not listed here: implement the managed XNB machinery first.
+Custom managed content readers are not listed here because their managed XNB machinery is now
+implemented and does not require an upstream CNA change.
 
 ## Reproducible commands
 

@@ -31,31 +31,44 @@ public readonly struct TouchLocation : IEquatable<TouchLocation>
 
     public bool TryGetPreviousLocation(out TouchLocation previousLocation)
     {
+        if (_previousState == TouchLocationState.Invalid)
+        {
+            previousLocation = new TouchLocation(-1, TouchLocationState.Invalid, Vector2.Zero);
+            return false;
+        }
+
         previousLocation = new TouchLocation(Id, _previousState, _previousPosition);
-        return _previousState != TouchLocationState.Invalid;
+        return true;
     }
 
     internal static TouchLocation FromFramework(CNA.Input.Touch.TouchLocation source)
     {
-        source.TryGetPreviousLocation(out CNA.Input.Touch.TouchLocation previous);
+        bool hasPrevious = source.TryGetPreviousLocation(out CNA.Input.Touch.TouchLocation previous);
         return new TouchLocation(
             source.Id,
             (TouchLocationState)(int)source.State,
-            source.Position,
-            (TouchLocationState)(int)previous.State,
-            previous.Position);
+            source.Position.ToCompat(),
+            hasPrevious ? (TouchLocationState)(int)previous.State : TouchLocationState.Invalid,
+            hasPrevious ? previous.Position.ToCompat() : Vector2.Zero);
     }
 
     public bool Equals(TouchLocation other) =>
-        Id == other.Id && State == other.State && Position.Equals(other.Position);
+        Id == other.Id &&
+        Position.X == other.Position.X && Position.Y == other.Position.Y &&
+        _previousPosition.X == other._previousPosition.X && _previousPosition.Y == other._previousPosition.Y;
 
     public override bool Equals(object? obj) => obj is TouchLocation other && Equals(other);
 
-    public override int GetHashCode() => HashCode.Combine(Id, State, Position);
+    public override int GetHashCode() => Id.GetHashCode() + Position.X.GetHashCode() + Position.Y.GetHashCode();
 
-    public static bool operator ==(TouchLocation a, TouchLocation b) => a.Equals(b);
+    public static bool operator ==(TouchLocation value1, TouchLocation value2) =>
+        value1.Id == value2.Id && value1.State == value2.State &&
+        value1.Position.X == value2.Position.X && value1.Position.Y == value2.Position.Y &&
+        value1._previousState == value2._previousState &&
+        value1._previousPosition.X == value2._previousPosition.X &&
+        value1._previousPosition.Y == value2._previousPosition.Y;
 
-    public static bool operator !=(TouchLocation a, TouchLocation b) => !a.Equals(b);
+    public static bool operator !=(TouchLocation value1, TouchLocation value2) => !(value1 == value2);
 
-    public override string ToString() => $"{{Id:{Id} State:{State} Position:{Position}}}";
+    public override string ToString() => $"{{Position:{Position}}}";
 }

@@ -228,6 +228,12 @@ public class EffectParameter : IDisposable
 
     public unsafe void SetValue(int[] value) => SetArray(CnaEffectValueType.Int32, value, static i => i);
 
+    public unsafe void SetValue(bool[] value) =>
+        SetArray(CnaEffectValueType.Boolean, value, static item => (byte)(item ? 1 : 0));
+
+    public unsafe void SetValue(Quaternion[] value) =>
+        SetArray(CnaEffectValueType.Quaternion, value, static item => item.ToNative());
+
     public unsafe Matrix[] GetValueMatrixArray(int count) =>
         GetArray<CnaMatrix, Matrix>(CnaEffectValueType.Matrix, count, Matrix.FromNative);
 

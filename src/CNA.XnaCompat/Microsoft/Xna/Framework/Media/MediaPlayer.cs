@@ -105,14 +105,14 @@ public static class MediaPlayer
         set => CNA.Media.MediaPlayer.IsVisualizationEnabled = value;
     }
 
-    /// <summary>Forwards directly, no conversion needed: a compat-typed <paramref name="data"/>
-    /// already *is* a <c>CNA.Media.VisualizationData</c> (<see cref="VisualizationData"/> extends it
-    /// directly, with no members of its own -- see that type's own doc comment), so it upcasts as
-    /// this parameter with no seam for anything to diverge.</summary>
-    public static void GetVisualizationData(VisualizationData data) => CNA.Media.MediaPlayer.GetVisualizationData(data);
+    public static void GetVisualizationData(VisualizationData visualizationData)
+    {
+        ArgumentNullException.ThrowIfNull(visualizationData);
+        CNA.Media.MediaPlayer.GetVisualizationData(visualizationData.Framework);
+    }
 
     /// <summary>Releases the renderer's media resources. <c>CNAEXT</c>, like
     /// <c>CNA.Media.MediaPlayer.Update</c> -- real XNA has no equivalent, because its own framework
     /// does this at shutdown.</summary>
-    public static void ProgramExit() => CNA.Media.MediaPlayer.ProgramExit();
+    internal static void ProgramExit() => CNA.Media.MediaPlayer.ProgramExit();
 }

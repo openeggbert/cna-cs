@@ -1,7 +1,7 @@
 namespace CNA.Graphics.PackedVector;
 
 /// <summary>
-/// Matches real XNA's <c>HalfVector4</c>: Four IEEE 754 binary16 values. See <see cref="HalfSingle"/> for why the conversion uses <see cref="Half"/>.
+/// Matches real XNA's <c>HalfVector4</c>. See <see cref="HalfSingle"/> for the conversion semantics.
 ///
 /// Managed, not a P/Invoke. <c>packed_vectors.h</c> does expose
 /// <c>cna_packed_vector_pack</c>/<c>_unpack</c> for all seventeen formats, but design invariant #3
@@ -29,17 +29,17 @@ public struct HalfVector4 : IPackedVector<ulong>, IEquatable<HalfVector4>
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y, vector.Z, vector.W);
 
     public readonly Vector4 ToVector4() => new Vector4(
-            (float)BitConverter.UInt16BitsToHalf((ushort)(PackedValue & 0xFFFF)),
-            (float)BitConverter.UInt16BitsToHalf((ushort)((PackedValue >> 16) & 0xFFFF)),
-            (float)BitConverter.UInt16BitsToHalf((ushort)((PackedValue >> 32) & 0xFFFF)),
-            (float)BitConverter.UInt16BitsToHalf((ushort)((PackedValue >> 48) & 0xFFFF)));
+            HalfUtils.Unpack((ushort)(PackedValue & 0xFFFF)),
+            HalfUtils.Unpack((ushort)((PackedValue >> 16) & 0xFFFF)),
+            HalfUtils.Unpack((ushort)((PackedValue >> 32) & 0xFFFF)),
+            HalfUtils.Unpack((ushort)((PackedValue >> 48) & 0xFFFF)));
 
     private static ulong Pack(float x, float y, float z, float w)
     {
-        return BitConverter.HalfToUInt16Bits((Half)x)
-            | ((ulong)BitConverter.HalfToUInt16Bits((Half)y) << 16)
-            | ((ulong)BitConverter.HalfToUInt16Bits((Half)z) << 32)
-            | ((ulong)BitConverter.HalfToUInt16Bits((Half)w) << 48);
+        return HalfUtils.Pack(x)
+            | ((ulong)HalfUtils.Pack(y) << 16)
+            | ((ulong)HalfUtils.Pack(z) << 32)
+            | ((ulong)HalfUtils.Pack(w) << 48);
     }
 
     public readonly bool Equals(HalfVector4 other) => PackedValue == other.PackedValue;
@@ -48,7 +48,7 @@ public struct HalfVector4 : IPackedVector<ulong>, IEquatable<HalfVector4>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(HalfVector4 a, HalfVector4 b) => a.PackedValue == b.PackedValue;
 

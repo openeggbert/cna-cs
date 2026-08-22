@@ -3,7 +3,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// <summary>Matches real XNA's <c>VertexPositionColorTexture</c> exactly (layout: <c>Position</c>
 /// at offset 0, <c>Color</c> at offset 12, <c>TextureCoordinate</c> at offset 16; stride 24).
 /// </summary>
-public struct VertexPositionColorTexture : IVertexType, IEquatable<VertexPositionColorTexture>
+public struct VertexPositionColorTexture : IVertexType
 {
     public static readonly VertexDeclaration VertexDeclaration = new(
         new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
@@ -23,12 +23,13 @@ public struct VertexPositionColorTexture : IVertexType, IEquatable<VertexPositio
 
     readonly VertexDeclaration IVertexType.VertexDeclaration => VertexDeclaration;
 
-    public static bool operator ==(VertexPositionColorTexture a, VertexPositionColorTexture b) => a.Equals(b);
-    public static bool operator !=(VertexPositionColorTexture a, VertexPositionColorTexture b) => !a.Equals(b);
+    public static bool operator ==(VertexPositionColorTexture left, VertexPositionColorTexture right) =>
+        left.Position == right.Position && left.Color == right.Color &&
+        left.TextureCoordinate == right.TextureCoordinate;
 
-    public readonly bool Equals(VertexPositionColorTexture other) =>
-        Position.Equals(other.Position) && Color.Equals(other.Color) && TextureCoordinate.Equals(other.TextureCoordinate);
-    public override readonly bool Equals(object? obj) => obj is VertexPositionColorTexture other && Equals(other);
+    public static bool operator !=(VertexPositionColorTexture left, VertexPositionColorTexture right) => !(left == right);
+
+    public override readonly bool Equals(object? obj) => obj is VertexPositionColorTexture other && this == other;
     public override readonly int GetHashCode() => HashCode.Combine(Position, Color, TextureCoordinate);
     public override readonly string ToString() =>
         $"{{Position:{Position} Color:{Color} TextureCoordinate:{TextureCoordinate}}}";

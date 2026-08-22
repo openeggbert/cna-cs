@@ -1,30 +1,82 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>VideoPlayer</c>. A pure subclass -- playback control and the
-/// scalar properties are inherited unchanged; <see cref="GetTexture"/> and <see cref="Video"/>
-/// need re-typing. Each borrowed CNA frame is wrapped in this namespace's
-/// <see cref="Graphics.Texture2D"/> without adopting its native handle.</summary>
-public class VideoPlayer : CNA.Media.VideoPlayer
+/// <summary>XNA 4.0-compatible video-player facade.</summary>
+public sealed class VideoPlayer : IDisposable
 {
-    public new Video? Video => (Video?)base.Video;
+    private readonly CNA.Media.VideoPlayer _player = new();
+    private Video? _video;
+    private bool _disposed;
 
-    public new MediaState State => (MediaState)(int)base.State;
-
-    /// <summary>Narrows the base's <c>Texture</c> back to XNA's own <c>Texture2D</c> -- see the
-    /// base method's doc comment for why it cannot be typed that way itself.</summary>
-    public new Graphics.Texture2D? GetTexture()
+    ~VideoPlayer()
     {
-        CNA.Graphics.Texture? frame = base.GetTexture();
-        if (frame is not CNA.Graphics.Texture2D texture)
+        Dispose(false);
+    }
+
+    public bool IsDisposed => _disposed || _player.IsDisposed;
+
+    public Video? Video => _video;
+
+    public MediaState State => (MediaState)(int)_player.State;
+
+    public bool IsLooped
+    {
+        get => _player.IsLooped;
+        set => _player.IsLooped = value;
+    }
+
+    public bool IsMuted
+    {
+        get => _player.IsMuted;
+        set => _player.IsMuted = value;
+    }
+
+    public float Volume
+    {
+        get => _player.Volume;
+        set => _player.Volume = value;
+    }
+
+    public TimeSpan PlayPosition => _player.PlayPosition;
+
+    public void Play(Video video)
+    {
+        ArgumentNullException.ThrowIfNull(video);
+        _player.Play(video.Framework);
+        _video = video;
+    }
+
+    public void Pause() => _player.Pause();
+
+    public void Resume() => _player.Resume();
+
+    public void Stop() => _player.Stop();
+
+    public Graphics.Texture2D? GetTexture()
+    {
+        CNA.Graphics.Texture? frame = _player.GetTexture();
+        if (frame is not CNA.Graphics.Texture2D texture || _video is null)
         {
             return null;
         }
 
-        Graphics.GraphicsDevice device = Graphics.GraphicsDevice.FromFramework(texture.GraphicsDevice)
-            ?? throw new InvalidOperationException("The video frame has no XNA facade graphics device.");
-        return new Graphics.Texture2D(device, texture);
+        return new Graphics.Texture2D(_video.GraphicsDevice, texture);
     }
 
-    public void Play(Video video) => base.Play(video);
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
 
+    private void Dispose(bool disposing)
+    {
+        _ = disposing;
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _player?.Dispose();
+    }
 }

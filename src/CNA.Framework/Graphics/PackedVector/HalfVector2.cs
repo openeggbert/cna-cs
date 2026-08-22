@@ -1,7 +1,7 @@
 namespace CNA.Graphics.PackedVector;
 
 /// <summary>
-/// Matches real XNA's <c>HalfVector2</c>: Two IEEE 754 binary16 values. See <see cref="HalfSingle"/> for why the conversion uses <see cref="Half"/>.
+/// Matches real XNA's <c>HalfVector2</c>. See <see cref="HalfSingle"/> for the conversion semantics.
 ///
 /// Managed, not a P/Invoke. <c>packed_vectors.h</c> does expose
 /// <c>cna_packed_vector_pack</c>/<c>_unpack</c> for all seventeen formats, but design invariant #3
@@ -36,11 +36,11 @@ public struct HalfVector2 : IPackedVector<uint>, IEquatable<HalfVector2>
 
     /// <summary>Expands both halves back to single precision.</summary>
     public readonly Vector2 ToVector2() => new(
-        (float)BitConverter.UInt16BitsToHalf((ushort)(PackedValue & 0xFFFF)),
-        (float)BitConverter.UInt16BitsToHalf((ushort)(PackedValue >> 16)));
+        HalfUtils.Unpack((ushort)(PackedValue & 0xFFFF)),
+        HalfUtils.Unpack((ushort)(PackedValue >> 16)));
 
     private static uint Pack(float x, float y)
-        => BitConverter.HalfToUInt16Bits((Half)x) | ((uint)BitConverter.HalfToUInt16Bits((Half)y) << 16);
+        => HalfUtils.Pack(x) | ((uint)HalfUtils.Pack(y) << 16);
 
     public readonly bool Equals(HalfVector2 other) => PackedValue == other.PackedValue;
 
@@ -48,7 +48,7 @@ public struct HalfVector2 : IPackedVector<uint>, IEquatable<HalfVector2>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(HalfVector2 a, HalfVector2 b) => a.PackedValue == b.PackedValue;
 

@@ -29,17 +29,17 @@ public struct NormalizedShort4 : IPackedVector<ulong>, IEquatable<NormalizedShor
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y, vector.Z, vector.W);
 
     public readonly Vector4 ToVector4() => new Vector4(
-            (short)(PackedValue & 0xFFFF) / 32767f,
-            (short)((PackedValue >> 16) & 0xFFFF) / 32767f,
-            (short)((PackedValue >> 32) & 0xFFFF) / 32767f,
-            (short)((PackedValue >> 48) & 0xFFFF) / 32767f);
+            PackUtils.UnpackSNorm(65535u, (uint)PackedValue),
+            PackUtils.UnpackSNorm(65535u, (uint)(PackedValue >> 16)),
+            PackUtils.UnpackSNorm(65535u, (uint)(PackedValue >> 32)),
+            PackUtils.UnpackSNorm(65535u, (uint)(PackedValue >> 48)));
 
     private static ulong Pack(float x, float y, float z, float w)
     {
-        ulong xi = (ushort)(short)MathF.Round(Math.Clamp(x, -1f, 1f) * 32767f, MidpointRounding.AwayFromZero);
-        ulong yi = (ushort)(short)MathF.Round(Math.Clamp(y, -1f, 1f) * 32767f, MidpointRounding.AwayFromZero);
-        ulong zi = (ushort)(short)MathF.Round(Math.Clamp(z, -1f, 1f) * 32767f, MidpointRounding.AwayFromZero);
-        ulong wi = (ushort)(short)MathF.Round(Math.Clamp(w, -1f, 1f) * 32767f, MidpointRounding.AwayFromZero);
+        ulong xi = PackUtils.PackSNorm(65535u, x);
+        ulong yi = PackUtils.PackSNorm(65535u, y);
+        ulong zi = PackUtils.PackSNorm(65535u, z);
+        ulong wi = PackUtils.PackSNorm(65535u, w);
         return xi | (yi << 16) | (zi << 32) | (wi << 48);
     }
 
@@ -49,7 +49,7 @@ public struct NormalizedShort4 : IPackedVector<ulong>, IEquatable<NormalizedShor
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(NormalizedShort4 a, NormalizedShort4 b) => a.PackedValue == b.PackedValue;
 

@@ -15,6 +15,14 @@ namespace Microsoft.Xna.Framework.Media;
 public sealed class MediaLibrary : IDisposable
 {
     private readonly CNA.Media.MediaLibrary _inner;
+    private MediaSource? _mediaSource;
+    private SongCollection? _songs;
+    private AlbumCollection? _albums;
+    private ArtistCollection? _artists;
+    private GenreCollection? _genres;
+    private PlaylistCollection? _playlists;
+    private PictureCollection? _pictures;
+    private PictureCollection? _savedPictures;
 
     public MediaLibrary()
     {
@@ -27,23 +35,28 @@ public sealed class MediaLibrary : IDisposable
         _inner = new CNA.Media.MediaLibrary(mediaSource.Inner);
     }
 
+    ~MediaLibrary()
+    {
+        _inner?.Dispose();
+    }
+
     public bool IsDisposed => _inner.IsDisposed;
 
-    public MediaSource MediaSource => new(_inner.MediaSource);
+    public MediaSource MediaSource => _mediaSource ??= new MediaSource(_inner.MediaSource);
 
-    public SongCollection Songs => new(_inner.Songs);
+    public SongCollection Songs => _songs ??= new SongCollection(_inner.Songs);
 
-    public AlbumCollection Albums => new(_inner.Albums);
+    public AlbumCollection Albums => _albums ??= new AlbumCollection(_inner.Albums);
 
-    public ArtistCollection Artists => new(_inner.Artists);
+    public ArtistCollection Artists => _artists ??= new ArtistCollection(_inner.Artists);
 
-    public GenreCollection Genres => new(_inner.Genres);
+    public GenreCollection Genres => _genres ??= new GenreCollection(_inner.Genres);
 
-    public PlaylistCollection Playlists => new(_inner.Playlists);
+    public PlaylistCollection Playlists => _playlists ??= new PlaylistCollection(_inner.Playlists);
 
-    public PictureCollection Pictures => new(_inner.Pictures);
+    public PictureCollection Pictures => _pictures ??= new PictureCollection(_inner.Pictures);
 
-    public PictureCollection SavedPictures => new(_inner.SavedPictures);
+    public PictureCollection SavedPictures => _savedPictures ??= new PictureCollection(_inner.SavedPictures);
 
     /// <summary><see langword="null"/> on a device with no readable picture location -- see
     /// <c>CNA.Media.MediaLibrary.RootPictureAlbum</c> for why that is reported rather than papered

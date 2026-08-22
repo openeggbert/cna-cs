@@ -1,27 +1,46 @@
 namespace Microsoft.Xna.Framework.Media;
 
-/// <summary>XNA 4.0-compatible <c>Genre</c>. Same shape as <see cref="Album"/>.</summary>
-public class Genre : MediaLibraryObject<CNA.Media.Genre>, IEquatable<Genre>
+public sealed class Genre : IDisposable, IEquatable<Genre>
 {
+    private readonly MediaLibraryObjectAdapter<CNA.Media.Genre> _object;
+    private AlbumCollection? _albums;
+    private SongCollection? _songs;
+
     internal Genre(CNA.Media.Genre inner)
-        : base(inner)
     {
+        _object = new(inner);
     }
+
+    ~Genre()
+    {
+        _object?.ReleaseHandleOnly();
+    }
+
+    internal CNA.Media.Genre Inner => _object.Inner;
+
+    public bool IsDisposed => _object.IsDisposed;
 
     public string Name => Inner.Name;
 
-    public AlbumCollection Albums => new(Inner.Albums);
+    public SongCollection Songs => _songs ??= new SongCollection(Inner.Songs);
 
-    public SongCollection Songs => new(Inner.Songs);
+    public AlbumCollection Albums => _albums ??= new AlbumCollection(Inner.Albums);
 
-    public bool Equals(Genre? other) => other is not null && Inner.Equals(other.Inner);
+    public void Dispose()
+    {
+        _object.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public bool Equals(Genre? other) => other is not null && _object.Equals(other._object);
 
     public override bool Equals(object? obj) => Equals(obj as Genre);
 
-    public override int GetHashCode() => base.GetHashCode();
+    public override int GetHashCode() => _object.GetHashCodeValue();
 
-    public static bool operator ==(Genre? left, Genre? right) =>
-        left is null ? right is null : left.Equals(right);
+    public override string ToString() => Name;
 
-    public static bool operator !=(Genre? left, Genre? right) => !(left == right);
+    public static bool operator ==(Genre? first, Genre? second) => object.Equals(first, second);
+
+    public static bool operator !=(Genre? first, Genre? second) => !(first == second);
 }

@@ -5,8 +5,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// rather than inheriting from it, and how the two stay one native effect.</summary>
 public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
-    public BasicEffect(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice, new CNA.Graphics.BasicEffect(graphicsDevice.Framework))
+    public BasicEffect(GraphicsDevice device)
+        : base(device, new CNA.Graphics.BasicEffect(device.Framework))
     {
     }
 
@@ -14,20 +14,20 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 
     public Vector3 DiffuseColor
     {
-        get => Typed.DiffuseColor;
-        set => Typed.DiffuseColor = value;
+        get => Typed.DiffuseColor.ToCompat();
+        set => Typed.DiffuseColor = value.ToFramework();
     }
 
     public Vector3 EmissiveColor
     {
-        get => Typed.EmissiveColor;
-        set => Typed.EmissiveColor = value;
+        get => Typed.EmissiveColor.ToCompat();
+        set => Typed.EmissiveColor = value.ToFramework();
     }
 
     public Vector3 SpecularColor
     {
-        get => Typed.SpecularColor;
-        set => Typed.SpecularColor = value;
+        get => Typed.SpecularColor.ToCompat();
+        set => Typed.SpecularColor = value.ToFramework();
     }
 
     public float SpecularPower
@@ -68,20 +68,20 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 
     public Matrix World
     {
-        get => Typed.World;
-        set => Typed.World = value;
+        get => Typed.World.ToCompat();
+        set => Typed.World = value.ToFramework();
     }
 
     public Matrix View
     {
-        get => Typed.View;
-        set => Typed.View = value;
+        get => Typed.View.ToCompat();
+        set => Typed.View = value.ToFramework();
     }
 
     public Matrix Projection
     {
-        get => Typed.Projection;
-        set => Typed.Projection = value;
+        get => Typed.Projection.ToCompat();
+        set => Typed.Projection = value.ToFramework();
     }
 
     public bool FogEnabled
@@ -92,8 +92,8 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 
     public Vector3 FogColor
     {
-        get => Typed.FogColor;
-        set => Typed.FogColor = value;
+        get => Typed.FogColor.ToCompat();
+        set => Typed.FogColor = value.ToFramework();
     }
 
     public float FogStart
@@ -110,8 +110,8 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 
     public Vector3 AmbientLightColor
     {
-        get => Typed.AmbientLightColor;
-        set => Typed.AmbientLightColor = value;
+        get => Typed.AmbientLightColor.ToCompat();
+        set => Typed.AmbientLightColor = value.ToFramework();
     }
 
     public bool LightingEnabled
@@ -136,8 +136,16 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 
     /// <summary>Clones both halves: the native effect and a matching compat wrapper around it. See
     /// <see cref="Effect.Clone"/> for why the base cannot do this.</summary>
-    public override Effect Clone() =>
-        new BasicEffect((GraphicsDevice)GraphicsDevice, (CNA.Graphics.BasicEffect)Typed.Clone());
+    public override Effect Clone() => new BasicEffect(this);
+
+    protected BasicEffect(BasicEffect cloneSource)
+        : this(
+            (cloneSource ?? throw new ArgumentNullException(nameof(cloneSource))).GraphicsDevice,
+            (CNA.Graphics.BasicEffect)cloneSource.Typed.Clone())
+    {
+    }
+
+    protected internal override void OnApply() => base.OnApply();
 
     /// <summary>Adopts an already-cloned inner effect. Private: only <see cref="Clone"/> has
     /// one.</summary>

@@ -13,9 +13,9 @@ public class DisplayModeCollection : IEnumerable<DisplayMode>
         _modes = modes;
     }
 
-    public int Count => _modes.Length;
+    internal int Count => _modes.Length;
 
-    public DisplayMode this[int index] => _modes[index];
+    internal DisplayMode this[int index] => _modes[index];
 
     public IEnumerable<DisplayMode> this[SurfaceFormat format] => _modes.Where(m => m.Format == format);
 

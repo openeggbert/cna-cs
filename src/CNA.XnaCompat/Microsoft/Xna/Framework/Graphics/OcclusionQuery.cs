@@ -1,17 +1,30 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>OcclusionQuery</c>. A pure subclass -- <c>Begin</c>/<c>End</c>/
-/// <c>IsComplete</c>/<c>PixelCount</c>/<c>Dispose</c> involve no namespace-divergent types and are
-/// inherited unchanged; only <see cref="GraphicsDevice"/> needs re-typing.</summary>
-public class OcclusionQuery : CNA.Graphics.OcclusionQuery
+public class OcclusionQuery : GraphicsResource
 {
-    private readonly GraphicsDevice _graphicsDevice;
+    private readonly CNA.Graphics.OcclusionQuery _query;
 
     public OcclusionQuery(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice.Framework)
+        : base(graphicsDevice)
     {
-        _graphicsDevice = graphicsDevice;
+        _query = new CNA.Graphics.OcclusionQuery(graphicsDevice.Framework);
     }
 
-    public new GraphicsDevice GraphicsDevice => _graphicsDevice;
+    public bool IsComplete => _query.IsComplete;
+
+    public int PixelCount => _query.PixelCount;
+
+    public void Begin() => _query.Begin();
+
+    public void End() => _query.End();
+
+    protected override void Dispose(bool arg0)
+    {
+        if (!IsDisposed)
+        {
+            _query?.Dispose();
+        }
+
+        base.Dispose(arg0);
+    }
 }

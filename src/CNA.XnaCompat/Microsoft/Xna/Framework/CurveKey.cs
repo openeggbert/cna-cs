@@ -40,8 +40,17 @@ public class CurveKey : IEquatable<CurveKey>, IComparable<CurveKey>
 
     public CurveKey Clone() => new(Position, Value, TangentIn, TangentOut, Continuity);
 
-    public int CompareTo(CurveKey? other) =>
-        other is null ? 1 : Position.CompareTo(other.Position);
+    public int CompareTo(CurveKey? other)
+    {
+        // XNA deliberately performs direct comparisons here. Besides throwing for null, this
+        // means NaN compares as greater even when both positions are NaN.
+        if (Position == other!.Position)
+        {
+            return 0;
+        }
+
+        return Position < other.Position ? -1 : 1;
+    }
 
     public bool Equals(CurveKey? other) =>
         other is not null &&
@@ -53,8 +62,12 @@ public class CurveKey : IEquatable<CurveKey>, IComparable<CurveKey>
 
     public override bool Equals(object? obj) => obj is CurveKey other && Equals(other);
 
-    public override int GetHashCode() =>
-        HashCode.Combine(Position, Value, TangentIn, TangentOut, Continuity);
+    public override int GetHashCode() => unchecked(
+        Position.GetHashCode() +
+        Value.GetHashCode() +
+        TangentIn.GetHashCode() +
+        TangentOut.GetHashCode() +
+        Continuity.GetHashCode());
 
     public static bool operator ==(CurveKey? a, CurveKey? b) =>
         a is null ? b is null : a.Equals(b);

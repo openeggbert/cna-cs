@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
     <CompatibilityTarget Condition="'$(CompatibilityTarget)' == ''">CNA</CompatibilityTarget>
     <XnaReferencePath Condition="'$(XnaReferencePath)' == '' and '$(XNA_REFERENCE_PATH)' != ''">$(XNA_REFERENCE_PATH)</XnaReferencePath>
     <FnaFrameworkPath Condition="'$(FnaFrameworkPath)' == '' and '$(FNA_FRAMEWORK_PATH)' != ''">$(FNA_FRAMEWORK_PATH)</FnaFrameworkPath>
@@ -22,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(CompatibilityTarget)' == 'FNA' and '$(FnaFrameworkPath)' != ''">
-    <Reference Include="FNA" HintPath="$(FnaFrameworkPath)" Private="false" />
+    <Reference Include="FNA" HintPath="$(FnaFrameworkPath)" Private="true" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(CompatibilityTarget)' == 'MonoGame'">

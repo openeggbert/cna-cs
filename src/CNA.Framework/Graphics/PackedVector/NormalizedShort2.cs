@@ -28,14 +28,14 @@ public struct NormalizedShort2 : IPackedVector<uint>, IEquatable<NormalizedShort
 
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y);
 
-    public readonly Vector4 ToVector4() => new Vector4((short)(PackedValue & 0xFFFF) / 32767f, (short)((PackedValue >> 16) & 0xFFFF) / 32767f, 0f, 1f);
+    public readonly Vector4 ToVector4() => new Vector4(PackUtils.UnpackSNorm(65535u, PackedValue), PackUtils.UnpackSNorm(65535u, PackedValue >> 16), 0f, 1f);
 
-    public readonly Vector2 ToVector2() => new((short)(PackedValue & 0xFFFF) / 32767f, (short)((PackedValue >> 16) & 0xFFFF) / 32767f);
+    public readonly Vector2 ToVector2() => new(PackUtils.UnpackSNorm(65535u, PackedValue), PackUtils.UnpackSNorm(65535u, PackedValue >> 16));
 
     private static uint Pack(float x, float y)
     {
-        uint xi = (ushort)(short)MathF.Round(Math.Clamp(x, -1f, 1f) * 32767f, MidpointRounding.AwayFromZero);
-        uint yi = (ushort)(short)MathF.Round(Math.Clamp(y, -1f, 1f) * 32767f, MidpointRounding.AwayFromZero);
+        uint xi = PackUtils.PackSNorm(65535u, x);
+        uint yi = PackUtils.PackSNorm(65535u, y);
         return xi | (yi << 16);
     }
 
@@ -45,7 +45,7 @@ public struct NormalizedShort2 : IPackedVector<uint>, IEquatable<NormalizedShort
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(NormalizedShort2 a, NormalizedShort2 b) => a.PackedValue == b.PackedValue;
 

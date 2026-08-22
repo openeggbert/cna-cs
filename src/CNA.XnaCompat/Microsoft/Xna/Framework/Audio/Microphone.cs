@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Collections.ObjectModel;
 
 namespace Microsoft.Xna.Framework.Audio;
 
@@ -11,7 +12,7 @@ namespace Microsoft.Xna.Framework.Audio;
 /// <see cref="All"/> would make <c>Microphone.Default.BufferReady += h</c> subscribe an object the
 /// caller can never reach again. The cache is weak on the underlying instance, so dropping the CNA
 /// cache at game disposal drops these too rather than pinning them for the process.</summary>
-public class Microphone
+public sealed class Microphone
 {
     private static readonly ConditionalWeakTable<CNA.Audio.Microphone, Microphone> Wrappers = [];
 
@@ -23,6 +24,11 @@ public class Microphone
     internal Microphone(CNA.Audio.Microphone microphone)
     {
         _microphone = microphone;
+        Name = microphone.Name;
+    }
+
+    ~Microphone()
+    {
     }
 
     private static Microphone Wrap(CNA.Audio.Microphone microphone) =>
@@ -55,7 +61,7 @@ public class Microphone
         }
     }
 
-    public string Name => _microphone.Name;
+    public readonly string Name;
 
     public bool IsHeadset => _microphone.IsHeadset;
 
@@ -69,7 +75,7 @@ public class Microphone
         set => _microphone.BufferDuration = value;
     }
 
-    public static IReadOnlyList<Microphone> All
+    public static ReadOnlyCollection<Microphone> All
     {
         get
         {
@@ -80,7 +86,7 @@ public class Microphone
                 microphones[i] = Wrap(source[i]);
             }
 
-            return microphones;
+            return Array.AsReadOnly(microphones);
         }
     }
 

@@ -29,17 +29,17 @@ public struct Rgba1010102 : IPackedVector<uint>, IEquatable<Rgba1010102>
     public void PackFromVector4(Vector4 vector) => PackedValue = Pack(vector.X, vector.Y, vector.Z, vector.W);
 
     public readonly Vector4 ToVector4() => new Vector4(
-            (PackedValue & 0x3FF) / 1023f,
-            ((PackedValue >> 10) & 0x3FF) / 1023f,
-            ((PackedValue >> 20) & 0x3FF) / 1023f,
-            ((PackedValue >> 30) & 0x003) / 3f);
+            PackUtils.UnpackUNorm(1023u, PackedValue),
+            PackUtils.UnpackUNorm(1023u, PackedValue >> 10),
+            PackUtils.UnpackUNorm(1023u, PackedValue >> 20),
+            PackUtils.UnpackUNorm(3u, PackedValue >> 30));
 
     private static uint Pack(float r, float g, float b, float a)
     {
-        uint ri = (uint)(Math.Clamp(r, 0f, 1f) * 1023f + 0.5f);
-        uint gi = (uint)(Math.Clamp(g, 0f, 1f) * 1023f + 0.5f);
-        uint bi = (uint)(Math.Clamp(b, 0f, 1f) * 1023f + 0.5f);
-        uint ai = (uint)(Math.Clamp(a, 0f, 1f) * 3f + 0.5f);
+        uint ri = PackUtils.PackUNorm(1023f, r);
+        uint gi = PackUtils.PackUNorm(1023f, g);
+        uint bi = PackUtils.PackUNorm(1023f, b);
+        uint ai = PackUtils.PackUNorm(3f, a);
         return ri | (gi << 10) | (bi << 20) | (ai << 30);
     }
 
@@ -49,7 +49,7 @@ public struct Rgba1010102 : IPackedVector<uint>, IEquatable<Rgba1010102>
 
     public override readonly int GetHashCode() => PackedValue.GetHashCode();
 
-    public override readonly string ToString() => PackedValue.ToString();
+    public override readonly string ToString() => PackedValue.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
     public static bool operator ==(Rgba1010102 a, Rgba1010102 b) => a.PackedValue == b.PackedValue;
 
