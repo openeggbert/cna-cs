@@ -75,4 +75,6 @@ public class RasterizerState
     internal CnaRasterizerState ToNative() => _native;
 
     internal static RasterizerState FromNative(CnaRasterizerState native) => new(native);
+
+    internal static RasterizerState CopyOf(RasterizerState value) => new(value);
 }

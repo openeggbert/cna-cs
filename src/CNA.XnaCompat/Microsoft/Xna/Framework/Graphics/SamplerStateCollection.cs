@@ -13,9 +13,7 @@ public class SamplerStateCollection : CNA.Graphics.SamplerStateCollection
 
     public new SamplerState this[int index]
     {
-        get => (SamplerState)base[index];
-        set => base[index] = value;
+        get => new(base[index]);
+        set => base[index] = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
-
-    protected override CNA.Graphics.SamplerState Wrap(CNA.Graphics.SamplerState state) => new SamplerState(state);
 }

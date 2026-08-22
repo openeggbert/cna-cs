@@ -20,7 +20,7 @@ public class SpriteFont : CNA.Graphics.SpriteFont
         IReadOnlyList<Vector3> kerning,
         char? defaultCharacter)
         : base(
-            texture,
+            (CNA.Graphics.Texture2D)texture.FrameworkTexture,
             Convert(glyphBounds),
             Convert(cropping),
             characters,

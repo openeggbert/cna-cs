@@ -34,7 +34,7 @@ public class DynamicSoundEffectInstance : SoundEffectInstance
     {
     }
 
-    private static nint CreateNative(int sampleRate, AudioChannels channels)
+    internal static nint CreateNative(int sampleRate, AudioChannels channels)
     {
         CnaResult result = Native.cna_dynamic_sound_effect_instance_create(
             CnaAmbientGame.Current, sampleRate, (uint)channels, out CnaHandle instance);
@@ -70,17 +70,8 @@ public class DynamicSoundEffectInstance : SoundEffectInstance
             return;
         }
 
-        _bufferNeededBridge = NativeEventBridge.Subscribe(
-            () => _bufferNeeded?.Invoke(this, EventArgs.Empty),
-            (callback, context) =>
-            {
-                CnaResult result = Native.cna_dynamic_sound_effect_instance_subscribe_buffer_needed(
-                    new CnaHandle(NativeHandleValue), callback, context, out CnaHandle registration);
-                GC.KeepAlive(this);
-                CnaException.ThrowIfFailed(result, nameof(BufferNeeded));
-                return registration;
-            },
-            registration => Native.cna_audio_unsubscribe_ext(registration));
+        _bufferNeededBridge = SubscribeBufferNeeded(
+            NativeHandleValue, this, () => _bufferNeeded?.Invoke(this, EventArgs.Empty));
     }
 
     /// <summary>Unsubscribes before the base class releases the instance handle the registration is
@@ -125,15 +116,7 @@ public class DynamicSoundEffectInstance : SoundEffectInstance
     /// <summary>How many submitted buffers have not been consumed yet. A game submits more while
     /// this is low; when it reaches zero the instance has run dry and will stop.</summary>
     public int PendingBufferCount
-    {
-        get
-        {
-            CnaResult result = Native.cna_dynamic_sound_effect_instance_get_pending_buffer_count(
-                new CnaHandle(NativeHandleValue), out int value);
-            CnaException.ThrowIfFailed(result, nameof(PendingBufferCount));
-            return value;
-        }
-    }
+        => QueryPendingBufferCount(NativeHandleValue, this);
 
     public unsafe void SubmitBuffer(byte[] buffer)
     {
@@ -159,17 +142,71 @@ public class DynamicSoundEffectInstance : SoundEffectInstance
     }
 
     public TimeSpan GetSampleDuration(int sizeInBytes)
+        => QuerySampleDuration(NativeHandleValue, this, sizeInBytes);
+
+    public int GetSampleSizeInBytes(TimeSpan duration)
+        => QuerySampleSizeInBytes(NativeHandleValue, this, duration);
+
+    internal static NativeEventBridge SubscribeBufferNeeded(
+        nint nativeHandleValue,
+        object lifetimeOwner,
+        Action dispatch) =>
+        NativeEventBridge.Subscribe(
+            dispatch,
+            (callback, context) =>
+            {
+                CnaResult result = Native.cna_dynamic_sound_effect_instance_subscribe_buffer_needed(
+                    new CnaHandle(nativeHandleValue), callback, context, out CnaHandle registration);
+                GC.KeepAlive(lifetimeOwner);
+                CnaException.ThrowIfFailed(result, nameof(BufferNeeded));
+                return registration;
+            },
+            registration => Native.cna_audio_unsubscribe_ext(registration));
+
+    internal static int QueryPendingBufferCount(nint nativeHandleValue, object lifetimeOwner)
+    {
+        CnaResult result = Native.cna_dynamic_sound_effect_instance_get_pending_buffer_count(
+            new CnaHandle(nativeHandleValue), out int value);
+        GC.KeepAlive(lifetimeOwner);
+        CnaException.ThrowIfFailed(result, nameof(PendingBufferCount));
+        return value;
+    }
+
+    internal static unsafe void SubmitBuffer(
+        nint nativeHandleValue,
+        object lifetimeOwner,
+        byte[] buffer,
+        int offset,
+        int count)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, buffer.Length - offset);
+
+        fixed (byte* bufferPtr = buffer)
+        {
+            CnaResult result = Native.cna_dynamic_sound_effect_instance_submit_buffer(
+                new CnaHandle(nativeHandleValue), bufferPtr, (ulong)buffer.Length, offset, count);
+            GC.KeepAlive(lifetimeOwner);
+            CnaException.ThrowIfFailed(result, nameof(SubmitBuffer));
+        }
+    }
+
+    internal static TimeSpan QuerySampleDuration(nint nativeHandleValue, object lifetimeOwner, int sizeInBytes)
     {
         CnaResult result = Native.cna_dynamic_sound_effect_instance_get_sample_duration_ticks(
-            new CnaHandle(NativeHandleValue), sizeInBytes, out long ticks);
+            new CnaHandle(nativeHandleValue), sizeInBytes, out long ticks);
+        GC.KeepAlive(lifetimeOwner);
         CnaException.ThrowIfFailed(result, nameof(GetSampleDuration));
         return TimeSpan.FromTicks(ticks);
     }
 
-    public int GetSampleSizeInBytes(TimeSpan duration)
+    internal static int QuerySampleSizeInBytes(nint nativeHandleValue, object lifetimeOwner, TimeSpan duration)
     {
         CnaResult result = Native.cna_dynamic_sound_effect_instance_get_sample_size_in_bytes(
-            new CnaHandle(NativeHandleValue), duration.Ticks, out int bytes);
+            new CnaHandle(nativeHandleValue), duration.Ticks, out int bytes);
+        GC.KeepAlive(lifetimeOwner);
         CnaException.ThrowIfFailed(result, nameof(GetSampleSizeInBytes));
         return bytes;
     }

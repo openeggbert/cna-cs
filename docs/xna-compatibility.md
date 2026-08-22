@@ -1,145 +1,147 @@
-# XNA compatibility goals
+# XNA compatibility status
 
-Source: `openeggbert/cna`'s `analysis_binding.md` §31–§36. This page exists so
-the distinction below is stated once, clearly, in this repository, rather
-than assumed.
+`CNA.XnaCompat` is intended to let XNA 4.0 game source recompile against CNA. The current build is
+useful but **not API-complete**. Compatibility claims in this repository are evidence-based:
 
-## Four different kinds of "compatible"
+1. source compatibility;
+2. exact public metadata compatibility;
+3. behavioral compatibility;
+4. selected FNA/MonoGame/Kni portability;
+5. binary compatibility, which is not a primary goal.
 
-1. **Source compatibility** — an existing XNA `.cs` file recompiles against
-   `CNA.XnaCompat` with few or no changes. **This is the primary goal of
-   this repository.**
-2. **API compatibility** — namespaces, class names, method names,
-   properties, constructors, overloads, and enums match XNA 4.0. Necessary
-   for (1) to work at all.
-3. **Behavioral compatibility** — code that compiles also *runs the same
-   way*: blend-state behavior, sampler behavior, matrix conventions, input
-   timing, and so on. This is harder than (2) and is proven with tests, not
-   asserted.
-4. **Binary compatibility** — an old, precompiled XNA `.exe`/`.dll` runs
-   unmodified against CNA.NET assemblies. **Not a goal.** Old binaries
-   expect Microsoft's original assembly identity, strong names, and
-   possibly Xbox Live/GFWL services that may no longer exist. Do not build
-   toward this or advertise it as supported.
+The CNA C/C++ API determines what the backend can do. It is not the authority for Microsoft's
+managed type system.
 
-## What CNA.NET does not promise
+## Authoritative measured profile
 
-Directly from `analysis_binding.md` §72 — restated here because it is easy
-to accidentally overclaim in a README or release note:
+The current strict profile is XNA 4.0 Windows runtime and combines seven locally supplied XNA
+reference assemblies listed in `tools/api-compat/profiles/xna40-windows-runtime.json`. Reference
+assemblies are inspected as metadata only and are not redistributed.
 
-- Every historical XNA binary running unchanged.
-- Every XNA game working.
-- Every custom Content Pipeline extension (`ContentImporter`,
-  `ContentProcessor`, `ContentTypeWriter`/`ContentTypeReader`) working
-  without adaptation.
-- Every Windows-specific dependency (`System.Windows.Forms`,
-  `Microsoft.Win32`, raw `user32.dll` P/Invoke, DirectInput, Windows Media)
-  becoming portable — those are not XNA APIs and are outside CNA's control.
-- Every historical Xbox Live / Games for Windows Live service being
-  reproduced.
-- Zero-overhead FFI for every call.
-- Every CNA API being available in C# on day one.
+Run the verifier with:
 
-## What "publish a compatibility matrix" means here
-
-A real compatibility matrix should eventually be generated from tests against a
-running native ABI, not hand-maintained prose (`analysis_binding.md` §73, §84).
-That still does not exist. What follows is the honest split as of this writing.
-
-### Coverage
-
-The complete XNA 4.0 public API is present: every type in
-`Microsoft.Xna.Framework`, `.Audio`, `.Content`, `.Graphics`,
-`.Graphics.PackedVector`, `.Input`, `.Input.Touch`, `.Media` and `.Storage`.
-`.GamerServices` and `.Net` are excluded on purpose — they bind a live-service
-model with no meaning outside Xbox Live.
-
-### Verified real behaviour, with no native library present
-
-```text
-Vector2/3/4, Quaternion, Matrix, Rectangle, Point, Ray, Plane,
-BoundingBox, BoundingSphere, BoundingFrustum, MathHelper,
-the full 139-color Color table, the 160-member Keys enum,
-Curve/CurveKey/CurveKeyCollection and every loop/tangent mode,
-the whole PackedVector namespace (17 formats + IPackedVector),
-VertexDeclaration/VertexElement/IVertexType and the standard vertex structs,
-SpriteFont's glyph table and MeasureString,
-SoundEffect.GetSampleDuration/GetSampleSizeInBytes (pure arithmetic),
-the .xnb container parsers -- header, LZX decompression, Model, Texture2D
-and SpriteFont readers -- checked against real content-pipeline fixtures,
-the .cnj parser and its bone hierarchy.
+```bash
+dotnet build CNA.sln -c Release
+XNA_REFERENCE_PATH=/path/to/xna-reference-assemblies \
+  dotnet run --project tools/api-compat -c Release --no-build -- --format json
 ```
 
-"Verified" means real unit tests pass with no native library on the load path —
-see `MatrixTests`, `BoundingFrustumTests`, `CurveTests`, `PackedVectorTests` and
-`XnbSpriteFontReaderTests` in particular. Matrix inversion, frustum-plane
-extraction, Hermite interpolation and packed-vector rounding are exactly the kind
-of arithmetic that is easy to get subtly and silently wrong.
+As measured on 2026-08-22:
 
-### Native-backed
+- reference types: 257;
+- target types: 239;
+- unallowlisted diagnostics: 1,467;
+- accidental `CNA.*` public/protected signature findings: 118;
+- reviewed exceptions: 0;
+- verifier exit code: 1.
 
-Everything else. The managed side is complete and the calls are real; running any
-of it needs `cna-native`. Where the C API offers nothing, the real XNA signature
-is implemented and throws `NotSupportedException` naming the missing native
-function — never a silent no-op, never an omission.
+The tool compares type kind/access/base/interfaces/modifiers/generics/layout/attributes, members,
+parameters/modifiers/defaults, properties/indexers/accessors, events, fields/constants/enums,
+delegates, and nested types. Its allowlist requires an exact diagnostic identity and rationale and
+reports stale entries. The older regex/name counter remains useful only for discovery; it cannot
+establish XNA parity.
 
-### Known gaps, and what kind of gap each is
+## What was repaired in this audit
 
-Genuinely blocked upstream, not deferred here:
+The public XNA hierarchy now takes priority over implementation reuse for these coherent groups:
 
-- **Custom `.fx` effects.** `cna_effect_create_compiled` exists
-  (`effects.h:1190`) but is documented to return `CNA_RESULT_NOT_SUPPORTED`
-  while native CNA bytecode loading is unavailable.
-- **Managed content-reader registration.** `content_readers.h` has no entry
-  point that accepts a caller-supplied factory, so nothing on this side can
-  reach the registry. Needs a new C API route.
-- **`ResourceContentManager`'s native path.** `cna_content_manager_create_resource`
-  exists, but the header states its embedded-resource stream is a declared
-  placeholder that fails every load — so the managed implementation is used
-  instead, which actually works.
-- **Nonzero buffer read/write offsets.** `CNA_IndexBufferTransfer.start_index`
-  and its vertex equivalent index the *caller's* array; native transfer always
-  begins at element zero. A nonzero `offsetInBytes` throws rather than silently
-  reading the wrong data.
-- **Raw-bytes vertex readback.** Only a typed readback exists, over the built-in
-  vertex layouts, so `VertexBuffer.GetData<T>` covers the four that are XNA types
-  and throws for the rest.
+- `DrawableGameComponent : GameComponent` and compat-only `IGameComponent` collections/events;
+- dynamic vertex/index buffers and dynamic sound instance inheritance;
+- `ResourceContentManager : ContentManager`;
+- `GraphicsResource` ancestry for textures, buffers, effects, render targets, vertex declarations,
+  SpriteBatch, and graphics states;
+- `ModelEffectCollection : ReadOnlyCollection<Effect>`;
+- compat-generic `CurveKeyCollection`, including XNA's shallow clone behavior;
+- exact generic `DrawUser*` overload families;
+- CNA renderer diagnostics moved out of the strict namespace to `CNA.XnaCompat.Extensions`.
 
-Out of scope here rather than missing:
+These changes use composition, internal adapters, and single-owner backends. They do not make the
+remaining 1,467 differences less real.
 
-- **`.cnj` skinning** (vertex strides 48/52/56/68, `"skeleton"`/`"animations"`),
-  **runtime glTF**, and **MonoGame's Lz4 `.xnb` extension**. None is XNA 4.0
-  surface — `.cnj` and glTF are CNA-native formats, and XNA's own `.xnb` used
-  LZX, which is implemented. Each is detected and rejected with a clear
-  `ContentLoadException`, never silently mis-loaded.
+## Principal remaining contract failures
 
-### A note on how this section used to read
+- 55 wrong base types and 39 interface mismatches, concentrated in Game/device management,
+  models, audio/XACT, media, storage, and collections;
+- 118 CNA type leaks through strict-profile public/protected signatures;
+- 688 missing members and 23 missing types;
+- `ContentReader` has the wrong base and the generic `ContentTypeReader<T>` machinery is absent;
+- several kinds/layouts are wrong (`AudioCategory`, `RendererDetail`, `DisplayMode`);
+- public helper base types and inherited CNA-only members remain visible;
+- GamerServices, networking, device/sensor, Xbox/Phone, and Content Pipeline scope needs separate
+  authoritative inventories rather than blanket exclusion.
 
-Earlier revisions listed a much larger set of "real and testable today" items and
-a set of permanent limitations, several of which were neither. `MediaLibrary`'s
-music collections were described as "always empty ... by deliberate design",
-`MediaPlayer.State`/`Volume`/`IsMuted`/`PlayPosition` as "plain C# static state,
-not native queries", `RenderTarget2D`/`GamePadCapabilities`'s natives as having
-"no doc backing at all — designed from scratch", `SoundEffect`'s engine as "not
-yet C-ABI-exposed", and `.cnj` skinning as "not renderable in any meaningful way
-regardless, since this project has no `SkinnedEffect`".
+## Source compatibility corpus
 
-Every one of those was checked against the shipped headers and found false:
-`media_library.h` (148 functions, scans on open), `media_player.h` (41),
-`render_target.h` (10), `input_gamepad.h` (63), `audio.h` (50+),
-`effects.h`'s `cna_skinned_effect_create`. Those areas are real bindings now.
+`tests/CNA.XnaCompat.CompileProbe` builds with the solution and currently locks in assignments for
+the repaired component, dynamic-buffer, dynamic-audio, content-manager, graphics-resource, curve,
+model-effect, state, vertex-declaration, and SpriteBatch relationships. It is the seed of a larger
+corpus, not proof that arbitrary games compile.
 
-The reason the list is kept rather than deleted: a documented scope cut reads
-like a settled fact, and a reader has no way to tell one that was researched from
-one that was assumed. Re-checking each claim against the headers is what
-separated them, and it is worth doing again the next time this page grows a
-"cannot be done" entry.
+The identical compile-probe source passes against the local Microsoft XNA reference assemblies,
+CNA.XnaCompat, FNA, and MonoGame. It fails against Kni at one deliberate XNA assertion:
+Kni's `VertexDeclaration` is not assignable to `GraphicsResource`. This is recorded as an
+implementation portability difference; the less demanding template source still builds and runs
+on Kni.
 
-## Simple 2D games are the realistic first target
+The same representative template source currently compiles against:
 
-Typical minimal API surface: `Game`, `GameTime`, `GraphicsDeviceManager`,
-`GraphicsDevice`, `Texture2D`, `SpriteBatch`, `SpriteFont`, `Keyboard`,
-`Mouse`, `GamePad`, `SoundEffect`, `ContentManager`, `Vector2`, `Rectangle`,
-`Color`, `MathHelper`. Complex 3D games (custom `.fx` shaders, `Model`,
-instancing, `OcclusionQuery`) expose deeper behavioral differences and are
-explicitly a later phase.
+| Target | Compile status | Runtime status in this audit |
+| --- | --- | --- |
+| CNA.XnaCompat | Pass | Pass: 60 and 600 frames, OPENGLES3, Linux x64 |
+| FNA | Pass with explicitly configured FNA.dll | Unavailable: configured assembly could not load; clean exit 2, no frame claim |
+| MonoGame DesktopGL 3.8.1.303 | Pass | Pass: 60 frames, llvmpipe, Linux x64 |
+| Kni 4.2.9001 + SDL2.GL 4.2.9001.1 | Template pass; strict corpus has one hierarchy failure | Pass: 60 frames, llvmpipe, Linux x64 |
+| Microsoft XNA reference assemblies | Metadata authority; compile-corpus expansion pending | Not run |
+
+A build is not a runtime claim.
+
+## Behavior and content
+
+The managed suites currently pass 532 framework and 169 compat tests. A current ABI 0.6.0 CNA
+library passes all 103 native integration tests in both Debug and Release under Xvfb. That proves
+the exercised routes, not all XNA behavior.
+
+Known high-priority content limitation: `ContentManager.Load<T>` handles selected built-ins, but
+the XNA reader type system and ordinary custom `Content.Load<MyType>()` path are not implemented.
+`LoadForeign<T>` is a CNA extension, not a source-compatible substitute. Managed reader machinery,
+shared resources, reader activation/versioning, external references, and exception behavior remain
+P0 work.
+
+Behavioral differential coverage is also incomplete for validation order, disposed behavior,
+lifecycle/event order, graphics state transitions, SpriteBatch rules, input transitions, audio,
+media, and storage. Unsupported exceptions are assessed case by case; their presence alone neither
+proves a bug nor compatibility.
+
+## Extension boundaries
+
+| Contract | Current status |
+| --- | --- |
+| Strict XNA 4.0 | Baseline; measured, incomplete, no allowlisted differences |
+| FNA extensions | No deliberate extension subset promised yet; template baseline compiles |
+| MonoGame extensions | No deliberate extension subset promised yet; template baseline compiles |
+| Kni portability | Template baseline compiles; no extension or runtime claim |
+| CNA extensions | Renderer diagnostics are explicit in `CNA.XnaCompat.Extensions`; inherited CNA pollution remains a verifier failure |
+
+New extensions require an authority, a source-portability use case, an explicit status
+(`implemented`, `unsupported`, `upstream blocker`, `not applicable`, or `planned`), and a home that
+does not alter the strict XNA contract.
+
+## Profile boundaries
+
+The current 257-type measurement is specifically the selected Windows runtime assemblies. It is
+not the entire historical XNA product:
+
+- XACT runtime is included;
+- GamerServices and networking/session APIs need separate inventory;
+- Windows Phone sensor/device APIs need a separate platform profile;
+- Xbox-only APIs need a separate platform profile;
+- Content Pipeline/build-time assemblies are a separate product surface and roadmap.
+
+An extinct historical service can still have a useful compile-time facade with deterministic
+unsupported/platform behavior. Omission is not justified merely because FNA omitted it.
+
+## Binary compatibility
+
+Already-compiled Microsoft XNA binaries expect Microsoft's assembly identities and strong names.
+CNA.NET does not counterfeit those identities. Recompile source against `CNA.XnaCompat`; investigate
+binary compatibility separately without sacrificing source/API/behavior correctness.

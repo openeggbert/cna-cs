@@ -22,73 +22,20 @@ public static class CnaNativeProbe
     /// <summary>The ABI version the loaded library reports, for tests that want to log it.</summary>
     public static uint NativeVersion { get; private set; }
 
-    private static readonly Lazy<(IReadOnlySet<CNA.Graphics.GraphicsCapability> Capabilities, string Renderer)> Renderer =
-        new(DetectRenderer);
-
-    /// <summary>
-    /// Whether the loaded renderer can do 3D, and what it calls itself.
-    ///
-    /// Measured by briefly creating a game and asking, because <c>cna_graphics_device_supports_capability</c>
-    /// needs a device and a device needs a live game. The game is created with nothing in it and
-    /// disposed immediately, so it cannot leave a child resource behind and block the slot.
-    ///
-    /// Needed because "the renderer cannot do this" and "the binding is broken" are different
-    /// results and were being reported identically: on SDL_RENDERER, which is 2D-only by design,
-    /// the vertex- and index-buffer tests failed with NotSupported. A failure there measures the
-    /// renderer, not the binding.
-    /// </summary>
-    /// <summary>Whether the loaded renderer reports <paramref name="capability"/>.</summary>
-    public static bool Supports(CNA.Graphics.GraphicsCapability capability) =>
-        Renderer.Value.Capabilities.Contains(capability);
-
-    public static string RendererName => Renderer.Value.Renderer;
-
-    private static (IReadOnlySet<CNA.Graphics.GraphicsCapability>, string) DetectRenderer()
+    /// <summary>Checks a capability on the fixture's already-live device. This must happen in the
+    /// test body, not in a Fact attribute constructor: xUnit constructs attributes during
+    /// discovery, and creating a probe game there mutates CNA's process-global platform state
+    /// before the first test runs.</summary>
+    public static void RequireCapability(
+        CNA.Graphics.GraphicsDevice device,
+        CNA.Graphics.GraphicsCapability capability)
     {
-        var none = new HashSet<CNA.Graphics.GraphicsCapability>();
+        ArgumentNullException.ThrowIfNull(device);
 
-        if (SkipReason is not null)
+        if (!device.SupportsCapability(capability))
         {
-            return (none, "none");
-        }
-
-        try
-        {
-            using var probe = new ProbeGame();
-            probe.RunOneFrame();
-            return (probe.Capabilities, probe.Renderer);
-        }
-        catch (Exception)
-        {
-            // Reports nothing supported rather than assuming either way. Claiming support would
-            // turn a probe failure into a wall of confusing test failures; the opposite silently
-            // drops real coverage -- but a skip says so out loud, and a wrong pass does not.
-            return (none, "unknown");
-        }
-    }
-
-    private sealed class ProbeGame : CNA.Game
-    {
-        /// <summary>Every capability, asked once. The probe game exists anyway, so asking for one
-        /// and asking for all fourteen cost the same and the second is what lets a test name the
-        /// capability it actually needs.</summary>
-        public HashSet<CNA.Graphics.GraphicsCapability> Capabilities { get; } = [];
-
-        public string Renderer { get; private set; } = "unknown";
-
-        protected override void Update(CNA.GameTime gameTime)
-        {
-            foreach (CNA.Graphics.GraphicsCapability capability in Enum.GetValues<CNA.Graphics.GraphicsCapability>())
-            {
-                if (GraphicsDevice.SupportsCapability(capability))
-                {
-                    Capabilities.Add(capability);
-                }
-            }
-
-            Renderer = GraphicsDevice.RendererName;
-            Exit();
-            base.Update(gameTime);
+            throw Xunit.Sdk.SkipException.ForSkip(
+                $"Renderer '{device.RendererName}' does not report {capability}, and this test needs it.");
         }
     }
 
@@ -148,7 +95,8 @@ public sealed class NativeFactAttribute : FactAttribute
 }
 
 /// <summary>
-/// A <see cref="NativeFactAttribute"/> that additionally skips on a renderer with no 3D pipeline.
+/// Marks a native test that performs a live <see cref="CnaNativeProbe.RequireCapability"/> check
+/// for a 3D pipeline in its body.
 ///
 /// For tests whose subject genuinely needs one -- a vertex or index buffer cannot even be created
 /// on SDL_RENDERER. Without this they failed there with <c>NotSupported</c>, which reads as a
@@ -159,8 +107,8 @@ public sealed class NativeFactAttribute : FactAttribute
 public sealed class Native3DFactAttribute() : NativeFactRequiringAttribute(CNA.Graphics.GraphicsCapability.ThreeD);
 
 /// <summary>
-/// A <see cref="NativeFactAttribute"/> that additionally skips unless the loaded renderer reports a
-/// named capability.
+/// Marks a native test that performs a live <see cref="CnaNativeProbe.RequireCapability"/> check
+/// for a named capability in its body.
 ///
 /// General rather than one attribute per capability, because the list keeps growing as tests reach
 /// further: SDL_RENDERER has no 3D pipeline, and SOFTWARE has 3D but no volume-texture storage. A
@@ -171,13 +119,15 @@ public class NativeFactRequiringAttribute : FactAttribute
 {
     public NativeFactRequiringAttribute(CNA.Graphics.GraphicsCapability capability)
     {
+        _ = capability;
         if (CnaNativeProbe.SkipReason is { } reason)
         {
             Skip = reason;
         }
-        else if (!CnaNativeProbe.Supports(capability))
-        {
-            Skip = $"Renderer '{CnaNativeProbe.RendererName}' does not report {capability}, and this test needs it.";
-        }
+
+        // Do not create a game while xUnit is discovering attributes. CNA has a single active-game
+        // slot and some renderers cannot tear down and reacquire their platform video subsystem;
+        // the old discovery-time probe changed native process state before the first test ran.
+        // Capability-specific tests perform their check against the fixture's live device instead.
     }
 }

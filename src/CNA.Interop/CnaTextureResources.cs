@@ -59,6 +59,25 @@ internal struct CnaTexture2DInfo
     }
 }
 
+/// <summary>Exact <c>CNA_Texture2DDecodeInfo</c> layout from <c>texture.h</c>. The native header
+/// pins this ABI structure to 24 bytes; the seven reserved bytes must remain zero.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct CnaTexture2DDecodeInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Width;
+    public uint Height;
+    public byte Zoom;
+    public fixed byte Reserved[7];
+
+    public CnaTexture2DDecodeInfo()
+    {
+        StructSize = (uint)sizeof(CnaTexture2DDecodeInfo);
+        StructVersion = 1;
+    }
+}
+
 /// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_RenderTarget2DCreateInfo</c>
 /// exactly (<c>render_target.h:59-83</c>) -- <c>RenderTarget2D</c> is its own real resource type
 /// upstream, not a texture created with special usage flags the way this project originally guessed

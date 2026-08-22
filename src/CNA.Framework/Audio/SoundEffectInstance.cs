@@ -33,6 +33,11 @@ public class SoundEffectInstance : IDisposable
     /// handle for the dynamic-only native calls.</summary>
     private protected nint NativeHandleValue => _handle.DangerousGetHandle();
 
+    /// <summary>Internal handle-sharing seam for CNA.XnaCompat. The compat public hierarchy cannot
+    /// inherit <see cref="DynamicSoundEffectInstance"/>, but its internal adapter still needs the
+    /// one owned instance handle for dynamic-only C ABI calls.</summary>
+    internal nint NativeHandleValueForCompatibility => NativeHandleValue;
+
     public void Play()
     {
         CnaResult result = Native.cna_sound_effect_instance_play(new CnaHandle(NativeHandleValue));
@@ -192,5 +197,36 @@ public class SoundEffectInstance : IDisposable
             new CnaHandle(NativeHandleValue), in nativeListener, in nativeEmitter);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Apply3D));
+    }
+
+    /// <summary>Routes XNA's listener-array overload through the native ABI as one atomic request.
+    /// The current runtime deliberately reports NotSupported for every count other than one; doing
+    /// so is materially different from repeatedly overwriting one instance's single-listener
+    /// spatial state.</summary>
+    internal unsafe void Apply3D(AudioListener[] listeners, AudioEmitter emitter)
+    {
+        ArgumentNullException.ThrowIfNull(listeners);
+        ArgumentNullException.ThrowIfNull(emitter);
+
+        var nativeListeners = new CnaAudioListener[listeners.Length];
+        for (int i = 0; i < listeners.Length; i++)
+        {
+            ArgumentNullException.ThrowIfNull(listeners[i]);
+            nativeListeners[i] = listeners[i].ToNative();
+        }
+
+        CnaAudioEmitter nativeEmitter = emitter.ToNative();
+        fixed (CnaAudioListener* listenersPtr = nativeListeners)
+        {
+            CnaResult result = Native.cna_sound_effect_instance_apply_3d_multi_ext(
+                new CnaHandle(NativeHandleValue), listenersPtr, (ulong)nativeListeners.Length, in nativeEmitter);
+            GC.KeepAlive(this);
+            if (result == CnaResult.NotSupported)
+            {
+                throw new NotSupportedException("Only one audio listener is supported by the current CNA runtime.");
+            }
+
+            CnaException.ThrowIfFailed(result, nameof(Apply3D));
+        }
     }
 }

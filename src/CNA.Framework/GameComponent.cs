@@ -214,7 +214,6 @@ public class GameComponent : IGameComponent, IUpdateable, IComparable<GameCompon
         }
 
         _disposed = true;
-        Native.cna_game_component_destroy(_handle);        _disposed = true;
         Disposed?.Invoke(this, EventArgs.Empty);
         Native.cna_game_component_destroy(_handle);
 

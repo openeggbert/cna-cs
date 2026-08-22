@@ -47,18 +47,37 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// </summary>
 public sealed class ModelMesh : CNA.Graphics.ModelMesh
 {
-    public ModelMesh(GraphicsDevice graphicsDevice, IReadOnlyList<ModelMeshPart> parts)
+    internal ModelMesh(GraphicsDevice graphicsDevice, IReadOnlyList<ModelMeshPart> parts)
         : this(graphicsDevice, string.Empty, parts)
     {
     }
 
-    public ModelMesh(GraphicsDevice graphicsDevice, string name, IReadOnlyList<ModelMeshPart> parts)
+    internal ModelMesh(GraphicsDevice graphicsDevice, string name, IReadOnlyList<ModelMeshPart> parts)
         : base(graphicsDevice, name, parts)
     {
         MeshParts = new ModelMeshPartCollection(new List<ModelMeshPart>(parts));
+        Effects = new ModelEffectCollection(base.Effects);
     }
 
     public new ModelMeshPartCollection MeshParts { get; }
+
+    public new ModelEffectCollection Effects { get; }
+
+    public new BoundingSphere BoundingSphere
+    {
+        get => base.BoundingSphere;
+        set => base.BoundingSphere = value;
+    }
+
+    public new string Name => base.Name;
+
+    public new object? Tag
+    {
+        get => base.Tag;
+        set => base.Tag = value;
+    }
+
+    public new void Draw() => base.Draw();
 
     /// <summary>Downcasts <c>base.ParentBone</c> rather than keeping separate storage -- safe
     /// because the only ways this is ever set (this setter, and <c>Model</c>'s own constructor
@@ -67,6 +86,7 @@ public sealed class ModelMesh : CNA.Graphics.ModelMesh
     public new ModelBone? ParentBone
     {
         get => (ModelBone?)base.ParentBone;
-        set => base.ParentBone = value;
     }
+
+    internal void SetParentBone(ModelBone? value) => base.ParentBone = value;
 }

@@ -33,7 +33,7 @@ public readonly struct VertexBufferBinding
     public int InstanceFrequency { get; }
 
     internal CNA.Graphics.VertexBufferBinding ToFramework() =>
-        new(VertexBuffer, VertexOffset, InstanceFrequency);
+        new(VertexBuffer.FrameworkBuffer, VertexOffset, InstanceFrequency);
 
     /// <summary>
     /// The inverse, for <see cref="GraphicsDevice.GetVertexBuffers"/>.
@@ -45,7 +45,7 @@ public readonly struct VertexBufferBinding
     /// </summary>
     internal static VertexBufferBinding FromFramework(CNA.Graphics.VertexBufferBinding binding) =>
         new(
-            binding.VertexBuffer as VertexBuffer
+            VertexBuffer.FromFramework(binding.VertexBuffer)
             ?? throw new InvalidOperationException(
                 "A vertex-buffer binding came back holding a CNA.Graphics.VertexBuffer that is not " +
                 "this namespace's own, which means it was bound outside Microsoft.Xna.Framework."),

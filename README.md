@@ -1,184 +1,116 @@
 # CNA.NET
 
-> **Status: complete XNA 4.0 API surface; needs the `cna-native` shared library
-> to run.**
+> **Status: functional but not XNA API-complete or release-ready.** The current strict XNA 4.0
+> Windows runtime metadata comparison reports 1,467 unallowlisted differences, including 118
+> accidental `CNA.*` signature leaks.
 
-
-CNA.NET is the official C#/.NET language binding for [CNA](https://github.com/openeggbert/cna),
-a native C++ implementation of an XNA-inspired game framework with dozens of
-renderer backends (Vulkan, Direct3D, OpenGL family, Metal, WebGPU, SDL GPU,
-and more).
-
-CNA.NET plays the same role for CNA that **XNA 4.0**, **FNA**, or
-**MonoGame** play for C# game code: your game logic stays in C#, targeting
-familiar `Microsoft.Xna.Framework`-style types, while CNA's C++ engine does
-the actual work underneath.
+CNA.NET is the C#/.NET binding for [CNA](https://github.com/openeggbert/cna), a native C++ game
+framework. Its intended path is:
 
 ```text
-your C# game
+C# XNA-style game
         ↓
-CNA.XnaCompat   →  Microsoft.Xna.Framework-compatible facade
+CNA.XnaCompat   Microsoft.Xna.Framework public facade
         ↓
-CNA.Framework   →  idiomatic CNA .NET API
+CNA.Framework   idiomatic CNA managed implementation
         ↓
-CNA.Interop     →  raw P/Invoke over the CNA C ABI
+CNA.Interop     internal P/Invoke boundary
         ↓
-CNA's stable C ABI  (lives in openeggbert/cna, not here)
-        ↓
-CNA C++ core  →  Sharp Runtime, CNA subsystems, and every CNA renderer
+CNA C ABI → CNA C++
 ```
 
-A high-quality `CNA.XnaCompat` layer aims to let many existing XNA 4.0 game
-projects recompile against CNA.NET with little or no source modification —
-their gameplay code stays in C#, and CNA does the rendering. See
-[`docs/xna-compatibility.md`](docs/xna-compatibility.md) for exactly what
-that promise does and does not cover.
+XNA source compatibility is the priority. CNA's native headers determine available backend
+capabilities; authoritative XNA assemblies/documentation determine the managed public contract.
+Binary compatibility with Microsoft's strong-named assemblies is not the primary goal.
 
-## Status
+## Measured state
 
-**Coverage: the complete XNA 4.0 public API.** Every type in
-`Microsoft.Xna.Framework`, `.Audio`, `.Content`, `.Graphics`,
-`.Graphics.PackedVector`, `.Input`, `.Input.Touch`, `.Media` and `.Storage`
-is present, bound against the real
-[`openeggbert/cna`](https://github.com/openeggbert/cna) C API headers.
-`.GamerServices` and `.Net` are deliberately excluded: they bind a live-service
-model that has no meaning outside Xbox Live and are not part of what "write an
-XNA game" means.
+As of 2026-08-22:
 
-Two groups, by what runs without a native library:
+- Debug and Release solution builds: 0 warnings, 0 errors;
+- managed tests: 532 framework + 169 compat, all passing;
+- native tests: 103/103 passing in Debug and Release on Linux x64, Xvfb, ABI 0.6.0 OPENGLES3;
+- strict metadata profile: 257 reference types versus 239 target types, 1,467 failures, 0
+  allowlisted;
+- compile-time hierarchy corpus: passes unchanged on XNA, CNA, FNA, and MonoGame; records one Kni
+  hierarchy difference (`VertexDeclaration` is not a `GraphicsResource` there);
+- sibling template: CNA build, generated-project build, and 60/600-frame CNA runs pass;
+- FNA, MonoGame, and Kni template source builds pass; 60-frame MonoGame and Kni runs pass, while the
+  configured FNA assembly reports unavailable at runtime with a clean exit code 2;
+- NuGet/RID packages: not yet available.
 
-**Real and fully testable today, with no native dependency.** The math and
-value types (`Vector2`/`3`/`4`, `Matrix`, `Quaternion`, `Color`, `Rectangle`,
-`Point`, `Ray`, `Plane`, the `Bounding*` types, `MathHelper`), the `Curve`
-system, the whole `PackedVector` namespace, the vertex-format layer
-(`VertexDeclaration`, `VertexElement`, the `VertexPosition*` structs),
-`SpriteFont`'s glyph table and `MeasureString`, and the `.xnb`/`.cnj` content
-*parsers* — including LZX decompression, which is checked against real
-content-pipeline fixtures.
+The earlier name-level coverage claim that the XNA API was complete was false. The metadata tool
+now checks type identity and hierarchy, interfaces, modifiers, generics, parameters, properties,
+events, constants/enums, delegates, nested types, and relevant layout/attributes. See
+[`docs/xna-compatibility.md`](docs/xna-compatibility.md) for the exact profile and remaining groups.
 
-**Native-backed.** Everything else. The managed side is complete and the calls
-are real; running any of it needs the `cna-native` shared library on the load
-path. `samples/HelloGame` builds and starts, then throws `DllNotFoundException`
-from `Game`'s constructor without it — the expected failure point, not a bug
-here.
+## Build and test
 
-The binding is grounded in the headers rather than designed alongside them:
-every signature is read out of `modules/c-api/include/CNA/C/*.h`, and where the
-C API offers nothing, the real XNA signature is implemented and throws
-`NotSupportedException` naming the missing native function. Never a silent
-no-op, never an omission.
+Requires .NET 8 or later.
 
-`dotnet build CNA.sln` builds all 6 projects cleanly (0 warnings, 0 errors) and
-`dotnet test` passes 661 unit tests. See [`plan.md`](plan.md) for the
-phase-by-phase status and [`NEXT.md`](NEXT.md) for the session-by-session
-history and where to pick up next.
+```bash
+dotnet restore CNA.sln
+dotnet build CNA.sln -c Debug --no-restore
+dotnet build CNA.sln -c Release --no-restore
+dotnet test tests/CNA.Framework.Tests/CNA.Framework.Tests.csproj
+dotnet test tests/CNA.XnaCompat.Tests/CNA.XnaCompat.Tests.csproj
+```
 
-### A note on the earlier status text
+Native integration tests skip cleanly when CNA is unavailable. To run them explicitly:
 
-This section used to say that the native-backed half "does **not** yet work end
-to end, because it depends on a stable C ABI in `openeggbert/cna` that has not
-been implemented there yet", that `MediaLibrary`'s music collections were
-"always empty" because the scan "depends on FFmpeg/native tag-parsing
-infrastructure this binding has no way to reach", and that `MediaPlayer`'s
-`State`/`Volume`/`IsMuted`/`PlayPosition` were "plain C# static state needing no
-native call".
+```bash
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
+  xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj
+```
 
-All three were false, and an audit of every such claim against the shipped
-headers is what established it. The C API ships 60 headers;
-`media_library.h` alone is 148 functions and scans on open; `media_player.h` is
-41 and owns the queue, the state machine and the playback clock. Each of those
-areas is now a real binding, and the reimplementations they had accumulated are
-gone. The lesson is recorded here rather than quietly edited away: a documented
-scope cut is a claim about the world, and it goes stale like any other.
+The loader also accepts `CNA_NATIVE_DIR`. An ABI-incompatible library is rejected with a diagnostic
+before missing symbols fail later.
 
-## Why a C# binding, and why first
+## Strict API verification
 
-XNA itself was a C# framework. A high-fidelity `CNA.XnaCompat` facade is the
-most direct way to let an existing library of XNA/MonoGame/FNA-era C# game
-code run on CNA's engine without a manual C++ rewrite — turning ports that
-might otherwise take thousands of hours into ports that mostly need to
-address genuine API or content incompatibilities. This is why C#/.NET is the
-first official CNA language binding, ahead of JavaScript/TypeScript, Rust,
-Python, and the rest — see
-`analysis_binding.md` (in `openeggbert/cna`) and
-[`../cna/analysis_binding_languages.md`](../cna/analysis_binding_languages.md)
-for the full reasoning.
+Supply legally obtained XNA 4.0 reference assemblies without adding them to this repository:
+
+```bash
+dotnet build CNA.sln -c Release
+XNA_REFERENCE_PATH=/path/to/xna-reference-assemblies \
+  dotnet run --project tools/api-compat -c Release --no-build -- --format text
+```
+
+Exit codes are 0 for a clean/reviewed contract, 1 for unallowlisted differences, and 2 for bad
+configuration. `--format json` and `--format github` support automation; `--leak-only` requires no
+XNA reference assembly. The checked-in allowlist is intentionally empty.
 
 ## Repository layout
 
 ```text
-cna-dotnet/
-├── src/
-│   ├── CNA.Interop/      internal, low-level P/Invoke over the CNA C ABI
-│   ├── CNA.Framework/    idiomatic public CNA .NET API
-│   └── CNA.XnaCompat/    Microsoft.Xna.Framework-compatible facade
-├── tests/
-│   ├── CNA.Framework.Tests/
-│   └── CNA.XnaCompat.Tests/
-├── samples/
-│   └── HelloGame/        the minimal end-to-end game from the design docs
-├── tools/
-│   └── binding-generator/  (planned) codegen for repetitive ABI wrappers
-├── docs/
-│   ├── architecture.md
-│   └── xna-compatibility.md
-├── CNA.sln
-└── plan.md
+src/CNA.Interop/                  internal C ABI declarations and marshalling
+src/CNA.Framework/                public CNA.* API and native ownership
+src/CNA.XnaCompat/                Microsoft.Xna.Framework facade
+tests/CNA.Framework.Tests/        managed CNA behavior tests
+tests/CNA.XnaCompat.Tests/        managed strict-facade behavior tests
+tests/CNA.XnaCompat.CompileProbe/ source-assignability corpus
+tests/CNA.Integration.Tests/      real native ABI/runtime tests
+tools/api-compat/                 signature-aware XNA metadata verifier
+tools/coverage/                   portable header/symbol discovery tools
+samples/HelloGame/                small managed sample
 ```
 
-## Building
+The sibling `cna-cs-template` is the richer CNA-first demonstration and installable `dotnet new`
+template (`cna-game`).
 
-Requires the [.NET SDK](https://dotnet.microsoft.com/download) (net8.0 or
-later).
+## Architecture and packaging
 
-```bash
-dotnet build CNA.sln
-dotnet test CNA.sln
-```
+Public XNA hierarchy takes priority over implementation inheritance. Corrected families use
+composition and internal adapters so one native resource has one owner; remaining public
+inheritance from `CNA.*` is a tracked compatibility failure, not the intended end state.
 
-Any IDE that understands SDK-style `.csproj`/`.sln` projects works without
-extra configuration: Visual Studio and JetBrains Rider open `CNA.sln`
-directly; VS Code works via the C# Dev Kit / C# extension (a minimal
-`.vscode/` is included); the `dotnet` CLI itself is the common denominator
-for everything else (e.g. Neovim + an LSP, or CI).
-
-`samples/HelloGame` builds as an ordinary `dotnet run` executable once a
-`cna-native` shared library for your platform is available — see
-[`samples/HelloGame/README.md`](samples/HelloGame/README.md).
-
-## Relationship to Sharp Runtime
-
-CNA may use [Sharp Runtime](https://github.com/openeggbert/sharp-runtime)
-internally as a native C++ dependency (it implements a practical subset of
-`System.*` in C++23). **CNA.NET applications run on the normal .NET runtime
-and the real .NET Base Class Library** — `System.String`,
-`System.Collections.Generic.List<T>`, `System.Threading.Tasks.Task`, and so
-on. Sharp Runtime is not exposed anywhere in CNA.NET's managed API, is not a
-CLR, and does not execute your C# code. See
-[`docs/architecture.md`](docs/architecture.md) for the full explanation —
-this distinction is spelled out in detail because the name "Sharp Runtime"
-otherwise invites the wrong assumption.
+- [`docs/architecture.md`](docs/architecture.md) — layer and ownership rules.
+- [`docs/xna-compatibility.md`](docs/xna-compatibility.md) — measured profile and extension boundaries.
+- [`docs/packaging.md`](docs/packaging.md) — proposed package/RID graph and release tests.
+- [`plan.md`](plan.md) — current measurable roadmap.
+- [`NEXT.md`](NEXT.md) — chronological engineering history.
 
 ## License
 
-CNA.NET is licensed under the [Microsoft Public License (Ms-PL)](LICENSE),
-matching `openeggbert/cna`. See [`NOTICE.md`](NOTICE.md) for the project's
-relationship to Microsoft XNA Framework naming, Sharp Runtime, and FNA.
-
-## See also
-
-- [`openeggbert/cna`](https://github.com/openeggbert/cna) — the native C++
-  engine this binding wraps. Its `modules/c-api/include/CNA/C/*.h` are the
-  headers every binding here is read from, and its `analysis_binding*.md` are
-  the design analysis this repository's architecture is built on.
-
-  Referenced by repository rather than by relative path on purpose: those files
-  live in a *checkout* of that repository, and the checkout's directory name is
-  not stable. This page used to link `../cnabinding/analysis_binding.md`, which
-  stopped resolving the moment that working copy was renamed.
-- [`openeggbert/sharp-runtime`](https://github.com/openeggbert/sharp-runtime) —
-  the native .NET-like C++ library CNA may use internally.
-- `openeggbert/cna`'s `analysis_binding.md`,
-  `openeggbert/cna`'s `analysis_binding_sharp_runtime.md`,
-  `../cna/analysis_binding_languages.md` — the design analysis this
-  repository's architecture is built from.
+CNA.NET is licensed under the [Microsoft Public License (Ms-PL)](LICENSE). See
+[`NOTICE.md`](NOTICE.md) for naming and upstream notices.

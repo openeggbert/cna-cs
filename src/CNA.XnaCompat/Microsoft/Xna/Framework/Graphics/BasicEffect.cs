@@ -3,7 +3,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// <summary>XNA 4.0-compatible <c>BasicEffect</c>. Derives from this namespace's <see cref="Effect"/>
 /// -- see that type's doc comment for why these forward to an inner <c>CNA.Graphics</c> effect
 /// rather than inheriting from it, and how the two stay one native effect.</summary>
-public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights, CNA.Graphics.IEffectMatrices, CNA.Graphics.IEffectFog, CNA.Graphics.IEffectLights
+public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public BasicEffect(GraphicsDevice graphicsDevice)
         : base(graphicsDevice, new CNA.Graphics.BasicEffect(graphicsDevice))
@@ -60,10 +60,10 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights, C
         set => Typed.TextureEnabled = value;
     }
 
-    public Texture? Texture
+    public Texture2D? Texture
     {
-        get => Typed.Texture as Texture;
-        set => Typed.Texture = value;
+        get => global::Microsoft.Xna.Framework.Graphics.Texture.FromFramework(Typed.Texture) as Texture2D;
+        set => Typed.Texture = value?.FrameworkTexture;
     }
 
     public Matrix World
@@ -133,77 +133,6 @@ public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights, C
     private DirectionalLight? _light0;
     private DirectionalLight? _light1;
     private DirectionalLight? _light2;
-
-    // -- CNA.Graphics.IEffectMatrices ---------------------------------------------------------
-    //
-    // Implemented ALONGSIDE the compat interface of the same name, not instead of it. Before
-    // Phase 8 WP4c these effects inherited it by deriving from their CNA counterpart; now that
-    // they hold one instead, the contract has to be restated or it is silently lost -- and
-    // CNA.Graphics.Model.Draw type-tests for exactly this interface, so losing it made every
-    // compat-loaded model throw on Draw. Caught by a code-review pass, not by the build.
-
-    CNA.Matrix CNA.Graphics.IEffectMatrices.World
-    {
-        get => Typed.World;
-        set => Typed.World = value;
-    }
-
-    CNA.Matrix CNA.Graphics.IEffectMatrices.View
-    {
-        get => Typed.View;
-        set => Typed.View = value;
-    }
-
-    CNA.Matrix CNA.Graphics.IEffectMatrices.Projection
-    {
-        get => Typed.Projection;
-        set => Typed.Projection = value;
-    }
-
-    CNA.Vector3 CNA.Graphics.IEffectFog.FogColor
-    {
-        get => Typed.FogColor;
-        set => Typed.FogColor = value;
-    }
-
-    bool CNA.Graphics.IEffectFog.FogEnabled
-    {
-        get => Typed.FogEnabled;
-        set => Typed.FogEnabled = value;
-    }
-
-    float CNA.Graphics.IEffectFog.FogStart
-    {
-        get => Typed.FogStart;
-        set => Typed.FogStart = value;
-    }
-
-    float CNA.Graphics.IEffectFog.FogEnd
-    {
-        get => Typed.FogEnd;
-        set => Typed.FogEnd = value;
-    }
-
-    CNA.Vector3 CNA.Graphics.IEffectLights.AmbientLightColor
-    {
-        get => Typed.AmbientLightColor;
-        set => Typed.AmbientLightColor = value;
-    }
-
-    bool CNA.Graphics.IEffectLights.LightingEnabled
-    {
-        get => Typed.LightingEnabled;
-        set => Typed.LightingEnabled = value;
-    }
-
-    CNA.Graphics.DirectionalLight CNA.Graphics.IEffectLights.DirectionalLight0 => Typed.DirectionalLight0;
-
-    CNA.Graphics.DirectionalLight CNA.Graphics.IEffectLights.DirectionalLight1 => Typed.DirectionalLight1;
-
-    CNA.Graphics.DirectionalLight CNA.Graphics.IEffectLights.DirectionalLight2 => Typed.DirectionalLight2;
-
-    void CNA.Graphics.IEffectLights.EnableDefaultLighting() => Typed.EnableDefaultLighting();
-
 
     /// <summary>Clones both halves: the native effect and a matching compat wrapper around it. See
     /// <see cref="Effect.Clone"/> for why the base cannot do this.</summary>

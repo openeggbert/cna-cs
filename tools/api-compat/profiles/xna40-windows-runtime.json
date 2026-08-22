@@ -1,0 +1,16 @@
+{
+  "name": "XNA 4.0 Windows runtime",
+  "description": "Managed runtime assemblies used by Windows XNA 4.0 games. GamerServices, Net, Avatar, and the build-time Content Pipeline are inventoried separately and are not silently included in this profile.",
+  "referenceAssemblies": [
+    "Microsoft.Xna.Framework.dll",
+    "Microsoft.Xna.Framework.Game.dll",
+    "Microsoft.Xna.Framework.Graphics.dll",
+    "Microsoft.Xna.Framework.Storage.dll",
+    "Microsoft.Xna.Framework.Video.dll",
+    "Microsoft.Xna.Framework.Input.Touch.dll",
+    "Microsoft.Xna.Framework.Xact.dll"
+  ],
+  "namespacePrefixes": [
+    "Microsoft.Xna.Framework"
+  ]
+}

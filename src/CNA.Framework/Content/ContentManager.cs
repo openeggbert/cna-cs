@@ -37,15 +37,49 @@ namespace CNA.Content;
 /// </summary>
 public class ContentManager : IDisposable
 {
-    private readonly nint _nativeHandleValue;
+    private nint _nativeHandleValue;
+    private readonly bool _ownsNativeHandle;
 
     /// <summary>
     /// <c>protected internal</c> so CNA.XnaCompat's <c>ContentManager</c> subclass constructor
     /// can forward to it without naming <see cref="CnaHandle"/> -- see docs/architecture.md.
     /// </summary>
     protected internal ContentManager(nint nativeHandleValue)
+        : this(nativeHandleValue, ownsNativeHandle: false)
+    {
+    }
+
+    internal ContentManager(nint nativeHandleValue, bool ownsNativeHandle)
     {
         _nativeHandleValue = nativeHandleValue;
+        _ownsNativeHandle = ownsNativeHandle;
+    }
+
+    internal nint NativeHandleValue => _nativeHandleValue;
+
+    /// <summary>Creates an independently owned native manager. This is used by the strict XNA
+    /// facade's public service-provider constructors once a callback-scoped graphics device is
+    /// available. The game-provided manager continues to use the borrowed constructor above.</summary>
+    internal static ContentManager CreateOwned(GraphicsDevice graphicsDevice, string rootDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ArgumentNullException.ThrowIfNull(rootDirectory);
+
+        CnaHandle contentManager = CnaHandle.Zero;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            rootDirectory,
+            view =>
+            {
+                var createInfo = new CnaContentManagerCreateInfo(view);
+                return Native.cna_content_manager_create(
+                    graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out contentManager);
+            });
+        CnaException.ThrowIfFailed(result, nameof(CreateOwned));
+
+        return new ContentManager(contentManager.AsNint, ownsNativeHandle: true)
+        {
+            GraphicsDevice = graphicsDevice,
+        };
     }
 
     /// <summary>Set by <see cref="Game"/> once its own <see cref="Graphics.GraphicsDevice"/>
@@ -111,18 +145,30 @@ public class ContentManager : IDisposable
 
         _disposed = true;
 
-        if (disposing)
+        try
         {
-            Unload();
-
-            // Native's .cnj table goes with the manager, so this is the moment the roots it holds
-            // stop being reachable from native and can be freed.
-            foreach (CnjLoaderRegistration registration in _cnjLoaders)
+            if (disposing)
             {
-                registration.ReleaseRoots();
-            }
+                Unload();
 
-            _cnjLoaders.Clear();
+                // Native's .cnj table goes with the manager, so this is the moment the roots it holds
+                // stop being reachable from native and can be freed.
+                foreach (CnjLoaderRegistration registration in _cnjLoaders)
+                {
+                    registration.ReleaseRoots();
+                }
+
+                _cnjLoaders.Clear();
+            }
+        }
+        finally
+        {
+            if (_ownsNativeHandle && _nativeHandleValue != 0)
+            {
+                CnaResult result = Native.cna_content_manager_destroy(new CnaHandle(_nativeHandleValue));
+                _nativeHandleValue = 0;
+                CnaException.ThrowIfFailed(result, nameof(Dispose));
+            }
         }
     }
 
@@ -130,7 +176,7 @@ public class ContentManager : IDisposable
 
     /// <summary>Releases every asset this manager loaded. Matches real XNA's <c>Unload</c>: the
     /// manager stays usable and can load again afterwards.</summary>
-    public void Unload()
+    public virtual void Unload()
     {
         CnaResult result = Native.cna_content_manager_unload(new CnaHandle(_nativeHandleValue));
         CnaException.ThrowIfFailed(result, nameof(Unload));
@@ -351,7 +397,7 @@ public class ContentManager : IDisposable
         return path;
     }
 
-    protected nint LoadNativeTexture2DHandle(string assetName)
+    internal nint LoadNativeTexture2DHandle(string assetName)
     {
         CnaHandle texture = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -363,7 +409,7 @@ public class ContentManager : IDisposable
     /// <summary>The texture-cube loader. <c>cna_content_manager_load_texture_cube</c> was unbound
     /// until a sweep of unbound header functions found it, so <c>Load&lt;TextureCube&gt;</c> threw
     /// "unsupported content type" for an asset the C API could load all along.</summary>
-    protected nint LoadNativeTextureCubeHandle(string assetName)
+    internal nint LoadNativeTextureCubeHandle(string assetName)
     {
         CnaHandle texture = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -372,7 +418,7 @@ public class ContentManager : IDisposable
         return texture.AsNint;
     }
 
-    protected nint LoadNativeSoundEffectHandle(string assetName)
+    internal nint LoadNativeSoundEffectHandle(string assetName)
     {
         CnaHandle soundEffect = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -467,7 +513,7 @@ public class ContentManager : IDisposable
     /// <c>CnaHandle</c> compiles here and is unusable from compat, which is how the first draft of
     /// this method failed.
     /// </summary>
-    protected nint LoadNativeEffectHandle(string assetName)
+    internal nint LoadNativeEffectHandle(string assetName)
     {
         CnaHandle effect = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -484,7 +530,7 @@ public class ContentManager : IDisposable
     /// fetch, the same "return raw pieces, let each layer wrap its own type" split
     /// <see cref="LoadNativeTexture2DHandle"/> already uses for <c>Texture2D</c>.
     /// </summary>
-    protected readonly record struct SpriteFontData(
+    internal readonly record struct SpriteFontData(
         nint TextureHandle,
         IReadOnlyList<Rectangle> GlyphBounds,
         IReadOnlyList<Rectangle> Cropping,
@@ -517,7 +563,7 @@ public class ContentManager : IDisposable
     /// The 256-glyph cap the old fabricated native shape imposed is gone either way; a real
     /// <c>.xnb</c> font is limited only by the file.
     /// </summary>
-    protected SpriteFontData LoadSpriteFontData(string assetName)
+    internal SpriteFontData LoadSpriteFontData(string assetName)
     {
         if (TryLoadNativeSpriteFontData(assetName, out SpriteFontData native))
         {

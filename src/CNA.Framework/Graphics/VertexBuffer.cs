@@ -89,26 +89,33 @@ public class VertexBuffer : IDisposable
 
     public BufferUsage BufferUsage { get; }
 
-    public void SetData<T>(T[] data) where T : unmanaged
+    public void SetData<T>(T[] data) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         SetData(0, data, 0, data.Length, VertexDeclaration.VertexStride);
     }
 
-    public void SetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
+    public void SetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
         SetData(0, data, startIndex, elementCount, VertexDeclaration.VertexStride);
 
-    public unsafe void SetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride) where T : unmanaged
+    public unsafe void SetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
-
-        fixed (T* basePtr = data)
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
-            byte* bytePtr = (byte*)(basePtr + startIndex);
-            ulong byteCount = (ulong)((long)elementCount * sizeof(T));
+            throw new ArgumentException($"Vertex element type {typeof(T)} contains managed references.", nameof(data));
+        }
+
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+            byte* bytePtr = (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * elementSize);
+            ulong byteCount = (ulong)((long)elementCount * elementSize);
 
             // A nonzero offsetInBytes threw here until cna_vertex_buffer_set_data_raw_at landed.
             // The plain _raw route has no buffer offset and always starts at native vertex zero, so
@@ -123,15 +130,19 @@ public class VertexBuffer : IDisposable
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SetData));
         }
+        finally
+        {
+            pinned.Free();
+        }
     }
 
-    public void GetData<T>(T[] data) where T : unmanaged
+    public void GetData<T>(T[] data) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         GetData(0, data, 0, data.Length, VertexDeclaration.VertexStride);
     }
 
-    public void GetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
+    public void GetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
         GetData(0, data, startIndex, elementCount, VertexDeclaration.VertexStride);
 
     /// <summary>
@@ -150,7 +161,7 @@ public class VertexBuffer : IDisposable
     /// reason behind it".
     /// </summary>
     public unsafe void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride)
-        where T : unmanaged
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
@@ -159,25 +170,36 @@ public class VertexBuffer : IDisposable
 
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException($"Vertex element type {typeof(T)} contains managed references.", nameof(data));
+        }
 
         // The typed route reads whole vertices of a built-in type from native vertex zero, with no
         // stride override -- so anything that needs an offset, a different stride, or a layout the
         // built-in set does not name goes through the raw route instead.
         if (offsetInBytes != 0 || vertexStride != VertexDeclaration.VertexStride || !HasBuiltInVertexType<T>())
         {
-            fixed (T* basePtr = data)
+            System.Runtime.InteropServices.GCHandle pinned =
+                System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try
             {
-                byte* destination = (byte*)(basePtr + startIndex);
+                int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+                byte* destination = (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * elementSize);
                 CnaResult rawResult = Native.cna_vertex_buffer_get_data_raw(
                     new CnaHandle(NativeHandleValue),
                     (ulong)offsetInBytes,
                     destination,
-                    (ulong)((long)elementCount * sizeof(T)),
+                    (ulong)((long)elementCount * elementSize),
                     (ulong)elementCount,
                     (uint)vertexStride);
 
                 GC.KeepAlive(this);
                 CnaException.ThrowIfFailed(rawResult, nameof(GetData));
+            }
+            finally
+            {
+                pinned.Free();
             }
 
             return;
@@ -192,12 +214,19 @@ public class VertexBuffer : IDisposable
             ElementCount = (ulong)elementCount,
         };
 
-        fixed (T* destination = data)
+        System.Runtime.InteropServices.GCHandle typedPinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
         {
             CnaResult result = Native.cna_vertex_buffer_get_data(
-                new CnaHandle(NativeHandleValue), in transfer, destination, (ulong)data.Length, out _);
+                new CnaHandle(NativeHandleValue), in transfer,
+                (void*)typedPinned.AddrOfPinnedObject(), (ulong)data.Length, out _);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
+        finally
+        {
+            typedPinned.Free();
         }
     }
 
@@ -208,13 +237,13 @@ public class VertexBuffer : IDisposable
     /// <summary>Whether the typed readback route can name <typeparamref name="T"/>. The raw route
     /// handles everything else, so this decides which call runs rather than whether the read is
     /// possible at all.</summary>
-    private static bool HasBuiltInVertexType<T>() where T : unmanaged =>
+    private static bool HasBuiltInVertexType<T>() where T : struct =>
         typeof(T) == typeof(VertexPositionColor)
         || typeof(T) == typeof(VertexPositionColorTexture)
         || typeof(T) == typeof(VertexPositionNormalTexture)
         || typeof(T) == typeof(VertexPositionTexture);
 
-    private static CnaVertexType VertexTypeFor<T>() where T : unmanaged
+    private static CnaVertexType VertexTypeFor<T>() where T : struct
     {
         if (typeof(T) == typeof(VertexPositionColor))
         {

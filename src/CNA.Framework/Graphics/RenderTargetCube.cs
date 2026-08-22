@@ -38,7 +38,7 @@ public class RenderTargetCube : TextureCube
     /// handed to a handle-wrapping constructor. <c>internal</c> (not private) so CNA.XnaCompat's
     /// own <c>RenderTargetCube</c> -- which derives from CNA.XnaCompat's <c>TextureCube</c> and so
     /// cannot inherit this type -- makes the identical native call rather than duplicating it.
-    /// The same shape <see cref="RenderTarget2D.CreateNativeHandle"/> uses, and for the same reason (a
+    /// The same shape <c>RenderTarget2D.CreateNativeHandle</c> uses, and for the same reason (a
     /// <c>base(...)</c> argument is evaluated before any instance state exists, so the native call
     /// cannot live in the constructor body).</summary>
     internal static nint CreateNativeCubeHandle(

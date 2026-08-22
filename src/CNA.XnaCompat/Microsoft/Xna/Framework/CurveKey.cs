@@ -1,32 +1,63 @@
 namespace Microsoft.Xna.Framework;
 
-/// <summary>XNA 4.0-compatible <c>CurveKey</c>. A pure subclass -- <c>Position</c>/<c>Value</c>/
-/// <c>TangentIn</c>/<c>TangentOut</c>/comparison/equality are all inherited unchanged from
-/// <see cref="CNA.CurveKey"/>; only <see cref="Continuity"/> needs re-typing, since
-/// <see cref="CurveContinuity"/> is duplicated per namespace (see that enum's own doc
-/// comment).</summary>
-public class CurveKey : CNA.CurveKey
+/// <summary>XNA 4.0 curve control point. This independent implementation keeps the strict
+/// generic interfaces typed on the Microsoft.Xna.Framework identity.</summary>
+public class CurveKey : IEquatable<CurveKey>, IComparable<CurveKey>
 {
     public CurveKey(float position, float value)
-        : base(position, value)
+        : this(position, value, 0f, 0f, CurveContinuity.Smooth)
     {
     }
 
     public CurveKey(float position, float value, float tangentIn, float tangentOut)
-        : base(position, value, tangentIn, tangentOut)
+        : this(position, value, tangentIn, tangentOut, CurveContinuity.Smooth)
     {
     }
 
-    public CurveKey(float position, float value, float tangentIn, float tangentOut, CurveContinuity continuity)
-        : base(position, value, tangentIn, tangentOut, (CNA.CurveContinuity)(int)continuity)
+    public CurveKey(
+        float position,
+        float value,
+        float tangentIn,
+        float tangentOut,
+        CurveContinuity continuity)
     {
+        Position = position;
+        Value = value;
+        TangentIn = tangentIn;
+        TangentOut = tangentOut;
+        Continuity = continuity;
     }
 
-    public new CurveContinuity Continuity
-    {
-        get => (CurveContinuity)(int)base.Continuity;
-        set => base.Continuity = (CNA.CurveContinuity)(int)value;
-    }
+    public float Position { get; }
 
-    public new CurveKey Clone() => new(Position, Value, TangentIn, TangentOut, Continuity);
+    public float Value { get; set; }
+
+    public float TangentIn { get; set; }
+
+    public float TangentOut { get; set; }
+
+    public CurveContinuity Continuity { get; set; }
+
+    public CurveKey Clone() => new(Position, Value, TangentIn, TangentOut, Continuity);
+
+    public int CompareTo(CurveKey? other) =>
+        other is null ? 1 : Position.CompareTo(other.Position);
+
+    public bool Equals(CurveKey? other) =>
+        other is not null &&
+        Position == other.Position &&
+        Value == other.Value &&
+        TangentIn == other.TangentIn &&
+        TangentOut == other.TangentOut &&
+        Continuity == other.Continuity;
+
+    public override bool Equals(object? obj) => obj is CurveKey other && Equals(other);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Position, Value, TangentIn, TangentOut, Continuity);
+
+    public static bool operator ==(CurveKey? a, CurveKey? b) =>
+        a is null ? b is null : a.Equals(b);
+
+    public static bool operator !=(CurveKey? a, CurveKey? b) => !(a == b);
 }

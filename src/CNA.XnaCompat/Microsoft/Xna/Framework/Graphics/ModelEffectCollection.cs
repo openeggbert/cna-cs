@@ -1,38 +1,113 @@
 using System.Collections;
+using System.Collections.ObjectModel;
 
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>
-/// XNA 4.0-compatible <c>ModelEffectCollection</c>.
-///
-/// This closes what <c>ModelMesh</c>'s own doc comment previously called a permanent gap: the
-/// compat mirror had no <c>ModelEffectCollection</c> because <c>CNA.Graphics.ModelMesh</c>
-/// constructs its collection at field-initializer time with no override seam. The fix is to stop
-/// needing a seam -- this wraps the already-constructed base collection instead of replacing it,
-/// so there is exactly one collection and no two pieces of state that can desync. It is the same
-/// resolution <see cref="DirectionalLight"/> uses for the same problem.
-///
-/// Element type is <see cref="CNA.Graphics.Effect"/>, not a compat <c>Effect</c>: the compat stock
-/// effects derive from their <c>CNA.Graphics</c> counterparts rather than from a parallel compat
-/// <c>Effect</c> base (see <see cref="BasicEffect"/>'s doc comment), so that is the type they
-/// actually share. Tracked in <c>plan.md</c> WP4c.
-/// </summary>
-public class ModelEffectCollection : IEnumerable<CNA.Graphics.Effect>
+/// <summary>XNA 4.0-compatible read-only view of the effects used by a model mesh.</summary>
+public sealed class ModelEffectCollection : ReadOnlyCollection<Effect>
 {
-    private readonly CNA.Graphics.ModelEffectCollection _effects;
-
     internal ModelEffectCollection(CNA.Graphics.ModelEffectCollection effects)
+        : base(new EffectListAdapter(effects))
     {
-        _effects = effects;
     }
 
-    public CNA.Graphics.Effect this[int index] => _effects[index];
+    public new Enumerator GetEnumerator() => new(Items);
 
-    public int Count => _effects.Count;
+    public struct Enumerator : IEnumerator<Effect>
+    {
+        private readonly IList<Effect> _items;
+        private int _index;
 
-    public bool Contains(CNA.Graphics.Effect effect) => _effects.Contains(effect);
+        internal Enumerator(IList<Effect> items)
+        {
+            _items = items;
+            _index = -1;
+        }
 
-    public IEnumerator<CNA.Graphics.Effect> GetEnumerator() => ((IEnumerable<CNA.Graphics.Effect>)_effects).GetEnumerator();
+        public Effect Current => _items[_index];
 
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        object IEnumerator.Current => Current;
+
+        public bool MoveNext()
+        {
+            if (_index + 1 >= _items.Count)
+            {
+                _index = _items.Count;
+                return false;
+            }
+
+            _index++;
+            return true;
+        }
+
+        public void Dispose()
+        {
+        }
+
+        void IEnumerator.Reset() => _index = -1;
+    }
+
+    private sealed class EffectListAdapter : IList<Effect>
+    {
+        private readonly CNA.Graphics.ModelEffectCollection _effects;
+
+        internal EffectListAdapter(CNA.Graphics.ModelEffectCollection effects)
+        {
+            _effects = effects;
+        }
+
+        public Effect this[int index]
+        {
+            get => Effect.FromFramework(_effects[index])!;
+            set => throw new NotSupportedException();
+        }
+
+        public int Count => _effects.Count;
+
+        public bool IsReadOnly => true;
+
+        public void Add(Effect item) => throw new NotSupportedException();
+
+        public void Clear() => throw new NotSupportedException();
+
+        public bool Contains(Effect item) => _effects.Contains(item.Inner);
+
+        public void CopyTo(Effect[] array, int arrayIndex)
+        {
+            ArgumentNullException.ThrowIfNull(array);
+            for (int i = 0; i < Count; i++)
+            {
+                array[arrayIndex + i] = this[i];
+            }
+        }
+
+        public IEnumerator<Effect> GetEnumerator()
+        {
+            for (int i = 0; i < Count; i++)
+            {
+                yield return this[i];
+            }
+        }
+
+        public int IndexOf(Effect item)
+        {
+            for (int i = 0; i < Count; i++)
+            {
+                if (ReferenceEquals(this[i], item))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        public void Insert(int index, Effect item) => throw new NotSupportedException();
+
+        public bool Remove(Effect item) => throw new NotSupportedException();
+
+        public void RemoveAt(int index) => throw new NotSupportedException();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 }

@@ -82,6 +82,7 @@ public class DeviceStateIntegrationTests(ITestOutputHelper output, NativeGameFix
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             using var query = new OcclusionQuery(device);
 
             query.Begin();

@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using Xunit;
 using Xunit.Abstractions;
+using XnaAudio = Microsoft.Xna.Framework.Audio;
 using XnaGame = Microsoft.Xna.Framework.Game;
 
 // NOT under CNA. That is load-bearing, and it is the second thing this file established.
@@ -129,6 +130,43 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         });
     }
 
+    /// <summary>Exercises the raw-byte Texture3D ABI route through XNA's generic overload. A
+    /// uint is intentionally used for a four-byte Color texel so this cannot fall back to the
+    /// managed Color conversion path.</summary>
+    [global::CNA.Integration.Tests.NativeFactRequiring(global::CNA.Graphics.GraphicsCapability.Texture3D)]
+    public void CompatTexture3D_SetDataAcceptsBlittableNonColorElements()
+    {
+        InsideACompatFrame(game =>
+        {
+            global::CNA.Integration.Tests.CnaNativeProbe.RequireCapability(
+                game.GraphicsDevice, global::CNA.Graphics.GraphicsCapability.Texture3D);
+
+            using var texture = new Texture3D(game.GraphicsDevice, 1, 1, 1, false, SurfaceFormat.Color);
+            texture.SetData<uint>([0xFFFFFFFFu]);
+
+            Assert.Equal(1, texture.Depth);
+        });
+    }
+
+    /// <summary>The listener-array overload must be one native request. Current CNA explicitly
+    /// rejects true multi-listener mixing, so this proves the managed layer reports that limitation
+    /// instead of applying two single-listener updates and silently retaining only the last one.</summary>
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatSoundEffectInstance_MultipleListenersFailDeterministically()
+    {
+        InsideACompatFrame(_ =>
+        {
+            var pcm = new byte[44100 / 20 * 2];
+            using var effect = new XnaAudio.SoundEffect(pcm, 44100, XnaAudio.AudioChannels.Mono);
+            using XnaAudio.SoundEffectInstance instance = effect.CreateInstance();
+
+            Assert.Throws<NotSupportedException>(() =>
+                instance.Apply3D(
+                    [new XnaAudio.AudioListener(), new XnaAudio.AudioListener()],
+                    new XnaAudio.AudioEmitter()));
+        });
+    }
+
     /// <summary>A full compat SpriteBatch pass with the compat Vector2 and Color.</summary>
     [global::CNA.Integration.Tests.NativeFact]
     public void CompatSpriteBatch_DrawsWithCompatValueTypes()
@@ -216,7 +254,7 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
                 DiffuseColor = new Vector3(0.5f, 0.25f, 0.125f),
             };
 
-            effect.Apply();
+            effect.CurrentTechnique.Passes[0].Apply();
 
             Assert.Equal(0.5f, effect.DiffuseColor.X, 1e-4f);
             output.WriteLine($"diffuse={effect.DiffuseColor} world={effect.World.M11}");

@@ -1,54 +1,234 @@
+using System.Collections.ObjectModel;
+
 namespace Microsoft.Xna.Framework;
 
-/// <summary>XNA 4.0-compatible <c>GameComponentCollection</c>. A thin re-typing wrapper rather
-/// than a subclass, because <see cref="CNA.GameComponentCollection"/>'s only constructor is
-/// internal (it is a view the game creates over its own native collection). Every member forwards;
-/// the element type is the base <see cref="CNA.GameComponent"/>, which the compat components
-/// derive from, so both namespaces' components go in.
-///
-/// "Every member" now includes <see cref="ComponentAdded"/>/<see cref="ComponentRemoved"/>, which
-/// were missing until the WP16 re-audit -- a compat game could not observe its own component list
-/// changing.</summary>
-public class GameComponentCollection : System.Collections.Generic.ICollection<CNA.GameComponent>
+/// <summary>
+/// XNA 4.0-compatible <see cref="Collection{T}"/> of <see cref="IGameComponent"/> values. Native
+/// CNA components remain an implementation detail: ordinary interface implementations receive a
+/// private adapter, while compat <see cref="GameComponent"/> instances reuse their owned adapter.
+/// </summary>
+public sealed class GameComponentCollection : Collection<IGameComponent>
 {
-    private readonly CNA.GameComponentCollection _components;
+    private readonly Game? _game;
+    private readonly CNA.GameComponentCollection? _native;
+    private readonly Dictionary<IGameComponent, CNA.GameComponent> _adapters =
+        new(ReferenceEqualityComparer.Instance);
 
-    internal GameComponentCollection(CNA.GameComponentCollection components)
+    public GameComponentCollection()
     {
-        _components = components;
-        _components.ComponentAdded += (_, e) => ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(e.GameComponent));
-        _components.ComponentRemoved += (_, e) => ComponentRemoved?.Invoke(this, new GameComponentCollectionEventArgs(e.GameComponent));
     }
 
-    /// <summary>Raised after a component is added. Re-raised from the underlying collection's own
-    /// event with this wrapper as the sender, so an XNA handler that casts <c>sender</c> to
-    /// <see cref="GameComponentCollection"/> gets the type it asked for.</summary>
+    internal GameComponentCollection(Game game, CNA.GameComponentCollection native)
+    {
+        _game = game;
+        _native = native;
+    }
+
     public event EventHandler<GameComponentCollectionEventArgs>? ComponentAdded;
 
-    /// <summary>Raised after a component is removed. See <see cref="ComponentAdded"/>.</summary>
     public event EventHandler<GameComponentCollectionEventArgs>? ComponentRemoved;
 
-    public CNA.GameComponent this[int index] => _components[index];
+    protected override void InsertItem(int index, IGameComponent item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        // Publish managed membership before native invokes Initialize synchronously.
+        base.InsertItem(index, item);
+        if (_native is null)
+        {
+            ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
+            return;
+        }
 
-    public int Count => _components.Count;
+        bool alreadyAdapted = _adapters.ContainsKey(item);
+        CNA.GameComponent adapter;
+        try
+        {
+            adapter = GetAdapter(item);
+            _native.Insert(index, adapter);
+        }
+        catch
+        {
+            base.RemoveItem(index);
+            if (!alreadyAdapted && _adapters.Remove(item, out CNA.GameComponent? failedAdapter) &&
+                item is not GameComponent)
+            {
+                failedAdapter.Dispose();
+            }
 
-    public bool IsReadOnly => _components.IsReadOnly;
+            throw;
+        }
 
-    public void Add(CNA.GameComponent item) => _components.Add(item);
+        ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
+    }
 
-    public bool Remove(CNA.GameComponent item) => _components.Remove(item);
+    protected override void RemoveItem(int index)
+    {
+        IGameComponent item = this[index];
+        if (_native is not null && !_native.Remove(GetAdapter(item)))
+        {
+            throw new InvalidOperationException("The native CNA component collection did not contain the managed component.");
+        }
 
-    public void Insert(int index, CNA.GameComponent item) => _components.Insert(index, item);
+        base.RemoveItem(index);
+        ComponentRemoved?.Invoke(this, new GameComponentCollectionEventArgs(item));
+    }
 
-    public void Clear() => _components.Clear();
+    protected override void SetItem(int index, IGameComponent item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        IGameComponent previous = this[index];
+        if (_native is null)
+        {
+            base.SetItem(index, item);
+            ComponentRemoved?.Invoke(this, new GameComponentCollectionEventArgs(previous));
+            ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
+            return;
+        }
 
-    public bool Contains(CNA.GameComponent item) => _components.Contains(item);
+        CNA.GameComponent previousAdapter = GetAdapter(previous);
+        CNA.GameComponent replacementAdapter = GetAdapter(item);
 
-    public int IndexOf(CNA.GameComponent item) => _components.IndexOf(item);
+        if (!_native.Remove(previousAdapter))
+        {
+            throw new InvalidOperationException("The native CNA component collection did not contain the replaced component.");
+        }
 
-    public void CopyTo(CNA.GameComponent[] array, int arrayIndex) => _components.CopyTo(array, arrayIndex);
+        try
+        {
+            _native.Insert(index, replacementAdapter);
+        }
+        catch
+        {
+            _native.Insert(index, previousAdapter);
+            throw;
+        }
 
-    public System.Collections.Generic.IEnumerator<CNA.GameComponent> GetEnumerator() => _components.GetEnumerator();
+        base.SetItem(index, item);
+        ComponentRemoved?.Invoke(this, new GameComponentCollectionEventArgs(previous));
+        ComponentAdded?.Invoke(this, new GameComponentCollectionEventArgs(item));
+    }
 
-    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    protected override void ClearItems()
+    {
+        IGameComponent[] removed = this.ToArray();
+        _native?.Clear();
+        base.ClearItems();
+        foreach (IGameComponent item in removed)
+        {
+            ComponentRemoved?.Invoke(this, new GameComponentCollectionEventArgs(item));
+        }
+    }
+
+    private CNA.GameComponent GetAdapter(IGameComponent component)
+    {
+        if (_adapters.TryGetValue(component, out CNA.GameComponent? adapter))
+        {
+            return adapter;
+        }
+
+        adapter = component switch
+        {
+            GameComponent gameComponent => gameComponent.Inner,
+            IDrawable => new InterfaceDrawableAdapter(_game!, component),
+            _ => new InterfaceComponentAdapter(_game!, component),
+        };
+        _adapters.Add(component, adapter);
+        return adapter;
+    }
+
+    private sealed class InterfaceComponentAdapter : CNA.GameComponent
+    {
+        private readonly IGameComponent _component;
+        private readonly IUpdateable? _updateable;
+
+        internal InterfaceComponentAdapter(Game game, IGameComponent component)
+            : base(game)
+        {
+            _component = component;
+            _updateable = component as IUpdateable;
+            if (_updateable is not null)
+            {
+                Enabled = _updateable.Enabled;
+                UpdateOrder = _updateable.UpdateOrder;
+                _updateable.EnabledChanged += OnEnabledChanged;
+                _updateable.UpdateOrderChanged += OnUpdateOrderChanged;
+            }
+        }
+
+        public override void Initialize() => _component.Initialize();
+
+        public override void Update(CNA.GameTime gameTime) =>
+            _updateable?.Update(GameTime.FromFramework(gameTime));
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_updateable is not null)
+            {
+                _updateable.EnabledChanged -= OnEnabledChanged;
+                _updateable.UpdateOrderChanged -= OnUpdateOrderChanged;
+            }
+
+            base.Dispose(disposing);
+        }
+
+        private void OnEnabledChanged(object? sender, EventArgs eventArgs) => Enabled = _updateable!.Enabled;
+
+        private void OnUpdateOrderChanged(object? sender, EventArgs eventArgs) => UpdateOrder = _updateable!.UpdateOrder;
+    }
+
+    private sealed class InterfaceDrawableAdapter : CNA.DrawableGameComponent
+    {
+        private readonly IGameComponent _component;
+        private readonly IUpdateable? _updateable;
+        private readonly IDrawable _drawable;
+
+        internal InterfaceDrawableAdapter(Game game, IGameComponent component)
+            : base(game)
+        {
+            _component = component;
+            _updateable = component as IUpdateable;
+            _drawable = (IDrawable)component;
+            if (_updateable is not null)
+            {
+                Enabled = _updateable.Enabled;
+                UpdateOrder = _updateable.UpdateOrder;
+                _updateable.EnabledChanged += OnEnabledChanged;
+                _updateable.UpdateOrderChanged += OnUpdateOrderChanged;
+            }
+
+            Visible = _drawable.Visible;
+            DrawOrder = _drawable.DrawOrder;
+            _drawable.VisibleChanged += OnVisibleChanged;
+            _drawable.DrawOrderChanged += OnDrawOrderChanged;
+        }
+
+        public override void Initialize() => _component.Initialize();
+
+        public override void Update(CNA.GameTime gameTime) =>
+            _updateable?.Update(GameTime.FromFramework(gameTime));
+
+        public override void Draw(CNA.GameTime gameTime) =>
+            _drawable.Draw(GameTime.FromFramework(gameTime));
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_updateable is not null)
+            {
+                _updateable.EnabledChanged -= OnEnabledChanged;
+                _updateable.UpdateOrderChanged -= OnUpdateOrderChanged;
+            }
+
+            _drawable.VisibleChanged -= OnVisibleChanged;
+            _drawable.DrawOrderChanged -= OnDrawOrderChanged;
+            base.Dispose(disposing);
+        }
+
+        private void OnEnabledChanged(object? sender, EventArgs eventArgs) => Enabled = _updateable!.Enabled;
+
+        private void OnUpdateOrderChanged(object? sender, EventArgs eventArgs) => UpdateOrder = _updateable!.UpdateOrder;
+
+        private void OnVisibleChanged(object? sender, EventArgs eventArgs) => Visible = _drawable.Visible;
+
+        private void OnDrawOrderChanged(object? sender, EventArgs eventArgs) => DrawOrder = _drawable.DrawOrder;
+    }
 }

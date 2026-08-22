@@ -27,18 +27,36 @@ namespace CNA.Graphics;
 public class Texture2D : Texture
 {
     public Texture2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(graphicsDevice, CreateNativeTexture2DHandle(graphicsDevice, width, height))
+        : this(graphicsDevice, width, height, mipMap: false, SurfaceFormat.Color)
+    {
+    }
+
+    public Texture2D(
+        GraphicsDevice graphicsDevice,
+        int width,
+        int height,
+        bool mipMap,
+        SurfaceFormat format)
+        : base(graphicsDevice, CreateNativeTexture2DHandle(graphicsDevice, width, height, mipMap, format))
     {
     }
 
     /// <summary>Creates the native texture handle without wrapping it. <c>internal</c> (visible to
     /// CNA.XnaCompat through the assembly's <c>InternalsVisibleTo</c> grant) for exactly the reason
-    /// <see cref="RenderTarget2D.CreateNativeHandle"/> already is: CNA.XnaCompat's own
+    /// <c>RenderTarget2D.CreateNativeHandle</c> already is: CNA.XnaCompat's own
     /// <c>Texture2D</c> derives from CNA.XnaCompat's <c>Texture</c> -- so that
     /// <c>Texture t = someTexture2D;</c> compiles in game code, as it does in real XNA -- and
     /// therefore cannot inherit this type's implementation, but must still make the identical
     /// native call.</summary>
     internal static nint CreateNativeTexture2DHandle(GraphicsDevice graphicsDevice, int width, int height)
+        => CreateNativeTexture2DHandle(graphicsDevice, width, height, mipMap: false, SurfaceFormat.Color);
+
+    internal static nint CreateNativeTexture2DHandle(
+        GraphicsDevice graphicsDevice,
+        int width,
+        int height,
+        bool mipMap,
+        SurfaceFormat format)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
 
@@ -46,8 +64,8 @@ public class Texture2D : Texture
         {
             Width = (uint)width,
             Height = (uint)height,
-            MipMap = 0,
-            Format = 0, // CNA_SURFACE_FORMAT_COLOR
+            MipMap = (byte)(mipMap ? 1 : 0),
+            Format = (uint)format,
         };
 
         CnaResult result = Native.cna_texture2d_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);
@@ -120,7 +138,7 @@ public class Texture2D : Texture
     internal static void ReleaseNativeTexture2D(nint handleValue) => Native.cna_texture2d_destroy(new CnaHandle(handleValue));
 
     /// <summary>The shared body of both <c>SetData</c> overloads' native call, reusable by
-    /// CNA.XnaCompat's parallel <c>Texture2D</c> -- see <see cref="CreateNativeTexture2DHandle"/>.</summary>
+    /// CNA.XnaCompat's parallel <c>Texture2D</c> -- see <c>CreateNativeTexture2DHandle</c>.</summary>
     internal static unsafe void SetDataRgba8(nint handleValue, ReadOnlySpan<byte> data)
     {
         if (data.Length % 4 != 0)
@@ -194,16 +212,26 @@ public class Texture2D : Texture
     internal static unsafe void GetDataInto<T>(
         nint handleValue, SurfaceFormat format, int level, Rectangle? rect,
         T[] data, int startIndex, int elementCount)
-        where T : unmanaged
+        where T : unmanaged =>
+        GetDataInto(handleValue, format, TextureDataType.Of<T>(), level, rect, data, startIndex, elementCount);
+
+    internal static unsafe void GetDataInto<T>(
+        nint handleValue, SurfaceFormat format, uint dataType, int level, Rectangle? rect,
+        T[] data, int startIndex, int elementCount)
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
 
-        uint dataType = TextureDataType.Of<T>();
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException($"Texture element type {typeof(T)} contains managed references.", nameof(data));
+        }
 
-        CnaResult validation = Native.cna_texture_validate_get_data_format((uint)format, sizeof(T));
+        CnaResult validation = Native.cna_texture_validate_get_data_format(
+            (uint)format, System.Runtime.CompilerServices.Unsafe.SizeOf<T>());
         CnaException.ThrowIfFailed(validation, nameof(GetData));
 
         CnaTexture2DTransfer transfer = CnaTexture2DTransfer.Versioned();
@@ -217,11 +245,58 @@ public class Texture2D : Texture
             transfer.Rectangle = new CnaRectangle(region.X, region.Y, region.Width, region.Height);
         }
 
-        fixed (T* destination = data)
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
         {
             CnaResult result = Native.cna_texture2d_get_data(
-                new CnaHandle(handleValue), dataType, &transfer, destination, (ulong)data.Length, out _);
+                new CnaHandle(handleValue), dataType, &transfer,
+                (void*)pinned.AddrOfPinnedObject(), (ulong)data.Length, out _);
             CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
+        finally
+        {
+            pinned.Free();
+        }
+    }
+
+    internal static unsafe void SetDataFrom<T>(
+        nint handleValue, uint dataType, int level, Rectangle? rect,
+        T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException($"Texture element type {typeof(T)} contains managed references.", nameof(data));
+        }
+
+        var transfer = CnaTexture2DTransfer.Versioned();
+        transfer.Level = level;
+        transfer.StartIndex = (ulong)startIndex;
+        transfer.ElementCount = (ulong)elementCount;
+        if (rect is { } region)
+        {
+            transfer.HasRectangle = 1;
+            transfer.Rectangle = new CnaRectangle(region.X, region.Y, region.Width, region.Height);
+        }
+
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            CnaResult result = Native.cna_texture2d_set_data(
+                new CnaHandle(handleValue), dataType, &transfer,
+                (void*)pinned.AddrOfPinnedObject(), (ulong)data.Length);
+            CnaException.ThrowIfFailed(result, nameof(SetData));
+        }
+        finally
+        {
+            pinned.Free();
         }
     }
 
@@ -272,7 +347,34 @@ public class Texture2D : Texture
     /// Found unbound by a sweep of header functions with no binding --
     /// <c>cna_texture2d_create_from_encoded_memory</c> had been there all along.
     /// </summary>
-    public static unsafe Texture2D FromStream(GraphicsDevice graphicsDevice, Stream stream)
+    public static unsafe Texture2D FromStream(GraphicsDevice graphicsDevice, Stream stream) =>
+        FromStreamCore(graphicsDevice, stream, null);
+
+    /// <summary>Decodes and fits or cover-crops an image to the requested dimensions through the
+    /// native ABI's versioned decode descriptor.</summary>
+    public static unsafe Texture2D FromStream(
+        GraphicsDevice graphicsDevice,
+        Stream stream,
+        int width,
+        int height,
+        bool zoom)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var decodeInfo = new CnaTexture2DDecodeInfo
+        {
+            Width = (uint)width,
+            Height = (uint)height,
+            Zoom = (byte)(zoom ? 1 : 0),
+        };
+        return FromStreamCore(graphicsDevice, stream, &decodeInfo);
+    }
+
+    private static unsafe Texture2D FromStreamCore(
+        GraphicsDevice graphicsDevice,
+        Stream stream,
+        CnaTexture2DDecodeInfo* decodeInfo)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         ArgumentNullException.ThrowIfNull(stream);
@@ -286,7 +388,7 @@ public class Texture2D : Texture
         {
             // A null decode_info preserves the source dimensions, which is what FromStream means.
             CnaResult result = Native.cna_texture2d_create_from_encoded_memory(
-                graphicsDevice.ResolveNativeDeviceHandle(), encodedPtr, (ulong)encoded.Length, 0, out texture);
+                graphicsDevice.ResolveNativeDeviceHandle(), encodedPtr, (ulong)encoded.Length, decodeInfo, out texture);
             CnaException.ThrowIfFailed(result, nameof(FromStream));
         }
 

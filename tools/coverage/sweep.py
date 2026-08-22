@@ -1,26 +1,10 @@
-import re, glob, os, sys
-import os, glob
+import glob, os, re, shutil, subprocess, sys
 
-def _find_cna_root():
-    """The openeggbert/cna checkout's *directory name* is not stable (cnabinding is gone;
-    the headers have lived in cnanext, cnagltf and cnabindingc). Locate it, never hard-code it."""
-    env = os.environ.get('CNA_ROOT')
-    if env and os.path.isdir(os.path.join(env, 'modules/c-api/include/CNA/C')):
-        return env
-    base = '/rv/data/development/github.com/openeggbert'
-    found = sorted(glob.glob(base + '/*/modules/c-api/include/CNA/C/media_library.h'))
-    if not found:
-        raise SystemExit('No openeggbert/cna checkout with modules/c-api found. Set CNA_ROOT.')
-    root = found[0][:-len('/modules/c-api/include/CNA/C/media_library.h')]
-    if len(found) > 1:
-        print(f'# headers: {root}  (of {len(found)} checkouts; set CNA_ROOT to pick another)')
-    return root
+from paths import REPO_ROOT, find_cna_root, find_native_libraries
 
-CNA_ROOT = _find_cna_root()
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-H = CNA_ROOT + '/modules/c-api/include/CNA/C/'
-CS = REPO + '/src/CNA.Interop/Native.cs'
+CNA_ROOT = find_cna_root()
+H = str(CNA_ROOT / 'modules/c-api/include/CNA/C') + '/'
+CS = str(REPO_ROOT / 'src/CNA.Interop/Native.cs')
 
 # --- headers: name -> (param list, doc)
 hdr={}
@@ -99,22 +83,38 @@ for b in bad: print('  ',b[0],'['+b[1]+']','\n     ',b[2],'\n      doc:',b[3])
 # A *count* comparison cannot see that. "2,855 declared, 2,855 exported" is equally true of a header
 # naming one route the library lacks while the library exports one the header lacks. Only the set
 # difference finds it, which is why this runs over names rather than totals.
-import subprocess
-
 def check_library(path):
+    suffix = os.path.basename(path).lower()
+    if suffix.endswith('.so'):
+        command = ['nm', '-D', '--defined-only', path]
+    elif suffix.endswith('.dylib'):
+        command = ['nm', '-gU', path]
+    elif suffix.endswith('.dll'):
+        if shutil.which('dumpbin'):
+            command = ['dumpbin', '/exports', path]
+        elif shutil.which('llvm-nm'):
+            command = ['llvm-nm', '--defined-only', path]
+        else:
+            print(f'\n(skip {path}: PE inspection needs dumpbin or llvm-nm)')
+            return
+    else:
+        print(f'\n(skip {path}: unknown library format)')
+        return
+
     try:
-        out = subprocess.run(['nm', '-D', '--defined-only', path],
+        out = subprocess.run(command,
                              capture_output=True, text=True, check=True).stdout
     except Exception as exc:
         print(f'\n(could not read {path}: {exc})')
         return
     exported = {line.split()[-1].split('@@')[0] for line in out.splitlines() if ' cna_' in line}
     absent = sorted(n for n in decls if n not in exported)
-    # Name the build, not the directory two levels up -- every one of those is called "modules".
-    build = path.split('/media/robertvokac/claude/tmp/cna/')[-1].split('/')[0]
-    print(f'\n{build}: {len(exported)} exports, {len(absent)} declaration(s) absent')
+    print(f'\n{path}: {len(exported)} exports, {len(absent)} declaration(s) absent')
     for name in absent:
         print('   ', name)
 
-for candidate in sorted(glob.glob('/media/robertvokac/claude/tmp/cna/*/modules/c-api/libcna_c_api.so')):
-    check_library(candidate)
+libraries = find_native_libraries(CNA_ROOT)
+if not libraries:
+    print('\n(no native library found; set CNA_NATIVE_LIBRARY or CNA_NATIVE_DIR for symbol verification)')
+for candidate in libraries:
+    check_library(str(candidate))

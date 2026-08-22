@@ -34,16 +34,7 @@ public class DynamicIndexBuffer : IndexBuffer
     /// starts reporting loss is reported here without a change to this file.
     /// </summary>
     public bool IsContentLost
-    {
-        get
-        {
-            var info = new CnaIndexBufferInfo();
-            CnaResult result = Native.cna_index_buffer_get_info(new CnaHandle(NativeHandleValue), ref info);
-            GC.KeepAlive(this);
-            CnaException.ThrowIfFailed(result, nameof(IsContentLost));
-            return info.IsContentLost != 0;
-        }
-    }
+        => QueryIsContentLost(NativeHandleValue, this);
 
     /// <summary>
     /// Raised when a device reset discards this buffer's contents. A real native subscription now,
@@ -62,17 +53,8 @@ public class DynamicIndexBuffer : IndexBuffer
             {
                 ObjectDisposedException.ThrowIf(_contentLostDisposed, this);
 
-                _contentLostBridge ??= NativeEventBridge.SubscribeWithSender(
-                    () => _contentLost?.Invoke(this, EventArgs.Empty),
-                    (callback, context) =>
-                    {
-                        CnaResult result = Native.cna_index_buffer_subscribe_content_lost(
-                            new CnaHandle(NativeHandleValue), callback, context, out CnaHandle registration);
-                        GC.KeepAlive(this);
-                        CnaException.ThrowIfFailed(result, nameof(ContentLost));
-                        return registration;
-                    },
-                    registration => Native.cna_index_buffer_unsubscribe_content_lost(registration));
+                _contentLostBridge ??= SubscribeContentLost(
+                    NativeHandleValue, this, () => _contentLost?.Invoke(this, EventArgs.Empty));
 
                 _contentLost += value;
             }
@@ -121,4 +103,29 @@ public class DynamicIndexBuffer : IndexBuffer
             throw pending;
         }
     }
+
+    internal static bool QueryIsContentLost(nint nativeHandleValue, object lifetimeOwner)
+    {
+        var info = new CnaIndexBufferInfo();
+        CnaResult result = Native.cna_index_buffer_get_info(new CnaHandle(nativeHandleValue), ref info);
+        GC.KeepAlive(lifetimeOwner);
+        CnaException.ThrowIfFailed(result, nameof(IsContentLost));
+        return info.IsContentLost != 0;
+    }
+
+    internal static NativeEventBridge SubscribeContentLost(
+        nint nativeHandleValue,
+        object lifetimeOwner,
+        Action dispatch) =>
+        NativeEventBridge.SubscribeWithSender(
+            dispatch,
+            (callback, context) =>
+            {
+                CnaResult result = Native.cna_index_buffer_subscribe_content_lost(
+                    new CnaHandle(nativeHandleValue), callback, context, out CnaHandle registration);
+                GC.KeepAlive(lifetimeOwner);
+                CnaException.ThrowIfFailed(result, nameof(ContentLost));
+                return registration;
+            },
+            registration => Native.cna_index_buffer_unsubscribe_content_lost(registration));
 }

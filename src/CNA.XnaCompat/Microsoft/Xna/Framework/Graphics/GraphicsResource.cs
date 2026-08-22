@@ -1,17 +1,61 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>GraphicsResource</c>. A pure subclass -- every member is
-/// inherited unchanged from <see cref="CNA.Graphics.GraphicsResource"/> except the
-/// <see cref="GraphicsDevice"/> property, which needs a `new` override so it reports this
-/// namespace's device type (the same downcast pass-through pattern
-/// <see cref="GraphicsDevice.Indices"/> uses, and holding no field of its own for the same
-/// reason).</summary>
-public abstract class GraphicsResource : CNA.Graphics.GraphicsResource
+/// <summary>XNA 4.0-compatible base for resources associated with a graphics device.</summary>
+public abstract class GraphicsResource : IDisposable
 {
-    protected GraphicsResource(GraphicsDevice graphicsDevice)
-        : base(graphicsDevice)
+    private bool _disposed;
+    private string _name = string.Empty;
+    private readonly GraphicsDevice? _graphicsDevice;
+
+    internal GraphicsResource()
     {
     }
 
-    public new GraphicsDevice GraphicsDevice => (GraphicsDevice)base.GraphicsDevice;
+    internal GraphicsResource(GraphicsDevice graphicsDevice)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        _graphicsDevice = graphicsDevice;
+    }
+
+    ~GraphicsResource()
+    {
+        Dispose(false);
+    }
+
+    public GraphicsDevice GraphicsDevice => _graphicsDevice!;
+
+    public bool IsDisposed => _disposed;
+
+    public string Name
+    {
+        get => _name;
+        set => _name = value;
+    }
+
+    public object? Tag { get; set; }
+
+    public event EventHandler<EventArgs>? Disposing;
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool arg0)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (arg0)
+        {
+            Disposing?.Invoke(this, EventArgs.Empty);
+        }
+
+        _disposed = true;
+    }
+
+    public override string ToString() => string.IsNullOrEmpty(Name) ? base.ToString()! : Name;
 }

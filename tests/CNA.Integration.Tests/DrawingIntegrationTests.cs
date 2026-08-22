@@ -104,6 +104,7 @@ public class DrawingIntegrationTests(ITestOutputHelper output, NativeGameFixture
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             var vertices = new[]
             {
                 new VertexPositionColor(new Vector3(0f, 0f, 0f), Color.Red),
@@ -146,6 +147,7 @@ public class DrawingIntegrationTests(ITestOutputHelper output, NativeGameFixture
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             var bones = new[]
             {
                 new ModelBone(0, "root") { Transform = Matrix.CreateTranslation(1f, 0f, 0f) },

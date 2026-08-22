@@ -94,12 +94,13 @@ public class IndexBuffer : IDisposable
     /// <see cref="SizeForType"/> recognizes -- confirmed with <c>cnabinding</c> that this stays
     /// correct generically since the real native call only ever inspects the selected width.
     /// </summary>
-    private static unsafe uint IndexElementSizeForType<T>() where T : unmanaged => sizeof(T) switch
+    private static uint IndexElementSizeForType<T>() where T : struct =>
+        System.Runtime.CompilerServices.Unsafe.SizeOf<T>() switch
     {
         2 => (uint)IndexElementSize.SixteenBits,
         4 => (uint)IndexElementSize.ThirtyTwoBits,
         _ => throw new ArgumentException(
-            $"Index element type {typeof(T)} must be 2 or 4 bytes (was {sizeof(T)}) -- the real cna C API only stores " +
+            $"Index element type {typeof(T)} must be 2 or 4 bytes (was {System.Runtime.CompilerServices.Unsafe.SizeOf<T>()}) -- the real cna C API only stores " +
             "16-bit or 32-bit index elements.", nameof(T)),
     };
 
@@ -111,17 +112,21 @@ public class IndexBuffer : IDisposable
 
     public BufferUsage BufferUsage { get; }
 
-    public void SetData<T>(T[] data) where T : unmanaged
+    public void SetData<T>(T[] data) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         SetData(0, data, 0, data.Length);
     }
 
-    public unsafe void SetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount) where T : unmanaged
+    public unsafe void SetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException($"Index element type {typeof(T)} contains managed references.", nameof(data));
+        }
 
         var transfer = new CnaIndexBufferTransfer
         {
@@ -131,8 +136,11 @@ public class IndexBuffer : IDisposable
             ElementCount = (ulong)elementCount,
         };
 
-        fixed (T* basePtr = data)
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
         {
+            void* basePtr = (void*)pinned.AddrOfPinnedObject();
             // A nonzero offsetInBytes threw here until cna_index_buffer_set_data_at landed. The
             // plain route replaces the buffer's whole contents -- which is what XNA's
             // SetData(T[], int, int) does -- so the two are different calls, not one with a default.
@@ -157,19 +165,27 @@ public class IndexBuffer : IDisposable
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SetData));
         }
+        finally
+        {
+            pinned.Free();
+        }
     }
 
-    public void GetData<T>(T[] data) where T : unmanaged
+    public void GetData<T>(T[] data) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         GetData(0, data, 0, data.Length);
     }
 
-    public unsafe void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount) where T : unmanaged
+    public unsafe void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException($"Index element type {typeof(T)} contains managed references.", nameof(data));
+        }
 
         if (offsetInBytes != 0)
         {
@@ -187,11 +203,18 @@ public class IndexBuffer : IDisposable
             ElementCount = (ulong)elementCount,
         };
 
-        fixed (T* basePtr = data)
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
         {
             CnaResult result = Native.cna_index_buffer_get_data(
-                new CnaHandle(NativeHandleValue), in transfer, (byte*)basePtr, (ulong)elementCount, out _);
+                new CnaHandle(NativeHandleValue), in transfer,
+                (byte*)pinned.AddrOfPinnedObject(), (ulong)elementCount, out _);
             CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
+        finally
+        {
+            pinned.Free();
         }
     }
 

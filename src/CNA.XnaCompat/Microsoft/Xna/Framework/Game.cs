@@ -15,7 +15,10 @@ namespace Microsoft.Xna.Framework;
 /// remarks.</remarks>
 public class Game : CNA.Game
 {
-    public new Content.ContentManager Content => (Content.ContentManager)base.Content;
+    private Content.ContentManager? _content;
+
+    public new Content.ContentManager Content =>
+        _content ??= new Content.ContentManager(base.Content, Services);
 
     public new Graphics.GraphicsDevice GraphicsDevice => (Graphics.GraphicsDevice)base.GraphicsDevice;
 
@@ -23,10 +26,9 @@ public class Game : CNA.Game
 
     private GameComponentCollection? _components;
 
-    /// <summary>Re-typed only so the name resolves in this namespace -- the element type is the
-    /// base <see cref="CNA.GameComponent"/>, which both namespaces' components derive from, so no
-    /// element conversion is involved.</summary>
-    public new GameComponentCollection Components => _components ??= new GameComponentCollection(base.Components);
+    /// <summary>The XNA-typed component collection. It delegates native membership through
+    /// internal adapters without exposing CNA component types.</summary>
+    public new GameComponentCollection Components => _components ??= new GameComponentCollection(this, base.Components);
 
     /// <summary>Re-typed so a compat game gets this namespace's own <see cref="LaunchParameters"/>.
     /// Re-wraps the base's dictionary rather than rebuilding it: since
@@ -34,9 +36,6 @@ public class Game : CNA.Game
     /// a second time here would reintroduce exactly the divergence that change removed -- a
     /// parameter added at run time would be missing from the compat view only.</summary>
     public new LaunchParameters LaunchParameters => new(base.LaunchParameters);
-
-    protected override Content.ContentManager CreateContentManager() =>
-        new Content.ContentManager(GetNativeContentHandle());
 
     /// <summary>The <em>game</em> handle, for the reason
     /// <see cref="CNA.Game.CreateGraphicsDevice"/> spells out: the device wrapper re-resolves its

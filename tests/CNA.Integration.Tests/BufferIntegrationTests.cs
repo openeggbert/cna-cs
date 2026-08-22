@@ -26,6 +26,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             VertexPositionColor[] written = [Vertex(1f), Vertex(2f), Vertex(3f), Vertex(4f)];
 
             using var buffer = new VertexBuffer(
@@ -54,6 +55,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             VertexPositionColor[] original = [Vertex(1f), Vertex(2f), Vertex(3f), Vertex(4f)];
             int stride = VertexPositionColor.VertexDeclaration.VertexStride;
 
@@ -84,6 +86,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             VertexPositionColor[] written = [Vertex(5f), Vertex(6f)];
             int stride = VertexPositionColor.VertexDeclaration.VertexStride;
 
@@ -114,6 +117,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             Assert.Empty(device.GetVertexBuffers());
 
             using var buffer = new VertexBuffer(
@@ -137,6 +141,7 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             ushort[] original = [10, 11, 12, 13];
 
             using var buffer = new IndexBuffer(

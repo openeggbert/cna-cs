@@ -83,7 +83,7 @@ public class EffectParameter
 
     public void SetValue(Vector4 value) => _parameter.SetValue(value);
 
-    public void SetValue(Texture? value) => _parameter.SetValue(value);
+    public void SetValue(Texture? value) => _parameter.SetValue(value?.FrameworkTexture);
 
     public void SetValue(float[] value) => _parameter.SetValue(value);
 

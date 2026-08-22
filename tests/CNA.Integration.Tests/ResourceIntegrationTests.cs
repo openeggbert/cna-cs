@@ -21,6 +21,7 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             using var cube = new TextureCube(device, 8);
 
             output.WriteLine($"size={cube.Size} levels={cube.LevelCount} format={cube.Format}");
@@ -38,6 +39,7 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             using var cube = new TextureCube(device, 2);
 
             var face = new Color[2 * 2];
@@ -59,6 +61,7 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.Texture3D);
             using var volume = new Texture3D(device, 4, 4, 2);
 
             output.WriteLine($"{volume.Width}x{volume.Height}x{volume.Depth} format={volume.Format}");
@@ -74,6 +77,7 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
             using var target = new RenderTargetCube(
                 device, 16, false, SurfaceFormat.Color, DepthFormat.Depth24);
 

@@ -10,7 +10,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// this codebase: arrays of a type with a user-defined conversion operator do not convert
 /// automatically.
 /// </summary>
-public class VertexDeclaration
+public class VertexDeclaration : GraphicsResource
 {
     private readonly CNA.Graphics.VertexDeclaration _framework;
 
@@ -69,6 +69,8 @@ public class VertexDeclaration
 
         return result;
     }
+
+    protected override void Dispose(bool arg0) => base.Dispose(arg0);
 
     private static CNA.Graphics.VertexElement[] ToFramework(VertexElement[] elements)
     {

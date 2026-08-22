@@ -1,5 +1,8 @@
 using Xunit;
+using Microsoft.Xna.Framework;
 using XnaEventArgs = Microsoft.Xna.Framework.GameComponentCollectionEventArgs;
+using XnaComponent = Microsoft.Xna.Framework.IGameComponent;
+using XnaComponentCollection = Microsoft.Xna.Framework.GameComponentCollection;
 
 namespace CNA.XnaCompat.Tests;
 
@@ -17,7 +20,7 @@ namespace CNA.XnaCompat.Tests;
 /// </summary>
 public class GameComponentCollectionEventArgsCompatTests
 {
-    private sealed class StubComponent : CNA.IGameComponent
+    private sealed class StubComponent : XnaComponent
     {
         public void Initialize()
         {
@@ -40,5 +43,22 @@ public class GameComponentCollectionEventArgsCompatTests
     public void Constructor_RejectsNull()
     {
         Assert.Throws<ArgumentNullException>(() => new XnaEventArgs(null!));
+    }
+
+    [Fact]
+    public void StandaloneCollection_IsTypedOnCompatInterface_AndRaisesOrderedEvents()
+    {
+        var collection = new XnaComponentCollection();
+        var component = new StubComponent();
+        var events = new List<string>();
+        collection.ComponentAdded += (_, args) => events.Add($"added:{ReferenceEquals(component, args.GameComponent)}:{collection.Count}");
+        collection.ComponentRemoved += (_, args) => events.Add($"removed:{ReferenceEquals(component, args.GameComponent)}:{collection.Count}");
+
+        ICollection<XnaComponent> contract = collection;
+        contract.Add(component);
+        Assert.Same(component, collection[0]);
+        Assert.True(contract.Remove(component));
+
+        Assert.Equal(["added:True:1", "removed:True:0"], events);
     }
 }

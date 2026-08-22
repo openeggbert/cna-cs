@@ -1,2033 +1,278 @@
-# Current state — 2026-08-19
+# CNA.NET engineering roadmap
 
-**Not releasable yet.** The API surface is complete and both layers run against the real library;
-what is missing is everything between "it works here" and "someone else can use it".
+Last measured: 2026-08-22. Session history and superseded decisions live in
+[`NEXT.md`](NEXT.md). This file is the current, normative plan.
 
-## What is done
+## Current verified state
 
-| | |
+**Not release-ready and not API-complete.** `CNA.XnaCompat` runs useful XNA-style code on CNA, but
+its remaining public contract differences are systemic rather than cosmetic.
+
+| Area | Measured result |
 | --- | --- |
-| XNA 4.0 API surface | Complete, to the FNA standard. Where the C ABI cannot back a member it throws and names what is missing, rather than the member being absent. `Microsoft.Xna.Framework.Net`, `.GamerServices` and `Microsoft.Devices.Sensors` are out of scope — FNA ships none of them either. |
-| Interop verification | 833 P/Invoke declarations. All present in the headers, all arities matching, all versioned structs passed correctly, and **all resolving in both built libraries in both directions** — checked as a set difference against `nm -D`, not as a count. |
-| Tests | 804 (532 framework, 171 compat, 101 integration), 1 skipped, 0 warnings, 0 errors. |
-| Runtime verification | Both layers execute against the real engine: `CNA.*` and `Microsoft.Xna.Framework.*`. Native-backed compat types 74/89. |
-| Template | `cna-cs-template` builds and runs on both CNA renderers (3 frames, exit 0) and builds clean on MonoGame and Kni. |
-| ABI | Pinned at 0.6.0, with a floor check (major equal, minor/patch at or above). |
+| Debug and Release solution build | 0 warnings, 0 errors |
+| Managed tests | 532 `CNA.Framework` + 169 `CNA.XnaCompat`, all passing |
+| Native integration | 103/103 passing in Debug and Release on Linux under Xvfb with an ABI 0.6.0 OPENGLES3 CNA library |
+| Compile probe | Identical source passes XNA, CNA, FNA, and MonoGame; Kni fails the XNA `VertexDeclaration : GraphicsResource` assignment |
+| XNA Windows runtime metadata | 257 reference types, 239 target types, 1,467 unallowlisted differences |
+| CNA public-type leakage | 118 findings in public/protected strict-profile signatures |
+| Template | CNA build, generated-project build, and real 60/600-frame CNA runs pass |
+| Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; configured FNA runtime reports unavailable with exit 2 |
+| Packages | None; all shipping projects remain `IsPackable=false` |
+| Tested platform | Linux x64 only in this run |
 
-## What blocks a release
-
-1. **There is no package.** All three projects are `IsPackable=false`; `dotnet pack` produces
-   nothing. A consumer can only reference a source checkout by relative path, which is what the
-   template does.
-2. **There is no version and no tag.** 215 commits, zero releases, no `<Version>` anywhere.
-3. **The native library has no shipping story.** Phase 6's `runtimes/<rid>/native/` layout does not
-   exist. A consumer must locate `libcna_c_api.so` themselves and point `CNA_NATIVE_LIBRARY` at it.
-   Whether the package should carry the library or declare it an external dependency is a decision
-   nobody has made; either is defensible and it needs to be written down.
-4. **Only linux-x64 has ever run.** `NativeLibraryResolver`'s Windows and macOS branches are
-   compiled and have never executed. Cross-platform validation is the rest of Phase 6.
-
-## Known problems
-
-Found by running `cna-cs-template` under Xvfb with a real X11 window rather than the headless dummy
-driver, which is why they had not shown up before: the smoke test exits through the game's own
-`Exit()`, and that path is clean.
-
-### A game cannot be stopped with Ctrl-C
-
-SIGINT is ignored. Measured twice on each of two runs: the process was still running ten seconds
-after the signal and needed `SIGKILL`. Anyone who starts a game from a terminal has no way to stop
-it short of killing it.
-
-Not a divergence from the model — XNA has no signal concept and FNA installs no handler either — but
-it is the first thing a developer does, and it does nothing.
-
-### SIGTERM aborts instead of shutting down
-
-Exit code 134 (SIGABRT), with `pure virtual method called` and `terminate called without an active
-exception` on stderr. Reproduced twice out of two.
-
-**Hypothesis, not yet confirmed:** .NET runs managed shutdown on SIGTERM, so `SafeHandle` critical
-finalizers run `cna_*_destroy` on native objects while the native game loop is still on the stack —
-a virtual call lands on a partially destroyed C++ object. It fits the symptom and the ownership
-model, and it has not been verified against the native side; whoever picks this up should confirm
-before treating the cause as known. This project has recorded a *confident wrong cause* attached to
-a true symptom before, and that is the hardest kind of claim to dislodge.
-
-### What is *not* affected
-
-The normal path is clean, and that bounds how serious the two above are. 600 frames through a real
-X11 window on both renderers, exiting through the game's own `Exit()`: code 0, no diagnostics, on
-SOFTWARE and SDL_RENDERER alike. Three-frame runs prove startup and teardown and nothing between
-them, which is why `CNA_SMOKE_FRAMES` now exists.
-
-## What works but should be said out loud to a user
-
-- **`CompiledEffects` is false on both available renderers.** The compiled-`.fx` route is bound and
-  real, and neither SOFTWARE nor SDL_RENDERER can use it — it needs FNA3D, or SDL_GPU/Vulkan/EasyGL
-  with their build option on. A game shipping a compiled shader will not run on what is built here.
-  Source-based custom shaders do work on SOFTWARE.
-- **15 native-backed types have never executed**, all blocked by something absent from this machine
-  rather than by the binding: XACT needs authored banks, the music family needs music on the device,
-  `PictureAlbumCollection` needs a nested picture album. Listed with reasons under "Runtime
-  coverage: where it stopped".
-- **Coverage means reachability, not correctness.** A shallow smoke test catches a fabricated
-  import, a wrong struct layout and a stale handle. It would not catch a subtly wrong blend
-  equation.
-
-# CNA.NET (`cna-dotnet`) — Implementation Plan
-
-## Coverage: how it is measured, and what it is
-
-### Runtime coverage: where it stopped, and why
-
-Measured by `tools/coverage/runtimecoverage.py`, which refuses to print a single number because
-most of the compat surface has no native side to exercise. **Native-backed: 74 of 89 (83%).**
-
-Fifteen native-backed types have never executed, and each is blocked by something absent from this
-machine rather than by anything missing from the binding:
-
-| Types | Why unreachable here |
-| --- | --- |
-| `AudioEngine`, `SoundBank`, `WaveBank`, `Cue`, `AudioCategory` | XACT needs authored `.xgs`/`.xwb`/`.xsb` banks. Nothing in this repository can produce one -- they come from the XACT authoring tool. |
-| `Song`, `SongCollection`, `Artist`, `ArtistCollection`, `Genre`, `GenreCollection`, `Playlist`, `PlaylistCollection`, `AlbumCollection` | The media library opens and scans; this machine reports 0 songs. Reachable unchanged on a machine with music. |
-| `PictureAlbumCollection` | Pictures exist here (17) and the album tree walks, but `album.Albums` reports 0 sub-albums. Needs a nested picture album on disk. |
-
-`EffectAnnotation` was the last one that looked reachable and is not: a source effect declaring two
-uniforms reflects zero parameters on SOFTWARE, which accepts any non-empty text without inspecting
-it. Recorded because "probably reflects nothing" was a prediction, and this project has been wrong
-about seven of those -- it was worth the ten minutes to measure rather than assume.
-
-**What this coverage does and does not establish.** It establishes that each covered type's native
-routes are reachable and answer plausibly. It does not establish correctness: a shallow smoke test
-finds a fabricated import, a wrong struct layout and a stale handle, and would not find a subtly
-wrong blend equation. The distinction matters because 83% reads like a completeness claim and is
-not one.
-
-
-Three diffs against the C++ engine's own `Microsoft/Xna/Framework/**` headers,
-which are the authority — not a remembered list of XNA 4.0.
-
-**Types.** 237 public compat types. Everything the diff still reports is non-XNA:
-CNAEXT effect/vertex/glTF types, MonoGame's `MouseCursor`, FNA's `TextInputEXT`,
-CNA's content-manifest types, and `HalfTypeHelper` (internal in XNA too).
-
-**Whole types absent from C#** — the third diff, added 2026-08-18, and the one
-that closes the member diff's own blind spot. The member diff walks C++ classes
-and compares members of types that exist on *both* sides; a type with no C# file
-at all is `continue`d past and never reported. So "the member diff is clean" said
-nothing whatsoever about missing types.
-
-It found `TitleLocation` — a real XNA 4.0 static class (FNA ships it too), with
-`cna_title_location_get_path_size`/`_copy_path` sitting unbound in `runtime.h`.
-Now implemented. Of the 227 raw candidates, everything else is `Detail::`/
-`Internal::`/`Platform::` engine internals, `*EXT` extensions, the renderer
-interfaces, or the excluded namespaces below.
-
-Re-run it with `typesweep.py`; it is cheap and it is the only one of the three
-that can see a missing type.
-
-**Members.** Run 2026-08-18, and it should have been run at the same time as the
-type diff — it was not, and it found ~45 real gaps that the type diff and the
-unbound-header sweep both structurally missed. Two kinds in particular:
-
-- members with no native counterpart at all (`BoundingSphere.CreateFromPoints`) —
-  invisible to a sweep that looks for unbound native functions;
-- members mapping onto an *already-bound* function (`Texture2D.GetData`) — the
-  function was bound, so nothing looked missing.
-
-Both layers are now at 41 remaining candidates across 22 types, and every one is
-verified noise. The categories, so a re-run is quick to triage:
-
-| Category | Examples |
-| --- | --- |
-| C++ accessor spelling the normaliser cannot map | `getDeviceCreatedEvent`, `getVertexDeclarationStatic` |
-| private C++ fields | `preferredMultiSampleCount`, `passIndex`, `vertexOffset` |
-| C++ internals | `ContentManager.LoadXnbAsset`, `Texture.ValidateGetDataFormat` |
-| equivalent under a different name | `Get/SetIndexBuffer` → `Indices`; `MaxTextures` → `Count`; cube `Width`/`Height` → `Size` |
-| inherited from the BCL | `LaunchParameters.Add`/`ContainsKey` (from `Dictionary`) |
-| not XNA 4.0 | `AdaptersChanged`, `ClosestMSAAPower`, `VideoPlayer.VideoInfo` |
-
-The filter that makes this tractable: the C++ headers mark non-XNA members
-`CNAEXT`. Applying it cut the candidate list from 107 to 45 in one step. It now
-lives inside `tools/coverage/md2run.py` rather than being reapplied by hand each
-time — `CNAEXT` is a *declaration prefix*, not part of the identifier, so the
-name-based filter it replaced was only ever catching members literally spelled
-`…EXT` and left the list at 93.
-
-**Two triage errors from the 2026-08-18 member pass, corrected on re-run:**
-
-- `GraphicsAdapter.MonitorHandle` was filed under "not XNA 4.0". It *is* XNA 4.0
-  (`public IntPtr MonitorHandle { get; }`), and `display.h` has a route for it.
-  Now implemented — it throws, because the route is documented to always answer
-  `CNA_RESULT_NOT_SUPPORTED`, which is the throw-don't-omit rule working exactly
-  as intended.
-- compat `GameComponentCollectionEventArgs` named its property `Component`. XNA
-  calls it `GameComponent`. Renamed, and pinned by a test, because a wrong
-  *name* in the compat layer compiles perfectly here and fails only in a ported
-  game — nothing else in this repository can catch one.
-
-The lesson generalises: "not XNA 4.0" is the noise category that needs a real
-check, not a glance. It is the only one whose false positives are silent.
-
-**The standard**, restated by the user: FNA is the model. Every XNA 4.0 type
-*and member* present. Where the C ABI cannot back one, implement the real XNA
-signature and throw, naming what is missing — never omit. Members currently in
-that state: `Texture2D.GetData`, `GraphicsDevice.GetVertexBuffers`,
-`RenderTarget2D.ContentLost`, `Effect.Clone` on the abstract base.
-
-**A doc comment is not an implementation.** The `out`-versus-`ref` sweep reads each route's
-`@param` text, and for four routes that text was misleading -- see the Corrections row below. When
-the sweep reports a versioned struct passed by `out`, confirm against
-`modules/c-api/src/*.cpp` whether the body calls `HasSupportedOutputHeader`, not just what the
-header says the parameter receives.
-
-**Verified against the binary, 2026-08-18** — all 807 P/Invoke declarations
-resolve against every built `libcna_c_api.so` (five variants: headless,
-software, sdl-renderer, opengles3, and cnanext's own). Zero absent. Until now
-every check had been against *headers*; this is the first against the shipped
-symbol table, and it is what rules out `EntryPointNotFoundException` at runtime.
-
-Note for anyone repeating it: the exports are ELF-versioned
-(`cna_album_get_artist@@CNA_C_API_0.1`), so a naive `nm -D | grep` comparison
-reports all 807 as missing. Strip at `@`.
-
-**What this does *not* establish:** that anything runs. No test in this
-repository loads the native library — all 701 are pure managed. Symbols resolving
-is necessary, not sufficient. See "Will XNA games run" below.
-
-## Will XNA 4.0 games run — the honest answer
-
-API surface is complete; *execution* is unproven and there are known functional
-blockers. Not the same claim, and the difference matters:
-
-| Blocker | Effect on a ported game |
-| --- | --- |
-| ~~`cna_effect_create_compiled` → `NOT_SUPPORTED`~~ | **False, and now closed.** The route works; the claim came from a stale header sentence. `Effect(GraphicsDevice, byte[])` and `Load<Effect>` are both bound and exercised by integration tests. |
-| ~~No content-reader registration route~~ | **Closed.** `cna_content_type_reader_manager_register`/`_unregister` plus `LoadForeign<T>`, bound and tested. |
-| ~~Buffer transfers start at element zero~~ | **False, and now closed.** `cna_vertex_buffer_set_data_raw_at` and `cna_index_buffer_set_data_at` take a buffer-side offset. The one real caveat is about cost, not result: the renderer replaces whole-buffer contents, so the window is composed CPU-side and the whole buffer is re-uploaded. Bytes land where XNA puts them; the transfer is not smaller. |
-| ~~`PreparingDeviceSettings` cannot write back~~ | **Fixed upstream (CBIND-057), and the event now exists here.** This was recorded as the one blocker that needed the C++ event-handler collection changed rather than an ABI addition -- the argument delivered its settings by `const` reference, so "a C++ subscriber cannot reach the mutable accessor either". It holds them by *pointer*, so the mutable accessor needs no cast. The claim was true about the symptom and wrong about the cause, which is why it read as unfixable. |
-| ~~Nothing has ever been executed~~ | **Done.** `tests/CNA.Integration.Tests`, 13 tests against the real library. |
-
-That last row was the one that mattered, and running it found two defects no
-managed test could see:
-
-- **The binding could not load the library at all.** Every `[LibraryImport]` asks
-  for `cna-native`; the engine builds `libcna_c_api.so`. The names have never
-  matched. `HelloGame`'s README blamed the failure on the native library "not
-  existing upstream yet" — it existed, under a different name.
-  `NativeLibraryResolver` bridges them.
-- **The graphics device was constructed with the wrong handle.**
-  `CreateGraphicsDevice()` passed the *device* handle where `GraphicsDevice`
-  wanted the *game* handle — both `nint`, so it compiled — and since every
-  `GraphicsDevice` method re-resolves via `cna_game_get_graphics_device(game)`,
-  every graphics call answered `INVALID_HANDLE`. Clear, SetData, SpriteBatch:
-  none of it could work. Present in both `CNA.Game` and the compat override.
-
-And one ordering defect upstream: native invokes the `initialize` frame hook
-*after* `Game::Initialize()`, which itself calls `LoadContent()`, so the observed
-order is `LoadContent -> Initialize -> Update`. That contradicts the C header's
-own contract for the hook ("invoked once while the game initializes, before
-content loads") and XNA's. Reported upstream; `Game.RunInitializeOnce` enforces
-the correct order meanwhile, self-healingly.
-
-## Corrections — read before trusting a "cannot be done" note below
-
-A header audit on 2026-08-18 checked every claim in this repository that some
-capability was absent from the C API. Ten were false, and the count has since
-grown. The historical entries further down are left as the record of what was
-believed at the time, so this list is where the current truth lives.
-
-**Six shapes, and the instrument differs for each.** The transferable part is not
-the individual corrections but that "re-read the header" only catches the first
-one:
-
-| Shape | Example | What finds it |
-| --- | --- | --- |
-| **A name read out of prose instead of a declaration** | `cna_graphics_device_get_shading_dialect`, taken from the sentence above the real `..._get_shader_dialect_ext` and bound as if it existed | Only copying declarations from `CNA_C_API` lines. The grep that "found" it had the invented name in its own pattern, so it confirmed nothing |
-| Factually wrong about the ABI | `MediaLibrary` "has no C ABI exposure"; `media_library.h` has 148 functions | Re-reading the header |
-| True but not conclusive | `GetVertexBuffers` "cannot be answered" -- true about bare handles, and `GetRenderTargets` twenty lines up solves the same problem | Noticing the problem is solved nearby |
-| Outlived its premise | The `.cnj` factory row upstream, true until a later slice gave C a type it could name | Re-checking the *reason*, not the conclusion |
-| True symptom, confident wrong cause | `PreparingDeviceSettings` "the collection delivers a const reference" -- it holds settings by pointer | Nothing textual. Naming a cause answers the follow-up question before anyone asks it, which is why this shape is the most durable |
-| A claim about *this* binding its own code contradicts | `EffectParameter` "has no GraphicsDevice" -- every construction site passes one | Reading call sites. No sweep here points inward |
-| True of one member, written down about the class | "Custom shaders are blocked" -- true of `COMPILED_EFFECTS`, false of `CUSTOM_EFFECTS` | Enumerating the capability, not the category |
-
-Two questions worth asking of any such note: *is the stated reason true?* and
-*does it force the conclusion?* They are different, and the second catches shapes
-two through six.
-
-| Claim, as recorded | Reality |
-| --- | --- |
-| `MediaLibrary`'s music scan has "no C ABI exposure to build against"; collections "permanently empty by design" | `media_library.h`, 148 functions, scans on open. Fully bound. |
-| `MediaPlayer.State`/`Volume`/`IsMuted`/`PlayPosition`/`Queue` are "plain C# static state, not native queries" | `media_player.h`, 41 functions, owns queue, state machine and playback clock. Fully bound. |
-| `SoundEffect.Play()` needs "XNA's internal instance pool ... which this repository has no equivalent for" | `audio.h:483`/`:499`, including the `out_played` "instance limit reached" flag. Bound. |
-| `SpriteFont` "needs no new native ABI surface at all"; its loader P/Invoked `cna_content_load_spritefont` | That symbol exists in no header — every `Load<SpriteFont>` would have thrown `EntryPointNotFoundException`. `sprite_font.h` is a real eight-function resource. `.xnb` font parsing is managed now. |
-| `DrawUserPrimitives<T>`'s raw route "would need a native vertex-declaration resource this project doesn't have" | `vertex_resources.h:110-135`, already bound and in use by `VertexBuffer`. Any `IVertexType` draws. |
-| `ContentLost` is "a Direct3D 9-era concept the C API has no counterpart for" | `CNA_VertexBufferInfo.is_content_lost` and `cna_vertex_buffer_subscribe_content_lost`, plus index equivalents. Bound. |
-| `VertexBuffer.GetData<T>` "is not supported by the real cna C API" | True for raw bytes only; `cna_vertex_buffer_get_data` is a real typed readback. Bound for the four XNA vertex types. |
-| `ResourceContentManager`: "the C API has no resource-manager concept at all" | `cna_content_manager_create_resource` exists — but its embedded-resource stream is a declared placeholder that fails every load, so the managed implementation stays. |
-| `DualTextureEffect.Texture2` throws: "the C API has no second-layer function" | `cna_dual_texture_effect_set_texture` takes a layer index. Already fixed on the CNA side; the compat doc was stale. |
-| `GameComponentCollection`: "native owns the list and does not report modifications" | `cna_game_components_subscribe_added`/`_removed` exist. The snapshot enumerator is still right, for a different reason. |
-| `Effect`: "custom user-authored `.fx` shader loading is still not implemented"; recorded as the single largest functional blocker | `cna_effect_create_compiled` works. Fed malformed bytes it answers `InvalidArgument: ... does not contain a structurally valid XNA Direct3D 9 Effect Framework header` -- a live parser, not a stub. The claim traced to a header sentence ("NOT_SUPPORTED while native CNA bytecode loading is unavailable") that had outlived its implementation. `Effect` is now concrete with a real `Effect(GraphicsDevice, byte[])`, as in XNA. |
-| `Texture2D.GetData`: "no route to verify that an arbitrary element type matches that format ... needs a format-and-element-size query upstream" | `cna_texture_validate_get_data_format(format, element_size)` is exactly that query, and sits in the same header ~100 lines from the read it was guarding. Implemented; the round trip is covered by an integration test. |
-| `VertexBuffer`/`IndexBuffer` `SetData` with a nonzero `offsetInBytes`: "not supported by the real cna C API ... has no native-buffer offset parameter at all" | `cna_vertex_buffer_set_data_raw_at` and `cna_index_buffer_set_data_at` take a byte offset into **the buffer**, which is exactly what XNA's `offsetInBytes` means. Both implemented and covered by round-trip tests that check neighbouring elements are untouched. |
-| `VertexBuffer.GetData<T>`: "the C API has no raw-bytes vertex readback, only a typed one over its built-in layouts" | `cna_vertex_buffer_get_data_raw` exists, and its own header doc says it was added because that asymmetry "had no reason behind it". Any custom layout, nonzero offset or custom stride now routes through it. |
-| The ten versioned structs passed by `out` are "all documented as receiving a complete version-one value, so `out` is right" | **Four of the ten were wrong.** `cna_graphics_device_get_blend_state`/`_depth_stencil_state`/`_rasterizer_state`/`_sampler_state` call `HasSupportedOutputHeader` on the pointer *before* writing, so an `out` -- which skips the parameterless constructor and so the version stamp -- is refused with INVALID_ARGUMENT. The doc says output; the implementation requires a caller-initialised header. Now `ref` with a seeded value. The other six really are pure outputs, checked against the C++ rather than the doc. |
-| `cna_graphics_device_get_shading_dialect` is declared and unexported | **That symbol exists in no header.** It was reconstructed from doc prose, so the libraries were right to lack it; the real route is `cna_graphics_device_get_shader_dialect_ext` and always worked. The set-difference check against `nm -D` was still worth adding, and upstream added its own -- but it caught my invention, not their omission. |
-| Constructing a source effect that succeeds means the source compiled |** No.** `cna_shader_effect_create` returning success means the object exists, nothing more. `cna_shader_effect_is_valid` carries the verdict, and asymmetrically: `false` means a renderer looked and refused, `true` only that nothing rejected it. SOFTWARE reports `true` for deliberate nonsense; SDL_RENDERER reports `false` for the same text. |
-| Custom shaders are blocked, because `cna_effect_create_compiled` answers `NOT_SUPPORTED` | **Two capabilities, not one.** `CUSTOM_EFFECTS` (shader *source*) and `COMPILED_EFFECTS` (bytecode) are separate identities that differ in practice: SOFTWARE reports the first true and the second false. A game that can supply source was never blocked, and this project had recorded the category as blocked on the strength of one member of it. `Effect(GraphicsDevice, string, string)` is bound now. A sixth shape: true about one capability, written down about the class it belongs to. |
-| `EffectParameter` reached through a nested collection "cannot build a Texture wrapper" because it has no device | **The throw was dead code.** Every construction site passes a device -- `Effect.Parameters` from the effect, both nested collections from the parent parameter -- so the null it guarded was unreachable, and the message described a situation that cannot arise. Fixed by making the field non-nullable, which turns the guarantee into one the compiler keeps rather than one a throw asserts. A fifth shape: not a false claim about the ABI but a true-sounding claim about *this binding* that its own code already contradicted. |
-| `GraphicsDevice.GetVertexBuffers`: "cannot be answered -- native reports bare handles and this binding cannot map one back to the managed VertexBuffer" | Every word true, and none of it makes the question unanswerable. `GetRenderTargets`, twenty lines up in the same file, has the identical limitation and answers from a cache cross-checked against native's count. Implemented the same way. **The lesson is narrower than the other eleven: the claim was not wrong about the ABI, it was wrong that the ABI decided the outcome.** |
-| `ContentManager.Load<Effect>` fell through to "Unsupported content type" | `cna_content_manager_load_effect` exists and reads all three shapes (compiled `.xnb`, `.cnj` naming a stock effect, `.cnj` carrying shader source). Bound; a missing asset now fails as `Io`, not as an unsupported type. |
-
-Genuinely confirmed absent, re-checked in the same pass: managed content-reader
-registration (no factory entry point anywhere), service registration through
-`runtime_components.h`, nonzero buffer transfer offsets, and custom `.fx`
-effects (`cna_effect_create_compiled` returns `CNA_RESULT_NOT_SUPPORTED` while
-native bytecode loading is unavailable).
-
-The pattern worth carrying forward: a scope cut reads like a settled fact, and
-nothing in the text distinguishes one that was researched from one that was
-assumed. Re-check against the headers before relying on any of them.
-
-**Status:** Active — Phases 0-3 complete; Phase 4 essentially complete for
-the scope this plan actually calls for (pure math/value types,
-`Mouse`/`GamePad`, extra `SpriteBatch.Draw` overloads, `RenderTarget2D`,
-`SpriteFont`, `SoundEffect`/`SoundEffectInstance`, the zero-ABI
-vertex-format layer, `VertexBuffer`/`IndexBuffer`, `GraphicsDevice`'s draw
-calls, `Effect`/`BasicEffect`, `Model`, and a scoped `Song`/`MediaPlayer`
-done); Phase 5 also essentially complete (`SpriteBatch` command batching
-done; bulk-buffer transfer for `Texture2D`/vertex/index data turned out to
-already be done by every native-backed type's own original design;
-`EffectParameter` handle caching is not applicable — this project has no
-name-indexed effect-parameter system for it to apply to). `MediaQueue`/
-`SongCollection` (multi-song playlists, shuffle, repeat-driven
-auto-advance) and `VertexBuffer`/`IndexBuffer`'s real-XNA `Type`-taking
-constructors also now done. `Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`'s
-real XNA object model is also now done, deliberately scoped to always-empty
-collections (the real C++ engine's actual scanning logic depends on
-FFmpeg/native tag-parsing infrastructure with no equivalent on either side
-of this binding -- see `NEXT.md` for the detail). The picture-library
-surface (`Picture`/`PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`,
-`GetPictureFromToken`/`SavePicture`) is also now done, genuinely real (not
-scoped to always-empty) since its write path needs only plain file I/O --
-see `NEXT.md` for the detail, including why its `CNA.XnaCompat` mirror
-ended up an independent reimplementation rather than a subclass. `Model`
-file-loading is also now done for the well-grounded subset this pass
-scoped it down to: real, uncompressed `.xnb` binary assets (`CNA.Content.Xnb`),
-confirmed byte-for-byte against the real openeggbert/cna C++ engine's own
-reference implementation and a real MonoGame-compiled fixture -- LZX/LZ4
-compression and the real engine's own `.cnj`/glTF content paths are all
-deliberately out of scope (see `NEXT.md` for why -- each is its own large,
-separable feature, and the real engine hasn't even wired its own
-`ModelReader` into `ContentManager::Load<Model>()` yet either). `Model`'s
-`CNA.XnaCompat` mirror (`Model`/`ModelBone`/`ModelBoneCollection`/
-`ModelMesh`/`ModelMeshCollection`) is also now done. `ContentManager.Load<Model>()`
-on the compat `ContentManager` now also returns a real, compat-typed
-`Model` (`XnbCompatModelBuilder`, reusing the base class's own
-`.xnb`-parsing directly rather than duplicating it). `ModelMeshPart`/
-`ModelMeshPartCollection` are now compat-typed too, closing most of the
-mirror's own original "deliberately deferred" gap -- but a closer look
-showed `ModelEffectCollection`/`ModelMesh.Effects` genuinely can't be
-made safe the same way (constructed at field-initializer time inside the
-base `ModelMesh`, with no override seam at all, unlike everything else
-in this feature), so that one specific piece stays a real, documented,
-permanent gap, not a temporary scope cut -- see `NEXT.md` for the full
-design reasoning on all of this. `MediaPlayer.GetVisualizationData`/
-`IsVisualizationEnabled`/`VisualizationData` are also now done -- this
-one turned out to be the best-case scoping outcome of the whole session:
-the real C++ engine has a genuinely real, working, dependency-free FFT
-implementation for it (a from-scratch 512-point radix-2 FFT over a
-lock-free ring buffer fed from SDL3_mixer), not blocked or partial the
-way most of this session's deferred features turned out to be. `Model`
-file-loading now also covers a real, minimal-scope subset of the real
-engine's own `.cnj` JSON format (`CNA.Content.Cnj`) -- JSON envelope plus
-flat mesh list, `BasicEffect` only, vertex sidecar strides 16/20/24/32
-only -- on the base `CNA.Framework.Content.ContentManager` (`.xnb` still
-always wins first if both exist for the same asset name, matching the
-real engine's own dispatch order); the `.cnj` document's own bone
-hierarchy/skinning/PBR/morph-target surface and runtime glTF both remain
-explicitly out of scope. The `.cnj` path's own `CNA.XnaCompat` mirror
-(`CnjCompatModelBuilder`) is also now done, closing that deferred
-follow-up -- same "reuse the shared native-free parsing step, reimplement
-only the thin native-backed compat-typed assembly around it" pattern
-`XnbCompatModelBuilder` already established for the `.xnb` side (see
-`NEXT.md` for the detail, including the load-bearing finding that
-`.cnj`'s `BasicEffect` JSON has no material-color fields at all, unlike
-`.xnb`'s). Real, LZX-compressed `.xnb` `Model` loading (`LzxDecoder`/
-`XnbLzxDecompression`) is also now done -- a direct, line-by-line C#
-port of the real openeggbert/cna C++ engine's own `LzxDecoder`, confirmed
-byte-for-byte against two real MonoGame fixtures and an independently
-FNA-produced reference decompressed output, closing most of the `.xnb`
-loading feature's own original LZX/LZ4 deferral (`Lz4` -- a MonoGame-only
-extension with no local format grounding -- stays out of scope). `.cnj`'s
-own real `"bones"` rigid scene-graph hierarchy (cnjVersion 2) is also now
-supported on the base `ContentManager` -- research confirmed this is
-architecturally independent of skinning in the real format (a flat,
-parent-index-encoded array, closely analogous to `.xnb`'s own bone
-convention already ported), so it was carved out and built as its own
-increment; `.cnj`'s skinning surface (vertex strides 48/52/56/68,
-`"skeleton"`/`"animations"`) stays explicitly out of scope, confirmed to
-have no real payoff without a `SkinnedEffect` type, which doesn't exist
-anywhere in this project. `CnjCompatModelBuilder` (the `.cnj` path's
-`CNA.XnaCompat` mirror) now also links a document's own real bone
-hierarchy, closing that deferred follow-up -- previously it explicitly
-rejected such a document rather than silently producing a wrong bone
-structure.
-
-**Scope change, 2026-08-18 (supersedes every "out of scope" call above):**
-the user directed that `cna-cs` must cover **the complete XNA 4.0 API**, not
-a subset chosen by whatever the current sample happened to need. Phase 8
-below is now the primary outstanding work; the deferrals recorded in the
-paragraph above (`SkinnedEffect`, `.cnj` skinning, name-indexed effect
-parameters, and the rest) are **no longer deferrals** -- they are Phase 8
-line items. Phase 6 packaging/cross-platform validation still remains too.
-**Date:** 2026-08-18 (see `NEXT.md` for the session-by-session history and
-where to pick up)
-**Source analysis:** `openeggbert/cna`'s `analysis_binding.md`,
-`openeggbert/cna`'s `analysis_binding_sharp_runtime.md`,
-`../cna/analysis_binding_languages.md`
-
-This plan turns the architectural recommendations in the three analysis
-documents above into a concrete, phased build order for this repository.
-It is intentionally scoped to `cna-dotnet` only; `cna-js`, `cna-rs`,
-`cna-python`, and other bindings are out of scope here and belong in their
-own repositories once this one has proven the architecture (see
-"Recommendation" in `analysis_binding_languages.md`).
-
-## What this repository is
-
-CNA.NET is the C#/.NET language frontend for [CNA](../cna), a native C++
-XNA-inspired game framework. It plays the same role for CNA that XNA 4.0,
-FNA, or MonoGame play for game code written in C#: application code stays in
-C#, targeting familiar `Microsoft.Xna.Framework`-style APIs, while the actual
-engine — graphics, audio, input, content, and every renderer backend — runs
-as native C++ inside CNA.
+The metadata result is produced by `tools/api-compat`, not by the legacy name counter. The current
+diagnostic breakdown is:
 
 ```text
-C# game code
-        ↓
-CNA.XnaCompat   (Microsoft.Xna.Framework-compatible facade)
-        ↓
-CNA.Framework   (idiomatic CNA .NET API)
-        ↓
-CNA.Interop     (raw P/Invoke over the CNA C ABI)
-        ↓
-CNA stable C ABI                    ← lives in ../cna, not here
-        ↓
-CNA C++ core  →  Sharp Runtime, CNA subsystems, renderers
+BASE_TYPE_MISMATCH=55                 CNA_TYPE_LEAK=118
+FIELD_CONSTANT_MISMATCH=3             FIELD_TYPE_MISMATCH=1
+INTERFACE_MISMATCH=39                 MEMBER_ATTRIBUTE_MISMATCH=16
+MEMBER_MODIFIER_MISMATCH=14           MISSING_MEMBER=688
+MISSING_TYPE=23                       PARAMETER_DEFAULT_MISMATCH=2
+PARAMETER_MISMATCH=2                  PARAMETER_NAME_MISMATCH=242
+PROPERTY_ACCESSOR_MISMATCH=11         PROPERTY_TYPE_MISMATCH=2
+RETURN_TYPE_MISMATCH=9                TYPE_ATTRIBUTE_MISMATCH=2
+TYPE_KIND_MISMATCH=3                  TYPE_LAYOUT_MISMATCH=3
+TYPE_MODIFIER_MISMATCH=44             UNEXPECTED_MEMBER=185
+UNEXPECTED_TYPE=5
 ```
 
-See `docs/architecture.md` for the full picture and `docs/xna-compatibility.md`
-for what "XNA-compatible" does and does not mean here.
+No current difference is allowlisted. The normal verifier exits 1, as the quality gate should.
 
-## Scope mandate: the complete XNA 4.0 API
+## Compatibility definition
 
-**Directive (user, 2026-08-18): `cna-cs` must cover the whole XNA 4.0 API
-surface, not a narrow subset of it.**
+Priority is XNA 4.0 source compatibility, exact public metadata, then observable behavior. Binary
+compatibility with Microsoft's strong-named assemblies is not a release goal. CNA, FNA, and
+MonoGame extensions must be outside the strict `Microsoft.Xna.Framework` contract or explicitly
+reviewed and allowlisted.
 
-Up to and including 2026-08-17 this repository was built "vertical slice"
-style: a type was added when a sample or test actually needed it, and
-anything else was recorded as a documented, deliberate scope cut. That
-produced a solid but incomplete layer -- a concrete inventory taken
-2026-08-18 measured **94 of 201** public XNA 4.0 types present in
-`CNA.XnaCompat`, i.e. 47%. That inventory is the baseline Phase 8 works
-against; re-run it (see `Phase 8` below) rather than trusting this number
-once work starts landing.
+The current measured profile is `tools/api-compat/profiles/xna40-windows-runtime.json`, aggregating:
 
-This mandate changes three standing rules:
+- `Microsoft.Xna.Framework.dll`
+- `Microsoft.Xna.Framework.Game.dll`
+- `Microsoft.Xna.Framework.Graphics.dll`
+- `Microsoft.Xna.Framework.Storage.dll`
+- `Microsoft.Xna.Framework.Video.dll`
+- `Microsoft.Xna.Framework.Input.Touch.dll`
+- `Microsoft.Xna.Framework.Xact.dll`
 
-1. **"No caller needs it yet" is no longer a valid reason to omit a type.**
-   Real XNA 4.0 shipped it, so this project implements it. Coverage is
-   driven by the XNA 4.0 API reference, not by `samples/`.
-2. **A documented scope cut is no longer a terminal state.** Every
-   "deliberately out of scope" note already written in this file and in
-   `NEXT.md` is now a Phase 8 backlog item. Those notes stay valuable as
-   *why it was hard*, not as *why it will never exist*.
-3. **Fidelity still beats speed.** This mandate is about breadth, not about
-   lowering the bar. Every rule in "Design invariants" still holds, every
-   type is still grounded in the real, shipped `openeggbert/cna` C ABI
-   headers (never a guessed shape), and the existing build-clean +
-   tests-pass + `/code-review high` discipline still applies to each
-   increment. A wide layer of wrong bindings would be worse than the
-   narrow, correct one this replaces.
+The native CNA headers define available backend capabilities. They never define the managed XNA
+contract.
 
-What genuinely cannot be honored, and why that is a small list: a
-2026-08-18 survey of the real C ABI found upstream headers for essentially
-every remaining area -- `curve.h`, `input_touch.h`, `storage.h`,
-`runtime_components.h`, `texture_volume.h`, `texture.h`, `graphics_state.h`,
-`effects.h`, `video.h`, `xact.h`, `display.h`, `net.h`/`net_gamers.h`/
-`gamer_services.h`. Full coverage is therefore mostly *binding work against
-an ABI that already exists*, not inventing stubs for a nonexistent engine.
-Where a specific member still has no native counterpart, implement the type
-with real XNA signatures and make the unbacked member throw
-`NotSupportedException` with a message naming the missing native function --
-never silently no-op, and never fake a plausible return value.
+## Definition of done for the declared Windows runtime profile
 
-## Hard dependency on `openeggbert/cna`
+- Metadata comparison: 0 missing, mismatched, or unexpected items after a reviewed extension
+  allowlist; no stale allowlist entries.
+- Public/protected CNA-type leak check: 0 accidental findings.
+- Every XNA inheritance/interface/generic assignment in the compile corpus builds unchanged.
+- Managed differential tests cover high-risk value, collection, lifecycle, content, graphics,
+  input, audio, media, and disposal behavior.
+- Custom `ContentTypeReader<T>` and `Content.Load<MyType>()` work through normal XNA APIs.
+- C declarations, symbols, layouts, ownership, and callback lifetimes are checked against the
+  selected CNA ABI on each supported OS.
+- The template and a freshly generated `dotnet new cna-game` project build and complete both short
+  and stability native runs.
+- NuGet/RID installation is reproducible on every claimed OS/architecture.
 
-This repository cannot function at runtime until `openeggbert/cna` ships a
-stable **CNA C ABI** (`modules/c-api/` in that repository, per
-`analysis_binding.md` §3–§4). As of this writing that module does not exist
-yet upstream. The work in this repository proceeds in two tracks that can
-overlap:
+## P0 — public contract and ownership
 
-- **Track A (upstream, in `openeggbert/cna`):** design and implement the
-  C ABI itself — handles, `CNA_Result`, UTF-8 strings, struct versioning,
-  the managed-game callback bridge, etc. Not tracked by this file; see
-  `openeggbert/cna`'s `analysis_binding.md` §14, §67 Phase 0–1.
-- **Track B (this repository):** build the managed side against the *shape*
-  of that ABI as specified in the analysis documents, so that the moment
-  Track A lands, Track B only needs to fix up signatures rather than design
-  from scratch.
+### 1. Continue facade-first hierarchy repair
 
-Everything in Phase 2 onward in this plan is Track B. Until Track A ships,
-`samples/HelloGame` will build but will throw at run time when it tries to
-load the native library (`cna-native`) — this is expected and documented in
-the sample's README, not a bug in this repository.
+Use composition/internal adapters wherever inheriting a `CNA.*` implementation changes XNA's
+public hierarchy. The repaired groups include components, dynamic buffers, dynamic sound,
+`GraphicsResource`/textures/effects/states/SpriteBatch, content managers, and curves.
 
-## Phases
+Next coherent groups, ordered by impact:
 
-### Phase 0 — Repository scaffold (this commit)
+1. `Game`, `GraphicsDeviceManager`, `GraphicsDevice`, `GameWindow`, and service/device-setting
+   types. Completion: exact metadata for the group and no inherited CNA members visible to source.
+2. Model types and their exact `ReadOnlyCollection<T>`/nested enumerator contracts. Completion:
+   no `CNA.Graphics.*` generic arguments or base types in the model family.
+3. Audio/XACT facades, exception bases, `AudioCategory` and `RendererDetail` kind/layout fixes.
+4. Media/storage facades and collection bases; remove public helper base types in the strict
+   namespace.
+5. Remaining graphics collections, adapters, exceptions, and `DisplayMode` kind mismatch.
+6. Missing design converters, serialization attributes, nested enumerators, and
+   `GamerServicesComponent` for the selected profile.
 
-- [x] `plan.md`, `README.md`, `LICENSE` (Ms-PL, matching `cna`), `NOTICE.md`,
-      `.gitignore`, `.editorconfig`.
-- [x] `CNA.sln` plus SDK-style `CNA.Interop`, `CNA.Framework`,
-      `CNA.XnaCompat` projects, each currently empty of native-dependent
-      behavior beyond what compiles without the native library present.
-- [x] `docs/architecture.md`, `docs/xna-compatibility.md`.
-- [x] Editor/IDE support: `CNA.sln` (Visual Studio, Rider), SDK-style
-      `.csproj` (VS Code + C# Dev Kit, Rider, `dotnet` CLI all read these
-      directly — no separate project format needed per IDE).
+After each group, run the strict verifier and record the reduced counts in `NEXT.md`. Completion is
+measured by metadata, not by matching names.
 
-### Phase 1 — Minimal `CNA.Interop`
+### 2. Resource ownership
 
-- [x] ABI-shaped value structs (`CnaResult`, `CnaHandle`, `CnaVector2`,
-      `CnaColor`, `CnaGameTime`, `CnaKeyboardState`) matching
-      `analysis_binding.md` §8 and `analysis_binding_sharp_runtime.md` §13,
-      §42, §43.
-  - [x] `Native` partial class with `LibraryImport` declarations for the
-      slice of the ABI needed by `HelloGame` (§38, §140): runtime init,
-      managed-game lifecycle + callback bridge (§20), `GraphicsDevice.Clear`,
-      `Texture2D` create/release/set-data, `SpriteBatch`
-      begin/draw/end, `Keyboard` snapshot, `ContentManager` load/root
-      directory, and last-error retrieval.
-- [x] `CnaError.GetLastErrorMessage()` (last-error text retrieval); the
-      public `CnaException` that maps `CNA_Result` + that text to a managed
-      exception lives in `CNA.Framework` (§10, §77), since `CNA.Interop`
-      itself has no public surface at all.
-- [ ] Pure interop unit tests that only require the ABI headers/shape, not a
-      built native library (deferred until Track A ships something to link
-      against).
+The implementation must distinguish owned, borrowed, adopted, and parent-owned native handles.
+`StockEffect.Dispose()` now releases its base reflection handles, fixing a reproduced game-destroy
+failure, and `GameComponent.Dispose()` no longer destroys a native component twice.
 
-### Phase 2 — Minimal `CNA.Framework`
+Remaining criteria:
 
-- [x] Local (non-native) value types: `Vector2`, `Color`, `GameTime` (§23,
-      `analysis_binding_sharp_runtime.md` §43). Only the members needed by
-      `HelloGame`; broaden in Phase 4.
-- [x] `SafeHandle`-based native resource wrapper pattern (§24) applied to
-      `Texture2D`.
-- [x] `Game` lifecycle (`Initialize`/`LoadContent`/`Update`/`Draw`/
-      `UnloadContent`/`Exit`/`Run`) bridged to native through the
-      `[UnmanagedCallersOnly]` callback adapter described in §20.
-- [x] `GraphicsDeviceManager`, `GraphicsDevice.Clear`, `Texture2D`,
-      `SpriteBatch` (single-draw form; batched `DrawMany` per §22 is a
-      Phase 5 performance task), `Keyboard`/`KeyboardState`/`Keys` (snapshot
-      pattern, §25), `ContentManager` (`RootDirectory`, `Load<T>` dispatch
-      per §26).
+- disposal/finalization tests for every native-owning facade family;
+- construct/dispose/reconstruct stress tests, including exception paths;
+- no duplicate wrappers that both own one handle;
+- parent-owned wrappers cannot release their parent resource;
+- shutdown and signal behavior has an explicit tested policy.
 
-### Phase 3 — `CNA.XnaCompat` facade + `HelloGame` sample
+## P0 — content compatibility
 
-- [x] `Microsoft.Xna.Framework[.Graphics|.Input|.Content]` types that
-      subclass or thinly wrap their `CNA`-namespace counterparts — no
-      logic duplication for reference types; documented, minimal
-      duplication for value types via implicit conversion operators (§18,
-      §19; see `docs/architecture.md` "Why the XNA value types are not
-      literally the same type as the CNA namespace ones").
-- [x] `samples/HelloGame` reproducing the reference `HelloGame` from
-      `analysis_binding.md` §38 exactly: clear the screen, load a texture,
-      draw it with `SpriteBatch`, read `Keyboard`, exit on Escape.
-- [ ] Prove `HelloGame` actually runs once `openeggbert/cna` exposes
-      `cna-native` — this is the "first major success criterion" from §70
-      and cannot be closed from this repository alone.
+This is mostly managed work, not an upstream excuse. `ContentManager` now has the correct public
+base relationship, service-provider constructors, cache, unload, and resource-manager facade, but
+the reader type system is still structurally wrong.
 
-### Phase 4 — Broaden XNA API coverage
+Implement in this order:
 
-Split by whether the type needs the (still nonexistent) native ABI:
+1. Exact `ContentReader : BinaryReader`, abstract `ContentTypeReader`, generic
+   `ContentTypeReader<T>`, reader metadata, and serialization attributes.
+2. XNB reader table construction, type-reader activation and versioning.
+3. Shared resources, nested objects, external references, stream ownership, and deterministic
+   exception translation.
+4. Route `Content.Load<MyType>()` through managed readers; do not require `LoadForeign<T>`.
+5. Expand built-in reader fixtures over uncompressed and LZX XNBs; inventory MonoGame LZ4
+   separately as an extension.
 
-- [x] **Pure math/value types — done, complete, and real (no native
-      dependency, so unlike everything below these are 100% functional
-      today, not stubs).** `Vector3`, `Vector4`, `Quaternion`, `Matrix`,
-      `Rectangle`, `Point`, `Ray`, `Plane`, `BoundingBox`, `BoundingSphere`,
-      `BoundingFrustum`, `MathHelper`, the full 139-color XNA/X11
-      named-color table, and the 160-member `Keys` enum (Windows
-      virtual-key codes). As of the 2026-08-16 (session 5) pass, every gap
-      this bullet used to list is closed: `Matrix.Decompose`,
-      `CreateBillboard`/`CreateConstrainedBillboard`/`CreateShadow`/
-      `CreateReflection`/`CreatePerspective`/`CreatePerspectiveOffCenter`,
-      `BoundingFrustum.Intersects(BoundingFrustum)`/`Intersects(Ray)`,
-      `Quaternion.Slerp`/`CreateFromRotationMatrix`, spline interpolation
-      (`Lerp`/`SmoothStep`/`Barycentric`/`CatmullRom`/`Hermite` across
-      `Vector2`/`3`/`4`), and the IME/ChatPad/rare-OEM `Keys` members are
-      all implemented — see `NEXT.md`'s session-5 entry for per-method
-      confidence notes (most are cross-checked/round-trip-tested with real
-      unit tests; the rare-`Keys` ordinals and `CreateConstrainedBillboard`'s
-      degenerate branch are recalled/approximated rather than independently
-      verified, flagged as such in their own doc comments). That same pass
-      also fixed a real pre-existing bug: `Vector3.Transform(Vector3,
-      Quaternion)` was rotating by the *inverse* angle (wrong multiplication
-      order against this project's `Quaternion.operator *` convention) —
-      see `NEXT.md` for how it was caught and the fix. Verified with
-      `MatrixTests` (`Invert`/`Decompose`/`CreatePerspective*` round-trips
-      and cross-checks, including 9 matrices covering `LookAt`/
-      `PerspectiveFieldOfView`), `QuaternionTests` (`CreateFromRotationMatrix`
-      round-trips, `Slerp` endpoint/shortest-path checks), and
-      `BoundingFrustumTests` (containment, frustum-vs-frustum, ray
-      intersection, near/far corner ordering) — see the "Toolchain note"
-      below.
-- [x] **`Mouse`/`GamePad` — done** (new `CNA.Interop` natives
-      `cna_mouse_get_state`/`cna_gamepad_get_state`, same snapshot pattern as
-      `Keyboard`). `GamePad.GetCapabilities` — done as of 2026-08-16 (session
-      5) via a new, self-designed (no upstream ABI shape exists for it)
-      `cna_gamepad_get_capabilities` native call and `GamePadCapabilities`/
-      `GamePadType` types; `GamePadType`'s numeric values are
-      declaration-order guesses, not confirmed real XNA ordinals — see that
-      type's own doc comment. `GamePadState.PacketNumber` (always 0) is
-      still not implemented; `Buttons` covers the core d-pad/face/
-      shoulder/stick-click flags but not XNA's thumbstick-direction-as-button
-      or trigger-as-button flags — see `CNA.Input.Buttons`. `PlayerIndex`
-      lives at the *root* `CNA`/`Microsoft.Xna.Framework` namespace, not
-      `.Input` — matches real XNA, where it's shared by `GamePad` and the
-      GamerServices/Storage APIs. When adding a new type, don't assume its
-      real XNA namespace from where it "feels" like it belongs; check.
-- [x] **Extra `SpriteBatch.Draw` overloads — done** (source rectangle,
-      rotation, origin, scale, `SpriteEffects`, layer depth; both the
-      position-based and destination-rectangle-based XNA overload families).
-      Backed by one new native primitive, `cna_sprite_batch_draw_ex`, taking
-      a `CnaSpriteDrawCommand` struct that matches the `CNA_SpriteDrawCommand`
-      example in `analysis_binding.md` §22 field-for-field (that example was
-      illustrating Phase 5 batching, not this single-draw call, but the
-      field shape carries over exactly). `SpriteEffects` added as a new
-      enum (`CNA.Graphics.SpriteEffects` / XnaCompat's own, numerically
-      identical, parity-tested) — no bit values exist in the analysis docs,
-      so real XNA 4.0's values were used from memory. Destination-rectangle
-      overloads resolve to position+scale in C# (no native call of their
-      own); everything else funnels through the one native primitive.
-- [x] **`RenderTarget2D` — done, self-designed ABI, no doc backing.**
-      Unlike the `Draw` overloads above, **no ABI shape for render targets
-      exists anywhere in `analysis_binding.md` or
-      `analysis_binding_sharp_runtime.md`** — confirmed by a full-text grep
-      of both files, not an assumption. `cna_render_target2d_create` and
-      `cna_graphics_device_set_render_target` are invented for this
-      repository, following the general handle/`CnaResult` conventions used
-      everywhere else, but with **no upstream reference to validate
-      against** — treat these two functions as the least-trustworthy
-      signatures in the whole `CNA.Interop` surface once Track A ships, more
-      so than anything else in Phase 4. `RenderTarget2D` reuses
-      `Texture2D`'s release/width/height native calls rather than getting
-      its own (see `RenderTarget2D.cs` doc comment for why). XnaCompat's
-      `RenderTarget2D` inherits from XnaCompat's own `Texture2D` (not this
-      project's `RenderTarget2D`) so `Texture2D t = someRenderTarget;`
-      compiles in game code — see that file and
-      `GraphicsDevice.SetRenderTarget`'s doc comment for the
-      accepts-`Texture2D`-not-`RenderTarget2D` looseness this required.
-- [x] **`SpriteFont` — done, and needed *zero* new native ABI surface.**
-      Real XNA 4.0 exposes a public `SpriteFont` constructor taking raw
-      glyph arrays (for third-party font-building tools, not just its
-      content pipeline) — reproduced field-for-field, which makes
-      `MeasureString` pure managed code (real unit tests, no native
-      dependency, same as the math value types) and `SpriteBatch.DrawString`
-      a thin loop over the already-implemented `Draw` primitive (one native
-      call per glyph, no dedicated draw-string native call). Follows the
-      standard XNA/MonoGame "ABC" kerning-triple + cropping-rectangle
-      layout algorithm — not invented for this repository, but also not
-      verified against a real XNA binary (none available in this
-      environment); verified instead against hand-worked expected values
-      in `SpriteFontTests.cs`. Known incompleteness: does not implement
-      XNA's `SpriteEffects`-driven line/character reversal for flipped
-      text. `ContentManager.Load<SpriteFont>` — done as of 2026-08-16
-      (session 5 continued): a new, self-designed (no upstream ABI shape,
-      same caveat as `RenderTarget2D`) `cna_content_load_spritefont` native
-      call returns a fixed-capacity (256 glyphs, using C# 12's `InlineArray`
-      for a flat marshalled buffer with no two-call pointer/length dance)
-      glyph table; `ContentManager.LoadSpriteFontData` unpacks it into
-      exactly the shape `SpriteFont`'s public constructor wants, and each
-      of `CNA.Content.ContentManager`/`CNA.XnaCompat`'s `ContentManager`
-      builds its own namespace's `SpriteFont` from those same raw pieces —
-      the same "return raw pieces, let each layer wrap its own type" split
-      already used for `Texture2D`. The 256-glyph cap is a real, documented
-      limitation (generous for XNA's default ASCII-range content-pipeline
-      output, but a hard cap nonetheless) — a font with more glyphs is
-      expected to fail loudly via `CnaResult`, not silently truncate.
-- [x] **`SoundEffect`/`SoundEffectInstance` — done, 2026-08-16 (session 5,
-      after the weekly reset).** No ABI shape for audio exists anywhere in
-      the analysis docs (confirmed by a full-text grep of both — audio gets
-      no concrete struct anywhere, unlike `SpriteBatch.Draw`'s §22 example,
-      just class names to preserve and one `cna_audio_*` naming-convention
-      bullet). Better-grounded than that makes it sound, though: the real
-      `openeggbert/cna` C++ engine already has a working (if not yet
-      C-ABI-exposed) `Microsoft::Xna::Framework::Audio::SoundEffect`/
-      `SoundEffectInstance` implementation over SDL3_mixer
-      (`modules/audio/`), and every native function/parameter added here is
-      deliberately shaped to match that real implementation's actual method
-      surface and documented semantics — not invented from nothing. Follows
-      real XNA's public `SoundEffect(byte[], int, AudioChannels)` /
-      7-arg-with-loop-points constructors exactly; `SoundEffectInstance` has
-      no public constructor (matching real XNA, and the real C++ engine's
-      own `private`, `SoundEffect`-friend-only constructor), reachable only
-      via `SoundEffect.CreateInstance()`. `Volume`/`Pitch` pass through
-      unclamped and `Pan` validates to `[-1, 1]`/`IsLooped` throws if
-      already played, both reproduced in managed code specifically because
-      the real C++ implementation performs those checks in the same place.
-      `GetSampleDuration`/`GetSampleSizeInBytes` are pure arithmetic (no
-      native call) and fully tested. Known gaps, deliberately not
-      implemented: `SoundEffect`'s fire-and-forget `Play()`/
-      `Play(volume,pitch,pan)` convenience methods (would need an
-      instance-pooling mechanism this repository doesn't have — use
-      `CreateInstance()` explicitly instead), 3D positional audio
-      (`Apply3D`/`AudioListener`/`AudioEmitter`), the static
-      `MasterVolume`/`DistanceScale`/`DopplerScale`/`SpeedOfSound`
-      settings, and `SoundEffect`'s exact sample-rate range validation
-      (8,000-48,000 Hz in real XNA — only a positive check is done here,
-      lower confidence in the exact bounds). `ContentManager.Load<SoundEffect>`
-      is also supported, same split-and-wrap pattern as `Texture2D`/
-      `SpriteFont`.
-- [x] **`VertexDeclaration`/`VertexElement`/`VertexElementFormat`/
-      `VertexElementUsage`/`BufferUsage`/`IVertexType` and the five standard
-      vertex structs (`VertexPosition`, `VertexPositionColor`,
-      `VertexPositionTexture`, `VertexPositionColorTexture`,
-      `VertexPositionNormalTexture`) — done, 2026-08-16 (session 6
-      continued), and real (no native dependency).** First slice of the
-      3D pipeline, deliberately scoped down from the full
-      `Effect`/`VertexBuffer`/`Model` surface: confirmed the real
-      `openeggbert/cna` C++ engine's own `VertexDeclaration` "auto-computes
-      stride from element offsets/formats" exactly like real XNA's own
-      elements-only constructor does — pure data/arithmetic, the same
-      "escape hatch" pattern `SpriteFont` found for its own construction.
-      Stride auto-compute uses `max(offset + GetTypeSize(format))` across
-      elements (not element declaration order, not a running sum) —
-      verified against all five standard vertex structs' known real-XNA
-      strides (12/16/20/24/32) in `VertexDeclarationTests`. `BufferUsage`
-      added alongside these since `VertexBuffer`/`IndexBuffer` (native-backed,
-      done next, see below) needed it.
-- [x] **`VertexBuffer`/`IndexBuffer`/`IndexElementSize` — done, 2026-08-16
-      (session 6 continued yet further).** Second slice of the 3D
-      pipeline. No ABI shape for either exists in the analysis docs
-      (confirmed by grep — not even a naming-convention bullet, unlike
-      audio's `cna_audio_*` mention), but shaped to match the real
-      `openeggbert/cna` C++ engine's own working, tested,
-      renderer-backend-wired `VertexBuffer`/`IndexBuffer` implementations
-      (a renderer-owned GPU handle plus a CPU-side shadow buffer enabling
-      `GetData` readback) — same grounding `SoundEffect` had against
-      `modules/audio`. `SetData<T>`/`GetData<T>` use `where T : unmanaged`
-      (real XNA uses the broader `where T : struct`) — a deliberate
-      tightening, since `unmanaged` is what makes the `sizeof(T)`/`fixed`
-      pointer marshalling actually valid, and every realistic vertex/index
-      type is unmanaged anyway. Both the `VertexDeclaration`/`IndexElementSize`-taking
-      constructors *and* real XNA's `Type`-taking overloads are implemented
-      (the latter added 2026-08-16, session 6 continued autonomously past
-      the original Phase 4/5 checkpoint — `VertexDeclaration.FromType`/
-      `IndexBuffer.SizeForType`, reflection-based convenience sugar over
-      the exact same native calls, zero new native ABI needed; see
-      `NEXT.md` for the detail, including the `CNA.XnaCompat` mirror
-      needing its own genuinely separate `FromType` since a
-      compat-namespaced vertex struct implements a distinct `IVertexType`
-      interface from the base layer's). **Real testability limitation, not just an untested corner:** unlike
-      `SoundEffect`, whose constructor validates every argument before
-      ever touching native code, `VertexBuffer`/`IndexBuffer`'s
-      constructors call native immediately after minimal validation, so
-      only their argument-validation failure paths (null/non-positive
-      argument checks) are testable here at all — `SetData`/`GetData`
-      cannot be exercised without a real `cna-native`, because there is no
-      way to reach a successfully-constructed instance to call them on.
-- [x] **`GraphicsDevice.SetVertexBuffer`/`Indices`/`DrawPrimitives`/
-      `DrawIndexedPrimitives`/`PrimitiveType` — done, 2026-08-16 (session 6
-      continued yet further still).** Third slice of the 3D pipeline —
-      the actual draw calls, now that buffers exist to draw from.
-      `DrawIndexedPrimitives`'s signature matches real XNA's full 6-parameter
-      form (`primitiveType, baseVertex, minVertexIndex, numVertices,
-      startIndex, primitiveCount`) exactly for API compatibility, but
-      `minVertexIndex`/`numVertices` are accepted-and-validated without
-      being forwarded to the native call — on modern GPUs they are driver
-      hints real XNA/MonoGame themselves mostly ignore, so this project's
-      minimal native surface omits plumbing them through the ABI at all.
-      `DrawPrimitives`/`DrawIndexedPrimitives`'s own argument validation
-      (non-negative indices, positive primitive count) is testable without
-      native code, same reasoning as `VertexBuffer`/`IndexBuffer`'s
-      constructors; `SetVertexBuffer`/`Indices`'s setter call native
-      unconditionally (nothing to validate first) and are not testable
-      here, same as `SetRenderTarget`.
-- [x] **`Effect`/`BasicEffect`/`EffectTechnique`/`EffectPass`/
-      `EffectPassCollection`/`DirectionalLight` — done, 2026-08-16 (session
-      6 continued yet further still again).** Fourth slice of the 3D
-      pipeline, and — same lucky break `SoundEffect`/`VertexBuffer` had —
-      grounded against the real `openeggbert/cna` C++ engine's own working,
-      tested `modules/graphics/` `BasicEffect` implementation, not
-      invented: every property, `EnableDefaultLighting()`'s exact default
-      three-light rig, and `OnApply()`'s parameter-computation algorithm
-      are read directly from that implementation's own headers and
-      `BasicEffect.cpp`'s `FillGpuDrawParams` method. Confirmed a second
-      zero-ABI-until-Apply() escape hatch this session: constructing a
-      `BasicEffect` and setting any of its properties is pure managed
-      object state, no native call, same as `SpriteFont`'s own — only
-      `Apply()` (via `Effect.Apply` → `BasicEffect.OnApply`) crosses into
-      native code, through one new `cna_graphics_device_apply_basic_effect`
-      native call taking a `CnaBasicEffectParams` struct (a plain mutable
-      struct with object-initializer construction, not a large positional
-      constructor — see `NativeStructs.cs`'s own doc comment for why that
-      shape was chosen over the first draft). `EffectTechnique`/
-      `EffectPass`/`EffectPassCollection` are minimal scaffolding so
-      `effect.CurrentTechnique.Passes[0].Apply()` compiles and works, not a
-      general effect-parameter system (`EffectParameter` itself is not
-      implemented — nothing in `BasicEffect`'s own surface needs it).
-      `CNA.XnaCompat.BasicEffect` deliberately extends
-      `CNA.Graphics.BasicEffect` directly rather than getting its own
-      compat `Effect`/`EffectTechnique`/`EffectPass`/`DirectionalLight`
-      hierarchy — same "preserve the real logic's lineage over namespace
-      purity" trade-off `RenderTarget2D` already made, and required here
-      specifically because `DirectionalLight0/1/2` are constructed once
-      inside the base class's own constructor with no seam for a compat
-      subclass to intervene safely (see `NEXT.md` for the full reasoning,
-      including why this is *not* a case for the `Indices`-style
-      downcast-passthrough fix). Real, narrow, documented compat gap as a
-      result: `effect.CurrentTechnique`/`.Passes`/`DirectionalLight0-2` are
-      inherited unchanged and return `CNA.Graphics`-namespaced types, not
-      XNA-namespaced ones — ordinary `var`-typed/chained usage
-      (`effect.CurrentTechnique.Passes[0].Apply();`,
-      `effect.DirectionalLight0.Enabled = true;`) still compiles and works;
-      only an explicit XNA-namespaced type declaration for one of those
-      three would fail to compile. `OnApply`'s pure-computation halves
-      (`ComputeFogVector`/`ComputeLightingParams`'s eye-position) are
-      exposed via `internal`-only test-only properties
-      (`FogVectorForTests`/`EyePositionWorldForTests`) so they're directly
-      unit-testable without a real `cna-native`, same reasoning as
-      `VertexBuffer`/`IndexBuffer`'s constructor-validation-only
-      testability split.
-- [x] **`Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart` and their four
-      collection types (`ModelBoneCollection`/`ModelMeshCollection`/
-      `ModelMeshPartCollection`/`ModelEffectCollection`), plus
-      `IEffectMatrices`/`IEffectFog`/`IEffectLights` — done, 2026-08-16
-      (session 6 continued yet further still again once more).** Fifth
-      slice of the 3D pipeline, and the first one that needed **zero new
-      native ABI surface** — the real `openeggbert/cna` C++ engine's
-      `modules/graphics/` `Model`/`ModelMesh`/`ModelMeshPart`/`ModelBone`
-      are pure C++ object composition, not renderer-handle-backed types at
-      all: `Model.Draw()`/`ModelMesh.Draw()` are just C++ logic that calls
-      already-existing native-backed primitives (`SetVertexBuffer`,
-      `Indices`, `Effect.Apply()`, `DrawIndexedPrimitives`) — confirmed by
-      reading the real engine's own `Model.cpp`/`ModelMesh.cpp`/
-      `ModelMeshPart.cpp`, not invented. Every constructor, property, and
-      the exact `Draw()` algorithm (absolute-bone-transform composition via
-      a reused buffer, then per-mesh-effect `World = boneTransform * world`
-      assignment through `IEffectMatrices`) is reproduced from that source.
-      `IEffectMatrices`/`IEffectFog`/`IEffectLights` (real XNA interfaces,
-      confirmed against the C++ engine's own headers) were added to
-      `CNA.Graphics.BasicEffect` specifically because `Model.Draw()` needs
-      to set `World`/`View`/`Projection` on whatever effect each mesh part
-      uses without knowing its concrete type — `IEffectFog`/`IEffectLights`
-      were free additions once `IEffectMatrices` existed, since
-      `BasicEffect`'s existing properties already matched their members
-      exactly. Real XNA's own `Model`/`ModelBone`/`ModelMesh`/
-      `ModelMeshPart` constructors and several setters (`ModelBone.AddChild`,
-      `ModelMeshPart.SetVertexOffset`/etc., `ModelEffectCollection.Add`/
-      `Remove`) are content-pipeline-only (`internal`) in real XNA — this
-      project has no content pipeline / model-file loader (a separate, much
-      larger problem), so, matching the real C++ engine's own `CNAEXT`
-      markings exactly, all of these are public here: the *only* way to
-      obtain a `Model` in this repository right now is hand-building one.
-      **No `CNA.XnaCompat` mirror this pass** — deliberate, documented scope
-      cut: with no `ContentManager.Load<Model>` to produce a `Model` any
-      other way, a compat mirror's practical value is close to zero right
-      now, and it would roughly double this pass's surface (four more
-      wrapped/extended collection types, three more wrapped interfaces).
-      Follow-up once either `ContentManager.Load<Model>` exists or a real
-      caller needs `Microsoft.Xna.Framework.Graphics.Model` specifically
-      (plain `var`-typed consumption of `CNA.Graphics.Model` already works
-      today, same as `EffectTechnique`/`DirectionalLight`'s existing compat
-      gap). Verified: `dotnet build` clean across all 6 projects; `dotnet
-      test`: 218/218 passing (up from 189 — 28 new tests total across the
-      feature and its two review passes, three of which caught real bugs
-      fixed after the fact — see `NEXT.md`). `samples/HelloGame`
-      re-verified unaffected.
-- [x] **`Song`/`MediaPlayer`/`MediaState` — done, scoped to real XNA's
-      actual most-used surface, 2026-08-16 (session 6 continued yet
-      further still again once more still further again).** No ABI shape
-      for media/music playback exists in the analysis docs (confirmed by
-      grep, same as audio), but grounded the same way `SoundEffect`/
-      `BasicEffect` were: the real `openeggbert/cna` C++ engine already has
-      a working (if not yet C-ABI-exposed) `MediaPlayer` implementation
-      over SDL3_mixer (`modules/media/`), and this project's six new
-      `cna_mediaplayer_*` native functions are shaped to match its actual
-      `Play`/`Pause`/`Resume`/`Stop`/`Volume`/`IsMuted` semantics. `Song`
-      construction turned out to be **another zero-native-ABI escape
-      hatch**: the real C++ constructor is pure managed logic (a file-
-      existence check, nothing else) — reproduced in C# the same way, so
-      `Song` is real and testable today against real temporary files, a
-      rarity among this session's native-backed types. Also found and
-      reproduced (not the inaccurate doc, the actual verified behavior) a
-      real doc/code mismatch in the upstream C++ header: its own doc
-      comment claims an empty `name` "defaults to the file name," but the
-      constructor body just stores whatever was passed, even empty.
-      **Deliberately scoped down** from the C++ engine's much larger
-      surface: no `Album`/`Artist`/`Genre`/`MediaLibrary` scanning
-      subsystem, no visualization data — what real XNA games
-      overwhelmingly actually use (`MediaPlayer.Play(song)`, `Volume`,
-      `IsMuted`, checking `State`) is what's implemented (`MediaQueue`
-      followed in a later pass this same session — see below).
-      `State`/`Volume`/`IsMuted`/`PlayPosition` are
-      plain C# static state (not native queries), matching the real C++
-      engine's own architecture exactly — its own position timer uses
-      `std::chrono`, a language facility, not an ABI call, so this project
-      uses `System.Diagnostics.Stopwatch` the same way. `Song.FromUri`
-      uses `System.Uri` for path resolution rather than porting the real
-      C++ engine's own hand-rolled percent-decoding/scheme/UNC-path parser
-      — the .NET BCL already solves exactly that problem (design invariant
-      #7), so reproducing the manual parser would just be duplicating it
-      with more room for bugs. Full `CNA.XnaCompat` mirror this time
-      (unlike `Model`): `Song` has no construction blocker the way `Model`
-      did, so `Microsoft.Xna.Framework.Media.Song` extends
-      `CNA.Media.Song` directly (not sealed there, specifically so the
-      compat type — sealed, matching real XNA — can extend it), and
-      `Microsoft.Xna.Framework.Media.MediaPlayer` is a thin forwarding
-      static class, same shape as this compat layer's existing `Mouse`/
-      `Keyboard`. Verified: `dotnet build` clean across all 6 projects;
-      `dotnet test`: 242/242 passing (up from 218 — 24 new tests total
-      across the feature and its own review pass, one of which caught a
-      real bug also present in the upstream C++ engine — see `NEXT.md`).
-      `samples/HelloGame` re-verified unaffected.
-- [x] **`MediaQueue`/`SongCollection` (multi-song playlists,
-      `MoveNext`/`MovePrevious`, shuffle, repeat-driven auto-advance) and
-      the `ActiveSongChanged`/`MediaStateChanged` events — done, 2026-08-16
-      (session 6 continued autonomously past the original "Phase 4/5
-      complete" checkpoint).** Closes the one deferral from the
-      `Song`/`MediaPlayer` entry above that turned out to be readily
-      tractable once actually scoped: `MediaQueue`/`SongCollection`'s real
-      C++ shapes (`modules/media/`) are simple (indexer, `Count`, an
-      `ActiveSong`/`ActiveSongIndex` pair defaulting to `-1`/null, no
-      surprises), and `NextSong`'s repeat-wraparound/shuffle/clamped-
-      direction algorithm was already fully read while researching the
-      original `MediaPlayer` pass, so no new research was needed, only
-      implementation. `Update()` (`CNAEXT`, public here since real XNA
-      drives the equivalent through `FrameworkDispatcher.Update()`, which
-      this project doesn't implement) is now wired into `CNA.Game`'s own
-      base `Update(GameTime)`, so any game calling `base.Update(gameTime)`
-      (standard XNA practice) gets song-end detection/auto-advance for
-      free — the closest equivalent to real XNA's automatic per-frame
-      behavior available without a real `FrameworkDispatcher`.
-      `ActiveSongChanged`/`MediaStateChanged` are raised synchronously
-      (this project has no per-frame dispatcher to defer through, unlike
-      the real C++ engine's own flag-then-dispatcher-raises-later
-      mechanism). One real asymmetry reproduced faithfully rather than
-      "fixed": `Play(Song)` plays the caller's original `Song` object
-      directly, while `Play(SongCollection, index)` plays the queue's own
-      defensive copy — a genuinely ambiguous design choice in the real
-      C++ engine (which object should own the resulting `PlayCount`
-      increment), not a knowably-wrong one like `Model.Draw`'s bone-index
-      fallback was, so it wasn't second-guessed. **No `CNA.XnaCompat`
-      mirror for `Queue`/`Play(SongCollection)` — a real, structural
-      blocker, not a scope cut of convenience:** `LoadSong`'s defensive
-      copy always constructs the base `CNA.Media.Song` type regardless of
-      the original `Song`'s actual runtime type, and `MediaPlayer` being a
-      `static` class means (unlike every other compat type this session
-      built) there is no subclassing seam to override that -- a compat
-      `Queue` property would return songs that fail an explicit
-      compat-typed downcast. `IsShuffled`/`MoveNext`/`MovePrevious`/both
-      events have no such problem (no `Song`-typed data crosses their own
-      boundary) and got the full compat mirror. Verified: `dotnet build`
-      clean across all 6 projects; `dotnet test`: 264/264 passing (up from
-      242 — 22 new tests, all passing on first run, most exercising real
-      behavior against isolated `MediaQueue` instances or real temp files
-      rather than argument validation only — see `NEXT.md` for the
-      test-isolation design this needed, since `MediaPlayer`'s shared
-      static state makes "which tests are safe to write" a real
-      constraint). `samples/HelloGame` re-verified unaffected.
-- [x] **`Album`/`Artist`/`Genre`/`Playlist`/`MediaLibrary`/`MediaSource` and
-      their collections — done, scoped to an always-empty object model,
-      2026-08-17 (session 6 continued autonomously past the original
-      "Phase 4/5 complete" checkpoint, per explicit user request to keep
-      going, then an explicit scoping decision after research revealed
-      the real feature's actual dependency shape).** Reading the real C++
-      engine's own `MediaLibrary::BuildFromRoots` showed its scanning
-      logic depends on infrastructure with no equivalent anywhere in this
-      binding and no C ABI exposure to build against: real ID3v2/Vorbis/FLAC
-      tag parsing, FFmpeg-based audio duration probing
-      (`avformat_find_stream_info`), a native directory-scanning index,
-      and a native cover-art image loader. Unlike `BasicEffect`/`Model`/
-      `Song` (each "shaped to match a real implementation, just needs
-      porting"), this is not portable at any reasonable scope -- it would
-      need either a large new native ABI surface upstream (itself needing
-      FFmpeg-equivalent decoding exposed through a C API) or reimplementing
-      binary audio-tag/container parsing from scratch in pure C#.
-      Implemented instead: the real XNA public API surface in full (every
-      type, every property, `MediaLibrary`'s own real constructor
-      validation) but every collection is always empty, since nothing
-      ever scans anything -- an honest, documented scope decision (see
-      `MediaLibrary`'s own doc comment), not a silent stub. `Album`/
-      `Artist`/`Genre`/`Playlist`'s constructors stay `MediaLibrary`-only
-      (matching real XNA's own choice, unlike `Song`'s `CNAEXT` public
-      one) since they only make sense as part of a coherent scan this
-      project can't perform. Full `CNA.XnaCompat` mirror, safe in a way
-      `MediaPlayer.Queue` wasn't: since every collection is *provably*
-      always empty, a `new`-shadowed compat-typed collection can never
-      diverge from the base one there's no real data to disagree on.
-      Verified: `dotnet build` clean across all 6 projects; `dotnet test`:
-      311/311 passing (up from 280 — 31 new tests, all passing on first
-      run, exercising real construction/validation/equality behavior with
-      no native dependency at all). `samples/HelloGame` re-verified
-      unaffected.
-- [x] **The real C++ engine's picture-library surface (`Picture`/
-      `PictureAlbum`/`PictureCollection`/`PictureAlbumCollection`,
-      `GetPictureFromToken`/`SavePicture`) — done, 2026-08-17 (session 6
-      continued autonomously past the `MediaLibrary` checkpoint, per
-      explicit user request to start this subsystem next).** Unlike the
-      music side above, this is genuinely real, not scoped to
-      always-empty: reading `MediaLibrary::SavePicture`'s own C++ source
-      confirmed *saving* a picture needs nothing beyond plain file I/O
-      (`SavedPictureStore`, a faithful port including its security-relevant
-      path-traversal filename sanitization) — the only infrastructure-bound
-      sub-pieces (real image-dimension detection, real thumbnail
-      generation) already have real, working fallback paths in the
-      upstream engine itself (`width=0,height=0` on decode failure;
-      full-size image on thumbnail-generation failure), taken
-      unconditionally here rather than invented. `RootPictureAlbum` starts
-      as a single empty root node (no pre-existing-photo scan, same reason
-      as the music side) rather than null, matching real XNA's own
-      "always a valid album" contract. **`CNA.XnaCompat` mirror needed a
-      genuinely different design from every other feature this session:**
-      a covariant-return factory-hook design (the same pattern
-      `Game.CreateGraphicsDevice` uses) was tried first and does not fit,
-      because `PictureCollection`/`PictureAlbumCollection` are — like
-      `SongCollection`/`AlbumCollection` — independent reimplementations of
-      their `CNA.Media` counterparts, not subclasses, and a covariant
-      override requires the override's return type to actually be a
-      subtype of the base's declared return type. With no safe downcast
-      available for the collections, `Picture`/`PictureAlbum` became
-      independent reimplementations too, and `CNA.XnaCompat`'s own
-      `MediaLibrary` maintains fully independent, compat-typed picture
-      state built directly on `CNA.Media.SavedPictureStore` (the shared
-      low-level, security-sensitive helper — reused, not duplicated)
-      instead of on the base class's own bookkeeping — see `NEXT.md` for
-      the full reasoning trail, including the dead end. **Critical safety
-      finding, load-bearing for all testing in this area:**
-      `Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)`
-      resolves to the real current user's actual Pictures folder in this
-      environment — confirmed, not assumed — so no test anywhere calls
-      `SavePicture` with real data; `SavedPictureStore` (the actual
-      file-writing logic) is tested directly against a throwaway temp
-      directory instead. Verified: `dotnet build` clean across all 6
-      projects, 0 warnings; `dotnet test`: 359/359 passing (up from 315 —
-      44 new tests, including a follow-up `/code-review high` pass that
-      fixed a stream-draining-order bug and added a missing `IsDisposed`
-      guard to `SavePicture` — see `NEXT.md`). `samples/HelloGame`
-      re-verified unaffected.
-- [x] **`Model` file-loading via real, uncompressed `.xnb` binary assets
-      (`CNA.Content.Xnb`, `ContentManager.Load<Model>()`) — done, 2026-08-17
-      (session 6 continued autonomously past the picture-library checkpoint,
-      per explicit user selection of "Start Model file-loading," then an
-      explicit scope decision — "attempt full scope anyway" — once research
-      revealed the true dependency shape: three separate content formats,
-      not one).** Research first (this session's own standing discipline)
-      found the real openeggbert/cna C++ engine supports `Model` content
-      three different ways — real XNA's own `.xnb` binary format
-      (`modules/content/src/Xnb/`), a custom `.cnj` JSON format, and a
-      runtime glTF importer (`modules/content/src/GltfImport/`, ~2,500
-      lines, skeletal animation/morph targets/PBR materials, native
-      `cgltf`-dependent) — `ContentManager.cpp` alone is 3,227 lines. Only
-      the real-XNA `.xnb` path is in scope for this pass: it's the one
-      path that's genuinely about *XNA source compatibility* (goal #1),
-      it's pure C#/BCL logic with **zero** native ABI dependency (unlike
-      `Texture2D`/`SoundEffect`/`SpriteFont`, which this project's native
-      engine loads on their behalf), and — confirmed by a dedicated
-      research pass reading the real reference implementation in full and
-      hand-tracing a real, uncompressed, MonoGame-compiled `Model` fixture
-      byte-for-byte — it's genuinely tractable at this scope. LZX/LZ4
-      decompression and the `.cnj`/glTF paths are explicitly deferred (see
-      `NEXT.md` for the full reasoning); real, *uncompressed* `.xnb` files
-      are the only ones this reader accepts, rejecting compressed ones
-      with a clear, documented exception rather than attempting either
-      decompressor. **Split into two layers, mirroring
-      `ContentManager.LoadSpriteFontData`'s existing "return raw pieces,
-      let the caller build the native-backed object" pattern:** parsing
-      the `.xnb` bytes into an intermediate `XnbModelData` tree
-      (`CNA.Content.Xnb`) is pure C#, no native call anywhere, and fully
-      unit-testable — confirmed against a real fixture, not just
-      hand-constructed bytes; building the final, real `Model` from that
-      tree (`XnbModelBuilder`) needs a real, native-backed `GraphicsDevice`
-      to construct `VertexBuffer`/`IndexBuffer` instances, so *that* part
-      is native-ABI-blocked, the same situation as this project's other
-      content types. `System.IO.BinaryReader.Read7BitEncodedInt()`/
-      `.ReadString()` are used directly for the format's own 7-bit-encoded
-      ints/length-prefixed strings — confirmed byte-for-byte identical to
-      the real format, not just "close enough" (design invariant #7).
-      `ContentManager.GraphicsDevice` is a new settable property, wired by
-      `Game.EnsureGraphicsDevice()` once its own device becomes available.
-      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
-      `dotnet test`: 380/380 passing (up from 359 — 21 new tests,
-      including a full end-to-end parse of a real MonoGame-compiled
-      `Model` `.xnb` fixture, vendored into `tests/CNA.Framework.Tests/assets/`
-      from `openeggbert/cna`'s own MIT-licensed MonoGame test fixtures —
-      see that directory's own `README.md`, and a follow-up `/code-review
-      high` pass that fixed a real "loaded models render nothing" bug
-      plus four corrupt-input safety gaps — see `NEXT.md`).
-      `samples/HelloGame` re-verified unaffected.
-- [x] **`Model`'s `CNA.XnaCompat` mirror (`Model`/`ModelBone`/
-      `ModelBoneCollection`/`ModelMesh`/`ModelMeshCollection`) — done,
-      2026-08-17 (session 6 continued autonomously past the `.xnb`
-      loading checkpoint, per explicit user selection of "Build Model's
-      CNA.XnaCompat mirror").** Real design work, not a small addition:
-      `ModelBoneCollection`/`ModelMeshCollection` are independent
-      reimplementations (same "extending directly would inherit the
-      wrong element type" reasoning as `SongCollection`), `ModelBone`'s
-      `Children` needed its own independently-tracked, `AddChild`-synced
-      storage (the base class's own `Children` is built inside the base
-      constructor with no override seam — the same wall the
-      picture-library's `PictureAlbum` hit), and `Model`'s own
-      `CopyAbsoluteBoneTransformsTo`/`CopyBoneTransformsFrom`/
-      `CopyBoneTransformsTo` needed real element-wise-converting overloads
-      despite taking "just a `Matrix`" — their parameter is a `Matrix[]`,
-      and C#'s implicit conversion operators (which handle every other
-      inherited-unchanged scalar member in this compat layer for free)
-      don't apply across arrays. **Deliberately scoped down, matching
-      `BasicEffect.CurrentTechnique`/`DirectionalLight0-2`'s own precedent
-      exactly:** `ModelMeshPart`/`ModelMeshPartCollection`/
-      `ModelEffectCollection` stay base-typed -- `ModelMeshPart`'s own
-      `VertexBuffer`/`IndexBuffer`/`Effect` can already legitimately
-      *hold* compat-typed instances (compat `VertexBuffer`/`IndexBuffer`/
-      `BasicEffect` all subclass their base counterparts directly), so
-      ordinary `var`-typed/`foreach` consumption already works; only an
-      explicit `Microsoft.Xna.Framework.Graphics.ModelMeshPart` type
-      declaration would fail to compile — a real, narrow, documented gap,
-      not an oversight. `ContentManager.Load<Model>()` on the compat
-      `ContentManager` also does **not** yet return a compat-typed
-      `Model` (would need its own `XnbModelBuilder`-equivalent, reusing
-      `CNA.Content.Xnb`'s shared parsing layer the same way the
-      picture-library's compat `MediaLibrary` reuses
-      `SavedPictureStore`) — a separate, deliberately deferred follow-up,
-      not attempted in this pass. Verified: `dotnet build` clean across
-      all 6 projects, 0 warnings; `dotnet test`: 391/391 passing (up from
-      380 — 11 new tests, all for `ModelBone`/`ModelBoneCollection`, the
-      only new compat type reachable from `CNA.XnaCompat.Tests` without a
-      real `cna-native` — `Model`/`ModelMesh` both need a `GraphicsDevice`,
-      unreachable there, same pre-existing limitation already documented
-      on compat `VertexBuffer`/`IndexBuffer`/`BasicEffect`).
-      `samples/HelloGame` re-verified unaffected.
-- [x] **`ContentManager.Load<Model>()` on the compat `ContentManager` —
-      done, 2026-08-17 (session 6 continued autonomously past the compat
-      mirror checkpoint, per explicit user selection of "Wire compat
-      ContentManager.Load<Model>()").** Closes the one deferral flagged
-      in the entry above. Split `CNA.Content.ContentManager.LoadModel`
-      into `LoadXnbModelData` (pure `.xnb` parsing, unchanged behavior)
-      and `LoadModel` (parsing + base-typed assembly), so
-      `CNA.XnaCompat.ContentManager` can reuse the parsing step directly
-      without duplicating any `.xnb` format logic, then hand the result
-      to a new `XnbCompatModelBuilder` (this compat layer's own
-      counterpart to `XnbModelBuilder`, reusing its now-`internal`
-      `BuildVertexBuffer`/`BuildIndexBuffer`/`BuildBasicEffect` directly
-      rather than duplicating them, since `ModelMeshPart` stays
-      base-typed regardless of which builder constructs it). One real
-      compiler-caught correction along the way: `LoadXnbModelData` first
-      tried `protected` (matching every other load-helper), which failed
-      with `CS0050` since its `internal`-typed return value isn't visible
-      to a hypothetical third-party subclass of the *public*
-      `ContentManager` outside this project's own `InternalsVisibleTo`
-      grant — fixed by using `internal` instead (matching
-      `SavedPictureStore`'s own accessibility). Verified: `dotnet build`
-      clean across all 6 projects, 0 warnings; `dotnet test`: 391/391
-      passing, unchanged — no new testable surface (constructing a
-      working `ContentManager` at all needs a real `cna-native`, the
-      same pre-existing limitation `XnbModelBuilder` itself already has).
-      `samples/HelloGame` re-verified unaffected.
-- [x] **`ModelMeshPart`/`ModelMeshPartCollection` compat mirror — done,
-      2026-08-17 (session 6 continued autonomously past the compat
-      `Load<Model>()` checkpoint, per explicit user selection of "Mirror
-      ModelMeshPart and its collections").** Turned out simpler than
-      expected for `ModelMeshPart` itself (a fully trivial subclass --
-      this compat layer has no separate compat `Effect` hierarchy at
-      all, so `Effect`'s declared type never differs, and compat
-      `VertexBuffer`/`IndexBuffer` already subclass their base
-      counterparts, so `SetVertexBuffer`/`SetIndexBuffer`'s inherited,
-      base-typed parameters already accept a compat-typed argument via
-      ordinary upcasting), but harder than expected for `ModelEffectCollection`:
-      a closer look showed `ModelMesh.Effects` is constructed at
-      *field-initializer* time inside the base `ModelMesh`
-      (`public ModelEffectCollection Effects { get; } = new();`), with no
-      override seam at all -- unlike everything else in this feature,
-      there is no point after construction where a subclass could ever
-      substitute a compat-typed collection. Making it safe would need
-      `ModelMeshPart.Effect`'s setter overridden with its own
-      parallel-tracking logic *and* `ModelMesh` maintaining a second,
-      independent `Effects` collection kept in sync with it -- closer in
-      shape to why `MediaPlayer.Queue` stays a documented non-mirror than
-      to anything else in this feature, and not attempted here.
-      `ModelMesh.MeshParts` is now compat-typed (the same "single
-      construction seam" pattern `Model.Bones`/`.Meshes` already use);
-      `ModelMesh.Effects`/`ModelEffectCollection` remain a real,
-      permanent, documented gap, not a temporary scope cut.
-      `XnbCompatModelBuilder` needed real rework (not just a signature
-      update) since it can no longer reuse `XnbModelBuilder`'s own
-      buffer/effect builders now that a compat `ModelMeshPart` expects
-      compat-typed buffers -- reverted those back to `private` and gave
-      `XnbCompatModelBuilder` its own, including a new base-to-compat
-      `VertexDeclaration` converter. Verified: `dotnet build` clean
-      across all 6 projects, 0 warnings; `dotnet test`: 401/401 passing
-      (up from 391 — 10 new tests, all for compat `ModelMeshPart`, the
-      only new type in this pass reachable from `CNA.XnaCompat.Tests`
-      without a real `cna-native`). `samples/HelloGame` re-verified
-      unaffected.
-- [x] **`MediaPlayer.GetVisualizationData`/`IsVisualizationEnabled`/
-      `VisualizationData` — done, 2026-08-17 (session 6 continued
-      autonomously past the `ModelMeshPart` checkpoint, per explicit user
-      selection of "Start MediaPlayer visualization data").** Research
-      first (this session's own standing discipline) found the best-case
-      outcome of the whole session: a real, working, dependency-free
-      implementation already exists in the real C++ engine
-      (`modules/media/src/Internal/VisualizationCapture.cpp`/
-      `VisualizationFFT.cpp` -- a lock-free ring buffer fed from
-      SDL3_mixer's post-mix callback, and a from-scratch 512-point
-      radix-2 FFT the real engine's own authors deliberately built rather
-      than pulling in a DSP dependency for 256 bins), all corresponding
-      tickets checked complete in the real engine's own `plan_media.md`.
-      Since the DSP work lives entirely in native code, this followed the
-      same "build against the ABI shape a real implementation already
-      has" methodology as `Play`/`Pause`/`Resume`/`Stop`: two new
-      `cna_mediaplayer_*` native functions, one to toggle the real
-      post-mix callback (`set_visualization_enabled`), one to read the
-      FFT result (`get_visualization_data`, plain raw `float*` pointers
-      matching `cna_vertexbuffer_set_data`/`get_data`'s own "explicit
-      buffer" convention). `IsVisualizationEnabled` needed a real native
-      call on write either way (unlike `Volume`/`IsMuted`, it installs/
-      removes a real callback), but still caches the value in C# for
-      reads, matching `Volume`/`IsMuted`'s own shape. `VisualizationData`'s
-      own `CNA.XnaCompat` mirror is fully trivial -- `Frequencies`/
-      `Samples` are plain `float[]` referencing no other `CNA` type at
-      all, so the compat type is an empty subclass and
-      `MediaPlayer.GetVisualizationData` forwards with zero conversion.
-      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
-      `dotnet test`: 413/413 passing (up from 401 — 12 new tests,
-      including full, native-free coverage of `VisualizationData`'s own
-      construction in both projects, a rarity for anything
-      `MediaPlayer`-adjacent). `samples/HelloGame` re-verified
-      unaffected.
-- [x] **`Model` file-loading via a real, minimal-scope subset of the real
-      engine's own `.cnj` JSON format (`CNA.Content.Cnj`,
-      `ContentManager.Load<Model>()`) — done, 2026-08-17 (session 6
-      continued autonomously past the visualization-data checkpoint, per
-      explicit user selection of "Attempt Model's .cnj/glTF content
-      paths," then two further explicit continuations narrowing and then
-      resolving the format's own undocumented vertex-layout convention,
-      then "Attempt a minimal .cnj Model reader").** Research (three
-      sequential, increasingly-targeted passes) ruled runtime glTF out
-      entirely (hard-blocked on the vendored `cgltf` C library, no
-      algorithm-only slice avoids it) and found `.cnj` genuinely
-      tractable at a deliberately narrowed scope: JSON envelope + flat
-      mesh list (no `"bones"` hierarchy, no `"skeleton"`/`"animations"`,
-      no morph targets) + `BasicEffect` only + vertex sidecar strides
-      16/20/24/32 only (48/52/56/68, the PBR/skinned shapes, excluded).
-      The vertex sidecar's byte layout (no header, raw floats, stride
-      JSON-authoritative only) was cross-verified against both the real
-      reader and its writer, and confirmed field-for-field identical to
-      this project's own existing `CNA.Graphics.VertexPosition*` structs
-      -- so, like the `.xnb` path, sidecar bytes pass straight through to
-      `VertexBuffer.SetData(byte[])` with zero marshaling. **A real,
-      load-bearing finding that changed the implementation plan:**
-      `.cnj`'s `BasicEffect` JSON has *no material-color fields at all*
-      (no `diffuseColor`/`specularColor`/`alpha`/`specularPower`, unlike
-      `.xnb`'s own `BasicEffectReader`) -- only `texture`/
-      `vertexColorEnabled` are ever read, so `CnjModelBuilder`
-      deliberately does *not* reuse `XnbModelBuilder.ApplyBasicEffectData`,
-      which applies a field set this format simply doesn't have; it has
-      its own, much smaller effect-application step. Also new,
-      dedicated infrastructure: `CnjPathContainment`, a direct port of
-      the real engine's own `PathContainment.hpp` component-wise (not
-      string-prefix) containment check, since every sidecar path
-      (`"vertices"`/`"indices"`/`"texture"`) a `.cnj` document names is
-      untrusted, file-supplied input that must stay inside
-      `ContentManager.RootDirectory` before it's ever opened -- a
-      different shape from `SavedPictureStore.SanitizePictureName`'s
-      existing bare-filename check, since a sidecar path legitimately
-      contains subdirectories. Every deliberately out-of-scope input is
-      rejected with a clear `ContentLoadException` naming the reason
-      (unsupported `cnjVersion`, `"sourceFile"`/`"skeleton"`/
-      `"morphTargets"` present, a multi-entry `"bones"` array, an
-      unsupported vertex stride, a non-`BasicEffect` effect, a sidecar
-      path escaping the content root) rather than silently mis-loading
-      it, matching the `.xnb` path's own LZX/LZ4 precedent; two cases
-      (an empty `"vertices"`/`"indices"` field, a non-positive
-      `vertexStride`) are silently skipped, matching the real engine's
-      own behavior exactly. `LoadModel` now tries `.xnb` first (matching
-      the real engine's own dispatch order -- a real `.xnb` file always
-      shadows a `.cnj` of the same asset name), falling back to `.cnj`
-      only when no `.xnb` exists; runtime glTF stays fully out of scope.
-      Real fixture: `quad.cnj`/`quad_verts.bin`/`quad_idx.bin`, byte-for-byte
-      reproducing the real engine's own gtest fixture (`CnjModelTests.cpp`'s
-      `WriteQuadModelFixture`), vendored into
-      `tests/CNA.Framework.Tests/assets/cnj/` (regenerated from that
-      test's own field values, not copied binary, since the source is
-      C++ test code, not a binary asset -- see that directory's own
-      `README.md`). This feature does *not* serve this project's own
-      stated "XNA source compatibility" goal #1 the way `.xnb` loading
-      does -- `.cnj` is CNA's own self-rolled format with no XNA
-      equivalent -- the same goal-alignment caveat already surfaced to
-      and accepted by explicit user choice when this work was started.
-      `CnjModelReader` has zero native dependency, fully unit-testable
-      (same rare "fully real, testable today" status `XnbModelReader`
-      already has); `CnjModelBuilder` is native-ABI-blocked like every
-      other final-assembly step in this project. The `CNA.XnaCompat`
-      mirror of this path (`CnjCompatModelBuilder`) was deliberately
-      deferred as its own, separate follow-up in this pass -- matching
-      the `.xnb` path's own "narrow reader/builder split first, compat
-      mirror as a distinct, separately-reviewed follow-up" cadence; see
-      the entry below for that follow-up's own completion.
-      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
-      `dotnet test`: 459/459 passing (up from 413 — 46 new tests, all
-      for `CnjModelReader`/`CnjPathContainment`, reachable without a
-      real `cna-native` the same way `XnbModelReaderTests` already is;
-      includes two follow-up `/code-review high` passes that fixed a
-      real vertex/index sidecar byte-overrun gap (a first attempt
-      silently truncated instead of rejecting -- a second pass caught
-      that as inconsistent with this reader's own "detect and throw"
-      discipline, fixed to reject instead, matching `XnbIndexBufferReader`'s
-      own precedent exactly; `XnbVertexBufferData`/`XnbIndexBufferData`'s
-      own invariant is now also enforced structurally in their
-      constructors, not just documented), a path-containment
-      false-rejection bug, a malformed-`"bones"`-field gap, and an
-      over-rejection of `"bones": null` the first fix introduced — see
-      `NEXT.md`). `samples/HelloGame` re-verified unaffected.
-- [x] **The `.cnj` path's own `CNA.XnaCompat` mirror
-      (`CnjCompatModelBuilder`) — done, 2026-08-17 (session 6 continued
-      autonomously past the `.cnj` reader's own review-cycle checkpoint,
-      per explicit user selection of "Mirror .cnj in CNA.XnaCompat").**
-      Closes the one deferral flagged in the entry above. Exactly
-      `XnbCompatModelBuilder`'s own shape: reuses
-      `ContentManager.LoadCnjModelData` (the shared, native-free parsing
-      step) directly rather than re-parsing anything, builds
-      compat-typed `Model`/`ModelBone`/`ModelMesh`/`ModelMeshPart`/
-      `VertexBuffer`/`IndexBuffer`/`BasicEffect` throughout (so it has
-      its own `VertexDeclaration` converter, the same reason
-      `XnbCompatModelBuilder` has one), and reproduces
-      `CnjModelBuilder`'s own "no bone hierarchy, synthesize one root
-      bone plus one child bone per mesh" control flow rather than
-      sharing it (the same near-duplication trade-off
-      `XnbCompatModelBuilder`'s own doc comment already accepts for its
-      relationship to `XnbModelBuilder`). Extracted
-      `CnjModelBuilder.ApplyBasicEffectData` (mirroring
-      `XnbModelBuilder.ApplyBasicEffectData`'s own extraction) so the
-      compat builder reuses the base one's (trivial, one-line) effect
-      field-assignment logic rather than duplicating it -- nothing about
-      applying `VertexColorEnabled` is compat-specific, since compat
-      `BasicEffect` subclasses the base one directly. `ContentManager.LoadCompatModel`
-      now has the identical `.xnb`-then-`.cnj` dispatch order the base
-      class's own `LoadModel` already has. Verified: `dotnet build`
-      clean across all 6 projects, 0 warnings; `dotnet test`: 459/459
-      passing, unchanged — no new testable surface (constructing a
-      working compat `ContentManager`/`GraphicsDevice` at all needs a
-      real `cna-native`, the same pre-existing limitation
-      `XnbCompatModelBuilder`'s own compat wiring already has); includes
-      a follow-up `/code-review high` pass that deduplicated
-      `BuildVertexBuffer`/`BuildIndexBuffer`/`ToCompat` (byte-for-byte
-      identical to `XnbCompatModelBuilder`'s own, since `.cnj`'s buffer
-      data reuses the exact same format-agnostic types) into shared,
-      `internal` members on `XnbCompatModelBuilder` — see `NEXT.md`.
-      `samples/HelloGame` re-verified unaffected.
-- [x] **Real, LZX-compressed `.xnb` `Model` loading (`LzxDecoder`/
-      `XnbLzxDecompression`) — done, 2026-08-17 (session 6 continued
-      autonomously past the `CnjCompatModelBuilder` checkpoint, per
-      explicit user selection of "Attempt LZX/LZ4-compressed .xnb
-      decompression").** Research first (this session's own standing
-      discipline) found the best-grounded outcome of any deferred
-      feature this session tackled: the real openeggbert/cna C++ engine
-      has its own complete, working, already-tested `LzxDecoder`
-      (`modules/content/src/Xnb/LzxDecoder.cpp`, 680 lines) -- itself a
-      from-scratch C++ port of FNA's `LzxDecoder.cs` (a C# port of
-      libmspack's `lzxd.c`), preserving FNA's own variable names and
-      control flow specifically so it stays verifiable against the
-      original. That C++ port is cross-verified against two real,
-      vendored, Ms-PL-licensed MonoGame fixtures
-      (`Explosion.xnb`/`FontCalibri14.xnb`) **and** an independently
-      FNA-produced reference decompressed output (the exact bytes FNA's
-      own unmodified decoder produces, run under Mono) -- confirmed
-      SHA-256-identical. This C# port ported the C++ port back to C#
-      (its natural home, since the C++ was itself ported from C#),
-      preserving the same field names/control flow, and passed the
-      identical byte-exact differential test against both real fixtures
-      on the very first clean build -- no port bugs needed fixing.
-      MonoGame's own `Lz4` `.xnb` extension (confirmed, by contrast, to
-      be something original XNA/FNA never produced or read, with **zero**
-      byte-level framing details grounded anywhere reachable) stays
-      exactly as before: detected, rejected with a clear
-      `ContentLoadException` -- the real C++ engine's own maintainers
-      independently reached the identical "not now, no reference to
-      ground it against" conclusion first. "Intel E8" call-address
-      translation (a general LZX/CAB feature, essentially irrelevant to
-      game asset payloads) is reproduced exactly as FNA's own original
-      left it -- genuinely unfinished upstream (its own loop never
-      advances the output position) -- rather than "completed," since
-      that would diverge from, not match, the reference this port is
-      grounded against; in practice this option is essentially never set
-      for ordinary game-asset `.xnb` files. `XnbHeader` now accepts
-      `Lzx` as a real, supported compression value (previously it
-      rejected any non-`None` compression outright); `ContentManager.LoadXnbModelData`
-      branches on it, decompressing before constructing the
-      `XnbContentReader` the uncompressed path already used unchanged.
-      `LzxDecoder`/`XnbLzxDecompression` have zero native dependency,
-      fully unit-testable (same rare "fully real, testable today" status
-      every other `.xnb`/`.cnj` reader in this project already has).
-      Verified: `dotnet build` clean across all 6 projects, 0 warnings;
-      `dotnet test`: 464/464 passing (up from 459 — 5 new tests,
-      including the byte-exact differential check against both real
-      fixtures' independently-produced reference output, and an
-      integration check that a real compressed non-`Model` fixture
-      decompresses correctly then fails cleanly on its unsupported root
-      type reader, not a crash or a hang); includes a follow-up
-      `/code-review high` pass that fixed a real unhandled-`EndOfStreamException`
-      gap (a too-short-for-its-payload `.xnb` header previously crashed
-      instead of throwing `ContentLoadException`) and a real
-      discarded-error-return-value gap in `LzxDecoder.MakeDecodeTable`'s
-      four call sites (matching the reference implementations' own
-      control flow, but inconsistent with every other error condition
-      `Decompress` already checks) — see `NEXT.md`. `samples/HelloGame`
-      re-verified unaffected.
-- [x] **`.cnj`'s own real `"bones"` rigid scene-graph hierarchy (cnjVersion
-      2) — done, 2026-08-17 (session 6 continued autonomously past the
-      LZX decompression review-cycle checkpoint, per explicit user
-      selection of "Attempt .cnj's bone-hierarchy/skinning surface,"
-      then a dedicated research pass narrowed that to bone hierarchy
-      only).** Research first (this session's own standing discipline)
-      confirmed the real `.cnj` format keeps bone hierarchy and skinning
-      **architecturally separate already**, not one feature split for
-      convenience: `"bones"` is a flat, parent-before-child scene-graph
-      array (`ParseCnjBoneArrayEXT`) used to position rigid mesh pieces,
-      closely analogous to `.xnb`'s own bone convention already ported
-      in this project (`XnbModelBuilder`) — if anything simpler to link,
-      since `.cnj` encodes each bone's own parent index, needing only a
-      single forward pass, unlike `.xnb`'s child-index-list encoding.
-      Skinning (vertex strides 48/52/56/68, `"skeleton"`/`"animations"`)
-      was confirmed to have **no real payoff to attempt even partially**:
-      this project has no `SkinnedEffect` type anywhere (not stubbed,
-      not native-ABI-blocked, simply never started), and a real `.cnj`
-      mesh using a skinned vertex stride will, in every practically-occurring
-      case, also specify a `SkinnedEffect`-family `"effect"` value this
-      reader already rejects — so loading skinned vertex *bytes* in
-      isolation has nothing downstream to connect to, unlike this
-      project's own established "data loads now, native rendering comes
-      later" pattern (which needs the *managed* type to already exist,
-      just blocked on native — not true here). `CnjModelData`/`CnjMeshData`
-      gained `Bones`/`ParentBoneIndex`; `CnjModelBuilder.Build` gained a
-      second bone-construction branch (real hierarchy) alongside its
-      existing "no hierarchy, synthesize a bone per mesh" fallback,
-      selected by whether the document has more than one `"bones"` entry
-      (matching the real engine's own `hasBoneHierarchy` convention
-      exactly). `CnjCompatModelBuilder` was **not** extended to link real
-      bone hierarchies in this pass (its own separate, deliberately
-      deferred follow-up, matching this whole feature's established
-      cadence) — it now explicitly rejects a bone-hierarchy document with
-      a clear `ContentLoadException` instead of silently falling back to
-      its own (now genuinely *wrong*, not just incomplete) synthesized-bone
-      shape. A real, honest testing gap, stated plainly rather than
-      glossed over: unlike `quad.cnj`'s own byte-exact upstream-test
-      port, no real `.cnj` fixture with a multi-bone array exists
-      anywhere in the reference C++ engine's own test suite to
-      cross-check against, so this increment's own tests use
-      hand-authored fixtures verified against manually-derived expected
-      structure from the confirmed source logic, not an independent
-      reference. Verified: `dotnet build` clean across all 6 projects,
-      0 warnings; `dotnet test`: 476/476 passing (up from 464 — 12 new
-      tests covering real multi-bone parsing, field defaults, malformed/
-      out-of-range bone and mesh-parent-bone rejection, and the
-      no-hierarchy fallback's continued correctness; includes two
-      follow-up `/code-review high` passes — the first fixed a real
-      null-vs-absent inconsistency (a bone's own `"parent"`/`"transform"`
-      fields and a mesh's own `"parentBone"` field all originally
-      rejected JSON `null` instead of falling back to their defaults);
-      the second caught that first fix's own overreach, where making the
-      shared `GetInt` helper universally null-tolerant silently changed
-      `"vertexStride": null` from a clean rejection into a silent
-      default of 16 -- a materially worse outcome (real stride-32 vertex
-      bytes, since 32 is itself an exact multiple of 16, would be
-      reinterpreted as twice as many stride-16 vertices with a
-      completely wrong field layout), fixed by splitting `GetInt` (kept
-      strict) from a new `GetOptionalInt` (null-tolerant, used only
-      where that's safe) and extracting one shared `IsAbsentOrNull`
-      check instead of three independently-reimplemented ones; a third
-      pass then deduplicated `GetOptionalInt` itself (it delegates to
-      `GetInt` now) and corrected a mathematically overstated doc-comment
-      claim ("any multiple of 32/48/52/56/68 is also a multiple of 16" --
-      only 32 and 48 actually do; the severity conclusion didn't change,
-      32 alone already justifies it) — see `NEXT.md`). `samples/HelloGame`
-      re-verified unaffected.
-- [x] **`CnjCompatModelBuilder`'s own bone-hierarchy follow-up — done,
-      2026-08-17 (session 6 continued autonomously past the `.cnj`
-      bone-hierarchy review-cycle checkpoint, per explicit user selection
-      of "Extend CnjCompatModelBuilder for bone hierarchy").** Closes the
-      one deferral flagged when the base `.cnj` bone-hierarchy feature
-      landed. Mirrors `CnjModelBuilder.Build`'s own dual-path bone
-      construction exactly (real hierarchy when `CnjModelData.Bones` is
-      non-empty, the original synthesize-a-bone-per-mesh fallback
-      otherwise) -- the explicit rejection this builder previously threw
-      for a bone-hierarchy document is gone, replaced by the real
-      linking logic. Verified: `dotnet build` clean across all 6
-      projects, 0 warnings; `dotnet test`: 476/476 passing, unchanged —
-      no new testable surface (constructing a working compat
-      `ContentManager`/`GraphicsDevice` at all needs a real `cna-native`,
-      the same pre-existing limitation this builder's own compat wiring
-      already has). `samples/HelloGame` re-verified unaffected.
-- [ ] **Deliberately deferred follow-ups, not gaps in what's above:**
-      `Model`'s own `.cnj` skinning surface (vertex strides 48/52/56/68,
-      `"skeleton"`/`"animations"`, every `SkinnedEffect`-family effect
-      type -- confirmed architecturally separate from the now-supported
-      bone hierarchy, and requiring new `Effect` subclasses plus new
-      native ABI work regardless), runtime glTF content paths, and
-      MonoGame's own `Lz4` `.xnb` extension (see the `.xnb`/`.cnj`
-      loading entries above), and `ModelMeshPart`'s own
-      `ModelEffectCollection`/`ModelMesh.Effects` gap (see that entry
-      above, a real permanent gap, not deferred pending further work).
-      None of these are blocked on the native C ABI the way everything
-      else in this phase is — they're scoped out because each is its own
-      substantial, separable feature (or, for
-      `ModelEffectCollection`, structurally unfixable, and for `Lz4`, not
-      grounded against any reachable format reference).
-- [ ] Build the compatibility matrix (§73) from real tests, not from this
-      list.
+Completion: a user-defined reader/content type loads through unchanged XNA-style source and the
+same fixture produces normalized equivalent results on an available reference implementation.
 
-### Phase 5 — Performance passes
+## XNA profile inventory
 
-- [x] **`SpriteBatch` command buffering + `cna_sprite_batch_draw_many` (§22)
-      — done, 2026-08-16 (session 6 continued yet further still again once
-      more still further again once more still).** Every `Draw`/
-      `DrawString` call now buffers a `CnaSpriteDrawCommand` in managed
-      code instead of calling native immediately (`cna_sprite_batch_draw`/
-      `cna_sprite_batch_draw_ex`, the old single-draw natives, were
-      removed entirely rather than kept alongside the batched form — once
-      every draw funnels through one buffer, nothing calls them anymore);
-      `End()` flushes the whole batch through one new
-      `cna_sprite_batch_draw_many` call — this is the one place in this
-      project's ABI surface where `analysis_binding.md` §22 already
-      specified the exact batched struct/function shape, not just a
-      naming convention to extrapolate from. Also added real `Begin`/`End`
-      pairing validation `SpriteBatch` never had before (nothing to
-      validate when every `Draw` went straight to native): calling `Draw`
-      before `Begin`, `End` before `Begin`, or `Begin` twice without an
-      intervening `End` now throw `InvalidOperationException`, matching
-      real XNA/MonoGame's own behavior (message text recalled from
-      memory, not independently verified). Still not independently
-      testable despite being pure managed logic: `SpriteBatch` has no
-      raw-handle-wrapping constructor the way `GraphicsDevice`/`Texture2D`
-      do (never needed one for a real production reason), so constructing
-      *any* instance to exercise this new logic on still requires a real
-      `cna-native` — noted rather than adding a test-only constructor with
-      no other justification. Verified: `dotnet build` clean across all 6
-      projects (0 warnings after fixing one ambiguous-`cref` doc-comment
-      warning); `dotnet test`: 242/242 passing, unchanged (no new tests
-      possible, see above); `samples/HelloGame` re-verified unaffected.
-- [x] **Buffer-based bulk transfer for `Texture2D.SetData` / vertex/index
-      data (`analysis_binding_sharp_runtime.md` §40) — already done,
-      confirmed 2026-08-16 while scoping the rest of this phase, not new
-      work.** §40 asks for exactly one shape: explicit `(pointer,
-      byte_length)` native signatures for bulk binary data (texture
-      pixels, vertex/index data, audio samples), never a Sharp Runtime
-      array/span or `std::vector` crossing the ABI. Checked every
-      bulk-data-crossing native call already in this project against that
-      bar: `cna_texture2d_set_data`, `cna_vertexbuffer_set_data`/
-      `get_data`, `cna_indexbuffer_set_data`/`get_data`, and
-      `cna_soundeffect_create` all already take exactly `(handle, void*
-      data, size_t byteLength)` (or the C# `fixed`-pointer equivalent),
-      built this way from when each type was first added, not
-      retrofitted just now. Nothing in this codebase passes a managed
-      collection type across the ABI anywhere. This bullet was tracking a
-      principle the rest of this session's own work had already been
-      quietly honoring throughout — worth recording as done explicitly
-      rather than leaving it looking like outstanding work.
-- [ ] **`EffectParameter` handle caching (§27) — not applicable, not
-      deferred.** §27 is specifically about caching the native identity
-      behind a *name-based* lookup (`effect.Parameters["World"].SetValue(...)`)
-      so the name string isn't re-marshalled every frame. This project
-      has no `EffectParameter`/`Parameters["Name"]` collection at all —
-      `BasicEffect`'s fixed C# property surface *is* its parameter
-      interface (see that type's and `EffectPass`'s own doc comments:
-      "this project's stock effects only ever have exactly one pass",
-      no general multi-pass/name-indexed parameter system). There is
-      nothing here for this optimization to apply to; it isn't a gap,
-      it's a premise this project's `BasicEffect`-only design doesn't
-      share. Revisit only if a future custom/name-indexed effect system
-      is ever added. **Superseded 2026-08-18:** Phase 8 WP4 adds exactly
-      that name-indexed effect-parameter system, so this reopens as real
-      work once WP4 lands — re-read §27 then.
+| Profile/family | Current treatment | Completion criterion |
+| --- | --- | --- |
+| XNA 4.0 Windows runtime | Active strict profile; 1,467 differences | Zero unreviewed diff |
+| XACT runtime | Included in current seven-assembly profile | Exact API plus authored-bank tests where assets exist |
+| GamerServices | Only what selected Windows assemblies expose is currently measured | Inventory reference assemblies; provide compile-time API with deterministic unsupported behavior where services are extinct |
+| Networking/session APIs | Not yet inventoried against authoritative assemblies | Separate profile and explicit status per type |
+| Windows Phone sensors/devices | Not yet inventoried | Separate platform profile; no silent exclusion |
+| Xbox-only APIs | Not yet inventoried | Separate platform profile, normally compile-time facade plus platform behavior |
+| Content Pipeline/build-time assemblies | Explicitly outside the runtime profile | Metadata inventory and separate roadmap/package; never count it as runtime completion |
 
-### Phase 6 — Packaging and cross-platform validation
+## Behavioral audit
 
-- NuGet layout per `analysis_binding.md` §30 (`CNA.Framework.nupkg` with
-  `runtimes/<rid>/native/`).
-- Validate the `HelloGame` sample on at least Linux and Windows, with more
-  than one CNA renderer, per §38 and §70.
-- CI: pure-C ABI compile/link smoke test lives in `cna`, not here; this
-  repo's CI builds/tests the managed solution only.
+The 2026-08-22 source scan found 0 `NotImplementedException` sites, 36 explicit
+`throw new NotSupportedException` sites, and 2 `TODO` comments (both in the LZX decoder's documented
+reference-compatible edge paths). The unsupported sites include correct read-only collection/
+stream behavior as well as real content/typed-transfer gaps; each still needs contract-specific
+classification rather than a mechanical replacement.
 
-### Phase 8 — Complete XNA 4.0 API coverage (primary outstanding work)
+- Keep searching `TODO`, `FIXME`, unsupported exceptions, fallbacks, constant answers, empty
+  methods, and documented deviations.
+- Add golden/differential tests for validation order, exception types, null/range/disposed cases,
+  event order, collection mutation, math edge cases, graphics state, content caching, input
+  transitions, audio/media state, and lifecycle ordering.
+- Preserve strict behavior in `CNA.XnaCompat` even where `CNA.Framework` intentionally differs.
+  `CurveKeyCollection.Clone()` now demonstrates this: compat is shallow while the CNA API remains
+  independently designed.
 
-Driven by the "Scope mandate" section above. Baseline inventory taken
-2026-08-18: **94 of 201** tracked public XNA 4.0 types present in
-`CNA.XnaCompat` (47%); **107 missing**, of which **18 already exist in
-`CNA.Framework`** and need only a compat mirror, and **89 need building on
-both sides**.
+Completion is a published behavior matrix identifying the reference implementation and exact test
+corpus, not a percentage inferred from source.
 
-Reproduce the inventory (do this at the start of each work package rather
-than trusting the counts above once work lands):
+## CNA ABI and interop
+
+`tools/coverage` now discovers repositories/libraries relatively or through `CNA_ROOT`,
+`CNA_NATIVE_LIBRARY`, and `CNA_NATIVE_DIR`; ELF, PE, and Mach-O symbol tools are separated. The
+latest header sweep found no declared imports absent from the selected headers and no arity
+mismatches. An older ABI 0.1.0 library was correctly rejected; ABI 0.6.0 passed all 103 integration
+tests.
+
+Next criteria:
+
+- compile-time layout assertions for every interop struct, union, enum width, bool, callback, and
+  string view;
+- symbol resolution against current Linux, Windows, and macOS builds using the platform's real
+  export mechanism;
+- callback rooting/concurrency tests and systematic SafeHandle add-ref/keep-alive audit;
+- never infer cross-platform ABI validity from `nm` alone.
+
+## Extensions
+
+Current evidence is deliberately narrow:
+
+- Strict XNA: measured and incomplete.
+- FNA: the template source compiles against a configured FNA.dll; no FNA extension subset is yet
+  promised.
+- MonoGame: the template compiles and completes 60 frames against DesktopGL 3.8.1.303; extension
+  inventory and broader runtime matrix are pending.
+- Kni: the template compiles and completes 60 frames against the 4.2.9001 framework and
+  4.2.9001.1 SDL2.GL backend, while the strict compile corpus records Kni's non-XNA
+  `VertexDeclaration` ancestry; broader runtime matrix is pending.
+- CNA: renderer diagnostics moved to `CNA.XnaCompat.Extensions`; remaining inherited CNA pollution
+  is still reported by the metadata/leak tool.
+
+For each proposed FNA/MonoGame addition, record authority, source-portability value, implementation
+status, and whether it belongs in an extension namespace/assembly. Do not merge APIs into a random
+union.
+
+## Template
+
+The sibling `cna-cs-template` is now CNA-first and installable as `cna-game`. It uses raw
+`Texture2D.FromStream` for the PNG, isolates CNA diagnostics, exercises 2D and a guarded 3D path,
+and supports `--smoke-test`, `--stability-test`, and `--frames N`.
+
+Next criteria:
+
+- 600-frame CNA stability run on every additional claimed renderer (OPENGLES3 passes);
+- diagnose the configured FNA assembly/runtime load failure and complete an FNA frame run;
+- expand the passing MonoGame and Kni runs beyond this one Linux/x64 environment;
+- generated project build outside both repositories on all supported hosts;
+- generated output reduced to the clean consumer template if repository-only portability harness
+  files become intrusive.
+
+## Packaging and platform matrix
+
+The intended package graph is documented in `docs/packaging.md`. Packaging remains blocked until
+the public contract and native distribution policy are stable. Do not flip `IsPackable` merely to
+produce misleading packages.
+
+No OS/architecture is supported by claim until restore, Debug/Release build, ABI check, generated
+template build, and native smoke/stability runs pass there. Current runtime evidence is Linux x64
+with OPENGLES3 only.
+
+## CI/tooling gates
+
+Target quality gate:
+
+1. restore and Debug/Release solution build;
+2. managed unit tests and compile corpus;
+3. strict metadata diff plus CNA leak check;
+4. portable ABI/header validation;
+5. native integration when an ABI-matched library is supplied;
+6. CNA template build/run and generated-project build;
+7. alternate-engine build/runtime jobs when dependencies are available;
+8. package creation and isolated-consumer install test.
+
+The strict API job cannot be green today: it correctly exits 1 for 1,467 unallowlisted findings.
+Do not hide that with a blanket allowlist. CI reference assemblies must be supplied legally through
+`XNA_REFERENCE_PATH` or an equivalent protected artifact.
+
+## Precise upstream CNA requirements
+
+Managed work should continue around these. Do not modify upstream without authorization.
+
+- Texture3D: raw region upload already exists and is now used by generic `SetData<T>`; an equivalent
+  raw readback route is still needed for `GetData<T>` beyond Color.
+- TextureCube: general typed/raw per-face write and readback routes are needed beyond Color.
+- Dynamic audio: `cna_sound_effect_instance_apply_3d_multi_ext` is now bound and used atomically,
+  but the native implementation deliberately rejects listener counts other than one. True
+  multi-listener mixing therefore requires an implementation change, not a new ABI entry point.
+- Compiled effect bytecode needs a renderer/native implementation before `.fx` runtime support can
+  be claimed on that renderer.
+- The historical SIGTERM `pure virtual method called` shutdown report remains open until reproduced
+  or disproved on the current native build.
+
+Custom managed content readers are not listed here: implement the managed XNB machinery first.
+
+## Reproducible commands
 
 ```bash
-# list every public type CNA.XnaCompat currently declares
-grep -rhoP '^\s*public\s+(?:sealed\s+|abstract\s+|static\s+|readonly\s+|partial\s+)*(?:class|struct|enum|interface|record)\s+\K\w+' \
-  src/CNA.XnaCompat --include=*.cs | sort -u
+dotnet build CNA.sln -c Debug
+dotnet build CNA.sln -c Release
+dotnet test tests/CNA.Framework.Tests/CNA.Framework.Tests.csproj
+dotnet test tests/CNA.XnaCompat.Tests/CNA.XnaCompat.Tests.csproj
+
+XNA_REFERENCE_PATH=/path/to/xna-reference-assemblies \
+  dotnet run --project tools/api-compat -c Release -- --format json
+
+CNA_ROOT=/path/to/cna python3 tools/coverage/sweep.py
+
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
+  xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj
 ```
-
-Ordering rationale: WP1–WP4 first because they unblock the most other
-types (the texture hierarchy and effect system are dependencies of several
-later packages); WP8/WP9 are self-contained and can be done any time;
-WP11–WP14 are the largest new subsystems and come last.
-
-- [x] **WP1 — Graphics enums + `GraphicsResource` base — done 2026-08-18.**
-      Coverage 94/201 → 115/201. `GraphicsResource` landed but nothing
-      derives from it yet (WP3's job, see its own doc comment).
-      `SurfaceFormat` deliberately carries CNA's seven `_EXT` values beyond
-      XNA's 20 so a native value never casts to an undefined member. The
-      compat side gained a reflection-driven enum-parity test that pairs
-      every `Microsoft.Xna.Framework` enum with its `CNA.*` counterpart and
-      compares members + `[Flags]`, so later enums are covered with no test
-      edit. Tests 440 → 591. Original scope, for reference:
-      <details>Build:
-      `SurfaceFormat`, `DepthFormat`, `SetDataOptions`, `CubeMapFace`,
-      `RenderTargetUsage`, `PresentInterval`, `GraphicsDeviceStatus`,
-      `SpriteSortMode`, `TextureAddressMode`, `TextureFilter`,
-      `GraphicsResource`, `GamePadDeadZone`, `DisplayOrientation`.
-      Mirror-only into `CNA.XnaCompat`: `Blend`, `BlendFunction`,
-      `ColorWriteChannels`, `CompareFunction`, `CullMode`, `FillMode`,
-      `StencilOperation`, `ContentLoadException`. Ground the enums in
-      `graphics_state.h` / `graphics.h` / `display.h` `CNA_*` constants.</details>
-- [x] **WP2 — `SamplerState` + sampler collections — done 2026-08-18.**
-      `SamplerState` (six XNA presets, all native-seeded via
-      `cna_sampler_state_init`), `SamplerStateCollection`, and
-      `GraphicsDevice.SamplerStates`/`.VertexSamplerStates`, both stages,
-      16 slots each. The collection is deliberately stateless — every read
-      and write goes through to `cna_graphics_device_get/set_sampler_state`
-      rather than caching per slot, unlike the single-valued
-      `BlendState`/`DepthStencilState`/`RasterizerState` properties.
-      `TextureCollection` and `GraphicsDevice.Textures` **moved to WP3**:
-      the indexer's element type is XNA's `Texture` base class, which does
-      not exist until WP3 introduces it, and a collection typed on
-      `Texture2D` today would need re-typing immediately afterwards.
-- [x] **WP3 — Texture hierarchy — done 2026-08-18 (WP3a+WP3b).** Coverage
-      →122/201. Texture base + reparent, Texture3D, TextureCube,
-      RenderTargetCube, TextureCollection. SetData/GetData for the 3D/cube
-      forms deliberately deferred (they need the CNA_Texture3DTransfer/
-      CNA_TextureCubeTransfer descriptors, which have no 2D counterpart) --
-      tracked in WP15. Original scope:
-      <details>**WP3 — Texture hierarchy.** Introduce the real XNA `Texture` base
-      class and reparent `Texture2D`/`RenderTarget2D` onto it (a breaking
-      internal refactor — do it before more texture types exist, not
-      after), then `Texture3D` (`texture_volume.h`), `TextureCube`
-      (`texture.h`), `RenderTargetCube` (`render_target.h`, whose
-      `_set_render_target_cube` this project already noticed but never
-      used). Also carries `TextureCollection` and
-      `GraphicsDevice.Textures`/`.VertexTextures`, moved here from WP2 —
-      the indexer is typed on the `Texture` base this package introduces.</details>
-- [x] **WP4 — Full effect system — done 2026-08-18 (WP4a+WP4b).** Coverage
-      →163/201. The fabricated one-pass `EffectTechnique` is gone; techniques,
-      passes, parameters and annotations are now the effect's real native
-      objects. Note §27's `EffectParameter` handle caching (Phase 5) is now
-      genuinely applicable again and remains **not done** — the collections
-      re-resolve on every access by design; revisit if profiling shows it
-      matters. `BasicEffect` derived from `StockEffect` in WP15. Original scope:
-      <details>**WP4 — Full effect system.** Name-indexed `EffectParameter` /
-      `EffectParameterCollection` / `EffectParameterClass` /
-      `EffectParameterType`, `EffectAnnotation(Collection)`,
-      `EffectTechniqueCollection`, plus the four remaining stock effects
-      `AlphaTestEffect`, `DualTextureEffect`, `EnvironmentMapEffect`,
-      `SkinnedEffect`, and `EffectMaterial`. Native: `effects.h`. This
-      also retires the Phase 5 "`EffectParameter` handle caching — not
-      applicable" note, which was only true while no such collection
-      existed; once it does, §27's caching becomes real work again.
-- [x] **WP5 — Display / adapter / presentation — done 2026-08-18.** Coverage
-      →145/201. One documented deviation: `GraphicsAdapter.Adapters`/
-      `.DefaultAdapter` cannot be static (every adapter call needs a device
-      handle), so they take a device. Original scope:
-      <details>**WP5 — Display / adapter / presentation.** `GraphicsAdapter`,
-      `DisplayMode`, `DisplayModeCollection`, `PresentationParameters`,
-      `GraphicsDeviceInformation`, `PreparingDeviceSettingsEventArgs`,
-      `ResourceCreatedEventArgs`, `ResourceDestroyedEventArgs`. Native:
-      `display.h` (already read once for `CNA_GraphicsProfile`; the
-      adapter/display-mode half of that header is still unbound).</details>
-- [x] **WP6 — Real `GraphicsDeviceManager` — done 2026-08-18.** The
-      placeholder (a `Game` property and nothing else) is gone; every
-      preference, `ApplyChanges`, and `ToggleFullScreen` now bind
-      `runtime_graphics_manager.h`. Original scope:
-      <details>**WP6 — Real `GraphicsDeviceManager`.** Replace the placeholder
-      (currently only a `Game` property) with the real XNA surface:
-      `PreferredBackBufferWidth`/`Height`/`Format`,
-      `PreferredDepthStencilFormat`, `IsFullScreen`, `GraphicsProfile`,
-      `PreferMultiSampling`, `SynchronizeWithVerticalRetrace`,
-      `SupportedOrientations`, `ApplyChanges()`, `ToggleFullScreen()`,
-      and the `IGraphicsDeviceService`/`IGraphicsDeviceManager` contracts.
-      Native: `runtime_graphics_manager.h` — already fully surveyed
-      2026-08-18, every function confirmed to exist.</details>
-- [x] **WP7 — Game component / service model — done 2026-08-18 (WP7a+WP7b).** Coverage →194/201.
-      WP7b bound `GameComponent`/`DrawableGameComponent`/
-      `GameComponentCollection` against `runtime_components.h`, as predicted:
-      the native game owns the collection and drives components through a
-      callback table, so a managed model would have compiled and never run.
-      `Game.IsActive`/`.IsFixedTimeStep`/`.TargetElapsedTime`/`.SuppressDraw()`
-      and the `Activated`/`Deactivated`/`Exiting` events remain — moved to
-      WP15. Original scope:
-      <details>**WP7 — Game component / service model.** `IGameComponent`,
-      `IUpdateable`, `IDrawable`, `GameComponent`,
-      `DrawableGameComponent`, `GameComponentCollection`,
-      `GameServiceContainer`, `LaunchParameters`, `FrameworkDispatcher`,
-      and `Game.Components`/`.Services`/`.IsActive`/`.IsFixedTimeStep`/
-      `.TargetElapsedTime`/`.SuppressDraw()`/`.ResetElapsedTime()` plus
-      the `Activated`/`Deactivated`/`Exiting`/`Disposed` events. Native:
-      `runtime_components.h` + the unbound half of `runtime.h`. Note
-      `FrameworkDispatcher.Update()` finally gives `MediaPlayer.Update`
-      its real XNA home (today `Game.Update` calls it directly as a
-      documented stand-in — see that method's own doc comment).
-- [x] **WP8 — `Curve` system — done 2026-08-18.** Coverage →128/201.
-      Decision recorded: implemented **managed**, not bound to `curve.h`
-      (which does have a full native Curve) — design invariant #3 plus
-      testability, and the tests immediately caught two real math errors in
-      the first draft. Original scope:
-      <details>**WP8 — `Curve` system.** `Curve`, `CurveKey`, `CurveKeyCollection`,
-      `CurveContinuity`, `CurveLoopType`, `CurveTangent`. Native:
-      `curve.h`, though this is pure math and may be better implemented
-      managed-side per design invariant #3 — decide by reading the header
-      first, and record the decision.</details>
-- [x] **WP9 — Touch input — done 2026-08-18.** Coverage →135/201. All seven
-      types; CNA-only extensions (`pressure`, `finger_id_ext`) deliberately
-      not surfaced, for XNA-shape fidelity. Original scope:
-      <details>**WP9 — Touch input.** `TouchPanel`, `TouchPanelCapabilities`,
-      `TouchCollection`, `TouchLocation`, `TouchLocationState`,
-      `GestureSample`, `GestureType`. Native: `input_touch.h`.</details>
-- [x] **WP10 — Remaining buffer/query graphics types — done 2026-08-18.**
-      Coverage →149/201. `DynamicVertexBuffer`/`DynamicIndexBuffer` turned out
-      to be the *same* native resource with a `dynamic` create-info flag, not
-      separate bindings, so they are thin subclasses. `DrawUserIndexedPrimitives`
-      still outstanding (needs `CNA_UserIndices`) — moved to WP15.
-      Original scope:
-      <details>**WP10 — Remaining buffer/query graphics types.**
-      `DynamicVertexBuffer`, `DynamicIndexBuffer`, `VertexBufferBinding`,
-      `OcclusionQuery`, and `GraphicsDevice.SetVertexBuffers(params
-      VertexBufferBinding[])` / `DrawUserIndexedPrimitives` /
-      `DrawInstancedPrimitives`. Native: `vertex_resources.h`,
-      `index_resources.h`, `graphics_ext.h`, and
-      `graphics_device.h`'s already-surveyed `cna_graphics_device_draw_user_
-      indexed_primitives` / `_draw_instanced_primitives` / `CNA_UserIndices`.
-- [x] **WP5b — remaining Framework/Graphics mirrors — done 2026-08-18.**
-      Coverage →180/201. Compat `DirectionalLight`, `IEffectMatrices`/
-      `IEffectFog`/`IEffectLights`, `ModelEffectCollection`,
-      `ResourceCreatedEventArgs`/`ResourceDestroyedEventArgs`, plus
-      `GraphicsDeviceInformation`, `PreparingDeviceSettingsEventArgs`,
-      `IGraphicsDeviceService`, `IGraphicsDeviceManager` and `Game.Services`.
-      `GraphicsDeviceManager` now implements both service contracts and
-      registers itself, matching XNA. **Closes the `ModelEffectCollection`
-      "permanent gap"** recorded before the mandate: the fix was to wrap the
-      already-constructed base collection rather than to find an override seam
-      that does not exist.
-- [x] **WP4c — compat `Effect` base — done 2026-08-18. Coverage 201/201.**
-      Resolved by composition rather than the `internal static` route WP3a used:
-      each compat stock effect holds its `CNA.Graphics` counterpart and forwards
-      (~87 members), with the compat `Effect` overriding `NativeEffectHandleValue`
-      so the pair remains one native effect. docs/architecture.md updated --
-      this is now a documented exception to its "no duplicated logic" rule, taken
-      deliberately. `BasicEffect` was folded onto `StockEffect` in WP15.
-      Original note:
-      <details>The one type in this area still missing.
-      `Microsoft.Xna.Framework.Graphics.Effect` cannot simply be added: the
-      compat stock effects derive from their `CNA.Graphics` counterparts to
-      inherit ~30 native-backed properties each, and C# single inheritance
-      means they cannot also derive from a parallel compat `Effect`. The fix is
-      the one WP3a used for `Texture2D` — expose the leaf effects' native calls
-      as `internal static` helpers and reparent the compat classes onto a compat
-      `Effect` — which is a real refactor of already-reviewed code and wants its
-      own increment. Also fold `BasicEffect` onto `StockEffect` while there.</details>
-- [x] **WP11 — Full audio — done 2026-08-18 (WP11a+WP11b).** Coverage →191/201.
-      XACT (`AudioEngine`, `AudioCategory`, `AudioStopOptions`, `WaveBank`,
-      `SoundBank`, `Cue`) plus 3D audio (`AudioListener`, `AudioEmitter`).
-      WP11b added `Microphone`, `MicrophoneState`,
-      `DynamicSoundEffectInstance`. `DynamicSoundEffectInstance.BufferNeeded`
-      and `SoundEffect.Apply3D` remain — both need native callback/3D wiring;
-      moved to WP15. Original scope:
-      <details>**WP11 — Full audio.** XACT (`AudioEngine`, `SoundBank`, `WaveBank`,
-      `Cue`, `AudioCategory`, `AudioStopOptions`) from `xact.h`; 3D audio
-      (`AudioEmitter`, `AudioListener`, `SoundEffect.Apply3D`) and
-      `DynamicSoundEffectInstance`, `Microphone`, `MicrophoneState` from
-      `audio.h`.</details>
-- [x] **WP12 — Video playback + media completion — done 2026-08-18.** Coverage
-      →167/201. `Video`/`VideoPlayer`/`VideoSoundtrackType` bound, `MediaQueue`
-      mirrored. The always-empty `MediaLibrary` re-check is **still open** and
-      moves to WP15. Original scope:
-      <details>**WP12 — Video playback + media completion.** `Video`,
-      `VideoPlayer`, `VideoSoundtrackType` from `video.h`; mirror
-      `MediaQueue` into `CNA.XnaCompat` (it exists in `CNA.Framework`
-      already). Revisit the always-empty `MediaLibrary` collections from
-      the 2026-08-17 pass — `media_library.h` may now support more than
-      that scoping note assumed.</details>
-- [x] **WP13 — Storage — done 2026-08-18.** Coverage →169/201.
-      `StorageDevice`/`StorageContainer` plus an internal `StorageStream :
-      System.IO.Stream`. Both the `Begin`/`End` pairs and plain synchronous
-      methods are offered — see below. Original scope:
-      <details>**WP13 — Storage.** `StorageDevice`, `StorageContainer`, and the
-      `IAsyncResult`-based `BeginOpenContainer`/`EndOpenContainer` API
-      shape. Native: `storage.h`.</details>
-- [x] **WP14 — Content pipeline reader API — done 2026-08-18.** Coverage
-      →200/201. `ContentReader`, `ContentTypeReader`, `ContentTypeReaderManager`,
-      `ContentSerializerAttribute`, `ResourceContentManager`, plus
-      `EffectMaterial`. Registering a *managed* type reader is not possible
-      against this ABI (the registry is keyed by canonical name with no managed
-      callback route) — moved to WP15. Original scope:
-      <details>**WP14 — Content pipeline reader API.** `ContentReader`,
-      `ContentTypeReader`/`ContentTypeReader<T>`,
-      `ContentTypeReaderManager`, `ContentSerializerAttribute`,
-      `ResourceContentManager`. Native: `content_readers.h`. This is the
-      extensibility half of the content system — the existing
-      `ContentManager.Load<T>` covers only the built-in types.</details>
-- [ ] **WP15 — Close the pre-mandate deferrals.** Landed so far:
-      - **Native event callbacks — done 2026-08-18.** Three deferrals
-        (`DynamicSoundEffectInstance.BufferNeeded`, `GraphicsDeviceManager`'s
-        four device events, `Microphone.BufferReady`) all wanted the same
-        `void(void*)` bridge, so it exists once as `NativeEventBridge`: a
-        `GCHandle` root, a total callback, and unsubscription ordered before
-        freeing the root. Exceptions follow `GameComponent`'s bargain — catch,
-        keep the first, count the rest, rethrow the original at the next
-        managed-initiated call. The `#pragma warning disable CS0067` and the doc
-        comments admitting the manager events never fired are gone.
-        `Microphone` needed an instance cache first (both here and in compat):
-        subscribing on a wrapper rebuilt per read of `All` would leak the
-        registration and raise nothing observable. `Game.Dispose` ends those
-        registrations, since they are taken against that game.
-      - **`SoundEffectInstance.Apply3D` — done 2026-08-18**, plus a
-        `protected virtual Dispose(bool)` so a subclass can release a
-        subscription before the handle it is registered against.
-      - **`BasicEffect` folded onto `StockEffect` — done 2026-08-18.** Not just
-        de-duplication: it held a bare `CnaHandle` where the other four hold an
-        owned `SafeHandle`, so an undisposed one leaked. `DirectionalLight` now
-        owns its handle too, which closes the same leak for all five lit effects
-        on the finalizer path — previously only the explicit-`Dispose` path
-        released them.
-
-      Still open: `.cnj` skinning (vertex strides 48/52/56/68,
-      `"skeleton"`/`"animations"`), unblocked once WP4 landed `SkinnedEffect`;
-      `ModelEffectCollection`'s compat mirror, previously called a "permanent
-      gap" for want of an override seam — re-solve it, since "no seam exists" is
-      a fixable design problem now that omitting it is no longer allowed;
-      `.xnb` LZ4; runtime glTF.
-
-      Closed by discovery rather than by code:
-      - **`MediaLibrary`'s always-empty collections — done 2026-08-18.** Not a
-        scope cut after all. `media_library.h` ships all 148 functions and
-        scans on open; the whole family is a real binding now, and the compat
-        mirror moved from inheritance to composition because a real library
-        hands back base-typed objects no subclass can retroactively become.
-      - **Managed content-reader registration — blocked upstream, not
-        deferred.** `ContentTypeReader` recorded this as needing the callback
-        machinery `GameComponent` uses. Re-reading `content_readers.h` shows
-        that is wrong: the registry exposes only `_clear_type_creators`,
-        `_get_is_registered`, `_create_reader` and
-        `cna_content_register_known_unsupported_xnb_readers` — there is no
-        entry point taking a caller-supplied factory, so nothing on this side
-        can reach it. Needs a new C API route.
-- [x] **WP17 — `SafeHandle` use is unsound project-wide (found by the Phase 8
-      review; pre-existing, not introduced by it) — done 2026-08-18; **slice 1
-      had a scope hole, closed 2026-08-18**. Slice 1's own note said it covered
-      "every type whose handle accessor is *private*" -- which is exactly the
-      bug: `internal` and `private protected` accessors were out of scope for no
-      reason other than how the sweep was phrased, and the hazard does not care
-      about accessibility. A re-sweep over *every* `Native.cna_*(NativeHandle...)`
-      call site found **32 more unpaired reads** across `SoundEffectInstance`
-      (9), `ContentReader` (9), `Video` (5), `Song` (a type that only became
-      exposed to this when its handle moved into a `SafeHandle` this session),
-      `SpriteBatch` (2), `AudioEngine` (2), `SoundEffect` (2), `Texture`,
-      `Texture3D`, `TextureCube`. All fixed. `GameComponent`/
-      `DrawableGameComponent` are the one genuine exemption -- a bare
-      `CnaHandle`, no finalizer -- and now say so, because a sweep flags them
-      every time. **Slice 1:**
-      every type whose handle accessor is *private* now pairs each native call
-      with `GC.KeepAlive` (151 sites across 20 types, including the delegate
-      helpers, `WithStringView` lambdas and expression-bodied members).
-      **Slice 2** covered the cross-type reads, where the object to keep alive
-      is the *argument* rather than `this`. Most turned out already safe because
-      the argument is used after the call (e.g. `TextureCollection` stores it,
-      `VideoPlayer.Play` assigns `_video`); the rest got an explicit
-      `GC.KeepAlive`. It also surfaced a defect no `KeepAlive` could express:
-      `SpriteBatch` buffers commands holding bare handles, so a texture drawn
-      and then dropped could be finalized before `End()` flushed — the batch now
-      holds the texture references itself. Original note:
-      <details>**WP17 — `SafeHandle` use is unsound project-wide.** Every native-backed type
-      reads its handle via `SafeHandle.DangerousGetHandle()` with no
-      `DangerousAddRef`/`DangerousRelease` pair. Nothing keeps the wrapper alive
-      across the native call, so the JIT may treat it as dead once the handle
-      value has been read and let the finalizer run `ReleaseHandle` while native
-      is still using it. Defeating exactly that is why `SafeHandle` exists, and
-      design invariant #4 assumes it works. The fix is mechanical but touches
-      every call site; it wants its own increment and its own review.
-- [x] **WP18 — `Model`/`ModelMesh`/`ModelMeshPart` disposal — done 2026-08-18.**
-      Gated on a builder-set ownership flag, so a part never releases buffers or
-      an effect that game code assigned. Original note:
-      <details>**WP18 — `Model`/`ModelMesh`/`ModelMeshPart` have no `Dispose`.** The
-      model builders create one `BasicEffect` per mesh part and nothing ever
-      releases it. Phase 8 reduced this from an unbounded leak to a
-      GC-reclaimable one (`StockEffect` now holds its handle in a
-      `NativeResourceHandle`), but a loaded model still owns native resources
-      with no way to release them deterministically.</details>
-- [x] **WP16 — Re-audit — done 2026-08-18.** The headline finding is that
-      **"201/201" was never a measurement of XNA 4.0.** It was measured against
-      an enumeration of XNA 4.0 written from memory, which is a different thing,
-      and the difference was 31 types.
-
-      The audit was redone against evidence instead: diff the compat assembly's
-      public types against the C++ engine's own
-      `Microsoft/Xna/Framework/**` headers, which are an authoritative
-      XNA-shaped list. That surfaced, and this work package landed:
-      - the entire `Microsoft.Xna.Framework.Graphics.PackedVector` namespace —
-        19 types, none of which had ever been counted;
-      - `RenderTargetBinding` and the multiple-render-target route it exists
-        for;
-      - `KeyState`, the `KeyboardState` indexer, `GetPressedKeys`;
-      - seven exception types XNA source catches by name;
-      - `RendererDetail` / `AudioEngine.RendererDetails`;
-      - `TitleContainer`;
-      - the compat `GameComponentCollectionEventArgs`, and the two events on the
-        compat collection that had no way to report which component changed;
-      - `IGraphicsDeviceService`, which was in the wrong namespace.
-
-      Coverage now: 237 public compat types. Everything the diff still reports
-      missing is non-XNA — CNAEXT effect/vertex/glTF types, MonoGame's
-      `MouseCursor`, FNA's `TextInputEXT`, CNA's own content-manifest types, and
-      `HalfTypeHelper`, which is internal in XNA too.
-
-      The header audit that ran alongside it is recorded in the Corrections
-      table at the top of this file.
-
-      **Review pass — done 2026-08-18.** Reviewed this session's own output,
-      which was all new and none of it previously reviewed. Seven real defects,
-      six of them introduced by these commits:
-      - a **use-after-free** in the SpriteFont atlas upload (two owning wrappers
-        on one texture handle; the throwaway's finalizer would destroy a texture
-        the live font was still drawing from);
-      - `GetRenderTargets` threw on a legitimate sequence, because the
-        single-target `SetRenderTarget` overloads did not update the cache it
-        cross-checks;
-      - disposing a media collection ran `cna_*_dispose` on library-owned
-        objects, marking them disposed for every other reader — and only for the
-        arbitrary subset a caller had indexed;
-      - `NativeEventBridge.Dispose` could leak its GC root permanently if
-        unsubscription threw, and a stale registration would still have
-        dispatched;
-      - `MediaPlayer` cached a game-scoped queue handle for the process;
-      - **WP17's own scope hole**: its note said it covered "every type whose
-        handle accessor is *private*", which left `internal` and
-        `private protected` ones unswept for no reason but phrasing. 32 more
-        unpaired handle reads across ten types, all fixed;
-      - two more fabricated P/Invokes (`cna_runtime_initialize`/`_shutdown`),
-        found by sweeping all 715 declarations against the headers, plus
-        `cna_get_abi_version` — real, bound, and never called, now wired to a
-        real compatibility check.
-
-      Interop verification, mechanical and now clean: **713 declarations, every
-      one present in the headers, every arity matching, and all 62
-      caller-initialized versioned structs correctly passed by `ref` rather than
-      `out`.**
-
-Explicitly still excluded from this mandate (not XNA 4.0 API surface, or
-genuinely unbackable): `Microsoft.Xna.Framework.Net` /
-`.GamerServices` (Xbox Live session/gamer services — `net.h`,
-`net_gamers.h`, `gamer_services.h` do exist upstream, so revisit if the
-user wants them, but they bind a live-service model that has no meaning
-outside Xbox Live and are not part of what "write an XNA game" means
-today), and the XNA *content pipeline build tooling*
-(`Microsoft.Xna.Framework.Content.Pipeline.*`, a build-time assembly that
-never shipped in the runtime profile).
-
-Added to that list 2026-08-18, on the same grounds: `Microsoft.Devices.Sensors`
-(`Accelerometer`, `Compass`, `Gyroscope`, `Motion`) and
-`Microsoft.Devices.VibrateController`. The C++ side has all of them, but they are
-the Windows Phone 7 sensor assembly, not the XNA core profile.
-
-**This exclusion is measured against the standard the user actually set, which is
-FNA.** FNA ships no `Microsoft.Xna.Framework.Net.dll`, no
-`Microsoft.Xna.Framework.GamerServices.dll` and no `Microsoft.Devices.Sensors` —
-it covers Framework, Graphics, Audio, Content, Input, Media, Storage and Xact,
-which is exactly the set this binding covers. So "FNA is the model, no gaps" and
-"these three namespaces are out" are the same statement, not a tension between
-two. If the user wants them anyway, the upstream surface is there: 369 exported
-functions across `gamer_services.h`, `net.h`, `net_gamers.h` and
-`net_sessions.h`, plus `sensors.h`.
-
-### Phase 7+ — Out of scope for this repository
-
-`cna-js`, `cna-rs`, `cna-python`, and later bindings are separate
-repositories per `analysis_binding.md` §69 and `analysis_binding_languages.md`
-"Proposed support order". Do not add non-.NET language code here.
-
-## Design invariants (do not violate)
-
-Carried over from `analysis_binding.md` §68 and
-`analysis_binding_sharp_runtime.md` §143, restated for this repository:
-
-1. `CNA.Interop` is the only project allowed to reference native symbols
-   directly. `CNA.Framework` and `CNA.XnaCompat` never call `[LibraryImport]`
-   themselves.
-2. No `CNA_Result`/native exception ever crosses out of `CNA.Interop`
-   unconverted — it becomes a managed `CnaException` (or subclass) before
-   reaching `CNA.Framework` callers.
-3. Math/value types (`Vector2`, `Matrix`, `Color`, `GameTime`, …) do not make
-   P/Invoke calls for trivial operations. They are plain managed structs. In
-   `CNA.XnaCompat`, `Vector2`/`Color` (the first two written) fully
-   re-implement their formulas a second time; every value type after them
-   instead duplicates only the fields and delegates every formula to its
-   `CNA`-namespace counterpart via the implicit conversion operators, so
-   there is one implementation of the actual math — see docs/architecture.md.
-4. Every native handle wrapper implements `SafeHandle` or is owned by one;
-   no bare `CnaHandle` is exposed as public API outside `CNA.Interop`.
-5. `CNA.XnaCompat` never references `CNA.Interop` directly — only through
-   `CNA.Framework`.
-6. Nothing in this repository references, includes, or links Sharp Runtime.
-   If a future change seems to require that, stop and re-read
-   `openeggbert/cna`'s `analysis_binding_sharp_runtime.md` §31 first.
-7. C# code in this repository uses the real .NET BCL (`System.*`) for
-   everything that is not a CNA-specific concept. Never invent a
-   `CNA`-flavored reimplementation of an ordinary BCL type.
-8. The `CNA.Framework` *project* is not the same thing as a `CNA.Framework`
-   *namespace* — there is no such namespace. Types inside the `CNA.Framework`
-   project live in `CNA`, `CNA.Graphics`, `CNA.Input`, or `CNA.Content`,
-   matching the real CNA C++ codebase's own public namespace convention
-   (`CNA::Graphics`, `CNA::Input`, `CNA::Devices`, bare `CNA::`; *not*
-   `CNA::Framework::`). `CNA.Interop`'s project name and namespace do match
-   (both `CNA.Interop`) because it corresponds to the C++ side's
-   `CNA::Internal::*`, a genuinely different, private-implementation
-   namespace — see docs/architecture.md.
-
-## Toolchain note
-
-`dotnet` was not installed by default in the sandbox this scaffold was
-authored in, but a .NET 8/9 SDK happened to be present locally and was used
-to verify it: `dotnet build CNA.sln` succeeds with 0 warnings/0 errors across
-all 6 projects, and all unit tests pass (`dotnet test`) — 44 as of the
-initial scaffold, 112 as of 2026-08-16 (session 5); the count only grows,
-see `NEXT.md`'s per-session entries for the history and `README.md` for the
-current number, since this note isn't kept in sync with every session. Also
-verified each time: `dotnet run --project samples/HelloGame` fails at
-exactly the documented point — a `DllNotFoundException` for `cna-native`
-raised from inside `Game`'s constructor — rather than from any code defect.
-That confirms the managed callback bridge, the covariant-return
-`CreateGraphicsDevice`/`CreateContentManager` factories, the
-`Matrix.Invert`/`BoundingFrustum` math, and the value-type implicit
-conversions are all wired correctly end to end, ahead of the native ABI
-existing. Re-run both commands after cloning if you
-want to reconfirm.
-
-## Native build reuse
-
-Once Track A (the C ABI in `openeggbert/cna`) exists, building it follows
-the workspace-wide build rules in `../CLAUDE.md`: reuse `../cna/build/`
-(or another already-configured CMake preset directory) rather than
-reconfiguring, cap parallelism at `-j3`, and always configure with
-`ccache`. Do not add a new CMake build directory under this repository —
-`cna-dotnet` only consumes prebuilt `cna-native` binaries (via a local
-`runtimes/<rid>/native/` copy or a project reference to `cna`'s build
-output), it does not build CNA itself.

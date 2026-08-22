@@ -74,33 +74,26 @@ functionality being permanently constrained by 2010-era XNA naming
 
 ### `CNA.XnaCompat` (project) → `Microsoft.Xna.Framework` namespace
 
-The `Microsoft.Xna.Framework`-named compatibility facade. Reference types
-(`Game`, `GraphicsDeviceManager`, `GraphicsDevice`, `SpriteBatch`,
-`ContentManager`) are thin subclasses of their `CNA`-namespace counterparts —
-no duplicated logic, just XNA-shaped constructors and members forwarding to
-`base`.
+The `Microsoft.Xna.Framework`-named compatibility facade. Its public classes,
+interfaces, generic collections and inheritance must reproduce the selected XNA
+profile even when the corresponding `CNA.*` implementation hierarchy differs.
+C# single inheritance makes subclassing CNA implementations unsuitable for many
+facade types: inherited public members and base identity become part of the XNA
+contract whether intended or not.
 
-**Two documented exceptions, both forced by C# single inheritance** (Phase 8;
-see `plan.md`). Where XNA's own type hierarchy has a base class that this
-facade must also expose, a compat leaf type cannot both derive from that compat
-base *and* from its `CNA`-namespace counterpart:
+The target pattern is therefore:
 
-- **Textures** (WP3a). `Microsoft.Xna.Framework.Graphics.Texture2D` derives
-  from the compat `Texture`, so `Texture t = someTexture2D;` compiles as it does
-  in XNA. It reuses `CNA.Graphics.Texture2D`'s `internal static` native helpers
-  rather than duplicating any logic — about five call sites.
-- **Effects** (WP4c). `Microsoft.Xna.Framework.Graphics.Effect` is a real base
-  of the compat stock effects for the same reason. Here the reuse is by
-  *composition*: each compat effect holds its `CNA.Graphics` counterpart and
-  forwards, roughly 87 members across the five of them. The forwards carry no
-  logic, but there are enough of them to be worth calling out. What keeps this
-  from being two drifting objects is that the compat `Effect` overrides
-  `NativeEffectHandleValue` to report the inner effect's handle — so the pair
-  is one native effect, not two.
+- public compat types define the XNA type system;
+- internal composition/adapters delegate to `CNA.Framework`;
+- an owned native handle has exactly one owner;
+- borrowed and parent-owned handles are never promoted to owners;
+- CNA-only APIs live in `CNA.Framework` or an explicit extension namespace.
 
-Both were taken deliberately, over the alternative of leaving the XNA base type
-absent, once the project's scope mandate made complete XNA 4.0 coverage a
-requirement rather than a goal.
+Components, dynamic buffers/audio, content managers, curves, textures,
+render targets, effects, graphics states, vertex declarations and SpriteBatch
+already use this pattern. `Game`, `GraphicsDevice`, models, media/audio and
+several collections still inherit CNA types and are reported as failures by
+`tools/api-compat`; they are transitional defects, not architectural exceptions.
 
 #### Why the XNA value types are not literally the same type as the `CNA` namespace ones
 
@@ -165,13 +158,19 @@ directly would be a mistake") before doing so.
 
 ## Native resource lifetime
 
-Every native-backed `CNA.Framework` type owns (or is) a `System.Runtime.InteropServices.SafeHandle`
-subclass whose `ReleaseHandle()` calls the matching `cna_*_release` native
-function. `IDisposable.Dispose()` on the public type disposes the handle.
-This is the pattern from `analysis_binding.md` §24, and it is required
-because .NET's GC lifetime and CNA's native C++ resource lifetime are two
-different systems that only agree to meet at an explicit handle — never
-assume they are otherwise in sync (`analysis_binding_sharp_runtime.md` §61).
+Native handles are classified rather than treated uniformly:
+
+- **owned** — one managed owner releases the handle through `SafeHandle`/`Dispose`;
+- **borrowed** — valid for the documented owner/callback lifetime and never released by the view;
+- **adopted** — ownership is transferred from one wrapper to another, invalidating the source;
+- **parent-owned** — a child view cannot outlive or destroy the parent resource.
+
+This distinction is required because .NET reachability and CNA's C++ resource
+lifetime are independent. Facades may share an internal backend, but must not
+create a second owning wrapper. Game destruction is also an ownership test:
+CNA correctly rejects it while owned child handles remain. A real regression
+found here was `StockEffect.Dispose()` omitting its base reflection handles;
+the next game could not be created until that disposal chain was corrected.
 
 ## Threading
 

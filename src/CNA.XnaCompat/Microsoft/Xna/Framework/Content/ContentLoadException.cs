@@ -1,13 +1,14 @@
+using System.Runtime.Serialization;
+
 namespace Microsoft.Xna.Framework.Content;
 
-/// <summary>XNA 4.0-compatible <c>ContentLoadException</c>. A pure subclass of
-/// <see cref="CNA.Content.ContentLoadException"/>, so a <c>catch</c> written against either
-/// namespace's type still catches what this namespace's <see cref="ContentManager"/> throws --
-/// which matters here in a way it doesn't for the value types, since the base
-/// <c>ContentManager</c>'s own loading code (reused unchanged by the compat subclass) is what
-/// actually raises it, and it raises the base type.</summary>
-public class ContentLoadException : CNA.Content.ContentLoadException
+[Serializable]
+public class ContentLoadException : Exception
 {
+    public ContentLoadException()
+    {
+    }
+
     public ContentLoadException(string message)
         : base(message)
     {
@@ -17,4 +18,11 @@ public class ContentLoadException : CNA.Content.ContentLoadException
         : base(message, innerException)
     {
     }
+
+#pragma warning disable SYSLIB0051 // Required by the XNA 4.0 serializable exception contract.
+    protected ContentLoadException(SerializationInfo info, StreamingContext context)
+        : base(info, context)
+    {
+    }
+#pragma warning restore SYSLIB0051
 }

@@ -144,7 +144,7 @@ public class SoundEffect : IDisposable
     ///
     /// The whole stream is read into memory first, because
     /// <c>cna_sound_effect_create_from_encoded_ext</c> decodes from a contiguous block rather than
-    /// from a reader -- the same shape <see cref="Graphics.Texture2D.FromStream"/> has.
+    /// from a reader -- the same shape <c>Texture2D.FromStream</c> has.
     /// </summary>
     public static unsafe SoundEffect FromStream(Stream stream)
     {

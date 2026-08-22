@@ -1,8 +1,10 @@
 # Coverage sweeps
 
-Five scripts that answer "does this binding actually cover XNA 4.0, and is every
-P/Invoke real?" — mechanically, against the `openeggbert/cna` headers, which are
-the authority. They exist because prose could not be trusted: a header audit
+These legacy sweeps answer native-binding questions mechanically against the
+`openeggbert/cna` headers. CNA headers are authoritative for native capability and the C ABI;
+they are **not** authoritative for the Microsoft XNA managed contract. Use
+`tools/api-compat` with XNA reference assemblies for strict XNA metadata comparison. They exist
+because prose could not be trusted: a header audit
 found **ten** doc comments in this repository asserting the C API could not do
 something it could do perfectly well, and three P/Invoke declarations naming
 functions that exist in no header at all.
@@ -29,14 +31,17 @@ or holds a handle, and which therefore have an ABI contract no managed test can 
 
 ## Locating the headers
 
-The `openeggbert/cna` checkout's **directory name is not stable** — the headers
-have lived in `cnabinding` (gone), `cnanext`, `cnagltf` and `cnabindingc`. Every
-script finds it by globbing for `modules/c-api/include/CNA/C/media_library.h`
-and prints which one it chose when there is more than one. Override with:
+The scripts first inspect repository-relative sibling locations for a checkout containing
+`modules/c-api/include/CNA/C/media_library.h`. Override discovery explicitly with:
 
 ```
 CNA_ROOT=/path/to/a/cna/checkout python3 tools/coverage/sweep.py
 ```
+
+The optional exported-symbol check uses `CNA_NATIVE_LIBRARY` for one exact file or
+`CNA_NATIVE_DIR` for a directory. ELF uses `nm -D`, Mach-O uses `nm -gU`, and PE uses `dumpbin`
+or `llvm-nm`; an unavailable platform tool is reported as a skip rather than presented as
+cross-platform proof.
 
 **Pick a checkout whose working tree is clean.** A checkout with uncommitted
 header edits will happily validate a binding written against a signature that is
@@ -51,8 +56,8 @@ catches, which is why there are four rather than one:
 | --- | --- | --- |
 | `sweep.py` | fabricated declarations, arity drift, versioned structs passed `out` instead of `ref` | anything about XNA coverage |
 | `unbound.py` | native routes nothing binds | members with no native counterpart; members onto an already-bound route |
-| `typesweep.py` | whole XNA types with no C# file | anything below type level |
-| `md2run.py` | missing members on types that exist on both sides | **missing types** — it skips a C++ class with no C# counterpart |
+| `typesweep.py` | CNA C++ types with no C# counterpart | strict XNA contract or anything below type level |
+| `md2run.py` | CNA/C# name differences on types present in both trees | strict XNA signatures and **missing types** |
 
 `md2.py` is the shared parser (`cpp_public`, `normalise`, `cs_file_members`), not
 a script to run on its own.

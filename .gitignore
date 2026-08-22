@@ -52,3 +52,5 @@ Thumbs.db
 # Stray tool/session output not produced by this project
 .output.txt
 assets_tmp/
+__pycache__/
+*.py[cod]

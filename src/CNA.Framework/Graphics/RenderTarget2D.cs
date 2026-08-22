@@ -23,7 +23,36 @@ namespace CNA.Graphics;
 public class RenderTarget2D : Texture2D
 {
     public RenderTarget2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(graphicsDevice, CreateNativeHandle(graphicsDevice, width, height))
+        : this(
+            graphicsDevice,
+            width,
+            height,
+            mipMap: false,
+            SurfaceFormat.Color,
+            DepthFormat.None,
+            0,
+            RenderTargetUsage.DiscardContents)
+    {
+    }
+
+    public RenderTarget2D(
+        GraphicsDevice graphicsDevice,
+        int width,
+        int height,
+        bool mipMap,
+        SurfaceFormat preferredFormat,
+        DepthFormat preferredDepthFormat,
+        int preferredMultiSampleCount,
+        RenderTargetUsage usage)
+        : base(graphicsDevice, CreateNativeHandle(
+            graphicsDevice,
+            width,
+            height,
+            mipMap,
+            preferredFormat,
+            preferredDepthFormat,
+            preferredMultiSampleCount,
+            usage))
     {
     }
 
@@ -37,6 +66,25 @@ public class RenderTarget2D : Texture2D
     /// ctor" trick would require.
     /// </summary>
     internal static nint CreateNativeHandle(GraphicsDevice graphicsDevice, int width, int height)
+        => CreateNativeHandle(
+            graphicsDevice,
+            width,
+            height,
+            mipMap: false,
+            SurfaceFormat.Color,
+            DepthFormat.None,
+            0,
+            RenderTargetUsage.DiscardContents);
+
+    internal static nint CreateNativeHandle(
+        GraphicsDevice graphicsDevice,
+        int width,
+        int height,
+        bool mipMap,
+        SurfaceFormat preferredFormat,
+        DepthFormat preferredDepthFormat,
+        int preferredMultiSampleCount,
+        RenderTargetUsage usage)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
 
@@ -44,11 +92,11 @@ public class RenderTarget2D : Texture2D
         {
             Width = (uint)width,
             Height = (uint)height,
-            MipMap = 0,
-            ColorFormat = 0, // CNA_SURFACE_FORMAT_COLOR
-            DepthStencilFormat = 0, // CNA_DEPTH_FORMAT_NONE
-            MultiSampleCount = 0,
-            Usage = 0, // CNA_RENDER_TARGET_USAGE_DISCARD_CONTENTS
+            MipMap = (byte)(mipMap ? 1 : 0),
+            ColorFormat = (uint)preferredFormat,
+            DepthStencilFormat = (uint)preferredDepthFormat,
+            MultiSampleCount = preferredMultiSampleCount,
+            Usage = (uint)usage,
         };
 
         CnaResult result = Native.cna_render_target2d_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);

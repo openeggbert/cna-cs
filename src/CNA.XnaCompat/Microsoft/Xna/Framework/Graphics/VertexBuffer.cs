@@ -16,24 +16,92 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// entry). No compat <c>GraphicsDevice</c> instance can be constructed here at all, so nothing
 /// requiring one -- this type included -- can be exercised from that test project.
 /// </summary>
-public class VertexBuffer : CNA.Graphics.VertexBuffer
+public class VertexBuffer : GraphicsResource
 {
-    private readonly VertexDeclaration _vertexDeclaration;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CNA.Graphics.VertexBuffer, VertexBuffer>
+        FrameworkFacades = new();
 
-    public VertexBuffer(GraphicsDevice graphicsDevice, Type vertexType, int vertexCount, BufferUsage bufferUsage)
-        : this(graphicsDevice, VertexDeclaration.FromType(vertexType), vertexCount, bufferUsage)
+    private readonly CNA.Graphics.VertexBuffer _frameworkBuffer;
+    private readonly VertexDeclaration _vertexDeclaration;
+    internal Func<Exception?>? DisposeHook { get; set; }
+
+    public VertexBuffer(GraphicsDevice graphicsDevice, Type vertexType, int vertexCount, BufferUsage usage)
+        : this(graphicsDevice, VertexDeclaration.FromType(vertexType), vertexCount, usage)
     {
     }
 
-    public VertexBuffer(GraphicsDevice graphicsDevice, VertexDeclaration vertexDeclaration, int vertexCount, BufferUsage bufferUsage)
-        : base(graphicsDevice, ToFramework(vertexDeclaration), vertexCount, (CNA.Graphics.BufferUsage)(int)bufferUsage)
+    public VertexBuffer(GraphicsDevice graphicsDevice, VertexDeclaration vertexDeclaration, int vertexCount, BufferUsage usage)
+        : this(graphicsDevice, vertexDeclaration, vertexCount, usage, dynamic: false)
+    {
+    }
+
+    private protected VertexBuffer(
+        GraphicsDevice graphicsDevice,
+        VertexDeclaration vertexDeclaration,
+        int vertexCount,
+        BufferUsage bufferUsage,
+        bool dynamic)
+        : base(graphicsDevice)
     {
         _vertexDeclaration = vertexDeclaration;
+        _frameworkBuffer = new CNA.Graphics.VertexBuffer(
+            graphicsDevice,
+            ToFramework(vertexDeclaration),
+            vertexCount,
+            (CNA.Graphics.BufferUsage)(int)bufferUsage,
+            dynamic);
+        FrameworkFacades.Add(_frameworkBuffer, this);
     }
 
-    public new VertexDeclaration VertexDeclaration => _vertexDeclaration;
+    internal CNA.Graphics.VertexBuffer FrameworkBuffer => _frameworkBuffer;
 
-    public new BufferUsage BufferUsage => (BufferUsage)(int)base.BufferUsage;
+    internal static VertexBuffer? FromFramework(CNA.Graphics.VertexBuffer? frameworkBuffer) =>
+        frameworkBuffer is not null && FrameworkFacades.TryGetValue(frameworkBuffer, out VertexBuffer? facade)
+            ? facade
+            : null;
+
+    internal nint NativeHandleValue => _frameworkBuffer.NativeHandleValue;
+
+    public VertexDeclaration VertexDeclaration => _vertexDeclaration;
+
+    public BufferUsage BufferUsage => (BufferUsage)(int)_frameworkBuffer.BufferUsage;
+
+    public int VertexCount => _frameworkBuffer.VertexCount;
+
+    public void SetData<T>(T[] data) where T : struct => _frameworkBuffer.SetData(data);
+
+    public void SetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
+        _frameworkBuffer.SetData(data, startIndex, elementCount);
+
+    public void SetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride)
+        where T : struct =>
+        _frameworkBuffer.SetData(offsetInBytes, data, startIndex, elementCount, vertexStride);
+
+    public void GetData<T>(T[] data) where T : struct => _frameworkBuffer.GetData(data);
+
+    public void GetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
+        _frameworkBuffer.GetData(data, startIndex, elementCount);
+
+    public void GetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride)
+        where T : struct =>
+        _frameworkBuffer.GetData(offsetInBytes, data, startIndex, elementCount, vertexStride);
+
+    protected override void Dispose(bool arg0)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        Exception? pending = DisposeHook?.Invoke();
+        DisposeHook = null;
+        _frameworkBuffer.Dispose();
+        base.Dispose(arg0);
+        if (pending is not null)
+        {
+            throw pending;
+        }
+    }
 
     private static CNA.Graphics.VertexDeclaration ToFramework(VertexDeclaration vertexDeclaration)
     {

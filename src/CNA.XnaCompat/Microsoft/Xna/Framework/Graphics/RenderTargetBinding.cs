@@ -7,43 +7,41 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// Landed with <see cref="GraphicsDevice.SetRenderTargets"/> in the WP16 re-audit -- both the type
 /// and the multiple-render-target route it exists for were missing.
 /// </summary>
-public readonly struct RenderTargetBinding : IEquatable<RenderTargetBinding>
+public readonly struct RenderTargetBinding
 {
     private readonly CNA.Graphics.RenderTargetBinding _framework;
 
-    public RenderTargetBinding(RenderTarget2D renderTarget, int arraySlice = 0)
+    public RenderTargetBinding(RenderTarget2D renderTarget)
     {
         ArgumentNullException.ThrowIfNull(renderTarget);
-        _framework = new CNA.Graphics.RenderTargetBinding(renderTarget, arraySlice);
+        _framework = new CNA.Graphics.RenderTargetBinding(
+            (CNA.Graphics.RenderTarget2D)renderTarget.FrameworkTexture);
     }
 
     public RenderTargetBinding(RenderTargetCube renderTarget, CubeMapFace cubeMapFace)
     {
         ArgumentNullException.ThrowIfNull(renderTarget);
         _framework = new CNA.Graphics.RenderTargetBinding(
-            renderTarget, (CNA.Graphics.CubeMapFace)(int)cubeMapFace);
+            (CNA.Graphics.RenderTargetCube)renderTarget.FrameworkTexture,
+            (CNA.Graphics.CubeMapFace)(int)cubeMapFace);
     }
 
     /// <summary>The bound target, re-typed. <see langword="null"/> for a default-constructed
     /// binding, and also when the underlying target is a <c>CNA.Graphics</c> instance this layer
     /// did not create -- which cannot happen through this type's own constructors.</summary>
-    public Texture? RenderTarget => _framework.RenderTarget as Texture;
-
-    public int ArraySlice => _framework.ArraySlice;
+    public Texture? RenderTarget => Texture.FromFramework(_framework.RenderTarget);
 
     public CubeMapFace CubeMapFace => (CubeMapFace)(int)_framework.CubeMapFace;
 
     public static implicit operator RenderTargetBinding(RenderTarget2D renderTarget) => new(renderTarget);
 
-    public static implicit operator CNA.Graphics.RenderTargetBinding(RenderTargetBinding value) => value._framework;
+    internal CNA.Graphics.RenderTargetBinding Framework => _framework;
 
-    public readonly bool Equals(RenderTargetBinding other) => _framework.Equals(other._framework);
+    internal static RenderTargetBinding FromFramework(CNA.Graphics.RenderTargetBinding value) =>
+        new(value);
 
-    public override readonly bool Equals(object? obj) => obj is RenderTargetBinding other && Equals(other);
-
-    public override readonly int GetHashCode() => _framework.GetHashCode();
-
-    public static bool operator ==(RenderTargetBinding a, RenderTargetBinding b) => a.Equals(b);
-
-    public static bool operator !=(RenderTargetBinding a, RenderTargetBinding b) => !a.Equals(b);
+    private RenderTargetBinding(CNA.Graphics.RenderTargetBinding value)
+    {
+        _framework = value;
+    }
 }

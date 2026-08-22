@@ -1,24 +1,9 @@
-import re, os, glob, collections
-import os, glob
+import collections, glob, os, re
 
-def _find_cna_root():
-    """The openeggbert/cna checkout's *directory name* is not stable (cnabinding is gone;
-    the headers have lived in cnanext, cnagltf and cnabindingc). Locate it, never hard-code it."""
-    env = os.environ.get('CNA_ROOT')
-    if env and os.path.isdir(os.path.join(env, 'modules/c-api/include/CNA/C')):
-        return env
-    base = '/rv/data/development/github.com/openeggbert'
-    found = sorted(glob.glob(base + '/*/modules/c-api/include/CNA/C/media_library.h'))
-    if not found:
-        raise SystemExit('No openeggbert/cna checkout with modules/c-api found. Set CNA_ROOT.')
-    root = found[0][:-len('/modules/c-api/include/CNA/C/media_library.h')]
-    if len(found) > 1:
-        print(f'# headers: {root}  (of {len(found)} checkouts; set CNA_ROOT to pick another)')
-    return root
+from paths import find_cna_root
 
-CNA_ROOT = _find_cna_root()
-
-CPP = CNA_ROOT + '/modules'
+CNA_ROOT = find_cna_root()
+CPP = str(CNA_ROOT / 'modules')
 
 NOISE = re.compile(
  r'^(begin|end|cbegin|cend|rbegin|rend|iterator|const_iterator|container_type|size_type|value_type|'

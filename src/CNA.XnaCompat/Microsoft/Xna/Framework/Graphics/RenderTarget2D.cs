@@ -15,22 +15,50 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// fixed on the CNA.Framework side. Reuses <c>CNA.Graphics.RenderTarget2D</c>'s own
 /// <c>internal static</c> helpers rather than duplicating the native calls.
 /// </summary>
-public class RenderTarget2D : Texture2D
+public class RenderTarget2D : Texture2D, IDynamicGraphicsResource
 {
     public RenderTarget2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(graphicsDevice, CNA.Graphics.RenderTarget2D.CreateNativeHandle(graphicsDevice, width, height))
+        : base(graphicsDevice, new CNA.Graphics.RenderTarget2D(graphicsDevice, width, height))
     {
     }
 
-    protected override void ReleaseNative(nint handleValue) => CNA.Graphics.RenderTarget2D.ReleaseNativeRenderTarget(handleValue);
+    public RenderTarget2D(
+        GraphicsDevice graphicsDevice,
+        int width,
+        int height,
+        bool mipMap,
+        SurfaceFormat preferredFormat,
+        DepthFormat preferredDepthFormat)
+        : this(
+            graphicsDevice, width, height, mipMap, preferredFormat, preferredDepthFormat,
+            0, RenderTargetUsage.DiscardContents)
+    {
+    }
 
-    public override int Width => CNA.Graphics.RenderTarget2D.GetDimensions(NativeHandleValue).Width;
-
-    public override int Height => CNA.Graphics.RenderTarget2D.GetDimensions(NativeHandleValue).Height;
+    public RenderTarget2D(
+        GraphicsDevice graphicsDevice,
+        int width,
+        int height,
+        bool mipMap,
+        SurfaceFormat preferredFormat,
+        DepthFormat preferredDepthFormat,
+        int preferredMultiSampleCount,
+        RenderTargetUsage usage)
+        : base(graphicsDevice, new CNA.Graphics.RenderTarget2D(
+            graphicsDevice,
+            width,
+            height,
+            mipMap,
+            (CNA.Graphics.SurfaceFormat)(int)preferredFormat,
+            (CNA.Graphics.DepthFormat)(int)preferredDepthFormat,
+            preferredMultiSampleCount,
+            (CNA.Graphics.RenderTargetUsage)(int)usage))
+    {
+    }
 
     /// <summary>Reads from <c>cna_render_target_get_info</c> through
-    /// <c>CNA.Graphics.RenderTarget2D</c>'s own internal reader, the same way
-    /// <see cref="Width"/>/<see cref="Height"/> already do -- this class derives from its own
+    /// <c>CNA.Graphics.RenderTarget2D</c>'s own internal reader, the same source its inherited
+    /// texture dimensions use -- this class derives from its own
     /// namespace's texture base, not from <c>CNA.Graphics.RenderTarget2D</c>, so there is no base
     /// property to re-type.</summary>
     public DepthFormat DepthStencilFormat =>
@@ -48,11 +76,13 @@ public class RenderTarget2D : Texture2D
 
     /// <summary>Inert -- <c>render_target.h</c> has no per-target subscription route. See
     /// <see cref="CNA.Graphics.RenderTarget2D.ContentLost"/>.</summary>
-    public event EventHandler<EventArgs>? ContentLost
+    public virtual event EventHandler<EventArgs>? ContentLost
     {
         add => _contentLost += value;
         remove => _contentLost -= value;
     }
 
     private EventHandler<EventArgs>? _contentLost;
+
+    protected override void Dispose(bool arg0) => base.Dispose(arg0);
 }

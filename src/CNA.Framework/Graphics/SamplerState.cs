@@ -91,4 +91,6 @@ public class SamplerState
     internal CnaSamplerState ToNative() => _native;
 
     internal static SamplerState FromNative(CnaSamplerState native) => new(native);
+
+    internal static SamplerState CopyOf(SamplerState value) => new(value);
 }

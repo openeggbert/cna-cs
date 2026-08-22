@@ -1,26 +1,10 @@
-import re, glob, os
-import os, glob
+import glob, os, re
 
-def _find_cna_root():
-    """The openeggbert/cna checkout's *directory name* is not stable (cnabinding is gone;
-    the headers have lived in cnanext, cnagltf and cnabindingc). Locate it, never hard-code it."""
-    env = os.environ.get('CNA_ROOT')
-    if env and os.path.isdir(os.path.join(env, 'modules/c-api/include/CNA/C')):
-        return env
-    base = '/rv/data/development/github.com/openeggbert'
-    found = sorted(glob.glob(base + '/*/modules/c-api/include/CNA/C/media_library.h'))
-    if not found:
-        raise SystemExit('No openeggbert/cna checkout with modules/c-api found. Set CNA_ROOT.')
-    root = found[0][:-len('/modules/c-api/include/CNA/C/media_library.h')]
-    if len(found) > 1:
-        print(f'# headers: {root}  (of {len(found)} checkouts; set CNA_ROOT to pick another)')
-    return root
+from paths import REPO_ROOT, find_cna_root
 
-CNA_ROOT = _find_cna_root()
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-CPP = CNA_ROOT + '/modules'
-CS = REPO + '/src'
+CNA_ROOT = find_cna_root()
+CPP = str(CNA_ROOT / 'modules')
+CS = str(REPO_ROOT / 'src')
 
 # every C# type name declared anywhere in the binding
 cs=set()

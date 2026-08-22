@@ -11,6 +11,108 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Signature audit, facade hierarchy repair, and real template product (2026-08-22)
+
+This session invalidated the old "complete XNA 4.0 API surface" claim with compiled metadata. A
+new `tools/api-compat` utility uses `System.Reflection.Metadata` and aggregates the seven assemblies
+in `profiles/xna40-windows-runtime.json`. It checks type identity/kind/access/base/interfaces,
+modifiers, constraints, layouts/attributes, every member signature, ref/out/in/defaults, properties,
+events, constants/enums, delegates and nested types. It also reports CNA types in public/protected
+strict-profile signatures and supports exact reviewed allowlists, JSON, GitHub output and stale
+allowlist detection.
+
+The first rigorous report was 1,834 findings, including 164 CNA leaks and 77 base mismatches. After
+the coherent repairs below, the current report is 257 reference types versus 239 target types,
+1,467 unallowlisted findings, zero allowed. The normal command exits 1. Current headline counts are
+55 base mismatches, 118 CNA leaks, 39 interface mismatches, 688 missing members, 23 missing types,
+242 parameter-name mismatches, 185 unexpected members and 5 unexpected types. No blanket allowlist
+was introduced.
+
+Public-hierarchy work completed:
+
+- compat `DrawableGameComponent : GameComponent`; component collections/events use compat
+  `IGameComponent` and accept arbitrary compat components through internal adapters;
+- dynamic vertex/index buffers derive from their compat bases;
+- `DynamicSoundEffectInstance` is sealed and derives from compat `SoundEffectInstance`;
+- `ResourceContentManager : ContentManager`; compat content uses composition, exact constructors,
+  cache/unload/dispose behavior and an owned/borrowed backend distinction;
+- textures, buffers, render targets, effects, vertex declarations, SpriteBatch and the four graphics
+  state types now follow compat `GraphicsResource` ancestry and delegate to one CNA backend;
+- `RenderTargetBinding`, generic buffer/texture transfers and DrawUser overloads were retyped;
+- `ModelEffectCollection` now exposes compat `Effect` generics;
+- curves are independent compat types; `CurveKeyCollection.Clone()` is shallow as in XNA even
+  though the CNA-native API deliberately deep-clones;
+- CNA renderer diagnostics moved from `Microsoft.Xna.Framework.Graphics` to explicit
+  `CNA.XnaCompat.Extensions` methods.
+
+Interop/backend work completed:
+
+- added exact content-manager create/resource/destroy declarations and ownership;
+- added the exact texture decode descriptor and wired resize/crop arguments in `FromStream`;
+- removed a duplicate native component destruction;
+- fixed `StockEffect.Dispose()` to call `Effect.Dispose()`. This was not cosmetic: a compat
+  `CurrentTechnique.Passes[0].Apply()` left reflection handles alive, CNA refused to destroy the
+  game, and every later native test failed. The focused 9-test create/destroy sequence and full
+  suite now pass;
+- bound and used `cna_texture3d_set_data_bytes`, so compat `Texture3D.SetData<T>` now supports
+  reference-free non-Color structs; raw non-Color readback remains an exact upstream ABI gap;
+- bound and used `cna_sound_effect_instance_apply_3d_multi_ext` for the listener-array overload.
+  The native runtime still deliberately rejects counts other than one, but the managed layer now
+  reports that limitation instead of incorrectly applying several single-listener updates;
+- capability-sensitive integration tests now query the fixture's live device. The old Fact
+  attribute created a native game during xUnit discovery and changed process-global renderer state
+  before test execution.
+
+Regression coverage added:
+
+- `tests/CNA.XnaCompat.CompileProbe` locks in repaired inheritance and invariant generic contracts;
+- that identical probe passes against XNA, CNA, FNA and MonoGame; Kni fails only the XNA
+  `VertexDeclaration : GraphicsResource` assertion, a measured Kni portability difference;
+- compat curve tests cover duplicate ordering, shallow collection/curve clone and
+  `ICollection<Microsoft.Xna.Framework.CurveKey>`;
+- native compat regressions cover raw non-Color Texture3D upload and deterministic multi-listener
+  audio rejection;
+- component/model tests were corrected to assert XNA contracts rather than non-XNA test helpers;
+- `CNA.ApiCompat` and the compile probe are solution projects.
+
+Portable tooling work:
+
+- coverage scripts now discover sibling CNA through `CNA_ROOT` and native libraries through
+  `CNA_NATIVE_LIBRARY`/`CNA_NATIVE_DIR`; personal paths were removed;
+- symbol inspection is split into ELF, PE and Mach-O mechanisms instead of presenting `nm -D` as
+  cross-platform proof;
+- the selected-header sweep reports 839 managed declarations, 2,861 header exports, zero missing
+  declarations and zero arity mismatches. A locally found ABI 0.1.0 library was correctly rejected;
+  the current ABI 0.6.0 build passed integration.
+
+The sibling `cna-cs-template` was rebuilt as a product: CNA is the default, FNA uses an explicit
+path/property, raw PNG loading uses `Texture2D.FromStream`, CNA diagnostics are isolated, the demo
+has resize/input/2D plus a guarded BasicEffect cube, deterministic 60/600/custom frame modes, and
+`.template.config/template.json` installs as `cna-game`. Its verifier installs the template into an
+isolated CLI home, generates a project in a temporary directory and builds it. The generated build
+uses one MSBuild node after a restricted environment reproduced a multiprocess exit 1 that reported
+zero compiler errors; the single-node verification completes with zero warnings/errors.
+
+Final evidence for this entry:
+
+- Debug and Release solution builds: zero warnings/errors;
+- managed tests: 532 framework and 169 compat, all pass;
+- native ABI 0.6.0 OPENGLES3 integration: 103/103 pass under Xvfb in Debug and Release;
+- template CNA 60- and 600-frame runs: exit 0 and clean disposal;
+- generated CNA project build: pass;
+- source build against FNA, MonoGame DesktopGL and Kni: pass;
+- MonoGame DesktopGL and Kni SDL2.GL 60-frame runtime: pass; the configured FNA assembly was copied
+  but failed to load under .NET 8, so FNA runtime remains unverified. Framework/native dependency
+  load failures now produce an actionable message and exit 2 instead of an unhandled SIGABRT;
+- strict API gate: expected failure, 1,467 findings; this is the next P0, not a green claim.
+
+The current top work is the Game/device facade group, then models/audio/media collections and the
+managed content-reader type system. `ContentReader : BinaryReader`, abstract/generic
+`ContentTypeReader<T>`, shared resources and ordinary `Content.Load<MyType>()` remain major P0 work.
+The behavioral marker scan found no `NotImplementedException`, 36 `throw new NotSupportedException` sites
+and two documented LZX `TODO` comments; the content and generic texture-transfer throws are the
+highest-value unresolved subset, while read-only collection/stream throws are intentional.
+
 ## Reviewing my own session: seven defects, six of them mine (2026-08-18, same session)
 
 Reviewed everything written this session before calling it done, on the grounds
@@ -1027,8 +1129,7 @@ C++ engine's *internal* (non-ABI) implementation. That C API is now real: `cnabi
 `CBIND-0xx` ticket series to a "closed" coverage campaign (2,838 exported symbols, all
 5 C API gates green, verified across 4 build trees) and then, on explicit instruction,
 carefully merged `next` into `feature/binding` (HEAD `fb882a7a2` as of this entry, not
-yet pushed to origin -- read directly from the local
-`/rv/data/development/github.com/openeggbert/cnabinding` worktree).
+yet pushed to origin -- read directly from the local `cnabinding` worktree).
 
 Three parallel research forks (`native-abi-migration-game-graphics.md`,
 `-content-textures.md`, `-audio-input.md` in this session's scratchpad, synthesized

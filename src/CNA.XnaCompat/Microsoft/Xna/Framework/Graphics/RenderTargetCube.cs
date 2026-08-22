@@ -8,7 +8,7 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// <see cref="RenderTarget2D"/> already documents, resolved the same way: by reusing the base
 /// assembly's <c>internal static</c> native helpers rather than duplicating any logic.
 /// </summary>
-public class RenderTargetCube : TextureCube
+public class RenderTargetCube : TextureCube, IDynamicGraphicsResource
 {
     public RenderTargetCube(GraphicsDevice graphicsDevice, int size, bool mipMap, SurfaceFormat preferredFormat, DepthFormat preferredDepthFormat)
         : this(graphicsDevice, size, mipMap, preferredFormat, preferredDepthFormat, 0, RenderTargetUsage.DiscardContents)
@@ -23,7 +23,7 @@ public class RenderTargetCube : TextureCube
         DepthFormat preferredDepthFormat,
         int preferredMultiSampleCount,
         RenderTargetUsage usage)
-        : base(graphicsDevice, CNA.Graphics.RenderTargetCube.CreateNativeCubeHandle(
+        : base(graphicsDevice, new CNA.Graphics.RenderTargetCube(
             graphicsDevice,
             size,
             mipMap,
@@ -33,9 +33,6 @@ public class RenderTargetCube : TextureCube
             (CNA.Graphics.RenderTargetUsage)(int)usage))
     {
     }
-
-    protected override void ReleaseNative(nint handleValue) =>
-        CNA.Graphics.RenderTarget2D.ReleaseNativeRenderTarget(handleValue);
 
     /// <summary>Reads from <c>cna_render_target_get_info</c> through
     /// <c>CNA.Graphics.RenderTarget2D</c>'s own internal reader, the same way
@@ -57,11 +54,13 @@ public class RenderTargetCube : TextureCube
 
     /// <summary>Inert -- <c>render_target.h</c> has no per-target subscription route. See
     /// <see cref="CNA.Graphics.RenderTarget2D.ContentLost"/>.</summary>
-    public event EventHandler<EventArgs>? ContentLost
+    public virtual event EventHandler<EventArgs>? ContentLost
     {
         add => _contentLost += value;
         remove => _contentLost -= value;
     }
 
     private EventHandler<EventArgs>? _contentLost;
+
+    protected override void Dispose(bool arg0) => base.Dispose(arg0);
 }

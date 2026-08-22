@@ -125,6 +125,47 @@ public class Texture3D : Texture
         }
     }
 
+    /// <summary>Uploads an arbitrary blittable XNA texture element window through the C ABI's
+    /// raw-byte Texture3D route. This stays internal because CNA.Framework's public convenience
+    /// API is Color-based; CNA.XnaCompat uses it to implement XNA's generic SetData overloads
+    /// without exposing an interop type or pointer.</summary>
+    internal unsafe void SetDataBytes<T>(
+        int level, int left, int top, int right, int bottom, int front, int back,
+        T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException($"Texture element type {typeof(T)} contains managed references.", nameof(data));
+        }
+
+        var transfer = new CnaTexture3DTransfer
+        {
+            Level = level,
+            Left = left,
+            Top = top,
+            Right = right,
+            Bottom = bottom,
+            Front = front,
+            Back = back,
+        };
+
+        ReadOnlySpan<byte> bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+            data.AsSpan(startIndex, elementCount));
+        fixed (byte* bytesPtr = bytes)
+        {
+            CnaResult result = Native.cna_texture3d_set_data_bytes(
+                new CnaHandle(NativeHandleValue), in transfer, bytesPtr, (ulong)bytes.Length);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(SetData));
+        }
+    }
+
     /// <summary>Reads the whole volume at mip level zero.</summary>
     public Color[] GetData() => GetData(0, 0, 0, 0, Width, Height, Depth);
 

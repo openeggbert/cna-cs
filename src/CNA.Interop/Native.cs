@@ -297,6 +297,10 @@ internal static partial class Native
         CnaHandle texture, in CnaTexture3DTransfer transfer, CnaColor* destination, ulong destinationCapacity, out ulong outRequiredElements);
 
     [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texture3d_set_data_bytes(
+        CnaHandle texture, in CnaTexture3DTransfer transfer, byte* data, ulong dataByteCount);
+
+    [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_texturecube_create(CnaHandle device, in CnaTextureCubeCreateInfo createInfo, out CnaHandle texture);
 
     [LibraryImport(LibraryName)]
@@ -370,6 +374,14 @@ internal static partial class Native
     /// <c>texture.h</c>. Reads one typed mip/rectangle transfer into a caller array, atomically:
     /// failure does not modify the destination.
     /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_texture2d_set_data(
+        CnaHandle texture,
+        uint dataType,
+        CnaTexture2DTransfer* transfer,
+        void* data,
+        ulong dataCapacity);
+
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_texture2d_get_data(
         CnaHandle texture,
@@ -653,7 +665,11 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_texture2d_create_from_encoded_memory(
-        CnaHandle graphicsDevice, byte* encodedData, ulong encodedByteCount, nint decodeInfo, out CnaHandle outTexture);
+        CnaHandle graphicsDevice,
+        byte* encodedData,
+        ulong encodedByteCount,
+        CnaTexture2DDecodeInfo* decodeInfo,
+        out CnaHandle outTexture);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_texture2d_get_encoded_byte_count(
@@ -1091,6 +1107,10 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sound_effect_instance_apply_3d(
         CnaHandle instance, in CnaAudioListener listener, in CnaAudioEmitter emitter);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sound_effect_instance_apply_3d_multi_ext(
+        CnaHandle instance, CnaAudioListener* listeners, ulong listenerCount, in CnaAudioEmitter emitter);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_dynamic_sound_effect_instance_create(
@@ -2519,6 +2539,21 @@ internal static partial class Native
     // CnaStringMarshal.cs. content_manager itself is now always the handle
     // cna_game_get_content_manager_ext returns (see Game.cs step 2), a borrowed handle safe to
     // reuse across calls -- unaffected by that string-marshaling change.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_create(
+        CnaHandle graphicsDevice,
+        in CnaContentManagerCreateInfo createInfo,
+        out CnaHandle contentManager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_create_resource(
+        CnaHandle graphicsDevice,
+        in CnaContentManagerCreateInfo createInfo,
+        out CnaHandle contentManager);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_content_manager_destroy(CnaHandle contentManager);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_content_manager_set_root_directory(CnaHandle contentManager, CnaStringView rootDirectory);

@@ -1,17 +1,45 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>XNA 4.0-compatible <c>Texture</c>. A pure subclass -- <c>LevelCount</c>/<c>Dispose</c>
-/// are inherited unchanged from <see cref="CNA.Graphics.Texture"/>; only <see cref="Format"/>
-/// needs a `new` override, since <see cref="SurfaceFormat"/> is this namespace's own enum type
-/// (see that enum's own doc comment for why the two namespaces duplicate rather than alias).</summary>
-public abstract class Texture : CNA.Graphics.Texture
+/// <summary>XNA 4.0-compatible common base for all texture resources.</summary>
+public abstract class Texture : GraphicsResource
 {
-    protected Texture(GraphicsDevice graphicsDevice, nint nativeHandleValue)
-        : base(graphicsDevice, nativeHandleValue)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CNA.Graphics.Texture, Texture>
+        FrameworkFacades = new();
+
+    private readonly CNA.Graphics.Texture _frameworkTexture;
+
+    internal Texture(GraphicsDevice graphicsDevice, CNA.Graphics.Texture frameworkTexture)
+        : base(graphicsDevice)
     {
+        ArgumentNullException.ThrowIfNull(frameworkTexture);
+        _frameworkTexture = frameworkTexture;
+        FrameworkFacades.Add(frameworkTexture, this);
     }
 
-    public new GraphicsDevice GraphicsDevice => (GraphicsDevice)base.GraphicsDevice;
+    internal CNA.Graphics.Texture FrameworkTexture => _frameworkTexture;
 
-    public new SurfaceFormat Format => (SurfaceFormat)(int)base.Format;
+    internal static Texture? FromFramework(CNA.Graphics.Texture? frameworkTexture)
+    {
+        if (frameworkTexture is null)
+        {
+            return null;
+        }
+
+        return FrameworkFacades.TryGetValue(frameworkTexture, out Texture? facade)
+            ? facade
+            : null;
+    }
+
+    internal nint NativeHandleValue => _frameworkTexture.NativeHandleValue;
+
+    internal nint DetachNativeHandle() => _frameworkTexture.DetachNativeHandle();
+
+    public int LevelCount => _frameworkTexture.LevelCount;
+
+    public SurfaceFormat Format => (SurfaceFormat)(int)_frameworkTexture.Format;
+
+    internal void DisposeFrameworkTexture()
+    {
+        _frameworkTexture.Dispose();
+    }
 }

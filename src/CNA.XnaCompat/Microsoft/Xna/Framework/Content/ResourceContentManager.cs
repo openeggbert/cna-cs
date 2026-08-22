@@ -1,12 +1,30 @@
+using System.Resources;
+
 namespace Microsoft.Xna.Framework.Content;
 
-/// <summary>XNA 4.0-compatible <c>ResourceContentManager</c>. A pure subclass of
-/// <see cref="CNA.Content.ResourceContentManager"/>; the resource lookup it adds involves only BCL
-/// types, so nothing needs re-typing.</summary>
-public class ResourceContentManager : CNA.Content.ResourceContentManager
+/// <summary>XNA 4.0-compatible resource-backed content manager.</summary>
+public class ResourceContentManager : ContentManager
 {
-    protected internal ResourceContentManager(nint nativeHandleValue, System.Resources.ResourceManager resourceManager)
-        : base(nativeHandleValue, resourceManager)
+    private readonly ResourceManager _resourceManager;
+
+    public ResourceContentManager(IServiceProvider serviceProvider, ResourceManager resourceManager)
+        : base(serviceProvider)
     {
+        ArgumentNullException.ThrowIfNull(resourceManager);
+        _resourceManager = resourceManager;
+    }
+
+    protected override Stream OpenStream(string assetName)
+    {
+        ArgumentNullException.ThrowIfNull(assetName);
+
+        object? resource = _resourceManager.GetObject(assetName);
+        return resource switch
+        {
+            byte[] bytes => new MemoryStream(bytes, writable: false),
+            null => throw new ContentLoadException($"Resource '{assetName}' was not found."),
+            _ => throw new ContentLoadException(
+                $"Resource '{assetName}' is not stored in binary format."),
+        };
     }
 }

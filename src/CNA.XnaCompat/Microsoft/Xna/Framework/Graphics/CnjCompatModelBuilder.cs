@@ -104,7 +104,7 @@ internal static class CnjCompatModelBuilder
                 parentBone = childBone;
             }
 
-            mesh.ParentBone = parentBone;
+            mesh.SetParentBone(parentBone);
             meshParentBones.Add(parentBone);
 
             // Same ordering requirement as CNA.Content.Cnj.CnjModelBuilder.Build's own -- Effect

@@ -29,17 +29,27 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     /// "no independent state, just a typed read/write-through" pattern
     /// <see cref="Microsoft.Xna.Framework.Audio.SoundEffectInstance.State"/> already uses.
     /// </summary>
-    /// <summary>Re-typed: <see cref="GraphicsCapability"/> is a separate enum per namespace, like
-    /// every other CNA enum the compat layer mirrors. Without this a compat game calling
-    /// <c>SupportsCapability</c> would have to name a <c>CNA.Graphics</c> type.</summary>
-    public bool SupportsCapability(GraphicsCapability capability) =>
+    internal bool SupportsCnaCapabilityCore(CNA.XnaCompat.Extensions.CnaGraphicsCapability capability) =>
         base.SupportsCapability((CNA.Graphics.GraphicsCapability)(uint)capability);
+
+    internal string CnaRendererName => base.RendererName;
 
     public new IndexBuffer? Indices
     {
-        get => (IndexBuffer?)base.Indices;
-        set => base.Indices = value;
+        get => IndexBuffer.FromFramework(base.Indices);
+        set => base.Indices = value?.FrameworkBuffer;
     }
+
+    public void SetVertexBuffer(VertexBuffer? vertexBuffer) =>
+        base.SetVertexBuffer(vertexBuffer?.FrameworkBuffer);
+
+    public void SetRenderTarget(RenderTarget2D? renderTarget) =>
+        base.SetRenderTarget(renderTarget?.FrameworkTexture as CNA.Graphics.Texture2D);
+
+    public void SetRenderTarget(RenderTargetCube? renderTarget, CubeMapFace cubeMapFace) =>
+        base.SetRenderTarget(
+            renderTarget?.FrameworkTexture as CNA.Graphics.RenderTargetCube,
+            (CNA.Graphics.CubeMapFace)(int)cubeMapFace);
 
     public void DrawPrimitives(PrimitiveType primitiveType, int startVertex, int primitiveCount) =>
         base.DrawPrimitives((CNA.Graphics.PrimitiveType)(int)primitiveType, startVertex, primitiveCount);
@@ -109,32 +119,25 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     public new DisplayMode DisplayMode => DisplayMode.FromFramework(base.DisplayMode);
 
     /// <summary>Same downcast pass-through pattern as <see cref="Indices"/>, but for a property
-    /// whose base default is a real, non-null value -- see the base <c>BlendState</c> property's
-    /// own doc comment for why <see cref="QueryBlendState"/> needs its own override here rather
-    /// than relying on the downcast alone.</summary>
+    /// whose base default is a real, non-null value. The facade wraps the backend descriptor
+    /// instead of relying on an invalid cross-hierarchy cast.</summary>
     public new BlendState BlendState
     {
-        get => (BlendState)base.BlendState;
-        set => base.BlendState = value;
+        get => new(base.BlendState);
+        set => base.BlendState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
-
-    protected override CNA.Graphics.BlendState QueryBlendState() => new BlendState(base.QueryBlendState());
 
     public new DepthStencilState DepthStencilState
     {
-        get => (DepthStencilState)base.DepthStencilState;
-        set => base.DepthStencilState = value;
+        get => new(base.DepthStencilState);
+        set => base.DepthStencilState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
-
-    protected override CNA.Graphics.DepthStencilState QueryDepthStencilState() => new DepthStencilState(base.QueryDepthStencilState());
 
     public new RasterizerState RasterizerState
     {
-        get => (RasterizerState)base.RasterizerState;
-        set => base.RasterizerState = value;
+        get => new(base.RasterizerState);
+        set => base.RasterizerState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
     }
-
-    protected override CNA.Graphics.RasterizerState QueryRasterizerState() => new RasterizerState(base.QueryRasterizerState());
 
     public new SamplerStateCollection SamplerStates => (SamplerStateCollection)base.SamplerStates;
 
@@ -237,18 +240,23 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
         var converted = new CNA.Graphics.RenderTargetBinding[renderTargets.Length];
         for (int i = 0; i < converted.Length; i++)
         {
-            converted[i] = renderTargets[i];
+            converted[i] = renderTargets[i].Framework;
         }
 
         base.SetRenderTargets(converted);
     }
 
-    /// <summary>Matches real XNA's <c>GetRenderTargets</c>. Only the count is meaningful across
-    /// this boundary: the base answers from the <c>CNA.Graphics</c> bindings it was handed, and a
-    /// compat binding converts one way only, so re-typing them back is not possible. Returns
-    /// default-constructed bindings of the right length, which is what a caller checking
-    /// <c>Length</c> -- the realistic use -- needs.</summary>
-    public new RenderTargetBinding[] GetRenderTargets() => new RenderTargetBinding[base.GetRenderTargets().Length];
+    public new RenderTargetBinding[] GetRenderTargets()
+    {
+        CNA.Graphics.RenderTargetBinding[] source = base.GetRenderTargets();
+        var result = new RenderTargetBinding[source.Length];
+        for (int i = 0; i < source.Length; i++)
+        {
+            result[i] = RenderTargetBinding.FromFramework(source[i]);
+        }
+
+        return result;
+    }
 
     /// <summary>Matches real XNA's <c>DrawUserPrimitives&lt;T&gt;</c>. Reimplements the
     /// type-to-<c>UserVertexSource</c> mapping for this namespace's own vertex structs rather than
@@ -262,60 +270,181 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     /// Any <see cref="IVertexType"/> works, not only the four the ABI names -- see
     /// <see cref="CNA.Graphics.UserVertexSource"/> for why the previous restriction was
     /// self-imposed.</summary>
-    public unsafe void DrawUserPrimitives<T>(PrimitiveType primitiveType, T[] vertexData, int vertexOffset, int primitiveCount)
-        where T : unmanaged
+    public void DrawUserPrimitives<T>(
+        PrimitiveType primitiveType,
+        T[] vertexData,
+        int vertexOffset,
+        int primitiveCount)
+        where T : struct, IVertexType =>
+        DrawUserPrimitivesCore(
+            primitiveType,
+            vertexData,
+            vertexOffset,
+            primitiveCount,
+            TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null);
+
+    public void DrawUserPrimitives<T>(
+        PrimitiveType primitiveType,
+        T[] vertexData,
+        int vertexOffset,
+        int primitiveCount,
+        VertexDeclaration vertexDeclaration)
+        where T : struct
     {
-        ArgumentNullException.ThrowIfNull(vertexData);
-
-        CNA.Graphics.UserVertexSource? typedSource = TypedVertexSourceFor<T>();
-
-        fixed (T* vertexDataPtr = vertexData)
-        {
-            DrawUserPrimitivesRaw(
-                (CNA.Graphics.PrimitiveType)(int)primitiveType,
-                vertexDataPtr,
-                typedSource ?? CNA.Graphics.UserVertexSource.RawStream,
-                vertexOffset,
-                primitiveCount,
-                typedSource is null ? DeclarationFor<T>() : null);
-        }
+        ArgumentNullException.ThrowIfNull(vertexDeclaration);
+        DrawUserPrimitivesCore(
+            primitiveType, vertexData, vertexOffset, primitiveCount, vertexDeclaration.Framework);
     }
 
     /// <summary>Matches real XNA's <c>DrawUserIndexedPrimitives&lt;T&gt;</c>. Reimplements the
-    /// vertex-type mapping for the same reason <see cref="DrawUserPrimitives{T}"/> does -- compat
+    /// vertex-type mapping for the same reason <c>DrawUserPrimitives&lt;T&gt;</c> does -- compat
     /// vertex structs are separate types from their CNA.Graphics counterparts -- and reaches the
     /// shared raw level underneath.</summary>
-    public unsafe void DrawUserIndexedPrimitives<TVertex, TIndex>(
+    public void DrawUserIndexedPrimitives<T>(
+        PrimitiveType primitiveType,
+        T[] vertexData,
+        int vertexOffset,
+        int numVertices,
+        int[] indexData,
+        int indexOffset,
+        int primitiveCount)
+        where T : struct, IVertexType =>
+        DrawUserIndexedPrimitivesCore(
+            primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
+            primitiveCount, TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null);
+
+    public void DrawUserIndexedPrimitives<T>(
+        PrimitiveType primitiveType,
+        T[] vertexData,
+        int vertexOffset,
+        int numVertices,
+        short[] indexData,
+        int indexOffset,
+        int primitiveCount)
+        where T : struct, IVertexType =>
+        DrawUserIndexedPrimitivesCore(
+            primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
+            primitiveCount, TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null);
+
+    public void DrawUserIndexedPrimitives<T>(
+        PrimitiveType primitiveType,
+        T[] vertexData,
+        int vertexOffset,
+        int numVertices,
+        int[] indexData,
+        int indexOffset,
+        int primitiveCount,
+        VertexDeclaration vertexDeclaration)
+        where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(vertexDeclaration);
+        DrawUserIndexedPrimitivesCore(
+            primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
+            primitiveCount, vertexDeclaration.Framework);
+    }
+
+    public void DrawUserIndexedPrimitives<T>(
+        PrimitiveType primitiveType,
+        T[] vertexData,
+        int vertexOffset,
+        int numVertices,
+        short[] indexData,
+        int indexOffset,
+        int primitiveCount,
+        VertexDeclaration vertexDeclaration)
+        where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(vertexDeclaration);
+        DrawUserIndexedPrimitivesCore(
+            primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
+            primitiveCount, vertexDeclaration.Framework);
+    }
+
+    private unsafe void DrawUserPrimitivesCore<T>(
+        PrimitiveType primitiveType,
+        T[] vertexData,
+        int vertexOffset,
+        int primitiveCount,
+        CNA.Graphics.VertexDeclaration? vertexDeclaration)
+        where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(vertexData);
+        RejectManagedReferences<T>(nameof(vertexData));
+
+        CNA.Graphics.UserVertexSource? typedSource = TypedVertexSourceFor<T>();
+        var pin = System.Runtime.InteropServices.GCHandle.Alloc(
+            vertexData, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            DrawUserPrimitivesRaw(
+                (CNA.Graphics.PrimitiveType)(int)primitiveType,
+                (void*)pin.AddrOfPinnedObject(),
+                vertexDeclaration is null && typedSource is { } source
+                    ? source
+                    : CNA.Graphics.UserVertexSource.RawStream,
+                vertexOffset,
+                primitiveCount,
+                vertexDeclaration);
+        }
+        finally
+        {
+            pin.Free();
+        }
+    }
+
+    private unsafe void DrawUserIndexedPrimitivesCore<TVertex, TIndex>(
         PrimitiveType primitiveType,
         TVertex[] vertexData,
         int vertexOffset,
         int numVertices,
         TIndex[] indexData,
         int indexOffset,
-        int primitiveCount)
-        where TVertex : unmanaged
-        where TIndex : unmanaged
+        int primitiveCount,
+        CNA.Graphics.VertexDeclaration? vertexDeclaration)
+        where TVertex : struct
+        where TIndex : struct
     {
         ArgumentNullException.ThrowIfNull(vertexData);
         ArgumentNullException.ThrowIfNull(indexData);
+        RejectManagedReferences<TVertex>(nameof(vertexData));
+        RejectManagedReferences<TIndex>(nameof(indexData));
 
         CNA.Graphics.UserVertexSource? typedSource = TypedVertexSourceFor<TVertex>();
-        CNA.Graphics.IndexElementSize indexElementSize = CNA.Graphics.IndexBuffer.SizeForType(typeof(TIndex));
-
-        fixed (TVertex* vertexDataPtr = vertexData)
-        fixed (TIndex* indexDataPtr = indexData)
+        CNA.Graphics.IndexElementSize indexElementSize =
+            CNA.Graphics.IndexBuffer.SizeForType(typeof(TIndex));
+        var vertexPin = System.Runtime.InteropServices.GCHandle.Alloc(
+            vertexData, System.Runtime.InteropServices.GCHandleType.Pinned);
+        var indexPin = System.Runtime.InteropServices.GCHandle.Alloc(
+            indexData, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
         {
             DrawUserIndexedPrimitivesRaw(
                 (CNA.Graphics.PrimitiveType)(int)primitiveType,
-                vertexDataPtr,
-                typedSource ?? CNA.Graphics.UserVertexSource.RawStream,
+                (void*)vertexPin.AddrOfPinnedObject(),
+                vertexDeclaration is null && typedSource is { } source
+                    ? source
+                    : CNA.Graphics.UserVertexSource.RawStream,
                 vertexOffset,
                 numVertices,
-                indexDataPtr,
+                (void*)indexPin.AddrOfPinnedObject(),
                 indexElementSize,
                 indexOffset,
                 primitiveCount,
-                typedSource is null ? DeclarationFor<TVertex>() : null);
+                vertexDeclaration);
+        }
+        finally
+        {
+            indexPin.Free();
+            vertexPin.Free();
+        }
+    }
+
+    private static void RejectManagedReferences<T>(string parameterName) where T : struct
+    {
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException(
+                $"Vertex/index type {typeof(T)} contains managed references.", parameterName);
         }
     }
 
@@ -323,7 +452,7 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     /// a fall-through to the raw-stream route rather than a failure -- see
     /// <see cref="CNA.Graphics.UserVertexSource"/> for the header evidence that the raw route was
     /// never actually blocked.</summary>
-    private static CNA.Graphics.UserVertexSource? TypedVertexSourceFor<T>() where T : unmanaged
+    private static CNA.Graphics.UserVertexSource? TypedVertexSourceFor<T>() where T : struct
     {
         if (typeof(T) == typeof(VertexPositionColor))
         {
@@ -353,7 +482,7 @@ public class GraphicsDevice : CNA.Graphics.GraphicsDevice
     /// <see cref="VertexDeclaration"/>, which converts implicitly to the CNA one, so a compat
     /// <see cref="IVertexType"/> is read through the compat interface it actually
     /// implements.</summary>
-    private static CNA.Graphics.VertexDeclaration DeclarationFor<T>() where T : unmanaged
+    private static CNA.Graphics.VertexDeclaration DeclarationFor<T>() where T : struct
     {
         if (Activator.CreateInstance<T>() is not IVertexType instance)
         {

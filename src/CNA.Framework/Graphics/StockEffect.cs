@@ -101,6 +101,13 @@ public abstract class StockEffect : Effect
         }
 
         _disposed = true;
+
+        // Effect owns the reflection handles it caches (parameters, techniques, passes, and the
+        // current technique). Skipping the base call left those children alive after the stock
+        // effect itself was destroyed; native then correctly refused to destroy the owning game.
+        // This surfaced when a compat BasicEffect applied CurrentTechnique.Passes[0] and the next
+        // test attempted to create a game in the same process.
+        base.Dispose();
         ReleaseAdditionalNativeResources();
         _ownedHandle.Dispose();
         GC.SuppressFinalize(this);

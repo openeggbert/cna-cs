@@ -1,44 +1,37 @@
+using System.Text;
+
 namespace Microsoft.Xna.Framework.Graphics;
 
-/// <summary>
-/// XNA 4.0-compatible <c>SpriteBatch</c>. <c>Begin()</c>/<c>End()</c>/<c>Dispose()</c> and every
-/// <c>Draw</c> overload *without* a <c>SpriteEffects</c> parameter are inherited unchanged from
-/// <see cref="CNA.Graphics.SpriteBatch"/> -- the <c>Texture2D</c> argument upcasts and the
-/// <c>Vector2</c>/<c>Rectangle?</c>/<c>Color</c> arguments convert through their implicit
-/// operators (nullable <c>Rectangle?</c> included -- C# lifts a value type's user-defined
-/// conversion operator over <c>Nullable&lt;T&gt;</c> automatically), so no override is needed for
-/// those. The three overloads that take <c>SpriteEffects</c> *do* need an override below: it is a
-/// distinct enum type from <see cref="CNA.Graphics.SpriteEffects"/> (enums cannot define
-/// conversion operators in C#), so a plain XNA-namespaced <c>SpriteEffects.None</c> argument would
-/// not otherwise bind to the base overload.
-/// </summary>
-public class SpriteBatch : CNA.Graphics.SpriteBatch
+/// <summary>XNA 4.0 SpriteBatch facade. Its public base is GraphicsResource; the CNA batch remains
+/// a private implementation object and owns the one native batch handle.</summary>
+public class SpriteBatch : GraphicsResource
 {
+    private readonly CNA.Graphics.SpriteBatch _inner;
+
     public SpriteBatch(GraphicsDevice graphicsDevice)
         : base(graphicsDevice)
     {
+        _inner = new CNA.Graphics.SpriteBatch(graphicsDevice);
     }
 
-    /// <summary>Matches real XNA's <c>Begin(SpriteSortMode, BlendState)</c>. Re-typed for the same
-    /// reason the <c>SpriteEffects</c> overloads are: <see cref="SpriteSortMode"/> is a distinct
-    /// enum per namespace, so an XNA-namespaced argument would not bind to the base
-    /// overload.</summary>
-    public void Begin(SpriteSortMode sortMode, BlendState? blendState) =>
-        Begin(sortMode, blendState, null, null, null);
+    public void Begin() => _inner.Begin();
 
-    /// <summary>Matches real XNA's five-argument <c>Begin</c>. The state objects subclass their
-    /// <c>CNA.Graphics</c> counterparts, so only the sort mode needs converting.</summary>
+    public void Begin(SpriteSortMode sortMode, BlendState? blendState) =>
+        _inner.Begin((CNA.Graphics.SpriteSortMode)(int)sortMode, blendState?.Framework);
+
     public void Begin(
         SpriteSortMode sortMode,
         BlendState? blendState,
         SamplerState? samplerState,
         DepthStencilState? depthStencilState,
         RasterizerState? rasterizerState) =>
-        base.Begin(
+        _inner.Begin(
             (CNA.Graphics.SpriteSortMode)(int)sortMode,
-            blendState, samplerState, depthStencilState, rasterizerState);
+            blendState?.Framework,
+            samplerState?.Framework,
+            depthStencilState?.Framework,
+            rasterizerState?.Framework);
 
-    /// <summary>Matches real XNA's six-argument <c>Begin</c>.</summary>
     public void Begin(
         SpriteSortMode sortMode,
         BlendState? blendState,
@@ -46,11 +39,14 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         DepthStencilState? depthStencilState,
         RasterizerState? rasterizerState,
         Effect? effect) =>
-        Begin(sortMode, blendState, samplerState, depthStencilState, rasterizerState, effect, null);
+        _inner.Begin(
+            (CNA.Graphics.SpriteSortMode)(int)sortMode,
+            blendState?.Framework,
+            samplerState?.Framework,
+            depthStencilState?.Framework,
+            rasterizerState?.Framework,
+            effect?.Inner);
 
-    /// <summary>Matches real XNA's seven-argument <c>Begin</c>. The compat <see cref="Effect"/>
-    /// composes its <c>CNA.Graphics</c> counterpart rather than deriving from it -- see that type's
-    /// doc comment -- so its inner effect is what reaches the base.</summary>
     public void Begin(
         SpriteSortMode sortMode,
         BlendState? blendState,
@@ -58,12 +54,23 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         DepthStencilState? depthStencilState,
         RasterizerState? rasterizerState,
         Effect? effect,
-        Matrix? transformMatrix) =>
-        base.Begin(
+        Matrix transformMatrix) =>
+        _inner.Begin(
             (CNA.Graphics.SpriteSortMode)(int)sortMode,
-            blendState, samplerState, depthStencilState, rasterizerState,
+            blendState?.Framework,
+            samplerState?.Framework,
+            depthStencilState?.Framework,
+            rasterizerState?.Framework,
             effect?.Inner,
-            transformMatrix is { } matrix ? matrix : null);
+            transformMatrix);
+
+    public void End() => _inner.End();
+
+    public void Draw(Texture2D texture, Vector2 position, Color color) =>
+        _inner.Draw(Backend(texture), position, color);
+
+    public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color) =>
+        _inner.Draw(Backend(texture), position, sourceRectangle, color);
 
     public void Draw(
         Texture2D texture,
@@ -75,7 +82,9 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         float scale,
         SpriteEffects effects,
         float layerDepth) =>
-        base.Draw(texture, position, sourceRectangle, color, rotation, origin, scale, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+        _inner.Draw(
+            Backend(texture), position, sourceRectangle, color, rotation, origin, scale,
+            (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
     public void Draw(
         Texture2D texture,
@@ -87,7 +96,19 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         Vector2 scale,
         SpriteEffects effects,
         float layerDepth) =>
-        base.Draw(texture, position, sourceRectangle, color, rotation, origin, scale, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+        _inner.Draw(
+            Backend(texture), position, sourceRectangle, color, rotation, origin, scale,
+            (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+
+    public void Draw(Texture2D texture, Rectangle destinationRectangle, Color color) =>
+        _inner.Draw(Backend(texture), destinationRectangle, color);
+
+    public void Draw(
+        Texture2D texture,
+        Rectangle destinationRectangle,
+        Rectangle? sourceRectangle,
+        Color color) =>
+        _inner.Draw(Backend(texture), destinationRectangle, sourceRectangle, color);
 
     public void Draw(
         Texture2D texture,
@@ -98,12 +119,19 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         Vector2 origin,
         SpriteEffects effects,
         float layerDepth) =>
-        base.Draw(texture, destinationRectangle, sourceRectangle, color, rotation, origin, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+        _inner.Draw(
+            Backend(texture), destinationRectangle, sourceRectangle, color, rotation, origin,
+            (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
-    /// <summary><c>DrawString(SpriteFont, string, Vector2, Color)</c> is inherited unchanged
-    /// (its <c>SpriteFont</c> argument upcasts, same as <c>Draw</c>'s <c>Texture2D</c>); these
-    /// two overloads need the same <c>SpriteEffects</c> override treatment as <c>Draw</c>
-    /// above.</summary>
+    public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color) =>
+        _inner.DrawString(spriteFont, text, position, color);
+
+    public void DrawString(SpriteFont spriteFont, StringBuilder text, Vector2 position, Color color)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        _inner.DrawString(spriteFont, text.ToString(), position, color);
+    }
+
     public void DrawString(
         SpriteFont spriteFont,
         string text,
@@ -114,7 +142,24 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         float scale,
         SpriteEffects effects,
         float layerDepth) =>
-        base.DrawString(spriteFont, text, position, color, rotation, origin, scale, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+        _inner.DrawString(
+            spriteFont, text, position, color, rotation, origin, scale,
+            (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+
+    public void DrawString(
+        SpriteFont spriteFont,
+        StringBuilder text,
+        Vector2 position,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        float scale,
+        SpriteEffects effects,
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        DrawString(spriteFont, text.ToString(), position, color, rotation, origin, scale, effects, layerDepth);
+    }
 
     public void DrawString(
         SpriteFont spriteFont,
@@ -126,5 +171,39 @@ public class SpriteBatch : CNA.Graphics.SpriteBatch
         Vector2 scale,
         SpriteEffects effects,
         float layerDepth) =>
-        base.DrawString(spriteFont, text, position, color, rotation, origin, scale, (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+        _inner.DrawString(
+            spriteFont, text, position, color, rotation, origin, scale,
+            (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+
+    public void DrawString(
+        SpriteFont spriteFont,
+        StringBuilder text,
+        Vector2 position,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        Vector2 scale,
+        SpriteEffects effects,
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        DrawString(spriteFont, text.ToString(), position, color, rotation, origin, scale, effects, layerDepth);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        _inner.Dispose();
+        base.Dispose(disposing);
+    }
+
+    private static CNA.Graphics.Texture2D Backend(Texture2D texture)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+        return (CNA.Graphics.Texture2D)texture.FrameworkTexture;
+    }
 }

@@ -15,48 +15,69 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// No logic is duplicated to pay for it: every member below is a one-line call into the same
 /// <c>internal static</c> helpers on <see cref="CNA.Graphics.Texture2D"/> that its own instance
 /// members call, which exist for precisely this purpose (see
-/// <see cref="CNA.Graphics.Texture2D.CreateNativeTexture2DHandle"/>'s doc comment). This is the
+/// <c>CNA.Graphics.Texture2D.CreateNativeTexture2DHandle</c>'s doc comment). This is the
 /// pattern <see cref="CNA.Graphics.RenderTarget2D"/> established for the identical problem.
 /// </summary>
 public class Texture2D : Texture
 {
     public Texture2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(graphicsDevice, CNA.Graphics.Texture2D.CreateNativeTexture2DHandle(graphicsDevice, width, height))
+        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice, width, height))
+    {
+    }
+
+    public Texture2D(GraphicsDevice graphicsDevice, int width, int height, bool mipMap, SurfaceFormat format)
+        : this(graphicsDevice, new CNA.Graphics.Texture2D(
+            graphicsDevice, width, height, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
     {
     }
 
     /// <summary>Wraps an already-loaded native handle -- used by <c>ContentManager</c>.</summary>
-    protected internal Texture2D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
-        : base(graphicsDevice, nativeHandleValue)
+    internal Texture2D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
+        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice, nativeHandleValue))
     {
     }
 
-    protected override void ReleaseNative(nint handleValue) => CNA.Graphics.Texture2D.ReleaseNativeTexture2D(handleValue);
-
-    public virtual int Width => CNA.Graphics.Texture2D.GetTexture2DDimensions(NativeHandleValue).Width;
-
-    public virtual int Height => CNA.Graphics.Texture2D.GetTexture2DDimensions(NativeHandleValue).Height;
-
-    public void SetData(byte[] data)
+    internal Texture2D(GraphicsDevice graphicsDevice, CNA.Graphics.Texture2D frameworkTexture)
+        : base(graphicsDevice, frameworkTexture)
     {
-        ArgumentNullException.ThrowIfNull(data);
-        CNA.Graphics.Texture2D.SetDataRgba8(NativeHandleValue, data);
     }
 
-    /// <summary>Converts element-wise before packing -- <see cref="Color"/> here is this
-    /// namespace's own type, which converts per element but not array-to-array (see that struct's
-    /// own conversion operators).</summary>
-    public void SetData(Color[] data)
-    {
-        ArgumentNullException.ThrowIfNull(data);
+    private CNA.Graphics.Texture2D FrameworkTexture2D => (CNA.Graphics.Texture2D)FrameworkTexture;
 
-        var converted = new CNA.Color[data.Length];
-        for (int i = 0; i < data.Length; i++)
+    public int Width => FrameworkTexture2D.Width;
+
+    public int Height => FrameworkTexture2D.Height;
+
+    protected override void Dispose(bool arg0)
+    {
+        if (!IsDisposed)
         {
-            converted[i] = data[i];
+            DisposeFrameworkTexture();
         }
 
-        CNA.Graphics.Texture2D.SetDataRgba8(NativeHandleValue, CNA.Graphics.Texture2D.PackColors(converted));
+        base.Dispose(arg0);
+    }
+
+    public void SetData<T>(T[] data) where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        SetData(0, null, data, 0, data.Length);
+    }
+
+    public void SetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
+        SetData(0, null, data, startIndex, elementCount);
+
+    public void SetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        CNA.Graphics.Texture2D.SetDataFrom(
+            NativeHandleValue,
+            CompatTextureDataType.Of<T>(),
+            level,
+            rect is { } region ? (CNA.Rectangle)region : null,
+            data,
+            startIndex,
+            elementCount);
     }
 
     /// <summary>
@@ -68,54 +89,33 @@ public class Texture2D : Texture
     /// type -- could not read a texture at all. Nothing caught it: the type-level diff sees
     /// <c>Texture2D</c> on both sides, and every integration test used the CNA type.
     /// </summary>
-    public void GetData<T>(T[] data) where T : unmanaged
+    public void GetData<T>(T[] data) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         GetData(0, null, data, 0, data.Length);
     }
 
     /// <summary>See <see cref="GetData{T}(T[])"/>.</summary>
-    public void GetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
+    public void GetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
         GetData(0, null, data, startIndex, elementCount);
 
     /// <summary>
     /// See <see cref="GetData{T}(T[])"/>. <paramref name="rect"/> is this namespace's own
     /// <see cref="Rectangle"/>, which is why this cannot simply forward.
     ///
-    /// <b><see cref="Color"/> is read through a CNA-typed buffer and converted back.</b> The
-    /// element-type map lives in CNA.Framework and names CNA's value types; it cannot name this
-    /// namespace's duplicates, and invariant 5 says it must not try. So a compat
-    /// <c>Color[]</c> would be refused by name -- which is what happened the first time this ran --
-    /// even though the two are byte-identical. Converting is the honest fix: the map stays truthful
-    /// about what the ABI accepts, and this layer does the translation it exists to do, the same
-    /// way <see cref="SetData(Color[])"/> already converts on the way down.
+    /// The compat mapper selects the matching native transfer tag while the pinned struct array is
+    /// copied directly. Types containing managed references are rejected before native is called.
     /// </summary>
     public void GetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
-        where T : unmanaged
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
 
         CNA.Rectangle? converted = rect is { } r ? new CNA.Rectangle(r.X, r.Y, r.Width, r.Height) : null;
 
-        if (typeof(T) == typeof(Color))
-        {
-            var native = new CNA.Color[data.Length];
-            CNA.Graphics.Texture2D.GetDataInto(
-                NativeHandleValue, (CNA.Graphics.SurfaceFormat)(int)Format, level, converted,
-                native, startIndex, elementCount);
-
-            Span<T> destination = data;
-            for (int i = startIndex; i < startIndex + elementCount; i++)
-            {
-                Color element = native[i];
-                destination[i] = (T)(object)element;
-            }
-
-            return;
-        }
-
         CNA.Graphics.Texture2D.GetDataInto(
-            NativeHandleValue, (CNA.Graphics.SurfaceFormat)(int)Format, level, converted,
+            NativeHandleValue, (CNA.Graphics.SurfaceFormat)(int)Format,
+            CompatTextureDataType.Of<T>(), level, converted,
             data, startIndex, elementCount);
     }
 
@@ -132,6 +132,23 @@ public class Texture2D : Texture
         using CNA.Graphics.Texture2D decoded = CNA.Graphics.Texture2D.FromStream(graphicsDevice, stream);
         return new Texture2D(graphicsDevice, decoded.DetachNativeHandle());
     }
+
+    public static Texture2D FromStream(
+        GraphicsDevice graphicsDevice, Stream stream, int width, int height, bool zoom)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ArgumentNullException.ThrowIfNull(stream);
+
+        using CNA.Graphics.Texture2D decoded =
+            CNA.Graphics.Texture2D.FromStream(graphicsDevice, stream, width, height, zoom);
+        return new Texture2D(graphicsDevice, decoded.DetachNativeHandle());
+    }
+
+    public void SaveAsPng(Stream stream, int width, int height) =>
+        FrameworkTexture2D.SaveAsPng(stream, width, height);
+
+    public void SaveAsJpeg(Stream stream, int width, int height) =>
+        FrameworkTexture2D.SaveAsJpeg(stream, width, height);
 
     /// <summary>This namespace's own <c>Rectangle</c>. Not a <c>new</c> override: this class
     /// derives from its own namespace's texture base rather than from

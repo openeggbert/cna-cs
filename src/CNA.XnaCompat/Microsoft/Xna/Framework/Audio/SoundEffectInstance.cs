@@ -1,28 +1,89 @@
 namespace Microsoft.Xna.Framework.Audio;
 
-/// <summary>
-/// XNA 4.0-compatible <c>SoundEffectInstance</c>. <c>Play</c>/<c>Pause</c>/<c>Resume</c>/
-/// <c>Stop</c>/<c>Volume</c>/<c>Pitch</c>/<c>Pan</c>/<c>IsLooped</c>/<c>Dispose</c> are all
-/// inherited unchanged from <see cref="CNA.Audio.SoundEffectInstance"/> -- every one of those
-/// members' types (<c>float</c>, <c>bool</c>) needs no conversion. <c>State</c> needs a `new`
-/// override since <c>SoundState</c> is an enum (no conversion operators possible), same reason
-/// <c>Buttons</c>/<c>Keys</c>/<c>SpriteEffects</c> need explicit casts at their own boundaries.
-/// Like real XNA, has no public constructor -- only reachable via
-/// <see cref="SoundEffect.CreateInstance"/>.
-/// </summary>
-public class SoundEffectInstance : CNA.Audio.SoundEffectInstance
+/// <summary>XNA 4.0 sound instance facade backed by exactly one CNA-owned instance handle.</summary>
+public class SoundEffectInstance : IDisposable
 {
-    protected internal SoundEffectInstance(nint nativeHandleValue)
-        : base(nativeHandleValue)
+    private readonly CNA.Audio.SoundEffectInstance _inner;
+    private bool _disposed;
+
+    internal SoundEffectInstance(nint nativeHandleValue)
     {
+        _inner = new CNA.Audio.SoundEffectInstance(nativeHandleValue);
     }
 
-    public new SoundState State => (SoundState)(int)base.State;
+    ~SoundEffectInstance()
+    {
+        Dispose(false);
+    }
 
-    /// <summary>Inherited behaviour, re-typed only so the compat
-    /// <see cref="AudioListener"/>/<see cref="AudioEmitter"/> bind -- they subclass the CNA ones,
-    /// so this could have been inherited unchanged; it is declared for discoverability alongside
-    /// the rest of this namespace's audio surface.</summary>
-    public void Apply3D(AudioListener listener, AudioEmitter emitter) => base.Apply3D(listener, emitter);
+    internal nint CompatibilityHandle => _inner.NativeHandleValueForCompatibility;
 
+    public bool IsDisposed => _disposed;
+
+    public virtual bool IsLooped
+    {
+        get => _inner.IsLooped;
+        set => _inner.IsLooped = value;
+    }
+
+    public float Pan
+    {
+        get => _inner.Pan;
+        set => _inner.Pan = value;
+    }
+
+    public float Pitch
+    {
+        get => _inner.Pitch;
+        set => _inner.Pitch = value;
+    }
+
+    public SoundState State => (SoundState)(int)_inner.State;
+
+    public float Volume
+    {
+        get => _inner.Volume;
+        set => _inner.Volume = value;
+    }
+
+    public virtual void Play() => _inner.Play();
+
+    public void Pause() => _inner.Pause();
+
+    public void Resume() => _inner.Resume();
+
+    public void Stop() => _inner.Stop();
+
+    public void Stop(bool immediate) => _inner.Stop(immediate);
+
+    public void Apply3D(AudioListener listener, AudioEmitter emitter)
+    {
+        ArgumentNullException.ThrowIfNull(listener);
+        ArgumentNullException.ThrowIfNull(emitter);
+        _inner.Apply3D(listener, emitter);
+    }
+
+    public void Apply3D(AudioListener[] listeners, AudioEmitter emitter)
+    {
+        ArgumentNullException.ThrowIfNull(listeners);
+        ArgumentNullException.ThrowIfNull(emitter);
+        _inner.Apply3D(listeners, emitter);
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _inner.Dispose();
+    }
 }

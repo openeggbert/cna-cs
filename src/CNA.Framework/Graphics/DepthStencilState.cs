@@ -135,4 +135,6 @@ public class DepthStencilState
     internal CnaDepthStencilState ToNative() => _native;
 
     internal static DepthStencilState FromNative(CnaDepthStencilState native) => new(native);
+
+    internal static DepthStencilState CopyOf(DepthStencilState value) => new(value);
 }

@@ -1,26 +1,10 @@
-import re, glob, os, collections
-import os, glob
+import collections, glob, os, re
 
-def _find_cna_root():
-    """The openeggbert/cna checkout's *directory name* is not stable (cnabinding is gone;
-    the headers have lived in cnanext, cnagltf and cnabindingc). Locate it, never hard-code it."""
-    env = os.environ.get('CNA_ROOT')
-    if env and os.path.isdir(os.path.join(env, 'modules/c-api/include/CNA/C')):
-        return env
-    base = '/rv/data/development/github.com/openeggbert'
-    found = sorted(glob.glob(base + '/*/modules/c-api/include/CNA/C/media_library.h'))
-    if not found:
-        raise SystemExit('No openeggbert/cna checkout with modules/c-api found. Set CNA_ROOT.')
-    root = found[0][:-len('/modules/c-api/include/CNA/C/media_library.h')]
-    if len(found) > 1:
-        print(f'# headers: {root}  (of {len(found)} checkouts; set CNA_ROOT to pick another)')
-    return root
+from paths import REPO_ROOT, find_cna_root
 
-CNA_ROOT = _find_cna_root()
-REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-H = CNA_ROOT + '/modules/c-api/include/CNA/C/'
-src=open(REPO + '/src/CNA.Interop/Native.cs').read()
+CNA_ROOT = find_cna_root()
+H = str(CNA_ROOT / 'modules/c-api/include/CNA/C') + '/'
+src = (REPO_ROOT / 'src/CNA.Interop/Native.cs').read_text()
 bound={m.group(1) for m in re.finditer(r'partial \w+ (cna_\w+)\s*\(', src)}
 by=collections.defaultdict(list)
 for p in sorted(glob.glob(H+'*.h')):

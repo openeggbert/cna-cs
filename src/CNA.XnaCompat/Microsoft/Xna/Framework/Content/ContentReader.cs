@@ -18,7 +18,7 @@ public class ContentReader
     /// into the CNA layer.</summary>
     internal CNA.Content.ContentReader Framework => _reader;
 
-    public ContentManager ContentManager => (ContentManager)_reader.ContentManager;
+    public ContentManager ContentManager => ContentManager.FromBackend(_reader.ContentManager);
 
     public string AssetName => _reader.AssetName;
 

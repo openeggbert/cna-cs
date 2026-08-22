@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <CompatibilityTarget Condition="'$(CompatibilityTarget)' == ''">CNA</CompatibilityTarget>
+    <XnaReferencePath Condition="'$(XnaReferencePath)' == '' and '$(XNA_REFERENCE_PATH)' != ''">$(XNA_REFERENCE_PATH)</XnaReferencePath>
+    <FnaFrameworkPath Condition="'$(FnaFrameworkPath)' == '' and '$(FNA_FRAMEWORK_PATH)' != ''">$(FNA_FRAMEWORK_PATH)</FnaFrameworkPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(CompatibilityTarget)' == 'CNA'">
+    <ProjectReference Include="..\..\src\CNA.XnaCompat\CNA.XnaCompat.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(CompatibilityTarget)' == 'XNA'">
+    <Reference Include="Microsoft.Xna.Framework" HintPath="$(XnaReferencePath)\Microsoft.Xna.Framework.dll" Private="false" />
+    <Reference Include="Microsoft.Xna.Framework.Game" HintPath="$(XnaReferencePath)\Microsoft.Xna.Framework.Game.dll" Private="false" />
+    <Reference Include="Microsoft.Xna.Framework.Graphics" HintPath="$(XnaReferencePath)\Microsoft.Xna.Framework.Graphics.dll" Private="false" />
+    <Reference Include="Microsoft.Xna.Framework.Storage" HintPath="$(XnaReferencePath)\Microsoft.Xna.Framework.Storage.dll" Private="false" />
+    <Reference Include="Microsoft.Xna.Framework.Video" HintPath="$(XnaReferencePath)\Microsoft.Xna.Framework.Video.dll" Private="false" />
+    <Reference Include="Microsoft.Xna.Framework.Input.Touch" HintPath="$(XnaReferencePath)\Microsoft.Xna.Framework.Input.Touch.dll" Private="false" />
+    <Reference Include="Microsoft.Xna.Framework.Xact" HintPath="$(XnaReferencePath)\Microsoft.Xna.Framework.Xact.dll" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(CompatibilityTarget)' == 'FNA' and '$(FnaFrameworkPath)' != ''">
+    <Reference Include="FNA" HintPath="$(FnaFrameworkPath)" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(CompatibilityTarget)' == 'MonoGame'">
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(CompatibilityTarget)' == 'Kni'">
+    <PackageReference Include="nkast.Kni.Platform.SDL2.GL" Version="4.2.9001.1" />
+  </ItemGroup>
+
+  <Target Name="ValidateCompatibilityReference" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(CompatibilityTarget)' != 'CNA' and '$(CompatibilityTarget)' != 'XNA' and '$(CompatibilityTarget)' != 'FNA' and '$(CompatibilityTarget)' != 'MonoGame' and '$(CompatibilityTarget)' != 'Kni'"
+           Text="Unknown CompatibilityTarget='$(CompatibilityTarget)'. Use CNA, XNA, FNA, MonoGame, or Kni." />
+    <Error Condition="'$(CompatibilityTarget)' == 'XNA' and ('$(XnaReferencePath)' == '' or !Exists('$(XnaReferencePath)\Microsoft.Xna.Framework.dll'))"
+           Text="Set XNA_REFERENCE_PATH or XnaReferencePath to the XNA 4.0 reference-assembly directory." />
+    <Error Condition="'$(CompatibilityTarget)' == 'FNA' and ('$(FnaFrameworkPath)' == '' or !Exists('$(FnaFrameworkPath)'))"
+           Text="Set FNA_FRAMEWORK_PATH or FnaFrameworkPath to FNA.dll." />
+  </Target>
+
+</Project>

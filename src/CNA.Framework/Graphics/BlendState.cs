@@ -119,4 +119,6 @@ public class BlendState
     internal CnaBlendState ToNative() => _native;
 
     internal static BlendState FromNative(CnaBlendState native) => new(native);
+
+    internal static BlendState CopyOf(BlendState value) => new(value);
 }

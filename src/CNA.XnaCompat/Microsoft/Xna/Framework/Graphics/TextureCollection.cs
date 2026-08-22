@@ -13,7 +13,7 @@ public class TextureCollection : CNA.Graphics.TextureCollection
 
     public new Texture? this[int index]
     {
-        get => (Texture?)base[index];
-        set => base[index] = value;
+        get => Texture.FromFramework(base[index]);
+        set => base[index] = value?.FrameworkTexture;
     }
 }

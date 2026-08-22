@@ -22,12 +22,38 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// </summary>
 public sealed class ModelMeshPart : CNA.Graphics.ModelMeshPart
 {
-    public ModelMeshPart()
+    internal ModelMeshPart()
     {
     }
 
-    public ModelMeshPart(VertexBuffer? vertexBuffer, IndexBuffer? indexBuffer, int numVertices, int primitiveCount, int startIndex, int vertexOffset)
-        : base(vertexBuffer, indexBuffer, numVertices, primitiveCount, startIndex, vertexOffset)
+    internal ModelMeshPart(VertexBuffer? vertexBuffer, IndexBuffer? indexBuffer, int numVertices, int primitiveCount, int startIndex, int vertexOffset)
+        : base(vertexBuffer?.FrameworkBuffer, indexBuffer?.FrameworkBuffer, numVertices, primitiveCount, startIndex, vertexOffset)
     {
+    }
+
+    public new Effect? Effect
+    {
+        get => Effect.FromFramework(base.Effect);
+        set => base.Effect = value?.Inner;
+    }
+
+    public new IndexBuffer? IndexBuffer =>
+        global::Microsoft.Xna.Framework.Graphics.IndexBuffer.FromFramework(base.IndexBuffer);
+
+    public new VertexBuffer? VertexBuffer =>
+        global::Microsoft.Xna.Framework.Graphics.VertexBuffer.FromFramework(base.VertexBuffer);
+
+    public new int NumVertices => base.NumVertices;
+
+    public new int PrimitiveCount => base.PrimitiveCount;
+
+    public new int StartIndex => base.StartIndex;
+
+    public new int VertexOffset => base.VertexOffset;
+
+    public new object? Tag
+    {
+        get => base.Tag;
+        set => base.Tag = value;
     }
 }
