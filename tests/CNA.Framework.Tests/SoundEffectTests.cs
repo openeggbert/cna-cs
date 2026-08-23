@@ -43,7 +43,8 @@ public class SoundEffectTests
     {
         int size = SoundEffect.GetSampleSizeInBytes(TimeSpan.FromSeconds(1), 44100, AudioChannels.Mono);
 
-        Assert.Equal(88200, size);
+        // XNA converts through float32 milliseconds before truncating to a sample count.
+        Assert.Equal(88198, size);
     }
 
     [Theory]
@@ -58,8 +59,8 @@ public class SoundEffectTests
         int sizeInBytes = SoundEffect.GetSampleSizeInBytes(original, sampleRate, channels);
         TimeSpan roundTripped = SoundEffect.GetSampleDuration(sizeInBytes, sampleRate, channels);
 
-        // Rounds to whole PCM samples, so allow up to one sample period of drift.
-        double samplePeriodSeconds = 1.0 / sampleRate;
+        // XNA converts through float32 in both directions; allow two sample periods of drift.
+        double samplePeriodSeconds = 2.0 / sampleRate;
         Assert.True(
             Math.Abs((roundTripped - original).TotalSeconds) <= samplePeriodSeconds,
             $"original={original}, roundTripped={roundTripped}");
@@ -68,7 +69,7 @@ public class SoundEffectTests
     [Fact]
     public void GetSampleDuration_NegativeSize_Throws()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => SoundEffect.GetSampleDuration(-1, 44100, AudioChannels.Mono));
+        Assert.Throws<ArgumentException>(() => SoundEffect.GetSampleDuration(-1, 44100, AudioChannels.Mono));
     }
 
     [Fact]
@@ -80,7 +81,7 @@ public class SoundEffectTests
     [Fact]
     public void GetSampleSizeInBytes_NegativeDuration_Throws()
     {
-        Assert.Throws<ArgumentException>(() => SoundEffect.GetSampleSizeInBytes(TimeSpan.FromSeconds(-1), 44100, AudioChannels.Mono));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SoundEffect.GetSampleSizeInBytes(TimeSpan.FromSeconds(-1), 44100, AudioChannels.Mono));
     }
 
     [Fact]
@@ -120,7 +121,7 @@ public class SoundEffectTests
     {
         var buffer = new byte[16];
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new SoundEffect(buffer, 0, buffer.Length, 44100, AudioChannels.Mono, -1, 0));
+        Assert.Throws<ArgumentException>(() => new SoundEffect(buffer, 0, buffer.Length, 44100, AudioChannels.Mono, -1, 0));
     }
 
     [Fact]
@@ -128,7 +129,7 @@ public class SoundEffectTests
     {
         var buffer = new byte[16];
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new SoundEffect(buffer, 0, buffer.Length, 44100, AudioChannels.Mono, 0, -1));
+        Assert.Throws<ArgumentException>(() => new SoundEffect(buffer, 0, buffer.Length, 44100, AudioChannels.Mono, 0, -1));
     }
 
     [Fact]

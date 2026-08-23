@@ -20,3 +20,16 @@ CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
 `storage`, `buffers`, `adopted`, or `content`. `all` exercises them together, including parent-owned
 effect reflection objects, a transferred `Texture2D.FromStream` handle, and a content-managed model
 graph. Success prints the exact explicit/finalizer split and `game-recreate=ok`.
+
+An optional deeper mode keeps the normal CI gate fast while making the long run one command:
+
+```bash
+CNA_OWNERSHIP_STRESS_DEEP=1 \
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
+SDL_AUDIODRIVER=dummy \
+dotnet run -c Release --project tests/CNA.OwnershipStress
+```
+
+With no explicit numeric argument this selects 1000 cycles. An explicit argument still takes
+precedence. This is wrapper/game recreation evidence, not an allocator-level leak claim; native
+sanitizer or allocator instrumentation is required for that stronger claim.

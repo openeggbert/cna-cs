@@ -16,11 +16,16 @@ namespace CNA.Audio;
 /// </summary>
 public class AudioCategory : IEquatable<AudioCategory>, IDisposable
 {
+    // Owned CNA handle representing XNA's borrowed category id; ParentOwned dependency on the
+    // engine is retained because every category operation routes through engine-owned XACT state.
     private readonly NativeResourceHandle _handle;
+    private readonly AudioEngine _audioEngine;
 
-    internal AudioCategory(nint nativeHandleValue)
+    internal AudioCategory(nint nativeHandleValue, AudioEngine audioEngine)
     {
+        _audioEngine = audioEngine;
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_audio_category_destroy(new CnaHandle(h)).IsSuccess());
+        audioEngine.RegisterDependant(this);
     }
 
     /// <summary>

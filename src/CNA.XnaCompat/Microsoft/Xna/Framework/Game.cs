@@ -182,7 +182,9 @@ public class Game : IDisposable
 
     protected virtual void Update(GameTime gameTime)
     {
-        FrameworkDispatcher.Update();
+        // Backend CGame performs the one framework-dispatcher pump after this managed callback
+        // returns successfully. Calling it here would double-pump every ordinary XNA override
+        // that follows the documented base.Update(gameTime) pattern.
     }
 
     protected virtual void Draw(GameTime gameTime)

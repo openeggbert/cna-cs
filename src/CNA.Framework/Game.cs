@@ -499,17 +499,19 @@ public class Game : IDisposable
     }
 
     /// <summary>
-    /// Calls <see cref="FrameworkDispatcher.Update"/>, matching real XNA's own automatic
-    /// per-frame dispatch -- which is what makes song-end detection and media-queue auto-advance
-    /// actually run. Before Phase 8 WP7 this called <c>MediaPlayer.Update()</c> directly and was
-    /// documented as a stand-in for the <c>FrameworkDispatcher</c> this project did not yet have;
-    /// that type now exists, so this is the real thing rather than an approximation. A game
-    /// overriding this method should call <c>base.Update(gameTime)</c>, standard XNA practice, to
-    /// keep getting it for free.
+    /// The managed update hook. The C-owned game invokes the native base update after this callback
+    /// returns, and that base update performs the one automatic
+    /// <see cref="FrameworkDispatcher.Update"/> for the frame. This method must therefore remain
+    /// empty: pumping here would make the ordinary <c>base.Update(gameTime)</c> pattern process
+    /// DynamicSound and Media work twice.
     /// </summary>
     protected virtual void Update(GameTime gameTime)
     {
-        FrameworkDispatcher.Update();
+        // The C-owned game invokes this managed override first, then calls native Game::Update,
+        // whose final operation is FrameworkDispatcher::Update(). Pumping here as well makes a
+        // normal override that calls base.Update process DynamicSound/Media work twice per frame.
+        // If this callback throws, CGame deliberately skips that native base pass, matching XNA's
+        // "failed update does not pump" ordering.
     }
 
     protected virtual void Draw(GameTime gameTime)

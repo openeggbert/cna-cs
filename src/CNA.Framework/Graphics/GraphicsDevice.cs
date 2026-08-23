@@ -429,7 +429,10 @@ public class GraphicsDevice : IDisposable
             return;
         }
 
-        _deviceEventBridges[index] = NativeEventBridge.Subscribe(
+        // CNA_GraphicsDeviceEventCallback is (graphics_device, context), not the one-argument
+        // callback used by audio and manager events. Using Subscribe here made native's device
+        // handle look like a GCHandle during Reset and could access-violate the process.
+        _deviceEventBridges[index] = NativeEventBridge.SubscribeWithSender(
             () => RaiseDeviceEvent(which),
             (callback, context) =>
             {

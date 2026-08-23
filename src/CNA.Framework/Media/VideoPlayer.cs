@@ -14,6 +14,8 @@ namespace CNA.Media;
 /// </summary>
 public class VideoPlayer : IDisposable
 {
+    // Owned player handle. GetTexture returns a ParentOwned borrowed alias, never another owner;
+    // the ABI guarantees that alias only until the next call made on this player.
     private readonly NativeResourceHandle _handle;
     private Video? _video;
 

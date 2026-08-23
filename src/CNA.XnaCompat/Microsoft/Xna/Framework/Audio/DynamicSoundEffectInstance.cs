@@ -7,6 +7,8 @@ public sealed class DynamicSoundEffectInstance : SoundEffectInstance
 {
     private CNA.NativeEventBridge? _bufferNeededBridge;
     private EventHandler<EventArgs>? _bufferNeeded;
+    private readonly int _sampleRate;
+    private readonly AudioChannels _channels;
     private bool _disposed;
 
     public DynamicSoundEffectInstance(int sampleRate, AudioChannels channels)
@@ -14,12 +16,25 @@ public sealed class DynamicSoundEffectInstance : SoundEffectInstance
             sampleRate,
             (CNA.Audio.AudioChannels)(int)channels))
     {
+        _sampleRate = sampleRate;
+        _channels = channels;
     }
 
     public override bool IsLooped
     {
-        get => base.IsLooped;
-        set => base.IsLooped = value;
+        get
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return false;
+        }
+        set
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (value)
+            {
+                throw new InvalidOperationException("A DynamicSoundEffectInstance cannot be looped.");
+            }
+        }
     }
 
     public int PendingBufferCount =>
@@ -43,21 +58,89 @@ public sealed class DynamicSoundEffectInstance : SoundEffectInstance
 
     public void SubmitBuffer(byte[] buffer)
     {
-        ArgumentNullException.ThrowIfNull(buffer);
+        // XNA reads Length before entering the range overload; null therefore has the observable
+        // NullReferenceException ordering, rather than ArgumentNullException.
         SubmitBuffer(buffer, 0, buffer.Length);
     }
 
     public void SubmitBuffer(byte[] buffer, int offset, int count) =>
+        SubmitBufferCore(buffer, offset, count);
+
+    public TimeSpan GetSampleDuration(int sizeInBytes)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (sizeInBytes < 0)
+        {
+            throw new ArgumentException("The audio buffer size cannot be negative.");
+        }
+
+        if (sizeInBytes == 0)
+        {
+            return TimeSpan.Zero;
+        }
+
+        int sampleCount = sizeInBytes / (2 * (int)_channels);
+        float milliseconds = (float)sampleCount * 1000f / (float)_sampleRate;
+        return TimeSpan.FromMilliseconds((double)milliseconds);
+    }
+
+    public int GetSampleSizeInBytes(TimeSpan duration)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        double milliseconds = duration.TotalMilliseconds;
+        if (milliseconds < 0d || milliseconds > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(duration));
+        }
+
+        if (duration == TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            int sampleCount = checked((int)(milliseconds * ((float)_sampleRate / 1000f)));
+            return checked((sampleCount + sampleCount % (int)_channels) * (2 * (int)_channels));
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentOutOfRangeException(nameof(duration));
+        }
+    }
+
+    private void SubmitBufferCore(byte[] buffer, int offset, int count)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        int blockAlign = 2 * (int)_channels;
+        if (buffer is null || buffer.Length == 0 || buffer.Length % blockAlign != 0)
+        {
+            throw new ArgumentException("The audio buffer is invalid.");
+        }
+
+        if (offset < 0 || offset >= buffer.Length || offset % blockAlign != 0)
+        {
+            throw new ArgumentException("The audio buffer offset is invalid.");
+        }
+
+        int end;
+        try
+        {
+            end = checked(offset + count);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentException("The offset and count do not describe a valid buffer range.");
+        }
+
+        if (count <= 0 || end > buffer.Length || count % blockAlign != 0)
+        {
+            throw new ArgumentException("The offset and count do not describe a valid buffer range.");
+        }
+
         CNA.Audio.DynamicSoundEffectInstance.SubmitBuffer(
             CompatibilityHandle, this, buffer, offset, count);
-
-    public TimeSpan GetSampleDuration(int sizeInBytes) =>
-        CNA.Audio.DynamicSoundEffectInstance.QuerySampleDuration(
-            CompatibilityHandle, this, sizeInBytes);
-
-    public int GetSampleSizeInBytes(TimeSpan duration) =>
-        CNA.Audio.DynamicSoundEffectInstance.QuerySampleSizeInBytes(
-            CompatibilityHandle, this, duration);
+    }
 
     protected override void Dispose(bool disposing)
     {

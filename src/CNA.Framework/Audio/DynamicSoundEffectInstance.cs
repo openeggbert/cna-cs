@@ -25,6 +25,8 @@ namespace CNA.Audio;
 /// </summary>
 public class DynamicSoundEffectInstance : SoundEffectInstance
 {
+    // Owned subscription registration. It pins this wrapper's managed callback context and must
+    // be unsubscribed before the inherited owned sound-instance handle is released.
     private NativeEventBridge? _bufferNeededBridge;
     private EventHandler<EventArgs>? _bufferNeeded;
     private bool _disposed;
@@ -36,6 +38,16 @@ public class DynamicSoundEffectInstance : SoundEffectInstance
 
     internal static nint CreateNative(int sampleRate, AudioChannels channels)
     {
+        if (sampleRate is < 8000 or > 48000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sampleRate));
+        }
+
+        if (channels is not (AudioChannels.Mono or AudioChannels.Stereo))
+        {
+            throw new ArgumentOutOfRangeException(nameof(channels));
+        }
+
         CnaResult result = Native.cna_dynamic_sound_effect_instance_create(
             CnaAmbientGame.Current, sampleRate, (uint)channels, out CnaHandle instance);
         CnaException.ThrowIfFailed(result, nameof(DynamicSoundEffectInstance));

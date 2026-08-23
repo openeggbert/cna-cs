@@ -32,6 +32,8 @@ namespace CNA.Media;
 /// </summary>
 public class MediaLibrary : IDisposable
 {
+    // Owned. Opening/scanning returns one library handle whose cached child collections are owned
+    // by this wrapper and are disposed before it releases the library.
     private readonly NativeResourceHandle _handle;
 
     public MediaLibrary()

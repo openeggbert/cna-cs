@@ -19,6 +19,9 @@ namespace CNA.Storage;
 /// </summary>
 public class StorageDevice
 {
+    // Owned. Selector creation transfers one native device handle to this wrapper. StorageDevice
+    // is not IDisposable in XNA, so NativeResourceHandle's critical finalizer is its release path;
+    // each open StorageContainer keeps this wrapper alive as its XNA-visible parent.
     private readonly NativeResourceHandle _handle;
 
     private StorageDevice(nint nativeHandleValue)

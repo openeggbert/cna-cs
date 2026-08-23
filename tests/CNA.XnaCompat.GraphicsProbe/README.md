@@ -41,9 +41,10 @@ If the runtime assemblies are not installed in the GAC, also pass `-XnaRuntimePa
 external directory. Both probes are built as 32-bit .NET Framework 4.8 executables, then run
 unchanged. Output is written below `artifacts/xna-snapshots/`:
 
-- `xna-math-input-content.txt` — 133 pure observations;
+- `xna-math-input-audio-content.txt` — 187 pure observations;
 - `xna-graphics-resource.txt` — 166 device-backed observations;
-- `xna-all.txt` — all 299 observations in source order.
+- `xna-audio-xact-media-video-storage-lifecycle.txt` — 104 runtime observations;
+- `xna-all.txt` — all 457 observations in source order.
 
 Normalization retains only lowercase dotted `name=value` observation lines; preserves source order
 and values verbatim; writes LF endings and UTF-8 without a BOM; and rejects an unexpected line

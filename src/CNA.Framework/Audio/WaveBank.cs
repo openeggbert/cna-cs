@@ -8,12 +8,16 @@ namespace CNA.Audio;
 /// beyond its state flags.</summary>
 public class WaveBank : IDisposable
 {
+    // Owned native bank; ParentOwned dependency on the AudioEngine, matching XNA's parent field
+    // and weak engine registration.
     private readonly NativeResourceHandle _handle;
+    private readonly AudioEngine _audioEngine;
 
     public WaveBank(AudioEngine audioEngine, string nonStreamingWaveBankFilename)
     {
         ArgumentNullException.ThrowIfNull(audioEngine);
         ArgumentNullException.ThrowIfNull(nonStreamingWaveBankFilename);
+        _audioEngine = audioEngine;
 
         CnaHandle waveBank = default;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -22,6 +26,7 @@ public class WaveBank : IDisposable
         CnaException.ThrowIfFailed(result, nameof(WaveBank));
 
         _handle = new NativeResourceHandle(waveBank.AsNint, Release);
+        audioEngine.RegisterDependant(this);
     }
 
     /// <summary>The streaming form, matching real XNA's four-argument constructor: wave data is
@@ -30,6 +35,7 @@ public class WaveBank : IDisposable
     {
         ArgumentNullException.ThrowIfNull(audioEngine);
         ArgumentNullException.ThrowIfNull(streamingWaveBankFilename);
+        _audioEngine = audioEngine;
 
         CnaHandle waveBank = default;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -39,6 +45,7 @@ public class WaveBank : IDisposable
         CnaException.ThrowIfFailed(result, nameof(WaveBank));
 
         _handle = new NativeResourceHandle(waveBank.AsNint, Release);
+        audioEngine.RegisterDependant(this);
     }
 
     private static bool Release(nint handleValue) =>
@@ -75,8 +82,44 @@ public class WaveBank : IDisposable
 
     public void Dispose()
     {
+        if (_handle.IsClosed)
+        {
+            return;
+        }
+
+        NativeEventBridge? disposingBridge = _disposingBridge;
+        _disposingBridge = null;
+        _disposingHandler = null;
         _handle.Dispose();
+
+        Exception? pending = null;
+        if (disposingBridge is not null)
+        {
+            try
+            {
+                disposingBridge.ThrowPendingException();
+            }
+            catch (Exception exception)
+            {
+                pending = exception;
+            }
+
+            try
+            {
+                disposingBridge.Dispose();
+            }
+            catch (Exception exception)
+            {
+                pending ??= exception;
+            }
+        }
+
         GC.SuppressFinalize(this);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
     }
 
     /// <summary>Raised as this wavebank is disposed, matching real XNA. The subscription is

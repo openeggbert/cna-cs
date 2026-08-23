@@ -16,6 +16,10 @@ namespace Microsoft.Xna.Framework.Media;
 /// </summary>
 public static class MediaPlayer
 {
+    private static readonly object QueueLock = new();
+    private static CNA.Media.MediaQueue? _frameworkQueue;
+    private static MediaQueue? _queue;
+
     public static event EventHandler<EventArgs>? ActiveSongChanged
     {
         add => CNA.Media.MediaPlayer.ActiveSongChanged += value;
@@ -87,7 +91,23 @@ public static class MediaPlayer
     /// queue's songs were never compat-typed and a downcasting <c>Queue</c> would have thrown on
     /// first use. Compat <see cref="Song"/> wraps rather than extends since the media-library
     /// rebinding, and a wrapper does not care what the base queue holds.</summary>
-    public static MediaQueue Queue => new(CNA.Media.MediaPlayer.Queue);
+    public static MediaQueue Queue
+    {
+        get
+        {
+            lock (QueueLock)
+            {
+                CNA.Media.MediaQueue frameworkQueue = CNA.Media.MediaPlayer.Queue;
+                if (_queue is null || !ReferenceEquals(_frameworkQueue, frameworkQueue))
+                {
+                    _frameworkQueue = frameworkQueue;
+                    _queue = new MediaQueue(frameworkQueue);
+                }
+
+                return _queue;
+            }
+        }
+    }
 
     public static void Pause() => CNA.Media.MediaPlayer.Pause();
 

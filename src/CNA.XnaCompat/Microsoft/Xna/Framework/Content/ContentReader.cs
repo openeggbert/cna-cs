@@ -90,11 +90,39 @@ public sealed class ContentReader : BinaryReader
             return default!;
         }
 
-        string? directory = Path.GetDirectoryName(_assetName);
-        string resolved = string.IsNullOrEmpty(directory)
+        int separator = _assetName.LastIndexOfAny(new[] { '\\', '/', Path.DirectorySeparatorChar });
+        string directory = separator < 0 ? string.Empty : _assetName.Substring(0, separator);
+        string resolved = directory.Length == 0
             ? reference
             : Path.Combine(directory, reference);
-        return _contentManager.Load<T>(resolved);
+        return _contentManager.Load<T>(CleanExternalReferencePath(resolved));
+    }
+
+    /// <summary>XNA calls <c>TitleContainer.GetCleanPath</c> here: separators become Windows
+    /// backslashes and embedded <c>.</c>/<c>..</c> segments collapse before ContentManager sees
+    /// the asset name. Do not use Path.GetFullPath, which would introduce the Linux working
+    /// directory and host-specific separators into an XNA content identity.</summary>
+    private static string CleanExternalReferencePath(string path)
+    {
+        string[] segments = path.Replace('/', '\\').Split('\\');
+        var clean = new List<string>(segments.Length);
+        foreach (string segment in segments)
+        {
+            if (segment.Length == 0 || segment == ".")
+            {
+                continue;
+            }
+
+            if (segment == ".." && clean.Count > 0 && clean[^1] != "..")
+            {
+                clean.RemoveAt(clean.Count - 1);
+                continue;
+            }
+
+            clean.Add(segment);
+        }
+
+        return string.Join("\\", clean);
     }
 
     /// <summary>Reads an object selected by the next type-reader table index.</summary>

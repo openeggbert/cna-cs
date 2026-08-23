@@ -4,6 +4,7 @@ namespace Microsoft.Xna.Framework.Audio;
 public sealed class SoundEffect : IDisposable
 {
     private readonly CNA.Audio.SoundEffect _soundEffect;
+    private readonly List<WeakReference<SoundEffectInstance>> _children = new();
     private bool _disposed;
 
     public SoundEffect(byte[] buffer, int sampleRate, AudioChannels channels)
@@ -47,25 +48,53 @@ public sealed class SoundEffect : IDisposable
     public static float MasterVolume
     {
         get => CNA.Audio.SoundEffect.MasterVolume;
-        set => CNA.Audio.SoundEffect.MasterVolume = value;
+        set
+        {
+            ValidateRange(value, 0f, 1f, nameof(value));
+            CNA.Audio.SoundEffect.MasterVolume = value;
+        }
     }
 
     public static float SpeedOfSound
     {
         get => CNA.Audio.SoundEffect.SpeedOfSound;
-        set => CNA.Audio.SoundEffect.SpeedOfSound = value;
+        set
+        {
+            if (value <= 0f || float.IsNaN(value))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            CNA.Audio.SoundEffect.SpeedOfSound = value;
+        }
     }
 
     public static float DopplerScale
     {
         get => CNA.Audio.SoundEffect.DopplerScale;
-        set => CNA.Audio.SoundEffect.DopplerScale = value;
+        set
+        {
+            if (value < 0f || float.IsNaN(value))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            CNA.Audio.SoundEffect.DopplerScale = value;
+        }
     }
 
     public static float DistanceScale
     {
         get => CNA.Audio.SoundEffect.DistanceScale;
-        set => CNA.Audio.SoundEffect.DistanceScale = value;
+        set
+        {
+            if (value < 0f || float.IsNaN(value))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            CNA.Audio.SoundEffect.DistanceScale = Math.Max(value, float.Epsilon);
+        }
     }
 
     public static SoundEffect FromStream(Stream stream)
@@ -75,11 +104,28 @@ public sealed class SoundEffect : IDisposable
         return new SoundEffect(decoded.DetachNativeHandle());
     }
 
-    public SoundEffectInstance CreateInstance() => new(_soundEffect.CreateNativeInstanceHandle());
+    public SoundEffectInstance CreateInstance()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var instance = new SoundEffectInstance(_soundEffect.CreateNativeInstanceHandle(), this);
+        lock (_children)
+        {
+            _children.Add(new WeakReference<SoundEffectInstance>(instance));
+        }
 
-    public bool Play() => _soundEffect.Play();
+        return instance;
+    }
 
-    public bool Play(float volume, float pitch, float pan) => _soundEffect.Play(volume, pitch, pan);
+    public bool Play() => Play(1f, 0f, 0f);
+
+    public bool Play(float volume, float pitch, float pan)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ValidateRange(volume, 0f, 1f, nameof(volume));
+        ValidateRange(pitch, -1f, 1f, nameof(pitch));
+        ValidateRange(pan, -1f, 1f, nameof(pan));
+        return _soundEffect.Play(volume, pitch, pan);
+    }
 
     public static TimeSpan GetSampleDuration(int sizeInBytes, int sampleRate, AudioChannels channels) =>
         CNA.Audio.SoundEffect.GetSampleDuration(sizeInBytes, sampleRate, (CNA.Audio.AudioChannels)(int)channels);
@@ -102,6 +148,30 @@ public sealed class SoundEffect : IDisposable
         }
 
         _disposed = true;
+        // XNA keeps weak child references on the effect while each instance keeps its parent
+        // strongly rooted. The parent disposes every still-live child before releasing its own
+        // native effect. This also satisfies CNA's native dependency order.
+        lock (_children)
+        {
+            foreach (WeakReference<SoundEffectInstance> child in _children)
+            {
+                if (child.TryGetTarget(out SoundEffectInstance? instance))
+                {
+                    instance.Dispose();
+                }
+            }
+
+            _children.Clear();
+        }
+
         _soundEffect?.Dispose();
+    }
+
+    private static void ValidateRange(float value, float minimum, float maximum, string parameterName)
+    {
+        if (value < minimum || value > maximum || float.IsNaN(value))
+        {
+            throw new ArgumentOutOfRangeException(parameterName);
+        }
     }
 }

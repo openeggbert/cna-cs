@@ -17,10 +17,8 @@ public class AudioEngine : IDisposable
 
     public AudioEngine(string settingsFile, TimeSpan lookAheadTime, string rendererId)
     {
-        ArgumentNullException.ThrowIfNull(settingsFile);
-        _ = lookAheadTime;
-        _ = rendererId;
-        _engine = new CNA.Audio.AudioEngine(settingsFile);
+        string fullPath = ValidateSettingsFile(settingsFile);
+        _engine = new CNA.Audio.AudioEngine(fullPath, lookAheadTime, rendererId);
     }
 
     ~AudioEngine()
@@ -76,5 +74,23 @@ public class AudioEngine : IDisposable
         {
             Disposing?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private static string ValidateSettingsFile(string settingsFile)
+    {
+        if (string.IsNullOrEmpty(settingsFile))
+        {
+            throw new ArgumentNullException(nameof(settingsFile));
+        }
+
+        string fullPath = Path.GetFullPath(settingsFile);
+        using var reader = new BinaryReader(File.OpenRead(fullPath));
+        bool valid = reader.BaseStream.Length > 4 && reader.ReadBytes(4) is [0x58, 0x47, 0x53, 0x46];
+        if (!valid)
+        {
+            throw new ArgumentException("The audio settings file has an invalid content version.");
+        }
+
+        return fullPath;
     }
 }

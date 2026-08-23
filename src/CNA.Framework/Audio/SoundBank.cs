@@ -8,12 +8,16 @@ namespace CNA.Audio;
 /// dispose.</summary>
 public class SoundBank : IDisposable
 {
+    // Owned native bank; ParentOwned dependency on the AudioEngine. XNA keeps this strong parent
+    // edge and the engine keeps only a weak registration so finalization remains possible.
     private readonly NativeResourceHandle _handle;
+    private readonly AudioEngine _audioEngine;
 
     public SoundBank(AudioEngine audioEngine, string filename)
     {
         ArgumentNullException.ThrowIfNull(audioEngine);
         ArgumentNullException.ThrowIfNull(filename);
+        _audioEngine = audioEngine;
 
         CnaHandle soundBank = default;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -22,6 +26,7 @@ public class SoundBank : IDisposable
         CnaException.ThrowIfFailed(result, nameof(SoundBank));
 
         _handle = new NativeResourceHandle(soundBank.AsNint, h => Native.cna_sound_bank_destroy(new CnaHandle(h)).IsSuccess());
+        audioEngine.RegisterDependant(this);
     }
 
     /// <summary>
@@ -66,7 +71,7 @@ public class SoundBank : IDisposable
             name, view => Native.cna_sound_bank_get_cue(NativeHandle, view, out cue));
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(GetCue));
-        return new Cue(cue.AsNint);
+        return new Cue(cue.AsNint, _audioEngine);
     }
 
     public void PlayCue(string name)
@@ -94,8 +99,44 @@ public class SoundBank : IDisposable
 
     public void Dispose()
     {
+        if (_handle.IsClosed)
+        {
+            return;
+        }
+
+        NativeEventBridge? disposingBridge = _disposingBridge;
+        _disposingBridge = null;
+        _disposingHandler = null;
         _handle.Dispose();
+
+        Exception? pending = null;
+        if (disposingBridge is not null)
+        {
+            try
+            {
+                disposingBridge.ThrowPendingException();
+            }
+            catch (Exception exception)
+            {
+                pending = exception;
+            }
+
+            try
+            {
+                disposingBridge.Dispose();
+            }
+            catch (Exception exception)
+            {
+                pending ??= exception;
+            }
+        }
+
         GC.SuppressFinalize(this);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
     }
 
     /// <summary>Raised as this soundbank is disposed, matching real XNA. The subscription is

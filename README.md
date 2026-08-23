@@ -25,24 +25,26 @@ Binary compatibility with Microsoft's strong-named assemblies is not the primary
 
 ## Measured state
 
-As of 2026-08-22:
+As of 2026-08-23:
 
 - Debug and Release solution builds: 0 warnings, 0 errors;
-- managed tests: 543/543 framework and 199/199 XNA-compat passing;
-- native integration tests: 114/114 passing in Debug and Release against an ABI 0.6.0 CNA library
+- managed tests: 549/549 framework and 199/199 XNA-compat passing;
+- native integration tests: 119/119 passing in Debug and Release against an ABI 0.6.0 CNA library
   under Xvfb on Linux x64;
 - strict metadata profile: 257 reference types versus 257 target types, 0 differences, 0
   allowlisted;
 - standalone public/protected CNA-type leak gate: 0 findings;
 - compile-time hierarchy corpus: passes unchanged on XNA, CNA, FNA, and MonoGame; records one Kni
   hierarchy difference (`VertexDeclaration` is not a `GraphicsResource` there);
-- deterministic behavior corpora: 299 observations (83 math/geometry, 23 input, 153 graphics, 13
-  resource/lifetime, and 27 content-error); identical source compiles against XNA, CNA, FNA, and
-  MonoGame. CNA and MonoGame execute all 299 on Linux, while FNA executes all safe paths and emits
-  deterministic placeholders for 48 process-fatal comparator paths. Direct XNA source/IL
-  establishes implemented strict semantics; the Windows XNA runtime snapshot is still pending;
+- deterministic behavior corpora: 457 observations. The original 299 remain stable; additions are
+  83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, 4 DeviceLifecycle, and 7 Content observations.
+  CNA executes all 457 on Linux. FNA completes the 187 pure lines before its own SoundEffect
+  finalizer aborts the process; its native runtime is unavailable here. MonoGame compiles the pure
+  probe but its audio initialization aborts before the new audio group, and its profile omits the
+  XACT/Storage runtime surface. Direct XNA IL establishes implemented strict semantics; the
+  independent Windows XNA snapshot remains pending;
 - isolated native ownership stress: 100/100 game create/use/finalize/destroy/recreate cycles pass
-  in both Debug and Release;
+  in both Debug and Release; `CNA_OWNERSHIP_STRESS_DEEP=1` selects the optional 1000-cycle mode;
 - sibling template: CNA build, generated-project build, and 60/600-frame CNA runs pass;
 - FNA, MonoGame, and Kni template source builds pass; 60-frame MonoGame and Kni runs pass, while the
   configured FNA assembly reports unavailable at runtime with a clean exit code 2;

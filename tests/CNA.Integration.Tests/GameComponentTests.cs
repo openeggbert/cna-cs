@@ -1,3 +1,4 @@
+using CNA.Audio;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -12,6 +13,15 @@ namespace CNA.Integration.Tests;
 [Collection(OwnGameCollection.Name)]
 public class GameComponentTests(ITestOutputHelper output)
 {
+    [NativeFact]
+    public void FailedUpdate_SkipsFrameworkDispatcherPump()
+    {
+        using var game = new FailingUpdateHost();
+
+        Assert.ThrowsAny<Exception>(game.RunOneFrame);
+        Assert.Equal(0, game.BufferNeededEvents);
+    }
+
     /// <summary>
     /// A component added to Game.Components must actually tick.
     ///
@@ -89,6 +99,42 @@ public class GameComponentTests(ITestOutputHelper output)
             }
 
             base.Update(gameTime);
+        }
+    }
+
+    private sealed class FailingUpdateHost : CNA.Game
+    {
+        private DynamicSoundEffectInstance? _dynamic;
+        private bool _failed;
+
+        public int BufferNeededEvents { get; private set; }
+
+        protected override void Update(GameTime gameTime)
+        {
+            if (!_failed)
+            {
+                _failed = true;
+                // Construct inside the active native frame. This both avoids competing ambient
+                // games when xUnit collections overlap and proves that framework work queued by a
+                // callback which then fails is not pumped by the native post-callback base pass.
+                _dynamic = new DynamicSoundEffectInstance(8000, AudioChannels.Mono);
+                _dynamic.SubmitBuffer(new byte[16_000]);
+                _dynamic.BufferNeeded += (_, _) => BufferNeededEvents++;
+                _dynamic.Play();
+                throw new InvalidOperationException("update-failure");
+            }
+
+            base.Update(gameTime);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _dynamic?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }

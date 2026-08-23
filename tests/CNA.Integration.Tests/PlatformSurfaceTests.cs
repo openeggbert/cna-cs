@@ -71,6 +71,52 @@ public class PlatformSurfaceTests(ITestOutputHelper output, NativeGameFixture fi
         });
     }
 
+    [NativeFact]
+    public void StorageContainer_DisposingIsOneShotAndContainsHandlerExceptions()
+    {
+        fixture.InsideAFrame(_ =>
+        {
+            StorageDevice device = StorageDevice.ShowSelector();
+            if (!device.IsConnected)
+            {
+                output.WriteLine("no storage device attached; disposal event not exercised");
+                return;
+            }
+
+            const string ordinaryName = "cna-cs-integration-disposing";
+            const string throwingName = "cna-cs-integration-disposing-throw";
+            try
+            {
+                using (StorageContainer container = device.OpenContainer(ordinaryName))
+                {
+                    int count = 0;
+                    bool senderMatches = false;
+                    container.Disposing += (sender, _) =>
+                    {
+                        count++;
+                        senderMatches = ReferenceEquals(sender, container);
+                    };
+
+                    container.Dispose();
+                    container.Dispose();
+                    Assert.Equal(1, count);
+                    Assert.True(senderMatches);
+                }
+
+                var throwing = device.OpenContainer(throwingName);
+                throwing.Disposing += (_, _) => throw new InvalidOperationException("storage-disposing-handler");
+                InvalidOperationException exception = Assert.Throws<InvalidOperationException>(throwing.Dispose);
+                Assert.Equal("storage-disposing-handler", exception.Message);
+                throwing.Dispose();
+            }
+            finally
+            {
+                try { device.DeleteContainer(ordinaryName); } catch { }
+                try { device.DeleteContainer(throwingName); } catch { }
+            }
+        });
+    }
+
     /// <summary>
     /// The touch panel with no digitiser. An empty collection and a capabilities record are the
     /// right answers; what would be wrong is failing, since a desktop game asks anyway.

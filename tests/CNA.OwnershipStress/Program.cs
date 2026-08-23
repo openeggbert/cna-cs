@@ -13,13 +13,16 @@ namespace CnaOwnershipStress;
 internal static class Program
 {
     private const int DefaultCycles = 24;
+    private const int DeepCycles = 1000;
     private static readonly string FinalizerFamily =
         Environment.GetEnvironmentVariable("CNA_OWNERSHIP_STRESS_FAMILY") ?? "all";
 
     private static int Main(string[] args)
     {
         int cycles = args.Length == 0
-            ? DefaultCycles
+            ? Environment.GetEnvironmentVariable("CNA_OWNERSHIP_STRESS_DEEP") == "1"
+                ? DeepCycles
+                : DefaultCycles
             : int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture);
         if (cycles <= 0)
         {

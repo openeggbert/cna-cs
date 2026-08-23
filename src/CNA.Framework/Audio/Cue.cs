@@ -13,11 +13,16 @@ namespace CNA.Audio;
 /// </summary>
 public class Cue : IDisposable
 {
+    // Owned native cue; ParentOwned dependency on the AudioEngine. XNA intentionally holds the
+    // engine rather than the SoundBank that created the cue.
     private readonly NativeResourceHandle _handle;
+    private readonly AudioEngine _audioEngine;
 
-    internal Cue(nint nativeHandleValue)
+    internal Cue(nint nativeHandleValue, AudioEngine audioEngine)
     {
+        _audioEngine = audioEngine;
         _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_cue_destroy(new CnaHandle(h)).IsSuccess());
+        audioEngine.RegisterDependant(this);
     }
 
     /// <summary>
@@ -131,8 +136,44 @@ public class Cue : IDisposable
 
     public void Dispose()
     {
+        if (_handle.IsClosed)
+        {
+            return;
+        }
+
+        NativeEventBridge? disposingBridge = _disposingBridge;
+        _disposingBridge = null;
+        _disposingHandler = null;
         _handle.Dispose();
+
+        Exception? pending = null;
+        if (disposingBridge is not null)
+        {
+            try
+            {
+                disposingBridge.ThrowPendingException();
+            }
+            catch (Exception exception)
+            {
+                pending = exception;
+            }
+
+            try
+            {
+                disposingBridge.Dispose();
+            }
+            catch (Exception exception)
+            {
+                pending ??= exception;
+            }
+        }
+
         GC.SuppressFinalize(this);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
     }
 
     /// <summary>Raised as this cue is disposed, matching real XNA. The subscription is

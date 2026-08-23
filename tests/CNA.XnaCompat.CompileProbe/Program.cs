@@ -19,6 +19,11 @@ internal static class Program
             Console.WriteLine(observation);
         }
 
+        foreach (string observation in AudioBehaviorCorpus.Capture())
+        {
+            Console.WriteLine(observation);
+        }
+
         foreach (string observation in ContentErrorCorpus.Capture())
         {
             Console.WriteLine(observation);

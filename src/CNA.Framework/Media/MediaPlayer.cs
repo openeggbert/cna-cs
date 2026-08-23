@@ -27,8 +27,9 @@ namespace CNA.Media;
 ///
 /// <see cref="Update"/> is <c>CNAEXT</c> (public here, unlike real XNA, which drives the equivalent
 /// through <c>FrameworkDispatcher.Update()</c>). It forwards to <c>cna_media_player_update_ext</c>,
-/// the canonical timer and state-transition pump. <see cref="CNA.Game"/>'s base
-/// <c>Update(GameTime)</c> calls it for any game that calls <c>base.Update(gameTime)</c>.
+/// the canonical timer and state-transition pump. CNA's native game base update invokes the
+/// framework dispatcher once after the managed update callback succeeds; the managed
+/// <see cref="CNA.Game.Update"/> hook deliberately does not invoke it a second time.
 /// </summary>
 public static class MediaPlayer
 {

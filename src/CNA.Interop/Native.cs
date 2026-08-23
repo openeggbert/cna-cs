@@ -1183,6 +1183,14 @@ internal static partial class Native
     internal static partial CnaResult cna_audio_engine_create(CnaHandle game, CnaStringView settingsFile, out CnaHandle outEngine);
 
     [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_audio_engine_create_with_renderer(
+        CnaHandle game,
+        CnaStringView settingsFile,
+        long lookAheadTicks,
+        CnaStringView rendererId,
+        out CnaHandle outEngine);
+
+    [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_audio_engine_destroy(CnaHandle engine);
 
     [LibraryImport(LibraryName)]

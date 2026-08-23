@@ -25,6 +25,10 @@ public static class ContentErrorCorpus
         Observe(observations, "content.profile_flag_40", () => Load<int>(Container(IntPayload(), flags: 0x40)));
         Observe(observations, "content.profile_flags_7f", () => Load<int>(Container(IntPayload(), flags: 0x7f)));
         Observe(observations, "content.truncated_compressed", () => Load<int>(Container([0, 0, 0, 0], flags: 0x80)));
+        Observe(observations, "content.truncated_compressed.header_only", () =>
+            Load<int>([(byte)'X', (byte)'N', (byte)'B', (byte)'w', 5, 0x80, 10, 0, 0, 0]));
+        Observe(observations, "content.truncated_compressed.short_block", () =>
+            Load<int>(Container([1, 0, 0, 0, 0, 0], flags: 0x80)));
 
         var truncatedBody = new byte[valid.Length - 1];
         Array.Copy(valid, truncatedBody, truncatedBody.Length);
@@ -51,10 +55,15 @@ public static class ContentErrorCorpus
         Observe(observations, "content.wrong_target", () => Load<string>(valid));
         Observe(observations, "content.external_reference", () => LoadExternalReference(empty: false));
         Observe(observations, "content.external_reference_empty", () => LoadExternalReference(empty: true));
+        Observe(observations, "content.external_reference_nested", LoadNestedExternalReference);
+        Observe(observations, "content.external_reference_missing", LoadMissingExternalReference);
+        Observe(observations, "content.external_reference_normalized", LoadNormalizedExternalReference);
         Observe(observations, "content.missing_asset", LoadMissingAsset);
 
         observations.Add("content.open_stream_disposed=" + Flag(StreamIsDisposedAfterFailure()));
+        observations.Add("content.open_stream_success_disposed=" + Flag(StreamIsDisposedAfterSuccess()));
         observations.Add("content.partial_failure_unload=" + PartialFailureUnload());
+        observations.Add("content.reader_create_then_throw=" + CreateThenThrowCleanup());
         observations.Add("content.duplicate_disposable=" + DuplicateDisposable());
         observations.Add("content.unload_throw_clears=" + UnloadThrowClears());
         observations.Add("content.dispose_throw_poisons=" + DisposeThrowPoisons());
@@ -94,6 +103,47 @@ public static class ContentErrorCorpus
         return content.Load<int>("absent");
     }
 
+    private static int LoadNestedExternalReference()
+    {
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/root"] = ExternalReferenceAsset("middle"),
+            ["folder/middle"] = ExternalReferenceAsset("child"),
+            ["folder/child"] = Container(IntPayload()),
+        };
+        using var content = new MappedContentManager(assets);
+        return content.Load<int>("folder/root");
+    }
+
+    private static int LoadMissingExternalReference()
+    {
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/root"] = ExternalReferenceAsset("missing"),
+        };
+        using var content = new MappedContentManager(assets);
+        return content.Load<int>("folder/root");
+    }
+
+    private static int LoadNormalizedExternalReference()
+    {
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/sub/root"] = ExternalReferenceAsset("../child"),
+            ["folder/child"] = Container(IntPayload()),
+        };
+        using var content = new MappedContentManager(assets);
+        return content.Load<int>("folder/sub/root");
+    }
+
+    private static byte[] ExternalReferenceAsset(string reference) => Container(Payload(
+        typeof(ExternalReferenceReader).AssemblyQualifiedName!, 0, 0,
+        writer =>
+        {
+            Write7Bit(writer, 1);
+            writer.Write(reference);
+        }));
+
     private static bool StreamIsDisposedAfterFailure()
     {
         TrackingStream? stream = null;
@@ -107,6 +157,26 @@ public static class ContentErrorCorpus
         }
 
         return stream is { WasDisposed: true };
+    }
+
+    private static bool StreamIsDisposedAfterSuccess()
+    {
+        TrackingStream? stream = null;
+        using var content = new MemoryContentManager(() => stream = new TrackingStream(Container(IntPayload())));
+        _ = content.Load<int>("fixture");
+        return stream is { WasDisposed: true };
+    }
+
+    private static string CreateThenThrowCleanup()
+    {
+        CreateThenThrowReader.Reset();
+        byte[] asset = Container(Payload(
+            typeof(CreateThenThrowReader).AssemblyQualifiedName!, 0, 0,
+            writer => Write7Bit(writer, 1)));
+        using var content = new MemoryContentManager(() => new TrackingStream(asset));
+        string load = ExceptionName(() => content.Load<CorpusDisposable>("fixture"));
+        content.Unload();
+        return $"{load}/{CreateThenThrowReader.CreatedDisposeCount}";
     }
 
     private static string PartialFailureUnload()
@@ -388,6 +458,19 @@ public sealed class ExternalReferenceReader : ContentTypeReader<int>
 public sealed class NewDisposableReader : ContentTypeReader<CorpusDisposable>
 {
     protected override CorpusDisposable Read(ContentReader input, CorpusDisposable existingInstance) => new();
+}
+
+public sealed class CreateThenThrowReader : ContentTypeReader<CorpusDisposable>
+{
+    public static int CreatedDisposeCount => CorpusDisposable.DisposeCount;
+
+    public static void Reset() => CorpusDisposable.Reset();
+
+    protected override CorpusDisposable Read(ContentReader input, CorpusDisposable existingInstance)
+    {
+        _ = new CorpusDisposable();
+        throw new InvalidOperationException("after-create");
+    }
 }
 
 public sealed class SingletonDisposableReader : ContentTypeReader<CorpusDisposable>

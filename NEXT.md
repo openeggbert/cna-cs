@@ -11,6 +11,166 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Audio/XACT, Media/Video, Storage, pumping and ownership hardening (2026-08-23)
+
+This run preserved the completed public contract: **257 reference types / 257 target types, zero
+metadata diagnostics, zero CNA leaks, zero base/interface/parameter-name mismatches, and an empty
+allowlist**. Upstream CNA source was inspected but not modified. The sibling C++ template was not
+modified: it does not consume the managed `CNA.Framework`/`CNA.XnaCompat` runtime paths changed
+here.
+
+### Behavior corpus: 299 to 457
+
+The original 299 observations remain unchanged. Three same-source executables now obtain their
+expected counts from `tests/behavior-corpus-counts.json`, and `Capture-XnaSnapshots.ps1` builds,
+normalizes, validates and combines all three:
+
+| Category | Before | Added | Final |
+| --- | ---: | ---: | ---: |
+| Math/geometry | 83 | 0 | 83 |
+| Input | 23 | 0 | 23 |
+| Graphics | 153 | 0 | 153 |
+| Resource/lifetime | 13 | 0 | 13 |
+| Content error | 27 | 7 | 34 |
+| Audio | 0 | 83 | 83 |
+| XACT | 0 | 7 | 7 |
+| Media | 0 | 20 | 20 |
+| Video | 0 | 17 | 17 |
+| Storage | 0 | 20 | 20 |
+| DeviceLifecycle | 0 | 4 | 4 |
+| **Total** | **299** | **158** | **457** |
+
+The 187-line pure probe contains 83 math, 23 input, 47 Audio, and 34 Content observations. The
+unchanged graphics/resource probe contains 166. The new native runtime probe contains 104: 36
+Audio, 7 XACT, 20 Media, 17 Video, 20 Storage and 4 DeviceLifecycle.
+
+Target status is deliberately precise:
+
+| Target | Compile | Runtime evidence |
+| --- | --- | --- |
+| CNA | Pass | All 457 observations execute on Linux with the pinned ABI 0.6.0 OPENGLES3 library |
+| Microsoft XNA 4.0 | net48/x86 targets integrated in the existing one-command script | Windows execution and archive pending; the local Linux environment is not a valid XNA runtime |
+| FNA | Both new projects compile as net472 against the supplied FNA.dll | All 187 pure lines are emitted, then FNA aborts in its own `SoundEffect` finalizer; the native runtime cannot initialize a video device here |
+| MonoGame DesktopGL | Pure project compiles | It emits the old 106 pure lines, then its audio initialization aborts; the full runtime project cannot compile because this profile omits XNA Storage (and authored XACT) |
+
+Comparator failures are evidence, never authority. XNA reference IL was used to adjudicate the
+implemented validation arithmetic and ownership edges; the independent Windows snapshot remains
+the final runtime authority.
+
+### Audio and framework pumping results
+
+- `SoundEffect.GetSampleDuration` and `GetSampleSizeInBytes` now use XNA's float arithmetic and
+  exact validation order. The counter-intuitive one-second mono size at 44.1 kHz is 88198 bytes,
+  not 88200. Negative duration/size, 8000..48000 sample-rate bounds, channels, overflow, alignment,
+  offset/count, and loop validation now match the measured XNA IL paths.
+- Strict `SoundEffectInstance` now validates `Volume`, `Pitch`, `Pan`, disposed access, null 3D
+  arguments, and keeps a strong parent `SoundEffect`. Its managed Volume/Pitch/Pan/IsLooped cache
+  remains readable after disposal exactly as XNA IL specifies, while State and playback throw.
+  The parent keeps only weak children and disposes live instances, matching XNA rather than
+  creating an uncollectable cycle.
+- Dynamic construction, byte-window submission, `IsLooped`, sample conversions, state transitions,
+  one/two-buffer pending counts, callback reentrant submission, self-unsubscription and throwing
+  handlers are covered. A one-buffer queue produces two `BufferNeeded` callbacks per dispatcher
+  pump because XNA/CNA refill toward three queued buffers.
+- The normal game path had a real double pump: the managed base `Game.Update` pumped, then the C++
+  base update pumped again. Both managed base hooks are now empty; native performs exactly one
+  dispatcher update after a successful managed callback. A callback that throws skips the pump.
+  Direct `FrameworkDispatcher.Update()` remains covered. Callback exceptions are captured and
+  surface on the next managed owner call; none unwind through native frames.
+- `Apply3D` uses the atomic multi-listener ABI route. The implementation still rejects more than
+  one listener; CNA.NET refuses explicitly and never duplicates the first listener. Empty arrays
+  currently surface a native `CnaException`; Windows XNA adjudication remains pending.
+
+### XACT ownership result
+
+XNA IL shows that `SoundBank`, `WaveBank`, `Cue`, and `AudioCategory` strongly retain their
+`AudioEngine`; the engine tracks dependants weakly. A Cue retains the engine rather than its
+SoundBank. Engine disposal walks live dependants before releasing itself. CNA.NET now models those
+edges, disposes in reverse registration order so Cue handles precede their banks, and releases
+XACT disposing-event registrations after native delivery so callbacks cannot root wrappers
+forever.
+
+No legal redistributable XGS/XSB/XWB fixture exists in this repository or the inspected sibling/
+upstream trees. The corpus therefore proves null/empty/missing/short/bad-signature settings-file
+validation and records authored bank success as
+`not-run(no-redistributable-authored-bank-fixture)`. The strict constructor now performs XNA's
+XGSF validation before native dispatch, and its three-argument overload reaches CNA's existing
+look-ahead/renderer ABI route. That backend currently accepts but ignores both extra arguments; it
+does not fabricate bank playback, bank-order, Cue success, or renderer selection.
+
+### Media, Video and Storage results
+
+- `MediaPlayer.Queue` is a stable per-game facade over the borrowed process-global queue handle;
+  repeated reads preserve reference identity. Initial stopped state, empty index behavior, null
+  play, stopped pause/resume/stop/move-next/move-previous, disabled all-zero visualization data,
+  volume bounds, mute/repeat/shuffle, library counts and cached collection identity are measured.
+  Song transitions/events remain fixture-pending.
+- XNA's video implementation owns two stable frame `Texture2D` buffers. CNA instead returns a
+  player-owned borrowed alias valid only until the next player call. The strict facade now keeps
+  at most one non-owning transient wrapper, invalidates it before every player operation, throws
+  before `Play`, and never lets wrapper disposal/finalization destroy the player's texture. Exact
+  XNA identity cannot be represented without a stronger ABI and is documented as a blocker.
+- `VideoPlayer` now also follows XNA's managed disposal boundary: loop/mute/volume remain cached
+  and readable, while State, PlayPosition and control calls throw `ObjectDisposedException`.
+  Null-Play ordering and XNA's unusual acceptance of NaN Volume are captured explicitly.
+- Storage selector completion, connected/capacity state, null/empty names, same-name reopen,
+  stable container-device identity, normalized nested paths, isolated directory/file CRUD, sorted
+  enumeration, stream readback, double disposal and post-disposal access all execute under a
+  dedicated `XDG_DATA_HOME`; cleanup is in `finally`.
+- The documented native `StorageContainer.Disposing` callback emitted zero events. Since the
+  wrapper exclusively owns explicit disposal and the sender is known, it now raises a managed
+  one-shot event after native accepts disposal. Handler exceptions propagate only through managed
+  `Dispose`. A native regression locks this in and the defective callback is in the blocker table.
+
+### Device, Content, input and ABI results
+
+- `GraphicsDevice.Reset()` deterministically raises `DeviceResetting` then `DeviceReset`, once
+  each, with the correct sender. The previous managed thunk used the wrong callback arity and could
+  access-violate; it now uses the sender/context bridge. `DeviceLost` has no deterministic trigger.
+- The C ABI exposes one game-owned graphics device, so true A-to-B resource/state validation is
+  `not-run`; a second managed wrapper over the same handle would be fake evidence.
+- Seven Content observations add nested, missing and normalized external references, successful
+  `OpenStream` disposal, partial-failure cleanup, reader-created disposable failure, duplicate
+  identity, and repeated unload/dispose failure state. Successful and failing asset streams are
+  closed by the content path.
+- CNA has polling and hotplug/reset support but no deterministic keyboard/mouse/gamepad state
+  injection. The existing 23 pure input observations remain unchanged; no physical-input CI claim
+  was invented.
+- Six Linux x64 interop tests check native sizes/offsets for audio/listener/emitter/cue/
+  visualization structs, uint32 enums, byte booleans embedded in those layouts, pointer-width
+  handles/callbacks, string views, and the corrected device-event prototype. This is ELF/Linux
+  evidence only; PE and Mach-O remain pending.
+
+### Ownership classification
+
+| Family | Measured/modelled ownership |
+| --- | --- |
+| `AudioEngine` | Owned dependency root; weak dependant registry; dependants and event registration released before completion |
+| `SoundBank` | Owned handle plus strong ParentOwned dependency on engine; native also requires Cue children released first |
+| `WaveBank` | Owned handle plus strong ParentOwned dependency on engine |
+| `Cue` | Owned handle plus strong ParentOwned dependency on engine, not bank |
+| `SoundEffectInstance` | Owned instance plus strong ParentOwned `SoundEffect`; parent tracks child weakly |
+| `DynamicSoundEffectInstance` | Owned instance and owned callback registration; unsubscribe precedes handle release |
+| `MediaPlayer` | Process-global static native state; stable borrowed queue view cached per game and released at game teardown |
+| `VideoPlayer` frame `Texture2D` | ParentOwned borrowed/transient alias, one live facade, invalid on next player call |
+| `StorageDevice` | Owned SafeHandle released by its critical finalizer; no public XNA `Dispose`; strongly retained by containers |
+| `StorageContainer` | Owned handle plus strong ParentOwned device; idempotent explicit disposal |
+
+### Verification and remaining honest limits
+
+The managed suites are 549/549 and 199/199. Native integration is now 119 tests after the Storage
+event regression. The normal ownership gate remains 100/100 in both configurations. An optional
+`CNA_OWNERSHIP_STRESS_DEEP=1` mode selects 1000 cycles without slowing normal CI; the long mode was
+not run, and no allocator-level leak claim is made. Full Debug/Release, native, ownership,
+metadata/leak, corpus and whitespace results are recorded in `plan.md` and the final session
+report.
+
+New native blockers are exact Video frame identity/lifetime, true cross-device construction,
+deterministic DeviceLost, deterministic native input injection, multi-listener implementation,
+ignored XACT renderer/look-ahead selection, and the silent Storage disposing callback. Existing
+ResourceCreated/ResourceDestroyed behavior remains deliberately at zero events because no stable
+facade identity/tag crosses the ABI.
+
 ## Graphics behavior and native ownership hardening (2026-08-22)
 
 This run started from the completed 257-type metadata profile and did not change its public

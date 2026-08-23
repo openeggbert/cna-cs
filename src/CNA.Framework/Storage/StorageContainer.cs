@@ -11,6 +11,8 @@ namespace CNA.Storage;
 /// </summary>
 public class StorageContainer : IDisposable
 {
+    // Owned, with a strong parent edge. Opening transfers one container handle to this wrapper;
+    // StorageDevice must remain alive for the container's full XNA-visible lifetime.
     private readonly NativeResourceHandle _handle;
 
     internal StorageContainer(nint nativeHandleValue, StorageDevice storageDevice)
@@ -165,11 +167,44 @@ public class StorageContainer : IDisposable
         }
 
         _disposed = true;
-        CnaResult result = Native.cna_storage_container_dispose(NativeHandle);
-        GC.KeepAlive(this);
-        CnaException.ThrowIfFailed(result, nameof(Dispose));
+        Exception? pending = null;
+        bool nativeDisposed = false;
+        try
+        {
+            CnaResult result = Native.cna_storage_container_dispose(NativeHandle);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(Dispose));
+            nativeDisposed = true;
+        }
+        catch (Exception exception)
+        {
+            pending = exception;
+        }
+
+        // ABI 0.6.0 documents a synchronous native callback here, but the measured implementation
+        // emits none. This wrapper is the exclusive explicit-disposal route, so deliver the known
+        // sender once in managed code after native has accepted disposal. That also guarantees a
+        // handler exception never crosses an unmanaged frame.
+        if (nativeDisposed)
+        {
+            try
+            {
+                _disposingHandler?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception exception)
+            {
+                pending ??= exception;
+            }
+        }
+
+        _disposingHandler = null;
         _handle.Dispose();
         GC.SuppressFinalize(this);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
     }
 
     private delegate CnaResult PathFunc(CnaHandle container, CnaStringView path);
@@ -247,30 +282,15 @@ public class StorageContainer : IDisposable
         return names;
     }
 
-    /// <summary>Raised as this storagecontainer is disposed, matching real XNA. The subscription is
-    /// taken on the first <c>+=</c> and released with this object -- see
-    /// <see cref="GraphicsDeviceManager.DeviceCreated"/> for the shared reasoning.</summary>
+    /// <summary>Raised once after native accepts explicit disposal, matching real XNA. ABI 0.6.0's
+    /// documented native callback is observably silent, so this event is kept managed rather than
+    /// pinning a native registration that never fires; see <c>docs/native-behavior-blockers.md</c>.
+    /// </summary>
     public event EventHandler<EventArgs>? Disposing
     {
-        add
-        {
-            _disposingBridge ??= NativeEventBridge.Subscribe(
-                () => _disposingHandler?.Invoke(this, EventArgs.Empty),
-                (callback, context) =>
-                {
-                    CnaResult result = Native.cna_storage_container_subscribe_disposing(
-                        NativeHandle, callback, context, out CnaHandle registration);
-                    GC.KeepAlive(this);
-                    CnaException.ThrowIfFailed(result, nameof(Disposing));
-                    return registration;
-                },
-                registration => Native.cna_storage_container_unsubscribe_disposing(registration));
-
-            _disposingHandler += value;
-        }
+        add => _disposingHandler += value;
         remove => _disposingHandler -= value;
     }
 
-    private NativeEventBridge? _disposingBridge;
     private EventHandler<EventArgs>? _disposingHandler;
 }

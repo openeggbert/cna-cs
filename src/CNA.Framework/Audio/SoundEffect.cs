@@ -23,7 +23,7 @@ public class SoundEffect : IDisposable
     private readonly NativeResourceHandle _handle;
 
     public SoundEffect(byte[] buffer, int sampleRate, AudioChannels channels)
-        : this(buffer, 0, buffer?.Length ?? 0, sampleRate, channels, loopStart: 0, loopLength: 0)
+        : this(ValidateBasicBuffer(buffer), 0, buffer?.Length ?? 0, sampleRate, channels, loopStart: 0, loopLength: 0)
     {
     }
 
@@ -45,12 +45,10 @@ public class SoundEffect : IDisposable
     public unsafe SoundEffect(
         byte[] buffer, int offset, int count, int sampleRate, AudioChannels channels, int loopStart, int loopLength)
     {
-        ArgumentNullException.ThrowIfNull(buffer);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sampleRate, 0);
-        BufferRangeValidation.ValidateRange(buffer.Length, offset, count);
-        ArgumentOutOfRangeException.ThrowIfNegative(loopStart);
-        ArgumentOutOfRangeException.ThrowIfNegative(loopLength);
-        ValidateChannels(channels);
+        // Owned SoundEffect handle. XNA validates in this exact order before it allocates a voice:
+        // format, whole-buffer alignment, range, then loop region. Keep this managed so failures
+        // are deterministic even when no native game exists yet.
+        ValidatePcmArguments(buffer, offset, count, sampleRate, channels, loopStart, loopLength);
 
         var createInfo = new CnaSoundEffectCreateInfo
         {
@@ -273,8 +271,12 @@ public class SoundEffect : IDisposable
     /// actually works.</summary>
     public static TimeSpan GetSampleDuration(int sizeInBytes, int sampleRate, AudioChannels channels)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(sizeInBytes);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sampleRate, 0);
+        if (sizeInBytes < 0)
+        {
+            throw new ArgumentException("The audio buffer size cannot be negative.", nameof(sizeInBytes));
+        }
+
+        ValidateSampleRate(sampleRate);
         ValidateChannels(channels);
 
         if (sizeInBytes == 0)
@@ -283,8 +285,9 @@ public class SoundEffect : IDisposable
         }
 
         int blockAlign = 2 * (int)channels;
-        long sampleCount = sizeInBytes / blockAlign;
-        return TimeSpan.FromSeconds(sampleCount / (double)sampleRate);
+        int sampleCount = sizeInBytes / blockAlign;
+        float milliseconds = (float)sampleCount * 1000f / (float)sampleRate;
+        return TimeSpan.FromMilliseconds((double)milliseconds);
     }
 
     /// <summary><see cref="AudioChannels"/> is a plain enum, so C# does not itself reject a cast
@@ -305,17 +308,103 @@ public class SoundEffect : IDisposable
     /// matching 16-bit PCM's fixed per-sample byte size.</summary>
     public static int GetSampleSizeInBytes(TimeSpan duration, int sampleRate, AudioChannels channels)
     {
-        if (duration < TimeSpan.Zero)
+        double totalMilliseconds = duration.TotalMilliseconds;
+        if (totalMilliseconds < 0d || totalMilliseconds > int.MaxValue)
         {
-            throw new ArgumentException("Must not be negative.", nameof(duration));
+            throw new ArgumentOutOfRangeException(nameof(duration));
         }
 
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(sampleRate, 0);
+        ValidateSampleRate(sampleRate);
+        ValidateChannels(channels);
+
+        if (duration == TimeSpan.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            int sampleCount = checked((int)(totalMilliseconds * ((float)sampleRate / 1000f)));
+            int blockAlign = 2 * (int)channels;
+            return checked((sampleCount + sampleCount % (int)channels) * blockAlign);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentOutOfRangeException(nameof(duration));
+        }
+    }
+
+    private static byte[] ValidateBasicBuffer(byte[]? buffer)
+    {
+        if (buffer is null || buffer.Length == 0)
+        {
+            throw new ArgumentException("The audio buffer cannot be null or empty.");
+        }
+
+        return buffer;
+    }
+
+    private static void ValidateSampleRate(int sampleRate)
+    {
+        if (sampleRate is < 8000 or > 48000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sampleRate));
+        }
+    }
+
+    private static void ValidatePcmArguments(
+        byte[]? buffer,
+        int offset,
+        int count,
+        int sampleRate,
+        AudioChannels channels,
+        int loopStart,
+        int loopLength)
+    {
+        ValidateSampleRate(sampleRate);
         ValidateChannels(channels);
 
         int blockAlign = 2 * (int)channels;
-        long sampleCount = (long)(duration.TotalSeconds * sampleRate);
-        return (int)(sampleCount * blockAlign);
+        if (buffer is null || buffer.Length == 0 || buffer.Length % blockAlign != 0)
+        {
+            throw new ArgumentException("The audio buffer is invalid.");
+        }
+
+        if (offset < 0 || offset >= buffer.Length || offset % blockAlign != 0)
+        {
+            throw new ArgumentException("The audio buffer offset is invalid.");
+        }
+
+        int end;
+        try
+        {
+            end = checked(offset + count);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentException("The offset and count do not describe a valid buffer range.");
+        }
+
+        if (count <= 0 || end > buffer.Length || count % blockAlign != 0)
+        {
+            throw new ArgumentException("The offset and count do not describe a valid buffer range.");
+        }
+
+        int loopEnd;
+        try
+        {
+            loopEnd = checked(loopStart + loopLength);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentException("The loop region is invalid.");
+        }
+
+        int sampleCount = count / blockAlign;
+        if (loopStart < 0 || loopLength < 0 || loopEnd > sampleCount)
+        {
+            throw new ArgumentException("The loop region is invalid.");
+        }
     }
 
     public void Dispose()

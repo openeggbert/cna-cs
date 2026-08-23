@@ -11,9 +11,9 @@ namespace CNA;
 /// This finally gives <see cref="MediaPlayer.Update"/> its real XNA home. Before Phase 8 WP7,
 /// <see cref="Game.Update"/> called <c>MediaPlayer.Update</c> directly and its doc comment called
 /// that "the closest equivalent this project can offer" -- an explicitly documented stand-in for
-/// exactly this type. <see cref="Game.Update"/> now calls <see cref="Update"/> instead, so a game
-/// that drives the framework without a <see cref="Game"/> loop has the same entry point real XNA
-/// gives it.
+/// exactly this type. The native game base update now calls the same dispatcher exactly once after
+/// the managed update callback succeeds; a host that drives the framework without a
+/// <see cref="Game"/> loop has this direct entry point, just as it does in real XNA.
 /// </summary>
 public static class FrameworkDispatcher
 {

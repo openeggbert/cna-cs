@@ -15,6 +15,11 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $referencePath = (Resolve-Path $XnaReferencePath).Path
 $outputPath = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot $OutputDirectory))
 $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+$counts = Get-Content (Join-Path $repositoryRoot "tests/behavior-corpus-counts.json") -Raw | ConvertFrom-Json
+$compileCount = [int]$counts.probes.compile
+$graphicsCount = [int]$counts.probes.graphics
+$runtimeCount = [int]$counts.probes.runtime
+$totalCount = $compileCount + $graphicsCount + $runtimeCount
 
 function Invoke-Checked {
     param(
@@ -74,6 +79,7 @@ try {
 
     Invoke-Checked dotnet @commonBuildArguments "tests/CNA.XnaCompat.CompileProbe/CNA.XnaCompat.CompileProbe.csproj"
     Invoke-Checked dotnet @commonBuildArguments "tests/CNA.XnaCompat.GraphicsProbe/CNA.XnaCompat.GraphicsProbe.csproj"
+    Invoke-Checked dotnet @commonBuildArguments "tests/CNA.XnaCompat.RuntimeProbe/CNA.XnaCompat.RuntimeProbe.csproj"
 
     if ($XnaRuntimePath) {
         $env:XNA_RUNTIME_PATH = (Resolve-Path $XnaRuntimePath).Path
@@ -85,24 +91,30 @@ try {
     $env:XNA_GRAPHICS_PROBE_UNSAFE_CONSTRUCTORS = "1"
 
     [System.IO.Directory]::CreateDirectory($outputPath) | Out-Null
-    $purePath = Join-Path $outputPath "xna-math-input-content.txt"
+    $purePath = Join-Path $outputPath "xna-math-input-audio-content.txt"
     $graphicsPath = Join-Path $outputPath "xna-graphics-resource.txt"
+    $runtimePath = Join-Path $outputPath "xna-audio-xact-media-video-storage-lifecycle.txt"
     $combinedPath = Join-Path $outputPath "xna-all.txt"
 
     Write-NormalizedSnapshot `
         (Join-Path $repositoryRoot "tests/CNA.XnaCompat.CompileProbe/bin/Release/net48/CNA.XnaCompat.CompileProbe.exe") `
         $purePath `
-        133
+        $compileCount
     Write-NormalizedSnapshot `
         (Join-Path $repositoryRoot "tests/CNA.XnaCompat.GraphicsProbe/bin/Release/net48/CNA.XnaCompat.GraphicsProbe.exe") `
         $graphicsPath `
-        166
+        $graphicsCount
+    Write-NormalizedSnapshot `
+        (Join-Path $repositoryRoot "tests/CNA.XnaCompat.RuntimeProbe/bin/Release/net48/CNA.XnaCompat.RuntimeProbe.exe") `
+        $runtimePath `
+        $runtimeCount
 
     $combined = [System.IO.File]::ReadAllText($purePath) +
-        [System.IO.File]::ReadAllText($graphicsPath)
+        [System.IO.File]::ReadAllText($graphicsPath) +
+        [System.IO.File]::ReadAllText($runtimePath)
     [System.IO.File]::WriteAllText($combinedPath, $combined, $utf8WithoutBom)
 
-    Write-Host "Captured 299 normalized XNA observations in '$outputPath'."
+    Write-Host "Captured $totalCount normalized XNA observations in '$outputPath'."
     if ($CompareFile) {
         Invoke-Checked git diff --no-index -- $CompareFile $combinedPath
     }

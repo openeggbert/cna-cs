@@ -1,0 +1,21 @@
+{
+  "probes": {
+    "compile": 187,
+    "graphics": 166,
+    "runtime": 104
+  },
+  "categories": {
+    "mathGeometry": 83,
+    "input": 23,
+    "graphics": 153,
+    "resourceLifetime": 13,
+    "contentErrorBaseline": 27,
+    "audio": 83,
+    "xact": 7,
+    "media": 20,
+    "video": 17,
+    "storage": 20,
+    "deviceLifecycle": 4,
+    "contentAdditional": 7
+  }
+}
