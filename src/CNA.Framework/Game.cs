@@ -96,6 +96,7 @@ public class Game : IDisposable
         // different ABI generation would otherwise be used anyway and fail later as a garbled
         // struct or a wrong handle, rather than as a message naming the mismatch.
         CnaAbi.EnsureCompatible();
+        NativeResourceHandle.DrainPendingReleasesForCurrentThread();
 
         CnaResult result = Native.cna_game_create(in createInfo, out _nativeHandle);
 
@@ -112,6 +113,7 @@ public class Game : IDisposable
         {
             GC.Collect();
             GC.WaitForPendingFinalizers();
+            NativeResourceHandle.DrainPendingReleasesForCurrentThread();
 
             if (Native.cna_game_destroy(_undestroyedGame).IsSuccess())
             {
@@ -463,6 +465,7 @@ public class Game : IDisposable
 
     private void Invoke(VoidCall call, string context)
     {
+        NativeResourceHandle.DrainPendingReleasesForCurrentThread();
         CnaResult result = call(_nativeHandle);
         CnaException.ThrowIfFailed(result, context);
     }
@@ -470,7 +473,9 @@ public class Game : IDisposable
     /// <summary>Hands control to native CNA. Blocks until the game exits.</summary>
     public void Run()
     {
+        NativeResourceHandle.DrainPendingReleasesForCurrentThread();
         CnaResult result = Native.cna_game_run(_nativeHandle);
+        NativeResourceHandle.DrainPendingReleasesForCurrentThread();
         CnaException.ThrowIfFailed(result, "cna_game_run");
     }
 
@@ -556,12 +561,8 @@ public class Game : IDisposable
     }
 
     /// <summary>
-    /// Covariant-return factory hook: CNA.XnaCompat's <c>Game</c> overrides this to return a
-    /// <c>Microsoft.Xna.Framework.Graphics.GraphicsDevice</c> instead, so <see cref="GraphicsDevice"/>
-    /// holds the compat-typed instance without CNA needing to know CNA.XnaCompat exists.
-    /// </summary>
-    /// <summary>
-    /// Passes the <em>game</em> handle, not the device handle.
+    /// Covariant-return factory hook used by CNA.XnaCompat. Passes the <em>game</em> handle, not the
+    /// device handle.
     ///
     /// This read <c>new(GetNativeGraphicsDeviceHandle())</c> until the first integration test ran,
     /// and that was wrong in a way nothing managed could see: both handles are <see cref="nint"/>,
@@ -685,6 +686,8 @@ public class Game : IDisposable
             GC.WaitForPendingFinalizers();
             GC.Collect();
         }
+
+        NativeResourceHandle.DrainPendingReleasesForCurrentThread();
 
         CnaResult destroyResult = Native.cna_game_destroy(_nativeHandle);
 

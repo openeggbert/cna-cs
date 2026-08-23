@@ -6,14 +6,20 @@ namespace CNA;
 /// A general-purpose <see cref="SafeHandle"/> for CNA native resources, parameterized by the
 /// release callback for the specific resource type. Every native-backed CNA type
 /// (<c>Texture2D</c>, <c>SpriteBatch</c>, ...) owns one of these rather than a bare handle value,
-/// so normal disposal, forgotten disposal, and GC finalization are all handled uniformly. See
-/// openeggbert/cna's analysis_binding.md §24 and plan.md invariant #4.
+/// so normal disposal, forgotten disposal, and GC finalization are all handled uniformly. CNA
+/// handles are creation-thread-affine, so critical-finalizer releases are queued and drained by
+/// the owning game thread rather than attempted from the finalizer thread. See plan.md invariant
+/// #4.
 /// </summary>
 internal sealed class NativeResourceHandle : SafeHandle
 {
-    private readonly Action<nint> _release;
+    private readonly Func<nint, bool> _release;
+    private readonly int _ownerThreadId;
 
-    public NativeResourceHandle(nint handleValue, Action<nint> release)
+    private static readonly object PendingLock = new();
+    private static readonly Dictionary<int, Queue<PendingRelease>> PendingByOwnerThread = [];
+
+    public NativeResourceHandle(nint handleValue, Func<nint, bool> release)
         : this(handleValue, release, ownsHandle: true)
     {
     }
@@ -29,10 +35,11 @@ internal sealed class NativeResourceHandle : SafeHandle
     /// <c>Dispose</c> -- a use-after-free the owner could not prevent, and one a doc comment
     /// telling callers "do not dispose this" cannot stop either.
     /// </summary>
-    public NativeResourceHandle(nint handleValue, Action<nint> release, bool ownsHandle)
+    public NativeResourceHandle(nint handleValue, Func<nint, bool> release, bool ownsHandle)
         : base(IntPtr.Zero, ownsHandle)
     {
         _release = release;
+        _ownerThreadId = Environment.CurrentManagedThreadId;
         SetHandle(handleValue);
     }
 
@@ -57,7 +64,117 @@ internal sealed class NativeResourceHandle : SafeHandle
 
     protected override bool ReleaseHandle()
     {
-        _release(handle);
+        var pending = new PendingRelease(handle, _release);
+        if (Environment.CurrentManagedThreadId == _ownerThreadId)
+        {
+            if (!TryRelease(pending))
+            {
+                Enqueue(_ownerThreadId, pending);
+            }
+
+            return true;
+        }
+
+        // CNA's registry rejects every Get/Release from a thread other than the handle's creation
+        // thread. A SafeHandle critical finalizer necessarily runs on the finalizer thread, so
+        // calling native here used to return CNA_RESULT_THREAD and permanently lose the only copy
+        // of the handle. Queue the raw value and release delegate for the owning game thread.
+        Enqueue(_ownerThreadId, pending);
         return true;
     }
+
+    /// <summary>
+    /// Releases handles whose SafeHandle finalizers ran away from their creation thread. Failed
+    /// releases are retried after successful ones in the same batch: this handles parent/child
+    /// order without guessing finalizer order (for example an effect view before its effect, or a
+    /// texture retained by a batch). Anything still failing is retained for the next owner-thread
+    /// safe point rather than silently leaked.
+    /// </summary>
+    internal static void DrainPendingReleasesForCurrentThread()
+    {
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        List<PendingRelease> pending;
+        lock (PendingLock)
+        {
+            if (!PendingByOwnerThread.Remove(ownerThreadId, out Queue<PendingRelease>? queue))
+            {
+                return;
+            }
+
+            pending = [.. queue];
+        }
+
+        while (pending.Count > 0)
+        {
+            var failed = new List<PendingRelease>();
+            bool madeProgress = false;
+            foreach (PendingRelease release in pending)
+            {
+                if (TryRelease(release))
+                {
+                    madeProgress = true;
+                }
+                else
+                {
+                    failed.Add(release);
+                }
+            }
+
+            if (failed.Count == 0)
+            {
+                return;
+            }
+
+            if (!madeProgress)
+            {
+                lock (PendingLock)
+                {
+                    if (!PendingByOwnerThread.TryGetValue(ownerThreadId, out Queue<PendingRelease>? queue))
+                    {
+                        queue = new Queue<PendingRelease>();
+                        PendingByOwnerThread.Add(ownerThreadId, queue);
+                    }
+
+                    foreach (PendingRelease release in failed)
+                    {
+                        queue.Enqueue(release);
+                    }
+                }
+
+                return;
+            }
+
+            pending = failed;
+        }
+    }
+
+    private static bool TryRelease(PendingRelease pending)
+    {
+        try
+        {
+            return pending.Release(pending.Handle);
+        }
+        catch
+        {
+            // ReleaseHandle cannot throw, particularly from the critical-finalizer path. Retain
+            // the work so a later owner-thread drain can retry it.
+            return false;
+        }
+    }
+
+    private static void Enqueue(int ownerThreadId, PendingRelease pending)
+    {
+        lock (PendingLock)
+        {
+            if (!PendingByOwnerThread.TryGetValue(ownerThreadId, out Queue<PendingRelease>? queue))
+            {
+                queue = new Queue<PendingRelease>();
+                PendingByOwnerThread.Add(ownerThreadId, queue);
+            }
+
+            queue.Enqueue(pending);
+        }
+    }
+
+    private readonly record struct PendingRelease(nint Handle, Func<nint, bool> Release);
 }

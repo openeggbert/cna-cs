@@ -145,11 +145,16 @@ public class SpriteBatch : GraphicsResource
             origin.ToFramework(),
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
 
-    public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color) =>
+    public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color)
+    {
+        ArgumentNullException.ThrowIfNull(spriteFont);
+        ArgumentNullException.ThrowIfNull(text);
         _inner.DrawString(spriteFont.Framework, text, position.ToFramework(), color.ToFramework());
+    }
 
     public void DrawString(SpriteFont spriteFont, StringBuilder text, Vector2 position, Color color)
     {
+        ArgumentNullException.ThrowIfNull(spriteFont);
         ArgumentNullException.ThrowIfNull(text);
         _inner.DrawString(spriteFont.Framework, text.ToString(), position.ToFramework(), color.ToFramework());
     }
@@ -163,7 +168,10 @@ public class SpriteBatch : GraphicsResource
         Vector2 origin,
         float scale,
         SpriteEffects effects,
-        float layerDepth) =>
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(spriteFont);
+        ArgumentNullException.ThrowIfNull(text);
         _inner.DrawString(
             spriteFont.Framework,
             text,
@@ -173,6 +181,7 @@ public class SpriteBatch : GraphicsResource
             origin.ToFramework(),
             scale,
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+    }
 
     public void DrawString(
         SpriteFont spriteFont,
@@ -185,6 +194,7 @@ public class SpriteBatch : GraphicsResource
         SpriteEffects effects,
         float layerDepth)
     {
+        ArgumentNullException.ThrowIfNull(spriteFont);
         ArgumentNullException.ThrowIfNull(text);
         DrawString(spriteFont, text.ToString(), position, color, rotation, origin, scale, effects, layerDepth);
     }
@@ -198,7 +208,10 @@ public class SpriteBatch : GraphicsResource
         Vector2 origin,
         Vector2 scale,
         SpriteEffects effects,
-        float layerDepth) =>
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(spriteFont);
+        ArgumentNullException.ThrowIfNull(text);
         _inner.DrawString(
             spriteFont.Framework,
             text,
@@ -208,6 +221,7 @@ public class SpriteBatch : GraphicsResource
             origin.ToFramework(),
             scale.ToFramework(),
             (CNA.Graphics.SpriteEffects)(int)effects, layerDepth);
+    }
 
     public void DrawString(
         SpriteFont spriteFont,
@@ -220,6 +234,7 @@ public class SpriteBatch : GraphicsResource
         SpriteEffects effects,
         float layerDepth)
     {
+        ArgumentNullException.ThrowIfNull(spriteFont);
         ArgumentNullException.ThrowIfNull(text);
         DrawString(spriteFont, text.ToString(), position, color, rotation, origin, scale, effects, layerDepth);
     }
@@ -231,13 +246,25 @@ public class SpriteBatch : GraphicsResource
             return;
         }
 
-        _inner.Dispose();
-        base.Dispose(disposing);
+        try
+        {
+            _inner?.Dispose();
+        }
+        finally
+        {
+            base.Dispose(disposing);
+        }
     }
 
     private static CNA.Graphics.Texture2D Backend(Texture2D texture)
     {
         ArgumentNullException.ThrowIfNull(texture);
         return (CNA.Graphics.Texture2D)texture.FrameworkTexture;
+    }
+
+    private static CNA.Graphics.SpriteFont Backend(SpriteFont spriteFont)
+    {
+        ArgumentNullException.ThrowIfNull(spriteFont);
+        return spriteFont.Framework;
     }
 }

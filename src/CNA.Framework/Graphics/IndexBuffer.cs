@@ -59,7 +59,7 @@ public class IndexBuffer : IDisposable
         CnaResult result = Native.cna_index_buffer_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(IndexBuffer));
 
-        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_index_buffer_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_index_buffer_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>Matches real XNA/MonoGame's own <c>Type</c>-to-<see cref="IndexElementSize"/>
@@ -86,24 +86,6 @@ public class IndexBuffer : IDisposable
             "Index buffers can only be created for types that are sixteen or thirty two bits in length.");
     }
 
-    /// <summary>Maps an unmanaged element type's own byte size to the real ABI's
-    /// <c>CNA_IndexElementSize</c> selector -- unlike <see cref="SizeForType"/> (which maps a
-    /// specific <see cref="Type"/> at buffer-construction time), this drives
-    /// <see cref="SetData{T}(T[])"/>/<see cref="GetData{T}(T[])"/>'s generic <c>T</c>, so it works
-    /// for any 2- or 4-byte unmanaged type, not just the four real XNA names
-    /// <see cref="SizeForType"/> recognizes -- confirmed with <c>cnabinding</c> that this stays
-    /// correct generically since the real native call only ever inspects the selected width.
-    /// </summary>
-    private static uint IndexElementSizeForType<T>() where T : struct =>
-        System.Runtime.CompilerServices.Unsafe.SizeOf<T>() switch
-    {
-        2 => (uint)IndexElementSize.SixteenBits,
-        4 => (uint)IndexElementSize.ThirtyTwoBits,
-        _ => throw new ArgumentException(
-            $"Index element type {typeof(T)} must be 2 or 4 bytes (was {System.Runtime.CompilerServices.Unsafe.SizeOf<T>()}) -- the real cna C API only stores " +
-            "16-bit or 32-bit index elements.", nameof(T)),
-    };
-
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
 
     public IndexElementSize IndexElementSize { get; }
@@ -119,28 +101,69 @@ public class IndexBuffer : IDisposable
     }
 
     public unsafe void SetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount) where T : struct
+        => SetDataWithOptions(offsetInBytes, data, startIndex, elementCount, 0);
+
+    internal unsafe void SetDataWithOptions<T>(
+        int offsetInBytes,
+        T[] data,
+        int startIndex,
+        int elementCount,
+        uint options)
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
+        if (data.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
+
+        if (elementCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(elementCount));
+        }
+
         if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
             throw new ArgumentException($"Index element type {typeof(T)} contains managed references.", nameof(data));
         }
 
+        if (offsetInBytes != 0 && options != 0)
+        {
+            throw new NotSupportedException(
+                "cna_index_buffer_set_data_at currently rejects Discard and NoOverwrite even for a dynamic buffer.");
+        }
+
+        int sourceElementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+        int nativeElementSize = IndexElementSize == CNA.Graphics.IndexElementSize.SixteenBits ? 2 : 4;
+        long byteCount = (long)sourceElementSize * elementCount;
+        long capacity = (long)nativeElementSize * IndexCount;
+        if ((long)offsetInBytes + byteCount > capacity)
+        {
+            throw new InvalidOperationException("The data does not fit in this IndexBuffer.");
+        }
+
+        if (byteCount % nativeElementSize != 0 || offsetInBytes % nativeElementSize != 0)
+        {
+            throw new NotSupportedException(
+                "The CNA IndexBuffer ABI can transfer only complete native 16-bit or 32-bit indices.");
+        }
+
+        ulong nativeElementCount = (ulong)(byteCount / nativeElementSize);
         var transfer = new CnaIndexBufferTransfer
         {
-            IndexElementSize = IndexElementSizeForType<T>(),
-            Options = 0,
-            StartIndex = (ulong)startIndex,
-            ElementCount = (ulong)elementCount,
+            IndexElementSize = (uint)IndexElementSize,
+            Options = options,
+            StartIndex = 0,
+            ElementCount = nativeElementCount,
         };
 
         System.Runtime.InteropServices.GCHandle pinned =
             System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
         try
         {
-            void* basePtr = (void*)pinned.AddrOfPinnedObject();
+            byte* source = (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * sourceElementSize);
             // A nonzero offsetInBytes threw here until cna_index_buffer_set_data_at landed. The
             // plain route replaces the buffer's whole contents -- which is what XNA's
             // SetData(T[], int, int) does -- so the two are different calls, not one with a default.
@@ -152,14 +175,14 @@ public class IndexBuffer : IDisposable
             if (offsetInBytes == 0)
             {
                 result = Native.cna_index_buffer_set_data(
-                    new CnaHandle(NativeHandleValue), in transfer, (byte*)basePtr, (ulong)elementCount);
+                    new CnaHandle(NativeHandleValue), in transfer, source, nativeElementCount);
             }
             else
             {
                 CnaIndexBufferTransfer windowed = transfer;
                 result = Native.cna_index_buffer_set_data_at(
                     new CnaHandle(NativeHandleValue), (ulong)offsetInBytes, &windowed,
-                    basePtr, (ulong)elementCount);
+                    source, nativeElementCount);
             }
 
             GC.KeepAlive(this);
@@ -182,25 +205,50 @@ public class IndexBuffer : IDisposable
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
+        if (data.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
+
+        if (elementCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(elementCount));
+        }
+
         if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
             throw new ArgumentException($"Index element type {typeof(T)} contains managed references.", nameof(data));
         }
 
+        int destinationElementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+        int nativeElementSize = IndexElementSize == CNA.Graphics.IndexElementSize.SixteenBits ? 2 : 4;
+        long byteCount = (long)destinationElementSize * elementCount;
+        long capacity = (long)nativeElementSize * IndexCount;
+        if ((long)offsetInBytes + byteCount > capacity)
+        {
+            throw new InvalidOperationException("The requested data does not fit in this IndexBuffer.");
+        }
+
+        if (byteCount % nativeElementSize != 0 || offsetInBytes % nativeElementSize != 0)
+        {
+            throw new NotSupportedException(
+                "The CNA IndexBuffer ABI can transfer only complete native 16-bit or 32-bit indices.");
+        }
+
         if (offsetInBytes != 0)
         {
             throw new NotSupportedException(
-                $"{nameof(IndexBuffer)}.{nameof(GetData)} with a nonzero {nameof(offsetInBytes)} is not supported by the real " +
-                "cna C API -- cna_index_buffer_get_data has no native-buffer offset parameter at all and always reads " +
-                "starting at native index zero.");
+                $"{nameof(IndexBuffer)}.{nameof(GetData)} with a nonzero {nameof(offsetInBytes)} is not supported by " +
+                "cna_index_buffer_get_data, which always starts at native index zero.");
         }
 
+        ulong nativeElementCount = (ulong)(byteCount / nativeElementSize);
         var transfer = new CnaIndexBufferTransfer
         {
-            IndexElementSize = IndexElementSizeForType<T>(),
+            IndexElementSize = (uint)IndexElementSize,
             Options = 0,
-            StartIndex = (ulong)startIndex,
-            ElementCount = (ulong)elementCount,
+            StartIndex = 0,
+            ElementCount = nativeElementCount,
         };
 
         System.Runtime.InteropServices.GCHandle pinned =
@@ -209,7 +257,9 @@ public class IndexBuffer : IDisposable
         {
             CnaResult result = Native.cna_index_buffer_get_data(
                 new CnaHandle(NativeHandleValue), in transfer,
-                (byte*)pinned.AddrOfPinnedObject(), (ulong)elementCount, out _);
+                (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * destinationElementSize),
+                nativeElementCount, out _);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(GetData));
         }
         finally

@@ -1,10 +1,9 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>
-/// XNA 4.0-compatible <c>IndexBuffer</c>. <c>SetData</c>/<c>GetData</c>/<c>IndexCount</c>/
-/// <c>Dispose</c> are inherited unchanged from <see cref="CNA.Graphics.IndexBuffer"/> for the
-/// same reason <see cref="VertexBuffer"/>'s equivalent members are. <c>IndexElementSize</c> and
-/// <c>BufferUsage</c> need `new` overrides.
+/// XNA 4.0-compatible <c>IndexBuffer</c>. It preserves XNA's own
+/// <see cref="GraphicsResource"/> inheritance and forwards transfer/property behavior by
+/// composition to one <see cref="CNA.Graphics.IndexBuffer"/>.
 /// </summary>
 public class IndexBuffer : GraphicsResource
 {
@@ -37,6 +36,7 @@ public class IndexBuffer : GraphicsResource
         bool dynamic)
         : base(graphicsDevice)
     {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
         _frameworkBuffer = new CNA.Graphics.IndexBuffer(
             graphicsDevice.Framework,
             (CNA.Graphics.IndexElementSize)(int)indexElementSize,
@@ -88,7 +88,7 @@ public class IndexBuffer : GraphicsResource
 
         Exception? pending = DisposeHook?.Invoke();
         DisposeHook = null;
-        _frameworkBuffer.Dispose();
+        _frameworkBuffer?.Dispose();
         base.Dispose(arg0);
         if (pending is not null)
         {

@@ -58,7 +58,8 @@ public class Texture3D : Texture
         return handle.AsNint;
     }
 
-    protected override void ReleaseNative(nint handleValue) => Native.cna_texture3d_destroy(new CnaHandle(handleValue));
+    protected override bool ReleaseNative(nint handleValue) =>
+        Native.cna_texture3d_destroy(new CnaHandle(handleValue)).IsSuccess();
 
     public int Width => (int)GetInfo().Width;
 

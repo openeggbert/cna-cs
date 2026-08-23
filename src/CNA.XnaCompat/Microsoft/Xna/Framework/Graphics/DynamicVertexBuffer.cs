@@ -1,8 +1,8 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>XNA 4.0-compatible dynamic vertex buffer. It is publicly a
-/// <see cref="VertexBuffer"/> while the inherited CNA resource is created with its native dynamic
-/// flag set.</summary>
+/// <see cref="VertexBuffer"/> while that facade's composed CNA resource is created with its native
+/// dynamic flag set.</summary>
 public class DynamicVertexBuffer : VertexBuffer, IDynamicGraphicsResource
 {
     private CNA.NativeEventBridge? _contentLostBridge;
@@ -52,7 +52,7 @@ public class DynamicVertexBuffer : VertexBuffer, IDynamicGraphicsResource
 
     public void SetData<T>(T[] data, int startIndex, int elementCount, SetDataOptions options)
         where T : struct =>
-        SetData(0, data, startIndex, elementCount, VertexDeclaration.VertexStride, options);
+        SetData(0, data, startIndex, elementCount, 0, options);
 
     public void SetData<T>(
         int offsetInBytes,
@@ -63,8 +63,14 @@ public class DynamicVertexBuffer : VertexBuffer, IDynamicGraphicsResource
         SetDataOptions options)
         where T : struct
     {
-        _ = options;
-        base.SetData(offsetInBytes, data, startIndex, elementCount, vertexStride);
+        FrameworkBuffer.SetDataWithOptions(
+            offsetInBytes,
+            data,
+            startIndex,
+            elementCount,
+            vertexStride,
+            (uint)options,
+            GraphicsDevice.TypedVertexSourceFor<T>());
     }
 
     private Exception? DisposeDynamicState()

@@ -11,6 +11,13 @@ public class GraphicsDevice : IDisposable
         GraphicsDevice> FrameworkFacades = new();
 
     private readonly CNA.Graphics.GraphicsDevice _framework;
+    private BlendState _blendState;
+    private DepthStencilState _depthStencilState;
+    private RasterizerState _rasterizerState;
+    private readonly SamplerStateCollection _samplerStates;
+    private readonly SamplerStateCollection _vertexSamplerStates;
+    private readonly TextureCollection _textures;
+    private readonly TextureCollection _vertexTextures;
     private bool _disposed;
 
     internal GraphicsDevice(nint nativeGameHandleValue)
@@ -41,6 +48,22 @@ public class GraphicsDevice : IDisposable
         ArgumentNullException.ThrowIfNull(framework);
         _framework = framework;
         FrameworkFacades.Add(_framework, this);
+
+        _blendState = BlendState.Opaque;
+        _depthStencilState = DepthStencilState.Default;
+        _rasterizerState = RasterizerState.CullCounterClockwise;
+        _blendState.Bind(this);
+        _depthStencilState.Bind(this);
+        _rasterizerState.Bind(this);
+        SamplerState.LinearWrap.Bind(this);
+
+        const int pixelSlots = 16;
+        int vertexSlots = this.GraphicsProfile ==
+            global::Microsoft.Xna.Framework.Graphics.GraphicsProfile.Reach ? 0 : 4;
+        _samplerStates = new SamplerStateCollection(this, vertexStage: false, pixelSlots);
+        _vertexSamplerStates = new SamplerStateCollection(this, vertexStage: true, vertexSlots);
+        _textures = new TextureCollection(this, vertexStage: false, pixelSlots);
+        _vertexTextures = new TextureCollection(this, vertexStage: true, vertexSlots);
     }
 
     internal CNA.Graphics.GraphicsDevice Framework => _framework;
@@ -50,22 +73,9 @@ public class GraphicsDevice : IDisposable
             ? facade
             : null;
 
-    /// <summary>
-    /// <c>SetVertexBuffer</c> is inherited unchanged (its <c>VertexBuffer</c> argument upcasts,
-    /// same as every other compat method taking a native-backed resource type). <c>Indices</c>
-    /// needs a `new` override since its declared type differs from the base property's -- but
-    /// deliberately holds *no field of its own*: an earlier draft gave this property its own
-    /// private backing field (mirroring <c>SetData</c>-style patterns elsewhere), which desyncs
-    /// from the base class's own field whenever the object is accessed through a base-typed
-    /// reference (e.g. <c>GraphicsDeviceManager.Game</c> is declared with the base <c>CNA.Game</c>
-    /// type, so <c>manager.Game.GraphicsDevice.Indices</c> would silently read/write a different
-    /// field than <c>this.GraphicsDevice.Indices</c> inside a <c>Game</c> subclass) -- caught by
-    /// a code-review pass, not by testing (the desync needs two different static-type access
-    /// paths to the same object to manifest, which no test here exercises). Fixed by making this
-    /// a pure downcast pass-through to the base property's own single field instead, the same
-    /// "no independent state, just a typed read/write-through" pattern
-    /// <see cref="Microsoft.Xna.Framework.Audio.SoundEffectInstance.State"/> already uses.
-    /// </summary>
+    /// <summary>The composed backend owns the single native index-buffer binding. This facade
+    /// validates XNA resource/device lifetime rules and converts the strict wrapper without keeping
+    /// a second binding field that could diverge from native state.</summary>
     internal bool SupportsCnaCapabilityCore(CNA.XnaCompat.Extensions.CnaGraphicsCapability capability) =>
         _framework.SupportsCapability((CNA.Graphics.GraphicsCapability)(uint)capability);
 
@@ -74,14 +84,28 @@ public class GraphicsDevice : IDisposable
     public IndexBuffer? Indices
     {
         get => IndexBuffer.FromFramework(_framework.Indices);
-        set => _framework.Indices = value?.FrameworkBuffer;
+        set
+        {
+            ThrowIfDisposedForBinding();
+            ThrowIfDisposed(value);
+            if (value is not null && !ReferenceEquals(value.GraphicsDevice, this))
+            {
+                throw new InvalidOperationException("The index buffer was created for a different GraphicsDevice.");
+            }
+
+            _framework.Indices = value?.FrameworkBuffer;
+        }
     }
 
-    public void SetVertexBuffer(VertexBuffer? vertexBuffer) =>
+    public void SetVertexBuffer(VertexBuffer? vertexBuffer)
+    {
+        ValidateVertexBuffer(vertexBuffer);
         _framework.SetVertexBuffer(vertexBuffer?.FrameworkBuffer);
+    }
 
     public void SetVertexBuffer(VertexBuffer? vertexBuffer, int vertexOffset)
     {
+        ValidateVertexBuffer(vertexBuffer);
         if (vertexBuffer is null)
         {
             _framework.SetVertexBuffer(null);
@@ -101,13 +125,38 @@ public class GraphicsDevice : IDisposable
             renderTarget?.FrameworkTexture as CNA.Graphics.RenderTargetCube,
             (CNA.Graphics.CubeMapFace)(int)cubeMapFace);
 
-    public void DrawPrimitives(PrimitiveType primitiveType, int startVertex, int primitiveCount) =>
-        _framework.DrawPrimitives((CNA.Graphics.PrimitiveType)(int)primitiveType, startVertex, primitiveCount);
+    public void DrawPrimitives(PrimitiveType primitiveType, int startVertex, int primitiveCount)
+    {
+        ThrowIfDisposedForDraw();
+        if (primitiveCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(primitiveCount));
+        }
+
+        ValidateBoundDrawInputs(indexed: false);
+        _framework.DrawPrimitives(
+            (CNA.Graphics.PrimitiveType)(int)primitiveType, startVertex, primitiveCount);
+    }
 
     public void DrawIndexedPrimitives(
-        PrimitiveType primitiveType, int baseVertex, int minVertexIndex, int numVertices, int startIndex, int primitiveCount) =>
+        PrimitiveType primitiveType, int baseVertex, int minVertexIndex, int numVertices, int startIndex, int primitiveCount)
+    {
+        ThrowIfDisposedForDraw();
+        if (numVertices <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(numVertices));
+        }
+
+        if (primitiveCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(primitiveCount));
+        }
+
+        ValidateBoundDrawInputs(indexed: true);
         _framework.DrawIndexedPrimitives(
-            (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex, numVertices, startIndex, primitiveCount);
+            (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex,
+            numVertices, startIndex, primitiveCount);
+    }
 
     public void Clear(Color color) => _framework.Clear(color.ToFramework());
 
@@ -244,8 +293,17 @@ public class GraphicsDevice : IDisposable
 
     public void Present() => _framework.Present();
 
-    public void Present(Rectangle? sourceRectangle, Rectangle? destinationRectangle, IntPtr overrideWindowHandle) =>
-        _framework.Present();
+    public void Present(Rectangle? sourceRectangle, Rectangle? destinationRectangle, IntPtr overrideWindowHandle)
+    {
+        if (sourceRectangle is null && destinationRectangle is null && overrideWindowHandle == IntPtr.Zero)
+        {
+            _framework.Present();
+            return;
+        }
+
+        throw new NotSupportedException(
+            "The CNA C ABI exposes only parameterless presentation and cannot represent source/destination rectangles or an override window handle.");
+    }
 
     public void Reset() => _framework.Reset();
 
@@ -263,10 +321,21 @@ public class GraphicsDevice : IDisposable
         }
 
         _disposed = true;
+        EventHandler<EventArgs>? disposing = arg0 ? _disposing : null;
         DetachBackendEvents();
         if (arg0)
         {
-            _framework.Dispose();
+            try
+            {
+                _framework.Dispose();
+            }
+            finally
+            {
+                // XNA releases the device and sets IsDisposed before raising Disposing. Invoke the
+                // strict handler from managed teardown, after detaching the native bridge, so a
+                // callback can never unwind across the unmanaged subscription boundary.
+                disposing?.Invoke(this, EventArgs.Empty);
+            }
         }
     }
 
@@ -277,9 +346,11 @@ public class GraphicsDevice : IDisposable
             return;
         }
 
+        _disposed = true;
+        EventHandler<EventArgs>? disposing = _disposing;
         DetachBackendEvents();
         _framework.ReleaseEventSubscriptions();
-        _disposed = true;
+        disposing?.Invoke(this, EventArgs.Empty);
     }
 
     private void DetachBackendEvents()
@@ -311,6 +382,7 @@ public class GraphicsDevice : IDisposable
 
     public void SetVertexBuffers(params VertexBufferBinding[]? vertexBuffers)
     {
+        ThrowIfDisposedForBinding();
         if (vertexBuffers is null)
         {
             _framework.SetVertexBuffers(null);
@@ -320,15 +392,21 @@ public class GraphicsDevice : IDisposable
         var converted = new CNA.Graphics.VertexBufferBinding[vertexBuffers.Length];
         for (int i = 0; i < converted.Length; i++)
         {
+            if (vertexBuffers[i].VertexBuffer is null)
+            {
+                throw new ArgumentException("A vertex-buffer binding cannot contain a null buffer.");
+            }
+
+            ValidateVertexBuffer(vertexBuffers[i].VertexBuffer);
             converted[i] = vertexBuffers[i].ToFramework();
         }
 
         _framework.SetVertexBuffers(converted);
     }
 
-    /// <summary>Re-typed: <see cref="VertexBufferBinding"/> is a separate value type per namespace,
-    /// so the base's array would hand a compat game <c>CNA.Graphics</c> bindings it cannot use.
-    /// The base does the cross-check against native's count; this only converts.</summary>
+    /// <summary><see cref="VertexBufferBinding"/> is a separate value type per namespace. The
+    /// composed backend cross-checks its retained wrappers against native's count; this facade
+    /// converts that verified result.</summary>
     public VertexBufferBinding[] GetVertexBuffers()
     {
         CNA.Graphics.VertexBufferBinding[] bindings = _framework.GetVertexBuffers();
@@ -351,39 +429,66 @@ public class GraphicsDevice : IDisposable
 
     public DisplayMode DisplayMode => DisplayMode.FromFramework(_framework.DisplayMode);
 
-    /// <summary>Same downcast pass-through pattern as <see cref="Indices"/>, but for a property
-    /// whose base default is a real, non-null value. The facade wraps the backend descriptor
-    /// instead of relying on an invalid cross-hierarchy cast.</summary>
     public BlendState BlendState
     {
-        get => new(_framework.BlendState);
-        set => _framework.BlendState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
+        get => _blendState;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (ReferenceEquals(value, _blendState))
+            {
+                return;
+            }
+
+            value.Bind(this);
+            _framework.BlendState = value.Framework;
+            _blendState = value;
+        }
     }
 
     public DepthStencilState DepthStencilState
     {
-        get => new(_framework.DepthStencilState);
-        set => _framework.DepthStencilState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
+        get => _depthStencilState;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (ReferenceEquals(value, _depthStencilState))
+            {
+                return;
+            }
+
+            value.Bind(this);
+            _framework.DepthStencilState = value.Framework;
+            _depthStencilState = value;
+        }
     }
 
     public RasterizerState RasterizerState
     {
-        get => new(_framework.RasterizerState);
-        set => _framework.RasterizerState = (value ?? throw new ArgumentNullException(nameof(value))).Framework;
+        get => _rasterizerState;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (ReferenceEquals(value, _rasterizerState))
+            {
+                return;
+            }
+
+            value.Bind(this);
+            _framework.RasterizerState = value.Framework;
+            _rasterizerState = value;
+        }
     }
 
-    public SamplerStateCollection SamplerStates => new(this, vertexStage: false);
+    public SamplerStateCollection SamplerStates => _samplerStates;
 
-    public SamplerStateCollection VertexSamplerStates => new(this, vertexStage: true);
+    public SamplerStateCollection VertexSamplerStates => _vertexSamplerStates;
 
-    public TextureCollection Textures => new(this, vertexStage: false);
+    public TextureCollection Textures => _textures;
 
-    public TextureCollection VertexTextures => new(this, vertexStage: true);
+    public TextureCollection VertexTextures => _vertexTextures;
 
-    /// <summary>Re-typed: <c>Rectangle</c> is a separate struct per namespace. Everything else the
-    /// device gained -- <c>Present</c>, <c>Reset</c>, <c>MultiSampleMask</c>,
-    /// <c>ReferenceStencil</c>, <c>IsDisposed</c>, <c>DrawInstancedPrimitives</c>, the four
-    /// events -- is inherited unchanged, since none of those types diverge.</summary>
+    /// <summary>Re-typed because <c>Rectangle</c> is a separate struct per namespace.</summary>
     public Rectangle ScissorRectangle
     {
         get => _framework.ScissorRectangle.ToCompat();
@@ -464,15 +569,33 @@ public class GraphicsDevice : IDisposable
         int numVertices,
         int startIndex,
         int primitiveCount,
-        int instanceCount) =>
+        int instanceCount)
+    {
+        ThrowIfDisposedForDraw();
+        if (numVertices <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(numVertices));
+        }
+
+        if (primitiveCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(primitiveCount));
+        }
+
+        if (instanceCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(instanceCount));
+        }
+
+        ValidateBoundDrawInputs(indexed: true);
         _framework.DrawInstancedPrimitives(
             (CNA.Graphics.PrimitiveType)(int)primitiveType, baseVertex, minVertexIndex,
             numVertices, startIndex, primitiveCount, instanceCount);
+    }
 
-    /// <summary>Matches real XNA's <c>SetRenderTargets</c>. Re-typed rather than inherited: the
-    /// base takes <c>CNA.Graphics.RenderTargetBinding</c>, and this namespace's own is a separate
-    /// struct (structs cannot be subclassed), so the array is converted element-wise -- the same
-    /// thing this layer does for every array of a type with a conversion operator.</summary>
+    /// <summary>Matches real XNA's <c>SetRenderTargets</c>. The composed backend takes
+    /// <c>CNA.Graphics.RenderTargetBinding</c>, while this namespace's binding is a separate struct,
+    /// so the array is converted element-wise.</summary>
     public void SetRenderTargets(params RenderTargetBinding[]? renderTargets)
     {
         if (renderTargets is null || renderTargets.Length == 0)
@@ -506,7 +629,7 @@ public class GraphicsDevice : IDisposable
     /// type-to-<c>UserVertexSource</c> mapping for this namespace's own vertex structs rather than
     /// forwarding to <see cref="CNA.Graphics.GraphicsDevice.DrawUserPrimitives{T}"/> directly --
     /// compat vertex structs (e.g. <see cref="VertexPositionTexture"/>) are separate types from
-    /// their CNA.Graphics counterparts (structs can't be subclassed to share one), so the base
+    /// their CNA.Graphics counterparts (structs can't be subclassed to share one), so the backend
     /// generic method's own <c>typeof(T) ==</c> checks would never match. Goes through
     /// <see cref="CNA.Graphics.GraphicsDevice.DrawUserPrimitivesRaw"/> instead, the shared
     /// pointer-and-identity level both namespaces build on.
@@ -519,13 +642,19 @@ public class GraphicsDevice : IDisposable
         T[] vertexData,
         int vertexOffset,
         int primitiveCount)
-        where T : struct, IVertexType =>
+        where T : struct, IVertexType
+    {
+        ThrowIfDisposedForDraw();
+        ArgumentNullException.ThrowIfNull(vertexData);
+        VertexDeclaration? declaration = TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null;
         DrawUserPrimitivesCore(
             primitiveType,
             vertexData,
             vertexOffset,
             primitiveCount,
-            TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null);
+            declaration?.Framework,
+            declaration);
+    }
 
     public void DrawUserPrimitives<T>(
         PrimitiveType primitiveType,
@@ -535,9 +664,12 @@ public class GraphicsDevice : IDisposable
         VertexDeclaration vertexDeclaration)
         where T : struct
     {
+        ThrowIfDisposedForDraw();
+        ArgumentNullException.ThrowIfNull(vertexData);
         ArgumentNullException.ThrowIfNull(vertexDeclaration);
         DrawUserPrimitivesCore(
-            primitiveType, vertexData, vertexOffset, primitiveCount, vertexDeclaration.Framework);
+            primitiveType, vertexData, vertexOffset, primitiveCount,
+            vertexDeclaration.Framework, vertexDeclaration);
     }
 
     /// <summary>Matches real XNA's <c>DrawUserIndexedPrimitives&lt;T&gt;</c>. Reimplements the
@@ -552,10 +684,14 @@ public class GraphicsDevice : IDisposable
         int[] indexData,
         int indexOffset,
         int primitiveCount)
-        where T : struct, IVertexType =>
+        where T : struct, IVertexType
+    {
+        ThrowIfDisposedForDraw();
+        VertexDeclaration? declaration = TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null;
         DrawUserIndexedPrimitivesCore(
             primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
-            primitiveCount, TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null);
+            primitiveCount, declaration?.Framework, declaration);
+    }
 
     public void DrawUserIndexedPrimitives<T>(
         PrimitiveType primitiveType,
@@ -565,10 +701,14 @@ public class GraphicsDevice : IDisposable
         short[] indexData,
         int indexOffset,
         int primitiveCount)
-        where T : struct, IVertexType =>
+        where T : struct, IVertexType
+    {
+        ThrowIfDisposedForDraw();
+        VertexDeclaration? declaration = TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null;
         DrawUserIndexedPrimitivesCore(
             primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
-            primitiveCount, TypedVertexSourceFor<T>() is null ? DeclarationFor<T>() : null);
+            primitiveCount, declaration?.Framework, declaration);
+    }
 
     public void DrawUserIndexedPrimitives<T>(
         PrimitiveType primitiveType,
@@ -581,10 +721,12 @@ public class GraphicsDevice : IDisposable
         VertexDeclaration vertexDeclaration)
         where T : struct
     {
+        ThrowIfDisposedForDraw();
+        ValidateIndexedArraysBeforeDeclaration(vertexData, indexData);
         ArgumentNullException.ThrowIfNull(vertexDeclaration);
         DrawUserIndexedPrimitivesCore(
             primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
-            primitiveCount, vertexDeclaration.Framework);
+            primitiveCount, vertexDeclaration.Framework, vertexDeclaration);
     }
 
     public void DrawUserIndexedPrimitives<T>(
@@ -598,10 +740,12 @@ public class GraphicsDevice : IDisposable
         VertexDeclaration vertexDeclaration)
         where T : struct
     {
+        ThrowIfDisposedForDraw();
+        ValidateIndexedArraysBeforeDeclaration(vertexData, indexData);
         ArgumentNullException.ThrowIfNull(vertexDeclaration);
         DrawUserIndexedPrimitivesCore(
             primitiveType, vertexData, vertexOffset, numVertices, indexData, indexOffset,
-            primitiveCount, vertexDeclaration.Framework);
+            primitiveCount, vertexDeclaration.Framework, vertexDeclaration);
     }
 
     private unsafe void DrawUserPrimitivesCore<T>(
@@ -609,10 +753,29 @@ public class GraphicsDevice : IDisposable
         T[] vertexData,
         int vertexOffset,
         int primitiveCount,
-        CNA.Graphics.VertexDeclaration? vertexDeclaration)
+        CNA.Graphics.VertexDeclaration? vertexDeclaration,
+        VertexDeclaration? facadeDeclaration)
         where T : struct
     {
+        ThrowIfDisposedForDraw();
         ArgumentNullException.ThrowIfNull(vertexData);
+        if (primitiveCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(primitiveCount));
+        }
+
+        if (vertexOffset < 0 || vertexOffset >= vertexData.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(vertexOffset));
+        }
+
+        long requiredElements = GetElementCount(primitiveType, primitiveCount);
+        if (requiredElements > vertexData.LongLength - vertexOffset)
+        {
+            throw new ArgumentOutOfRangeException(nameof(primitiveCount));
+        }
+
+        ThrowIfDisposed(facadeDeclaration);
         RejectManagedReferences<T>(nameof(vertexData));
 
         CNA.Graphics.UserVertexSource? typedSource = TypedVertexSourceFor<T>();
@@ -644,12 +807,45 @@ public class GraphicsDevice : IDisposable
         TIndex[] indexData,
         int indexOffset,
         int primitiveCount,
-        CNA.Graphics.VertexDeclaration? vertexDeclaration)
+        CNA.Graphics.VertexDeclaration? vertexDeclaration,
+        VertexDeclaration? facadeDeclaration)
         where TVertex : struct
         where TIndex : struct
     {
-        ArgumentNullException.ThrowIfNull(vertexData);
-        ArgumentNullException.ThrowIfNull(indexData);
+        ThrowIfDisposedForDraw();
+        ValidateIndexedArraysBeforeDeclaration(vertexData, indexData);
+        if (numVertices <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(numVertices));
+        }
+
+        if (primitiveCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(primitiveCount));
+        }
+
+        if (vertexOffset < 0 || vertexOffset >= vertexData.LongLength)
+        {
+            throw new ArgumentOutOfRangeException(nameof(vertexOffset));
+        }
+
+        if (indexOffset < 0 || indexOffset >= indexData.LongLength)
+        {
+            throw new ArgumentOutOfRangeException(nameof(indexOffset));
+        }
+
+        long requiredElements = GetElementCount(primitiveType, primitiveCount);
+        if (requiredElements > indexData.LongLength - indexOffset)
+        {
+            throw new ArgumentOutOfRangeException(nameof(primitiveCount));
+        }
+
+        if ((long)vertexOffset + numVertices > vertexData.LongLength)
+        {
+            throw new ArgumentOutOfRangeException(nameof(vertexData));
+        }
+
+        ThrowIfDisposed(facadeDeclaration);
         RejectManagedReferences<TVertex>(nameof(vertexData));
         RejectManagedReferences<TIndex>(nameof(indexData));
 
@@ -692,11 +888,78 @@ public class GraphicsDevice : IDisposable
         }
     }
 
+    private void ThrowIfDisposedForDraw()
+    {
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(nameof(GraphicsDevice));
+        }
+    }
+
+    private void ThrowIfDisposedForBinding()
+    {
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(nameof(GraphicsDevice));
+        }
+    }
+
+    private static void ThrowIfDisposed(GraphicsResource? resource)
+    {
+        if (resource?.IsDisposed == true)
+        {
+            throw new ObjectDisposedException(resource.GetType().Name);
+        }
+    }
+
+    private void ValidateVertexBuffer(VertexBuffer? vertexBuffer)
+    {
+        ThrowIfDisposedForBinding();
+        ThrowIfDisposed(vertexBuffer);
+        if (vertexBuffer is not null && !ReferenceEquals(vertexBuffer.GraphicsDevice, this))
+        {
+            throw new InvalidOperationException("The vertex buffer was created for a different GraphicsDevice.");
+        }
+    }
+
+    private void ValidateBoundDrawInputs(bool indexed)
+    {
+        if ((indexed && _framework.Indices is null) || !_framework.HasBoundVertexBuffers)
+        {
+            throw new InvalidOperationException("A vertex buffer and, for indexed draws, an index buffer must be bound before drawing.");
+        }
+    }
+
+    private static void ValidateIndexedArraysBeforeDeclaration<TVertex, TIndex>(
+        TVertex[]? vertexData,
+        TIndex[]? indexData)
+    {
+        if (vertexData is null || vertexData.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(vertexData));
+        }
+
+        if (indexData is null || indexData.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(indexData));
+        }
+    }
+
+    private static long GetElementCount(PrimitiveType primitiveType, int primitiveCount) =>
+        primitiveType switch
+        {
+            PrimitiveType.LineList => (long)primitiveCount * 2,
+            PrimitiveType.TriangleList => (long)primitiveCount * 3,
+            PrimitiveType.LineStrip => (long)primitiveCount + 1,
+            PrimitiveType.TriangleStrip => (long)primitiveCount + 2,
+            _ => long.MaxValue,
+        };
+
     /// <summary><see langword="null"/> for a vertex type the ABI does not name directly, which is
     /// a fall-through to the raw-stream route rather than a failure -- see
     /// <see cref="CNA.Graphics.UserVertexSource"/> for the header evidence that the raw route was
     /// never actually blocked.</summary>
-    private static CNA.Graphics.UserVertexSource? TypedVertexSourceFor<T>() where T : struct
+    internal static CNA.Graphics.UserVertexSource? TypedVertexSourceFor<T>() where T : struct
     {
         if (typeof(T) == typeof(VertexPositionColor))
         {
@@ -726,7 +989,7 @@ public class GraphicsDevice : IDisposable
     /// <see cref="VertexDeclaration"/>, which converts implicitly to the CNA one, so a compat
     /// <see cref="IVertexType"/> is read through the compat interface it actually
     /// implements.</summary>
-    private static CNA.Graphics.VertexDeclaration DeclarationFor<T>() where T : struct
+    private static VertexDeclaration DeclarationFor<T>() where T : struct
     {
         if (Activator.CreateInstance<T>() is not IVertexType instance)
         {
@@ -736,6 +999,6 @@ public class GraphicsDevice : IDisposable
                 "VertexPositionTexture and VertexPositionNormalTexture are drawable without one.");
         }
 
-        return instance.VertexDeclaration.Framework;
+        return instance.VertexDeclaration;
     }
 }

@@ -25,7 +25,7 @@ public class SoundEffectInstance : IDisposable
     /// "protected internal raw-handle constructor" pattern <c>Texture2D</c> already uses.</summary>
     protected internal SoundEffectInstance(nint nativeHandleValue)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_sound_effect_instance_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_sound_effect_instance_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary><c>private protected</c> rather than <c>private</c> since Phase 8 WP11b, so

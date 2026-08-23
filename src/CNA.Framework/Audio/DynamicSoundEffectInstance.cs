@@ -137,6 +137,7 @@ public class DynamicSoundEffectInstance : SoundEffectInstance
             // pre-offset pointer -- so the pointer is to element zero, not to `offset`.
             CnaResult result = Native.cna_dynamic_sound_effect_instance_submit_buffer(
                 new CnaHandle(NativeHandleValue), bufferPtr, (ulong)buffer.Length, offset, count);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(SubmitBuffer));
         }
     }

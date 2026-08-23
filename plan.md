@@ -13,10 +13,11 @@ native-platform validation, content fixtures, packaging, and release engineering
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 533 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
-| Native integration | 104/104 passing in Debug and Release on Linux under Xvfb with an ABI 0.6.0 CNA library |
+| Managed tests | 543 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
+| Native integration | 114/114 passing in Debug and Release on Linux under Xvfb with an ABI 0.6.0 CNA library |
 | Compile probe | Identical source passes XNA, CNA, FNA, and MonoGame; Kni fails the XNA `VertexDeclaration : GraphicsResource` assignment |
-| Behavior corpora | 83 deterministic math/geometry + 23 input observations run on CNA, FNA, and MonoGame; identical source compiles against XNA, while a Windows XNA runtime snapshot remains pending |
+| Behavior corpora | 299 observations: 83 math/geometry + 23 input + 153 graphics + 13 resource/lifetime + 27 content-error. Identical source compiles against XNA, CNA, FNA, and MonoGame; CNA and MonoGame execute all 299 on Linux, FNA executes the 133 pure observations plus 118 safe graphics/resource observations and emits 48 deterministic opt-in placeholders, and the Windows XNA snapshot remains pending |
+| Ownership stress | Separate process passes 100/100 cycles in Debug and Release: 50 explicit/double-dispose cycles, 50 finalizer cycles, 10 throwing device-disposal handlers, and complete game teardown/recreation each cycle |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
 | Template | CNA build, generated-project build, and real 60/600-frame CNA runs pass |
@@ -108,18 +109,23 @@ math/geometry and input corpora now provide a cross-engine behavior baseline.
 
 Next work must preserve every zero above. Priorities are now:
 
-1. Execute and archive the 106-observation differential corpus on a Windows XNA 4.0 runtime. CNA,
-   FNA, and MonoGame snapshots are captured; direct XNA source/IL has already adjudicated operation
-   order and edge semantics for the strict expected values, but only Windows can execute the
-   installed XNA C++/CLI assemblies and provide the final runtime snapshot.
-2. Expand differential behavior coverage for graphics state and resource validation, collections,
-   disposal, exceptions, event order, audio/XACT, media, and storage. Deepen the initial input
-   corpus with native polling, dead-zone, packet-number, disconnect, and multi-player scenarios.
-3. Expand managed XNB fixtures and malformed/error-path coverage without changing the exact public
-   contract.
-4. Preserve the checked-in leak-only CI gate and add the full strict zero-diagnostic job where
+1. Execute and archive the 299-observation differential corpus on a Windows XNA 4.0 runtime. CNA
+   and MonoGame execute the complete snapshot on Linux; FNA executes all safe observations and
+   retains deterministic placeholders for 48 process-fatal comparator paths. Direct XNA source/IL
+   has adjudicated implemented behavior, but only Windows can provide the independent runtime
+   snapshot.
+2. Continue graphics behavior work from the exact blockers in
+   [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.md): device-event ordering,
+   cross-device state/resource validation, additional format/mip/rectangle combinations, and the
+   native routes that cannot yet represent XNA behavior.
+3. Expand content fixtures beyond the 27 malformed/error observations into external references,
+   compressed payload variants, built-in reader failures, and stream-ownership cases without
+   changing the exact public contract.
+4. Deepen native input with deterministic polling/injection support before adding CI assertions;
+   cover dead zones, packet numbers, disconnects, focus, wheel state, and multiple players.
+5. Preserve the checked-in leak-only CI gate and add the full strict zero-diagnostic job where
    protected XNA reference artifacts can be supplied legally.
-5. Inventory additional XNA profiles separately; never merge Phone, Xbox, networking, or Content
+6. Inventory additional XNA profiles separately; never merge Phone, Xbox, networking, or Content
    Pipeline types into the completed Windows runtime profile without an authoritative profile.
 
 ### 2. Resource ownership
@@ -128,13 +134,25 @@ The implementation must distinguish owned, borrowed, adopted, and parent-owned n
 `StockEffect.Dispose()` now releases its base reflection handles, fixing a reproduced game-destroy
 failure, and `GameComponent.Dispose()` no longer destroys a native component twice.
 
-Remaining criteria:
+The separate ownership runner now completes 100 cycles in both Debug and Release. Each cycle
+creates a game, exercises textures, buffers, SpriteBatch, SpriteFont atlas ownership, effects and
+parent-owned reflection objects, SoundEffect, media, storage, an adopted `Texture2D.FromStream`
+handle, and a content-managed model graph, then destroys and recreates the game. Even cycles use
+explicit/double disposal; odd cycles abandon resources and force finalization. This found and
+fixed a real leak: service-provider-created `CNA.Content.ContentManager` instances held an owned
+raw handle without a finalizer, preventing the next game from being created. Owned content
+managers now use `NativeResourceHandle`; game-borrowed managers remain non-owning.
 
-- disposal/finalization tests for every native-owning facade family;
-- construct/dispose/reconstruct stress tests, including exception paths;
-- no duplicate wrappers that both own one handle;
-- parent-owned wrappers cannot release their parent resource;
-- shutdown and signal behavior has an explicit tested policy.
+The SafeHandle audit now protects native calls with explicit managed liveness (`GC.KeepAlive`),
+and owner-thread destruction is queued, drained, and retried at game safe points. Regression tests
+cover finalizer deferral, cross-thread disposal, parent-release retry, callback exception
+containment, failed unsubscribe rooting, and XNA-order `GraphicsDevice.Disposing` delivery after
+the disposed state becomes visible. Managed teardown stays in `finally` when a handler throws.
+
+Remaining criteria include authored XACT bank ownership, `VideoPlayer` frame-texture lifetime,
+exception paths not constructible with current assets, long-duration/multithreaded stress beyond
+100 cycles, and an upstream owner-thread pump if handles may outlive every managed `Game` safe
+point.
 
 ## P0 — content compatibility
 
@@ -144,13 +162,23 @@ from `BinaryReader`; abstract and generic `ContentTypeReader` contracts, reader-
 and versioning, shared resources, nested/existing objects, disposable tracking, LZX handling and
 ordinary custom `Content.Load<MyType>()` are implemented.
 
+The pure corpus now has 27 deterministic content-error observations covering invalid magic,
+platform/version/profile, truncated and inconsistent headers/payloads, compression flags, reader
+table activation/version/index failures, shared-resource indices, wrong target type, missing
+assets, reader exceptions, duplicate disposables, cache/root-directory behavior, and unload/dispose
+after failure. The managed path now normalizes truncation to `ContentLoadException`, validates XNB
+headers and reader versions/indices, records duplicate disposable occurrences like XNA, clears
+unload state in `finally`, and remains disposed after an unload exception.
+
 Remaining content work:
 
-1. Expand built-in reader fixtures over uncompressed and LZX XNBs; inventory MonoGame LZ4
-   separately as an extension.
-2. Add differential coverage for external references, stream ownership, malformed reader tables,
-   version mismatches and deterministic exception translation.
-3. Preserve the zero-diagnostic content surface while strengthening the managed reader path.
+1. Expand built-in reader fixtures over additional uncompressed and LZX failures; inventory
+   MonoGame LZ4 separately as an extension.
+2. Deepen the existing external-reference and failed-`OpenStream` disposal observations with
+   nested/missing/path-normalization references and successful-stream ownership; add compressed
+   truncation and partial shared-resource fixtures that require a broader binary fixture builder.
+3. Execute the identical 27 observations on Windows XNA and preserve the zero-diagnostic content
+   surface while adjudicating any differences.
 
 Completion: a user-defined reader/content type loads through unchanged XNA-style source and the
 same fixture produces normalized equivalent results on an available reference implementation.
@@ -169,21 +197,22 @@ same fixture produces normalized equivalent results on an available reference im
 
 ## Behavioral audit
 
-The 2026-08-22 source scan found 0 `NotImplementedException` sites, 36 explicit
+The earlier 2026-08-22 source scan found 0 `NotImplementedException` sites, 36 explicit
 `throw new NotSupportedException` sites, and 2 `TODO` comments (both in the LZX decoder's documented
-reference-compatible edge paths). The unsupported sites include correct read-only collection/
-stream behavior as well as real content/typed-transfer gaps; each still needs contract-specific
-classification rather than a mechanical replacement.
+reference-compatible edge paths). This run added deliberate `NotSupportedException` guards where
+the native ABI cannot represent XNA semantics; the exact active native blockers are classified in
+[`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.md), so raw exception counts are
+not a progress metric.
 
 - Keep searching `TODO`, `FIXME`, unsupported exceptions, fallbacks, constant answers, empty
   methods, and documented deviations.
 - Add golden/differential tests for validation order, exception types, null/range/disposed cases,
   event order, collection mutation, math edge cases, graphics state, content caching, input
   transitions, audio/media state, and lifecycle ordering.
-- Keep alternate-engine results as comparators rather than authorities. The current 83-observation
-  math/geometry and 23-observation input corpora record real FNA/MonoGame differences in arithmetic
-  grouping, matrix/viewport edge cases, color/packed values, containment, curves, hashes, strings,
-  and input-state construction. Actual XNA metadata/source/IL, documentation, and ultimately the
+- Keep alternate-engine results as comparators rather than authorities. The current 299-observation
+  snapshot includes 83 math/geometry, 23 input, 153 graphics, 13 resource/lifetime, and 27
+  content-error observations. FNA's 48 gated graphics paths demonstrate why comparator crashes and
+  exceptions cannot define XNA behavior. Actual XNA metadata/source/IL, documentation, and the
   Windows runtime snapshot decide strict behavior.
 - Preserve strict behavior in `CNA.XnaCompat` even where `CNA.Framework` intentionally differs.
   `CurveKeyCollection.Clone()` now demonstrates this: compat is shallow while the CNA API remains
@@ -197,8 +226,8 @@ corpus, not a percentage inferred from source.
 `tools/coverage` now discovers repositories/libraries relatively or through `CNA_ROOT`,
 `CNA_NATIVE_LIBRARY`, and `CNA_NATIVE_DIR`; ELF, PE, and Mach-O symbol tools are separated. The
 latest header sweep found no declared imports absent from the selected headers and no arity
-mismatches. An older ABI 0.1.0 library was correctly rejected; ABI 0.6.0 passed all 104 integration
-tests.
+mismatches. An older ABI 0.1.0 library was correctly rejected; ABI 0.6.0 passed all 114 integration
+tests in both configurations.
 
 Next criteria:
 
@@ -274,11 +303,24 @@ name change—as a gate failure. CI reference assemblies must be supplied legall
 
 ## Precise upstream CNA requirements
 
-Managed work should continue around these. Do not modify upstream without authorization.
+Managed work should continue around these. Do not modify upstream without authorization. The
+argument shape, observed fallback, and required versioned C ABI for each graphics limitation are
+specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.md). In summary:
 
-- Texture3D: raw region upload already exists and is now used by generic `SetData<T>`; an equivalent
-  raw readback route is still needed for `GetData<T>` beyond Color.
-- TextureCube: general typed/raw per-face write and readback routes are needed beyond Color.
+- `Present(source,destination,window)` needs a versioned descriptor; the current route carries no
+  arguments, so only the all-default tuple is forwarded.
+- Dynamic vertex raw/window uploads need `SetDataOptions`; dynamic index window uploads currently
+  reject non-`None` options. Representable complete typed uploads now forward all three values.
+- Vertex-buffer partial-element strided transfers need independent element-size and buffer-stride
+  scatter/gather fields; complete declaration-sized and contiguous full-byte windows work.
+- Texture2D arbitrary compatible structs, broader backbuffer readback, raw Texture3D readback, and
+  raw per-face TextureCube transfers need format/element-size-aware byte routes.
+- Resource create/destroy callbacks need a stable resource identity and round-trippable tag. The
+  historical managed two-argument thunk did not match the native three-argument callback and could
+  crash immediately; the current managed API safely emits no fake event.
+- Dynamic-buffer `ContentLost` needs real renderer loss/recreation notifications.
+- The selected backend needs XNA-compatible SpriteBatch treatment for unknown sort values and
+  non-finite sprite data, plus compressed DXT texture upload support for the checked font atlas.
 - Dynamic audio: `cna_sound_effect_instance_apply_3d_multi_ext` is now bound and used atomically,
   but the native implementation deliberately rejects listener counts other than one. True
   multi-listener mixing therefore requires an implementation change, not a new ABI entry point.
@@ -298,11 +340,32 @@ dotnet build CNA.sln -c Release
 dotnet test tests/CNA.Framework.Tests/CNA.Framework.Tests.csproj
 dotnet test tests/CNA.XnaCompat.Tests/CNA.XnaCompat.Tests.csproj
 
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
+  xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj -c Debug
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
+  xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj -c Release
+
+dotnet run -c Release --project tests/CNA.XnaCompat.CompileProbe
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
+  XNA_GRAPHICS_PROBE_DRAW_VALIDATION=1 \
+  XNA_GRAPHICS_PROBE_DESTRUCTIVE_LIFECYCLE=1 \
+  XNA_GRAPHICS_PROBE_UNSAFE_CONSTRUCTORS=1 \
+  xvfb-run -a dotnet run -c Release --project tests/CNA.XnaCompat.GraphicsProbe
+
+CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
+  CNA_OWNERSHIP_STRESS_FAMILY=all \
+  xvfb-run -a dotnet run -c Release \
+  --project tests/CNA.OwnershipStress/CNA.OwnershipStress.csproj -- 100
+
 XNA_REFERENCE_PATH=/path/to/xna-reference-assemblies \
   dotnet run --project tools/api-compat -c Release -- --format json
 
 CNA_ROOT=/path/to/cna python3 tools/coverage/sweep.py
+```
 
-CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
-  xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj
+On Windows with XNA 4.0 and the .NET Framework 4.8 developer pack:
+
+```powershell
+.\scripts\Capture-XnaSnapshots.ps1 `
+  -XnaReferencePath 'C:\path\to\XNA\References\Windows\x86'
 ```

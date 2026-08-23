@@ -8,6 +8,7 @@ public class Effect : GraphicsResource
 
     private EffectParameterCollection? _parameters;
     private EffectTechniqueCollection? _techniques;
+    private EffectTechnique? _currentTechnique;
 
     private protected Effect(GraphicsDevice graphicsDevice, CNA.Graphics.Effect inner)
         : base(graphicsDevice)
@@ -18,7 +19,9 @@ public class Effect : GraphicsResource
     }
 
     public Effect(GraphicsDevice graphicsDevice, byte[] effectCode)
-        : this(graphicsDevice, new CNA.Graphics.Effect(graphicsDevice.Framework, effectCode))
+        : this(graphicsDevice, new CNA.Graphics.Effect(
+            (graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice))).Framework,
+            effectCode))
     {
     }
 
@@ -55,11 +58,27 @@ public class Effect : GraphicsResource
 
     public EffectTechnique CurrentTechnique
     {
-        get => new(Inner.CurrentTechnique);
+        get
+        {
+            if (_currentTechnique is not null)
+            {
+                return _currentTechnique;
+            }
+
+            CNA.Graphics.EffectTechnique current = Inner.CurrentTechnique;
+            _currentTechnique = Techniques[current.Name] ?? EffectTechnique.Wrap(current);
+            return _currentTechnique;
+        }
         set
         {
             ArgumentNullException.ThrowIfNull(value);
+            if (ReferenceEquals(value, _currentTechnique))
+            {
+                return;
+            }
+
             Inner.CurrentTechnique = value.Framework;
+            _currentTechnique = value;
         }
     }
 
@@ -74,7 +93,13 @@ public class Effect : GraphicsResource
             return;
         }
 
-        Inner.Dispose();
-        base.Dispose(arg0);
+        try
+        {
+            Inner?.Dispose();
+        }
+        finally
+        {
+            base.Dispose(arg0);
+        }
     }
 }

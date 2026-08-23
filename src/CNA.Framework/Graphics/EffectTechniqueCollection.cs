@@ -6,9 +6,8 @@ namespace CNA.Graphics;
 /// <summary>
 /// Matches real XNA's <c>EffectTechniqueCollection</c>: the techniques of an effect, reached by index or by name.
 ///
-/// A borrowed view over a native collection the effect owns -- see <see cref="EffectTechnique"/>
-/// for the ownership rule. Nothing is cached: <see cref="Count"/> and the indexers each round-trip
-/// to native, so the collection cannot go stale relative to the effect it belongs to.
+/// An owned native collection view. Elements are cached by index because each native lookup mints
+/// another owned handle while XNA exposes stable managed objects.
 /// </summary>
 public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposable
 {
@@ -16,7 +15,7 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
 
     internal EffectTechniqueCollection(CnaHandle handle)
     {
-        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_technique_collection_destroy(new CnaHandle(h)));
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_technique_collection_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
@@ -30,12 +29,10 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
     /// these types SafeHandle ownership is what fixed their leak; it is also what introduced this
     /// hazard, since before that they held a bare handle with no finalizer at all.
     ///
-    /// <see cref="GC.KeepAlive(object)"/> rather than
-    /// <see cref="System.Runtime.InteropServices.SafeHandle.DangerousAddRef"/>/<c>DangerousRelease</c>:
-    /// it closes the reachability hazard, which is the real one here, but it does not make a
-    /// concurrent <c>Dispose</c> from another thread safe. Nothing in this project is thread-safe,
-    /// so that is consistent rather than a new gap -- and the ref-counted form is what
-    /// <c>plan.md</c> WP17 will apply project-wide.
+    /// <see cref="GC.KeepAlive(object)"/> closes the ordinary reachability hazard. In addition,
+    /// <see cref="NativeResourceHandle"/> defers finalizer-thread and cross-thread releases to an
+    /// owner-thread safe point, so an unreachable wrapper cannot destroy this raw handle during a
+    /// native call. This project still does not promise concurrent <c>Dispose</c>/operation safety.
     /// </summary>
     private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
 
@@ -57,25 +54,6 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
     /// index, owned by this collection, released with it.
     /// </summary>
     private readonly Dictionary<int, EffectTechnique> _byIndex = [];
-
-    private int _syntheticKey = -1;
-
-    /// <summary>By-name lookups have no stable index to key on, so each gets its own negative slot.
-    /// They still land in the cache, which is what matters: the collection owns them and releases
-    /// them, rather than leaving a native object for a finalizer that runs too late.</summary>
-    private int NextSyntheticKey() => _syntheticKey--;
-
-    private EffectTechnique Adopt(int key, CnaHandle handle)
-    {
-        if (_byIndex.TryGetValue(key, out EffectTechnique? existing))
-        {
-            return existing;
-        }
-
-        var created = new EffectTechnique(handle);
-        _byIndex[key] = created;
-        return created;
-    }
 
     public void Dispose()
     {
@@ -104,11 +82,22 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
     {
         get
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            if (index < 0 || index >= Count)
+            {
+                return null!;
+            }
+
+            if (_byIndex.TryGetValue(index, out EffectTechnique? existing))
+            {
+                return existing;
+            }
+
             CnaResult result = Native.cna_effect_technique_collection_get_at(_handle, (ulong)index, out CnaHandle element);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectTechniqueCollection));
-            return Adopt(index, element);
+            var created = new EffectTechnique(element);
+            _byIndex[index] = created;
+            return created;
         }
     }
 
@@ -118,17 +107,17 @@ public class EffectTechniqueCollection : IEnumerable<EffectTechnique>, IDisposab
     {
         get
         {
-            ArgumentNullException.ThrowIfNull(name);
+            int count = Count;
+            for (int i = 0; i < count; i++)
+            {
+                EffectTechnique technique = this[i];
+                if (technique.Name == name)
+                {
+                    return technique;
+                }
+            }
 
-            CnaHandle element = default;
-            byte found = 0;
-            CnaResult result = CnaStringMarshal.WithStringView(
-                name, view => Native.cna_effect_technique_collection_find(_handle, view, out found, out element));
-            GC.KeepAlive(this);
-                GC.KeepAlive(this);
-            CnaException.ThrowIfFailed(result, nameof(EffectTechniqueCollection));
-
-            return found != 0 ? Adopt(NextSyntheticKey(), element) : null;
+            return null;
         }
     }
 

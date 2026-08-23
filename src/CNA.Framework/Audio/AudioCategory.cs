@@ -20,7 +20,7 @@ public class AudioCategory : IEquatable<AudioCategory>, IDisposable
 
     internal AudioCategory(nint nativeHandleValue)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_audio_category_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_audio_category_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>

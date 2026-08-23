@@ -4,3 +4,4 @@ using System.Runtime.CompilerServices;
 // project allowed to talk to native code directly. CNA.Framework is the sole consumer.
 [assembly: InternalsVisibleTo("CNA.Framework")]
 [assembly: InternalsVisibleTo("CNA.Interop.Tests")]
+[assembly: InternalsVisibleTo("CNA.Framework.Tests")]

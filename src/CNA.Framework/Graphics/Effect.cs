@@ -68,7 +68,7 @@ public class Effect : IDisposable
             CnaException.ThrowIfFailed(result, nameof(Effect));
         }
 
-        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)));
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
@@ -115,7 +115,7 @@ public class Effect : IDisposable
                     graphicsDevice.ResolveNativeDeviceHandle(), vertexView, fragmentView, out handle)));
 
         CnaException.ThrowIfFailed(result, nameof(Effect));
-        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)));
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
@@ -148,7 +148,7 @@ public class Effect : IDisposable
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         GraphicsDevice = graphicsDevice;
-        _ownedHandle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_effect_destroy(new CnaHandle(h)));
+        _ownedHandle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_effect_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     public GraphicsDevice GraphicsDevice { get; }
@@ -207,6 +207,7 @@ public class Effect : IDisposable
             if (_parameters is null)
             {
                 CnaResult result = Native.cna_effect_get_parameters(NativeEffectHandle, out CnaHandle collection);
+                GC.KeepAlive(this);
                 CnaException.ThrowIfFailed(result, nameof(Parameters));
                 _parameters = new EffectParameterCollection(collection, GraphicsDevice);
             }
@@ -223,6 +224,7 @@ public class Effect : IDisposable
             if (_techniques is null)
             {
                 CnaResult result = Native.cna_effect_get_techniques(NativeEffectHandle, out CnaHandle collection);
+                GC.KeepAlive(this);
                 CnaException.ThrowIfFailed(result, nameof(Techniques));
                 _techniques = new EffectTechniqueCollection(collection);
             }
@@ -241,6 +243,7 @@ public class Effect : IDisposable
             }
 
             CnaResult result = Native.cna_effect_get_current_technique(NativeEffectHandle, out CnaHandle technique);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(CurrentTechnique));
             _currentTechnique = new EffectTechnique(technique);
             return _currentTechnique;
@@ -250,6 +253,7 @@ public class Effect : IDisposable
             ArgumentNullException.ThrowIfNull(value);
             CnaResult result = Native.cna_effect_set_current_technique(NativeEffectHandle, value.NativeHandle);
             GC.KeepAlive(value);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(CurrentTechnique));
 
             // The cached wrapper described the *previous* technique, so it is released rather than

@@ -49,7 +49,7 @@ public class Song : IDisposable, IEquatable<Song>
     /// <see cref="Dispose"/> does.</summary>
     internal Song(CnaHandle handle)
     {
-        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_song_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_song_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     public Song(string fileName, string name = "")
@@ -67,7 +67,7 @@ public class Song : IDisposable, IEquatable<Song>
             fileName, fileNameView => CnaStringMarshal.WithStringView(
                 name, nameView => Native.cna_song_create(CnaAmbientGame.Current, fileNameView, nameView, out handle)));
         CnaException.ThrowIfFailed(result, nameof(Song));
-        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_song_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_song_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     public Song(string fileName, string assetName, int durationMS)
@@ -86,7 +86,7 @@ public class Song : IDisposable, IEquatable<Song>
                 assetName, assetNameView => Native.cna_song_create_with_duration(
                     CnaAmbientGame.Current, fileNameView, assetNameView, durationMS, out handle)));
         CnaException.ThrowIfFailed(result, nameof(Song));
-        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_song_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_song_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>The song's display name -- stored as given, even when empty. (Verified against

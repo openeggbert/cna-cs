@@ -108,9 +108,10 @@ public class RenderTarget2D : Texture2D
     /// <summary>Matches <c>cna_render_target_destroy</c> exactly (<c>render_target.h:277</c>).
     /// <c>internal static</c>, not just this override's body -- see this class's own doc comment
     /// for why CNA.XnaCompat's parallel <c>RenderTarget2D</c> needs to call it directly too.</summary>
-    internal static void ReleaseNativeRenderTarget(nint handleValue) => Native.cna_render_target_destroy(new CnaHandle(handleValue));
+    internal static bool ReleaseNativeRenderTarget(nint handleValue) =>
+        Native.cna_render_target_destroy(new CnaHandle(handleValue)).IsSuccess();
 
-    protected override void ReleaseNative(nint handleValue) => ReleaseNativeRenderTarget(handleValue);
+    protected override bool ReleaseNative(nint handleValue) => ReleaseNativeRenderTarget(handleValue);
 
     /// <summary>Matches <c>cna_render_target_get_info</c> exactly (<c>render_target.h:199</c>) --
     /// <c>texture.h</c>'s/<c>graphics.h</c>'s own texture-info routes don't apply to a render
@@ -124,9 +125,25 @@ public class RenderTarget2D : Texture2D
         return ((int)info.Width, (int)info.Height);
     }
 
-    public override int Width => GetDimensions(NativeHandleValue).Width;
+    public override int Width
+    {
+        get
+        {
+            int value = GetDimensions(NativeHandleValue).Width;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
-    public override int Height => GetDimensions(NativeHandleValue).Height;
+    public override int Height
+    {
+        get
+        {
+            int value = GetDimensions(NativeHandleValue).Height;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     /// <summary>Reads the whole info block. Kept alongside <see cref="GetDimensions"/> rather than
     /// replacing it: most callers want only the two dimensions, and this one exists because
@@ -154,18 +171,50 @@ public class RenderTarget2D : Texture2D
     }
 
     /// <summary>The depth/stencil format this target was created with.</summary>
-    public DepthFormat DepthStencilFormat => (DepthFormat)GetInfo(NativeHandleValue).DepthStencilFormat;
+    public DepthFormat DepthStencilFormat
+    {
+        get
+        {
+            DepthFormat value = (DepthFormat)GetInfo(NativeHandleValue).DepthStencilFormat;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     /// <summary>How many samples this target multisamples with. Zero when it does not.</summary>
-    public int MultiSampleCount => GetInfo(NativeHandleValue).MultiSampleCount;
+    public int MultiSampleCount
+    {
+        get
+        {
+            int value = GetInfo(NativeHandleValue).MultiSampleCount;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     /// <summary>Whether contents survive a device reset or a rebind.</summary>
-    public RenderTargetUsage RenderTargetUsage => (RenderTargetUsage)GetInfo(NativeHandleValue).Usage;
+    public RenderTargetUsage RenderTargetUsage
+    {
+        get
+        {
+            RenderTargetUsage value = (RenderTargetUsage)GetInfo(NativeHandleValue).Usage;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     /// <summary>Whether a device reset has discarded this target's contents. Read from native
     /// (<c>CNA_RenderTargetInfo.content_lost</c>) rather than hardcoded -- the same correction
     /// <see cref="DynamicVertexBuffer.IsContentLost"/> already got.</summary>
-    public bool IsContentLost => GetInfo(NativeHandleValue).ContentLost != 0;
+    public bool IsContentLost
+    {
+        get
+        {
+            bool value = GetInfo(NativeHandleValue).ContentLost != 0;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     /// <summary>
     /// Raised when a device reset discards this target's contents.

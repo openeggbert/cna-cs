@@ -4,16 +4,24 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// <see cref="EffectParameter"/>.</summary>
 public sealed class EffectPass
 {
-    private readonly CNA.Graphics.EffectPass _pass;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        CNA.Graphics.EffectPass,
+        EffectPass> FrameworkFacades = new();
 
-    internal EffectPass(CNA.Graphics.EffectPass pass)
+    private readonly CNA.Graphics.EffectPass _pass;
+    private EffectAnnotationCollection? _annotations;
+
+    private EffectPass(CNA.Graphics.EffectPass pass)
     {
         _pass = pass;
     }
 
+    internal static EffectPass Wrap(CNA.Graphics.EffectPass pass) =>
+        FrameworkFacades.GetValue(pass, static value => new EffectPass(value));
+
     public string Name => _pass.Name;
 
-    public EffectAnnotationCollection Annotations => new(_pass.Annotations);
+    public EffectAnnotationCollection Annotations => _annotations ??= new(_pass.Annotations);
 
     public void Apply() => _pass.Apply();
 }

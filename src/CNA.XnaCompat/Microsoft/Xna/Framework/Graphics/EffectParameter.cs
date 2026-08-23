@@ -10,12 +10,22 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// </summary>
 public sealed class EffectParameter
 {
-    private readonly CNA.Graphics.EffectParameter _parameter;
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        CNA.Graphics.EffectParameter,
+        EffectParameter> FrameworkFacades = new();
 
-    internal EffectParameter(CNA.Graphics.EffectParameter parameter)
+    private readonly CNA.Graphics.EffectParameter _parameter;
+    private EffectParameterCollection? _elements;
+    private EffectParameterCollection? _structureMembers;
+    private EffectAnnotationCollection? _annotations;
+
+    private EffectParameter(CNA.Graphics.EffectParameter parameter)
     {
         _parameter = parameter;
     }
+
+    internal static EffectParameter Wrap(CNA.Graphics.EffectParameter parameter) =>
+        FrameworkFacades.GetValue(parameter, static value => new EffectParameter(value));
 
     public string Name => _parameter.Name;
 
@@ -29,11 +39,12 @@ public sealed class EffectParameter
 
     public EffectParameterType ParameterType => (EffectParameterType)(int)_parameter.ParameterType;
 
-    public EffectParameterCollection Elements => new(_parameter.Elements);
+    public EffectParameterCollection Elements => _elements ??= new(_parameter.Elements);
 
-    public EffectParameterCollection StructureMembers => new(_parameter.StructureMembers);
+    public EffectParameterCollection StructureMembers =>
+        _structureMembers ??= new(_parameter.StructureMembers);
 
-    public EffectAnnotationCollection Annotations => new(_parameter.Annotations);
+    public EffectAnnotationCollection Annotations => _annotations ??= new(_parameter.Annotations);
 
     public bool GetValueBoolean() => _parameter.GetValueBoolean();
 

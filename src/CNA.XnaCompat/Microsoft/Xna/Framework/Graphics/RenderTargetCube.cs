@@ -23,14 +23,9 @@ public class RenderTargetCube : TextureCube, IDynamicGraphicsResource
         DepthFormat preferredDepthFormat,
         int preferredMultiSampleCount,
         RenderTargetUsage usage)
-        : base(graphicsDevice, new CNA.Graphics.RenderTargetCube(
-            graphicsDevice.Framework,
-            size,
-            mipMap,
-            (CNA.Graphics.SurfaceFormat)(int)preferredFormat,
-            (CNA.Graphics.DepthFormat)(int)preferredDepthFormat,
-            preferredMultiSampleCount,
-            (CNA.Graphics.RenderTargetUsage)(int)usage))
+        : base(graphicsDevice, CreateFrameworkRenderTarget(
+            graphicsDevice, size, mipMap, preferredFormat, preferredDepthFormat,
+            preferredMultiSampleCount, usage))
     {
     }
 
@@ -63,4 +58,26 @@ public class RenderTargetCube : TextureCube, IDynamicGraphicsResource
     private EventHandler<EventArgs>? _contentLost;
 
     protected override void Dispose(bool arg0) => base.Dispose(arg0);
+
+    private static CNA.Graphics.RenderTargetCube CreateFrameworkRenderTarget(
+        GraphicsDevice graphicsDevice,
+        int size,
+        bool mipMap,
+        SurfaceFormat preferredFormat,
+        DepthFormat preferredDepthFormat,
+        int preferredMultiSampleCount,
+        RenderTargetUsage usage)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        TextureCube.ValidateSize(size);
+        int selectedMultiSampleCount = preferredMultiSampleCount <= 1 ? 0 : preferredMultiSampleCount;
+        return new CNA.Graphics.RenderTargetCube(
+            graphicsDevice.Framework,
+            size,
+            mipMap,
+            (CNA.Graphics.SurfaceFormat)(int)preferredFormat,
+            (CNA.Graphics.DepthFormat)(int)preferredDepthFormat,
+            selectedMultiSampleCount,
+            (CNA.Graphics.RenderTargetUsage)(int)usage);
+    }
 }

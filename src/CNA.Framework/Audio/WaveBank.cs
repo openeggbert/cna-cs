@@ -41,7 +41,8 @@ public class WaveBank : IDisposable
         _handle = new NativeResourceHandle(waveBank.AsNint, Release);
     }
 
-    private static void Release(nint handleValue) => Native.cna_wave_bank_destroy(new CnaHandle(handleValue));
+    private static bool Release(nint handleValue) =>
+        Native.cna_wave_bank_destroy(new CnaHandle(handleValue)).IsSuccess();
 
     /// <summary>
     /// The native handle, read out of the owning <see cref="NativeResourceHandle"/>. Every caller

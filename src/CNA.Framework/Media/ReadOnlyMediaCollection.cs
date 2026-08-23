@@ -41,13 +41,13 @@ public class ReadOnlyMediaCollection<T> : IDisposable, IEnumerable<T>
         CnaHandle handle,
         CountFunc getCount,
         ElementFunc getAt,
-        Action<CnaHandle> destroy,
+        Func<CnaHandle, CnaResult> destroy,
         Func<CnaHandle, T> wrap)
     {
         _getCount = getCount;
         _getAt = getAt;
         _wrap = wrap;
-        _handle = new NativeResourceHandle(handle.AsNint, h => destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => destroy(new CnaHandle(h)).IsSuccess());
     }
 
     private protected delegate CnaResult CountFunc(CnaHandle collection, out int outCount);

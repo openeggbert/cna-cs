@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CNA.XnaCompat\CNA.XnaCompat.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\CNA.Framework.Tests\assets\xnb\BlenderDefaultCube.xnb"
+          Link="assets\xnb\BlenderDefaultCube.xnb"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

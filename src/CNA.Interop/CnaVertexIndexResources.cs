@@ -83,9 +83,9 @@ internal struct CnaIndexBufferCreateInfo
 
 /// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_IndexBufferTransfer</c>
 /// exactly (<c>index_resources.h:74-87</c>) -- selects an index width, a
-/// <c>CNA_SetDataOptions</c> streaming hint (this project always passes <c>None</c>, matching its
-/// own <c>IndexBuffer</c>'s static -- not dynamic -- usage today), and a window into the *caller's*
-/// own array (<see cref="StartIndex"/>/<see cref="ElementCount"/>); confirmed directly against
+/// <c>CNA_SetDataOptions</c> streaming hint (the strict dynamic-buffer facade forwards all three
+/// XNA values on routes the ABI can represent), and a window into the *caller's* own array
+/// (<see cref="StartIndex"/>/<see cref="ElementCount"/>); confirmed directly against
 /// <c>cnabinding</c> that this stays fully generic for any 2- or 4-byte unmanaged element type,
 /// unlike <see cref="CnaVertexBufferCreateInfo"/>'s sibling -- CNA's own C++ <c>IndexBuffer</c> only
 /// ever stores <c>uint16_t</c> or <c>uint32_t</c> elements, so a width selector is the whole

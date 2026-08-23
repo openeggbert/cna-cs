@@ -31,7 +31,7 @@ public class DirectionalLight
 
     internal DirectionalLight(CnaHandle handle)
     {
-        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_directional_light_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_directional_light_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>Read out of the owning <see cref="NativeResourceHandle"/>; every use below pairs it

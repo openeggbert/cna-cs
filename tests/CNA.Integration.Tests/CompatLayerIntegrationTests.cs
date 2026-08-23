@@ -40,6 +40,18 @@ namespace CnaCs.Integration.Tests.Compat;
 [Collection(global::CNA.Integration.Tests.OwnGameCollection.Name)]
 public class CompatLayerIntegrationTests(ITestOutputHelper output)
 {
+    private struct ManagedReferenceVertex
+    {
+        public ManagedReferenceVertex(Vector3 position, string label)
+        {
+            Position = position;
+            Label = label;
+        }
+
+        public Vector3 Position;
+        public string? Label;
+    }
+
     /// <summary>Runs one frame of a real compat game and surfaces what the body threw.</summary>
     private sealed class CompatProbe(Action<CompatProbe> body) : XnaGame
     {
@@ -172,6 +184,30 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         });
     }
 
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatContent_LoadModelAcceptsXnbRawByteBufferPayloads()
+    {
+        InsideACompatFrame(game =>
+        {
+            game.Content.RootDirectory = Path.Combine(AppContext.BaseDirectory, "assets", "xnb");
+            Model model = game.Content.Load<Model>("BlenderDefaultCube");
+            ModelMeshPart part = model.Meshes[0].MeshParts[0];
+
+            Assert.NotNull(part.VertexBuffer);
+            Assert.NotNull(part.IndexBuffer);
+            Assert.NotNull(part.Effect);
+            Assert.True(part.NumVertices > 0);
+            Assert.True(part.PrimitiveCount > 0);
+
+            // Model XNB readers supply byte[] blobs to generic SetData. This used to interpret
+            // byte count as vertex/index count and fail in native before a model could load.
+            game.Content.Unload();
+            Assert.True(part.VertexBuffer.IsDisposed);
+            Assert.True(part.IndexBuffer.IsDisposed);
+            Assert.True(part.Effect.IsDisposed);
+        });
+    }
+
     /// <summary>Exercises the raw-byte Texture3D ABI route through XNA's generic overload. A
     /// uint is intentionally used for a four-byte Color texel so this cannot fall back to the
     /// managed Color conversion path.</summary>
@@ -269,6 +305,298 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         });
     }
 
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatGraphicsDevice_StateAndCollectionWrappersHaveXnaIdentity()
+    {
+        InsideACompatFrame(game =>
+        {
+            GraphicsDevice device = game.GraphicsDevice;
+
+            Assert.Same(BlendState.Opaque, device.BlendState);
+            Assert.Same(DepthStencilState.Default, device.DepthStencilState);
+            Assert.Same(RasterizerState.CullCounterClockwise, device.RasterizerState);
+            Assert.Same(device, device.BlendState.GraphicsDevice);
+            Assert.Equal("BlendState.Opaque", BlendState.Opaque.Name);
+            Assert.Equal("DepthStencilState.Default", DepthStencilState.Default.Name);
+            Assert.Equal("RasterizerState.CullCounterClockwise", RasterizerState.CullCounterClockwise.Name);
+            Assert.Equal("SamplerState.LinearWrap", SamplerState.LinearWrap.Name);
+            Assert.Throws<InvalidOperationException>(() =>
+                BlendState.Opaque.ColorSourceBlend = Blend.Zero);
+
+            Assert.Same(device.SamplerStates, device.SamplerStates);
+            Assert.Same(device.VertexSamplerStates, device.VertexSamplerStates);
+            Assert.Same(device.Textures, device.Textures);
+            Assert.Same(device.VertexTextures, device.VertexTextures);
+            Assert.Same(SamplerState.LinearWrap, device.SamplerStates[0]);
+
+            using var blend = new BlendState { ColorSourceBlend = Blend.SourceAlpha };
+            device.BlendState = blend;
+            Assert.Same(blend, device.BlendState);
+            Assert.Same(device, blend.GraphicsDevice);
+            Assert.Throws<InvalidOperationException>(() => blend.ColorSourceBlend = Blend.One);
+            device.BlendState = BlendState.Opaque;
+
+            using var sampler = new SamplerState { Filter = TextureFilter.Point };
+            device.SamplerStates[0] = sampler;
+            Assert.Same(sampler, device.SamplerStates[0]);
+            Assert.Throws<InvalidOperationException>(() => sampler.Filter = TextureFilter.Linear);
+            device.SamplerStates[0] = SamplerState.LinearWrap;
+
+            using var texture = new Texture2D(device, 1, 1);
+            TextureCollection first = device.Textures;
+            first[0] = texture;
+            Assert.Same(texture, device.Textures[0]);
+            device.Textures[0] = null;
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatGraphicsResource_DisposingSeesDisposedStateAndFiresOnceAfterHandlerFailure()
+    {
+        InsideACompatFrame(_ =>
+        {
+            var state = new BlendState
+            {
+                Name = "lifecycle-state",
+                Tag = new object(),
+            };
+            object? tag = state.Tag;
+            int calls = 0;
+
+            state.Disposing += (_, _) =>
+            {
+                calls++;
+                Assert.True(state.IsDisposed);
+                throw new InvalidOperationException("handler failure");
+            };
+
+            Assert.Throws<InvalidOperationException>(state.Dispose);
+            Assert.True(state.IsDisposed);
+            Assert.Equal(1, calls);
+
+            state.Dispose();
+            Assert.Equal(1, calls);
+            Assert.Equal("lifecycle-state", state.Name);
+            Assert.Same(tag, state.Tag);
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatGraphicsDevice_PresentOverloadRejectsUnrepresentableArguments()
+    {
+        InsideACompatFrame(game =>
+        {
+            GraphicsDevice device = game.GraphicsDevice;
+
+            Assert.Throws<NotSupportedException>(() =>
+                device.Present(new Rectangle(0, 0, 1, 1), null, IntPtr.Zero));
+            Assert.Throws<NotSupportedException>(() =>
+                device.Present(null, new Rectangle(0, 0, 1, 1), IntPtr.Zero));
+            Assert.Throws<NotSupportedException>(() =>
+                device.Present(null, null, new IntPtr(1)));
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatGraphicsDevice_ResourceEventSubscriptionIsSafeWhileAbiCannotReportWrappers()
+    {
+        InsideACompatFrame(game =>
+        {
+            int created = 0;
+            int destroyed = 0;
+            EventHandler<ResourceCreatedEventArgs> onCreated = (_, _) => created++;
+            EventHandler<ResourceDestroyedEventArgs> onDestroyed = (_, _) => destroyed++;
+
+            game.GraphicsDevice.ResourceCreated += onCreated;
+            game.GraphicsDevice.ResourceDestroyed += onDestroyed;
+            using (var texture = new Texture2D(game.GraphicsDevice, 1, 1))
+            {
+                texture.Name = "resource-event-safety";
+            }
+
+            game.GraphicsDevice.ResourceCreated -= onCreated;
+            game.GraphicsDevice.ResourceDestroyed -= onDestroyed;
+
+            // ABI 0.6 reports only presence/name bytes and cannot identify the actual facade
+            // object required by XNA. The safe fallback is no event, never a null/fake resource or
+            // the former callback-signature crash.
+            Assert.Equal(0, created);
+            Assert.Equal(0, destroyed);
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatTexture_DescriptionRemainsReadableAfterDispose()
+    {
+        InsideACompatFrame(game =>
+        {
+            var texture = new Texture2D(game.GraphicsDevice, 2, 3, false, SurfaceFormat.Color);
+            texture.Dispose();
+
+            Assert.Equal(2, texture.Width);
+            Assert.Equal(3, texture.Height);
+            Assert.Equal(1, texture.LevelCount);
+            Assert.Equal(SurfaceFormat.Color, texture.Format);
+            Assert.Equal(new Rectangle(0, 0, 2, 3), texture.Bounds);
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatSpriteBatch_InvalidOrderPreservesXnaStateMachine()
+    {
+        InsideACompatFrame(game =>
+        {
+            using var texture = new Texture2D(game.GraphicsDevice, 1, 1);
+            texture.SetData([Color.White]);
+            using var batch = new SpriteBatch(game.GraphicsDevice);
+
+            Assert.Throws<InvalidOperationException>(batch.End);
+            Assert.Throws<ArgumentNullException>(() =>
+                batch.Draw(null!, Vector2.Zero, Color.White));
+            Assert.Throws<InvalidOperationException>(() =>
+                batch.Draw(texture, Vector2.Zero, Color.White));
+
+            batch.Begin();
+            Assert.Throws<InvalidOperationException>(batch.Begin);
+            batch.End();
+            Assert.Throws<InvalidOperationException>(() =>
+                batch.Draw(texture, Vector2.Zero, Color.White));
+
+            batch.Begin();
+            batch.End();
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatDynamicBuffers_ForwardSetDataOptionsOrRejectMissingRawRoute()
+    {
+        InsideACompatFrame(game =>
+        {
+            if (!global::CNA.XnaCompat.Extensions.CnaGraphicsDeviceExtensions.SupportsCnaCapability(
+                    game.GraphicsDevice,
+                    global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.ThreeD))
+            {
+                throw Xunit.Sdk.SkipException.ForSkip("The active renderer does not support 3D buffers.");
+            }
+
+            var vertices = new[]
+            {
+                new VertexPositionColor(Vector3.Zero, Color.Red),
+                new VertexPositionColor(Vector3.UnitX, Color.Green),
+                new VertexPositionColor(Vector3.UnitY, Color.Blue),
+            };
+            using var vertexBuffer = new DynamicVertexBuffer(
+                game.GraphicsDevice,
+                VertexPositionColor.VertexDeclaration,
+                vertices.Length,
+                BufferUsage.None);
+
+            vertexBuffer.SetData(vertices, 0, vertices.Length, SetDataOptions.Discard);
+            vertexBuffer.SetData(vertices, 0, vertices.Length, SetDataOptions.NoOverwrite);
+            var vertexReadback = new VertexPositionColor[vertices.Length];
+            vertexBuffer.GetData(vertexReadback);
+            Assert.Equal(vertices[1].Position, vertexReadback[1].Position);
+
+            Assert.Throws<NotSupportedException>(() => vertexBuffer.SetData(
+                VertexPositionColor.VertexDeclaration.VertexStride,
+                vertices,
+                0,
+                1,
+                VertexPositionColor.VertexDeclaration.VertexStride,
+                SetDataOptions.NoOverwrite));
+
+            using var indexBuffer = new DynamicIndexBuffer(
+                game.GraphicsDevice,
+                IndexElementSize.SixteenBits,
+                3,
+                BufferUsage.None);
+            ushort[] indices = [0, 1, 2];
+            indexBuffer.SetData(indices, 0, indices.Length, SetDataOptions.None);
+            indexBuffer.SetData(indices, 0, indices.Length, SetDataOptions.Discard);
+            indexBuffer.SetData(indices, 0, indices.Length, SetDataOptions.NoOverwrite);
+            Assert.Throws<NotSupportedException>(() =>
+                indexBuffer.SetData(2, new ushort[] { 7 }, 0, 1, SetDataOptions.NoOverwrite));
+            indexBuffer.SetData(2, new ushort[] { 7 }, 0, 1, SetDataOptions.None);
+
+            var indexReadback = new ushort[3];
+            indexBuffer.GetData(indexReadback);
+            Assert.Equal((ushort)7, indexReadback[1]);
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatGraphicsDevice_DrawValidationMatchesXnaBeforeNativeDispatch()
+    {
+        InsideACompatFrame(game =>
+        {
+            GraphicsDevice device = game.GraphicsDevice;
+            var vertices = new[]
+            {
+                new VertexPositionColor(Vector3.Zero, Color.Red),
+                new VertexPositionColor(Vector3.UnitX, Color.Green),
+                new VertexPositionColor(Vector3.UnitY, Color.Blue),
+            };
+            short[] indices = [0, 1, 2];
+
+            Assert.Equal("vertexData", Assert.Throws<ArgumentNullException>(() =>
+                device.DrawUserPrimitives(
+                    PrimitiveType.TriangleList, (VertexPositionColor[])null!, 0, 1)).ParamName);
+            Assert.Equal("vertexOffset", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawUserPrimitives(
+                    PrimitiveType.TriangleList, new VertexPositionColor[0], 0, 1)).ParamName);
+            Assert.Equal("primitiveCount", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawUserPrimitives(
+                    PrimitiveType.TriangleList, vertices, 1, 1)).ParamName);
+
+            Assert.Equal("vertexData", Assert.Throws<ArgumentNullException>(() =>
+                device.DrawUserIndexedPrimitives(
+                    PrimitiveType.TriangleList, new VertexPositionColor[0], 0, 3,
+                    indices, 0, 1)).ParamName);
+            Assert.Equal("indexData", Assert.Throws<ArgumentNullException>(() =>
+                device.DrawUserIndexedPrimitives(
+                    PrimitiveType.TriangleList, vertices, 0, 3,
+                    Array.Empty<short>(), 0, 1)).ParamName);
+            Assert.Equal("numVertices", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawUserIndexedPrimitives(
+                    PrimitiveType.TriangleList, vertices, 0, 0, indices, 0, 1)).ParamName);
+            Assert.Equal("primitiveCount", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawUserIndexedPrimitives(
+                    PrimitiveType.TriangleList, vertices, 0, 3, new short[2], 0, 1)).ParamName);
+            Assert.Equal("vertexData", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawUserIndexedPrimitives(
+                    PrimitiveType.TriangleList, vertices, 1, 3, indices, 0, 1)).ParamName);
+
+            using var declaration = new VertexDeclaration(
+                16,
+                new VertexElement(
+                    0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0));
+            var managedVertices = new[]
+            {
+                new ManagedReferenceVertex(Vector3.Zero, "a"),
+                new ManagedReferenceVertex(Vector3.UnitX, "b"),
+                new ManagedReferenceVertex(Vector3.UnitY, "c"),
+            };
+            ArgumentException managedReference = Assert.Throws<ArgumentException>(() =>
+                device.DrawUserPrimitives(
+                    PrimitiveType.TriangleList, managedVertices, 0, 1, declaration));
+            Assert.Equal("vertexData", managedReference.ParamName);
+
+            Assert.Equal("primitiveCount", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawPrimitives(PrimitiveType.TriangleList, 0, 0)).ParamName);
+            Assert.Equal("numVertices", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawIndexedPrimitives(
+                    PrimitiveType.TriangleList, 0, 0, 0, 0, 1)).ParamName);
+            Assert.Equal("instanceCount", Assert.Throws<ArgumentOutOfRangeException>(() =>
+                device.DrawInstancedPrimitives(
+                    PrimitiveType.TriangleList, 0, 0, 3, 0, 1, 0)).ParamName);
+
+            using var effect = new BasicEffect(device);
+            effect.CurrentTechnique.Passes[0].Apply();
+            Assert.Throws<InvalidOperationException>(() =>
+                device.DrawPrimitives(PrimitiveType.TriangleList, 0, 1));
+        });
+    }
+
     /// <summary>Compat input, whose Keys and Buttons enums are duplicated per namespace and must
     /// stay numerically identical to the CNA ones for any of this to work.</summary>
     [global::CNA.Integration.Tests.NativeFact]
@@ -307,6 +635,50 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
 
             using Effect clone = effect.Clone();
             Assert.IsAssignableFrom<BasicEffect>(clone);
+        });
+    }
+
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatEffectReflection_ReturnsStableWrappersWithoutOwnedHandleChurn()
+    {
+        InsideACompatFrame(game =>
+        {
+            using var effect = new BasicEffect(game.GraphicsDevice);
+
+            Assert.Same(effect.Parameters, effect.Parameters);
+            Assert.Same(effect.Techniques, effect.Techniques);
+
+            EffectTechnique technique = effect.CurrentTechnique;
+            Assert.Same(technique, effect.CurrentTechnique);
+            Assert.Same(technique, effect.Techniques[technique.Name]);
+            Assert.Same(technique.Passes, technique.Passes);
+            Assert.Same(technique.Annotations, technique.Annotations);
+            Assert.Null(effect.Techniques[-1]);
+            Assert.Null(effect.Techniques[(string)null!]);
+
+            EffectPass pass = technique.Passes[0];
+            Assert.Same(pass, technique.Passes[0]);
+            Assert.Same(pass, technique.Passes[pass.Name]);
+            Assert.Same(pass.Annotations, pass.Annotations);
+            Assert.Null(technique.Passes[-1]);
+
+            if (effect.Parameters.Count > 0)
+            {
+                EffectParameter parameter = effect.Parameters[0];
+                Assert.Same(parameter, effect.Parameters[0]);
+                Assert.Same(parameter, effect.Parameters[parameter.Name]);
+                Assert.Same(parameter.Elements, parameter.Elements);
+                Assert.Same(parameter.StructureMembers, parameter.StructureMembers);
+                Assert.Same(parameter.Annotations, parameter.Annotations);
+                Assert.Null(effect.Parameters[-1]);
+                Assert.Null(effect.Parameters[(string)null!]);
+            }
+
+            for (int i = 0; i < 256; i++)
+            {
+                Assert.Same(technique, effect.CurrentTechnique);
+                Assert.Same(pass, technique.Passes[0]);
+            }
         });
     }
 

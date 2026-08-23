@@ -55,7 +55,7 @@ public abstract class Texture : GraphicsResource
     /// <c>cna_texturecube_destroy</c>, <c>cna_render_target_destroy</c>) -- there is no shared
     /// <c>cna_texture_destroy</c>, so this stays abstract rather than defaulting to the 2D
     /// one.</summary>
-    protected abstract void ReleaseNative(nint handleValue);
+    protected abstract bool ReleaseNative(nint handleValue);
 
     /// <summary>Number of mipmap levels. See this class's own doc comment for why this reads
     /// through to native on every access.</summary>

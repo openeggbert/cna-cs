@@ -54,6 +54,11 @@ public class ContentManager : IDisposable
         {
             ArgumentNullException.ThrowIfNull(value);
             ThrowIfDisposed();
+            if (_loadedAssets.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "The content root directory cannot be changed after an asset has been loaded.");
+            }
 
             _rootDirectory = value;
             if (_backend is not null)
@@ -75,9 +80,15 @@ public class ContentManager : IDisposable
         ThrowIfDisposed();
 
         string key = assetName.Replace('\\', '/');
-        if (_loadedAssets.TryGetValue(key, out object? cached) && cached is T typed)
+        if (_loadedAssets.TryGetValue(key, out object? cached))
         {
-            return typed;
+            if (cached is T typed)
+            {
+                return typed;
+            }
+
+            throw new ContentLoadException(
+                $"Content asset '{assetName}' was already loaded as {cached.GetType()}, not {typeof(T)}.");
         }
 
         T result = ReadAsset<T>(assetName, RecordDisposableObject);
@@ -89,14 +100,22 @@ public class ContentManager : IDisposable
     {
         ThrowIfDisposed();
 
-        foreach (IDisposable disposable in _disposableAssets)
+        try
         {
-            disposable.Dispose();
-        }
+            foreach (IDisposable disposable in _disposableAssets)
+            {
+                disposable.Dispose();
+            }
 
-        _disposableAssets.Clear();
-        _loadedAssets.Clear();
-        _backend?.Unload();
+            _backend?.Unload();
+        }
+        finally
+        {
+            // XNA clears both collections even when one disposable throws. This prevents a later
+            // Unload from disposing the same prefix again and leaves the manager reusable.
+            _disposableAssets.Clear();
+            _loadedAssets.Clear();
+        }
     }
 
     public void Dispose()
@@ -112,20 +131,30 @@ public class ContentManager : IDisposable
             return;
         }
 
-        if (disposing)
+        try
         {
-            // Unload before setting the disposed flag because Unload deliberately validates it.
-            Unload();
+            if (disposing)
+            {
+                // Unload before setting the disposed flag because Unload deliberately validates it.
+                Unload();
+            }
         }
-
-        _disposed = true;
-
-        if (_ownsBackend)
+        finally
         {
-            _backend?.Dispose();
-        }
+            _disposed = true;
 
-        _backend = null;
+            try
+            {
+                if (_ownsBackend)
+                {
+                    _backend?.Dispose();
+                }
+            }
+            finally
+            {
+                _backend = null;
+            }
+        }
     }
 
     protected virtual Stream OpenStream(string assetName)
@@ -154,8 +183,9 @@ public class ContentManager : IDisposable
 
         try
         {
+            bool managedXnb = !IsNativeBackedBuiltIn(typeof(T));
             T result = LoadCore<T>(assetName, recordDisposableObject);
-            if (result is IDisposable disposable)
+            if (!managedXnb && result is IDisposable disposable)
             {
                 recordDisposableObject?.Invoke(disposable);
             }
@@ -294,10 +324,9 @@ public class ContentManager : IDisposable
 
     private void RecordDisposableObject(IDisposable disposable)
     {
-        if (!_disposableAssets.Contains(disposable))
-        {
-            _disposableAssets.Add(disposable);
-        }
+        // XNA records every reader result independently. If a malformed/custom reader returns the
+        // same IDisposable for two object records, Unload consequently calls Dispose twice.
+        _disposableAssets.Add(disposable);
     }
 
     private void ThrowIfDisposed()

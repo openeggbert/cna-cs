@@ -1,20 +1,13 @@
 namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>
-/// XNA 4.0-compatible <c>VertexBuffer</c>. <c>SetData</c>/<c>GetData</c>/<c>VertexCount</c>/
-/// <c>Dispose</c> are inherited unchanged from <see cref="CNA.Graphics.VertexBuffer"/> --
-/// <c>SetData&lt;T&gt;</c>/<c>GetData&lt;T&gt;</c> operate purely on the caller's own generic
-/// type parameter, so no compat-type crossing happens inside them at all. <c>VertexDeclaration</c>
-/// and <c>BufferUsage</c> both need `new` overrides, same reason <c>SoundEffectInstance.State</c>
-/// and <c>VertexBuffer</c>'s sibling types elsewhere in this codebase do.
+/// XNA 4.0-compatible <c>VertexBuffer</c>. It uses composition: transfer calls and scalar
+/// properties forward to one <see cref="CNA.Graphics.VertexBuffer"/>, while this facade preserves
+/// XNA's own <see cref="GraphicsResource"/> inheritance and namespace-local
+/// <see cref="VertexDeclaration"/> type.
 ///
-/// Not independently testable, including the new <c>Type</c>-taking constructor added alongside
-/// <see cref="CNA.Graphics.VertexBuffer"/>'s own: this compat <c>GraphicsDevice</c>'s only
-/// constructor is <c>protected internal</c>, and unlike the base layer's own test project,
-/// <c>CNA.XnaCompat.Tests</c> has no <c>InternalsVisibleTo</c> grant to reach it (this project has
-/// no <c>AssemblyInfo.cs</c> of its own -- discovered, not newly introduced, by an earlier session
-/// entry). No compat <c>GraphicsDevice</c> instance can be constructed here at all, so nothing
-/// requiring one -- this type included -- can be exercised from that test project.
+/// Device-backed behavior is covered by the native integration and graphics behavior probes; the
+/// managed-only unit project intentionally cannot construct a compat <c>GraphicsDevice</c>.
 /// </summary>
 public class VertexBuffer : GraphicsResource
 {
@@ -43,6 +36,7 @@ public class VertexBuffer : GraphicsResource
         bool dynamic)
         : base(graphicsDevice)
     {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
         _vertexDeclaration = vertexDeclaration;
         _frameworkBuffer = new CNA.Graphics.VertexBuffer(
             graphicsDevice.Framework,
@@ -95,7 +89,7 @@ public class VertexBuffer : GraphicsResource
 
         Exception? pending = DisposeHook?.Invoke();
         DisposeHook = null;
-        _frameworkBuffer.Dispose();
+        _frameworkBuffer?.Dispose();
         base.Dispose(arg0);
         if (pending is not null)
         {

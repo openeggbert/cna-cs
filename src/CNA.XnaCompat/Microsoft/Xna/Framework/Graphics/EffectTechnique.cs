@@ -5,16 +5,26 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// subclass.</summary>
 public sealed class EffectTechnique
 {
-    internal EffectTechnique(CNA.Graphics.EffectTechnique technique)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        CNA.Graphics.EffectTechnique,
+        EffectTechnique> FrameworkFacades = new();
+
+    private EffectPassCollection? _passes;
+    private EffectAnnotationCollection? _annotations;
+
+    private EffectTechnique(CNA.Graphics.EffectTechnique technique)
     {
         Framework = technique;
     }
+
+    internal static EffectTechnique Wrap(CNA.Graphics.EffectTechnique technique) =>
+        FrameworkFacades.GetValue(technique, static value => new EffectTechnique(value));
 
     internal CNA.Graphics.EffectTechnique Framework { get; }
 
     public string Name => Framework.Name;
 
-    public EffectPassCollection Passes => new(Framework.Passes);
+    public EffectPassCollection Passes => _passes ??= new(Framework.Passes);
 
-    public EffectAnnotationCollection Annotations => new(Framework.Annotations);
+    public EffectAnnotationCollection Annotations => _annotations ??= new(Framework.Annotations);
 }

@@ -20,33 +20,39 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// </summary>
 public class Texture2D : Texture
 {
+    private readonly int _width;
+    private readonly int _height;
+
     public Texture2D(GraphicsDevice graphicsDevice, int width, int height)
-        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice.Framework, width, height))
+        : this(graphicsDevice, CreateFrameworkTexture(graphicsDevice, width, height, false, SurfaceFormat.Color))
     {
     }
 
     public Texture2D(GraphicsDevice graphicsDevice, int width, int height, bool mipMap, SurfaceFormat format)
-        : this(graphicsDevice, new CNA.Graphics.Texture2D(
-            graphicsDevice.Framework, width, height, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
+        : this(graphicsDevice, CreateFrameworkTexture(graphicsDevice, width, height, mipMap, format))
     {
     }
 
     /// <summary>Wraps an already-loaded native handle -- used by <c>ContentManager</c>.</summary>
     internal Texture2D(GraphicsDevice graphicsDevice, nint nativeHandleValue)
-        : this(graphicsDevice, new CNA.Graphics.Texture2D(graphicsDevice.Framework, nativeHandleValue))
+        : this(graphicsDevice, new CNA.Graphics.Texture2D(
+            (graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice))).Framework,
+            nativeHandleValue))
     {
     }
 
     internal Texture2D(GraphicsDevice graphicsDevice, CNA.Graphics.Texture2D frameworkTexture)
         : base(graphicsDevice, frameworkTexture)
     {
+        _width = frameworkTexture.Width;
+        _height = frameworkTexture.Height;
     }
 
     private CNA.Graphics.Texture2D FrameworkTexture2D => (CNA.Graphics.Texture2D)FrameworkTexture;
 
-    public int Width => FrameworkTexture2D.Width;
+    public int Width => _width;
 
-    public int Height => FrameworkTexture2D.Height;
+    public int Height => _height;
 
     protected override void Dispose(bool arg0)
     {
@@ -70,6 +76,7 @@ public class Texture2D : Texture
     public void SetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
         where T : struct
     {
+        ValidateTransfer(level, rect, data, startIndex, elementCount);
         CNA.Graphics.Texture2D.SetDataFrom(
             NativeHandleValue,
             CompatTextureDataType.Of<T>(),
@@ -78,11 +85,12 @@ public class Texture2D : Texture
             data,
             startIndex,
             elementCount);
+        GC.KeepAlive(this);
     }
 
     /// <summary>
-    /// Reads texels back. Re-typed rather than inherited, because this type derives from *this*
-    /// namespace's <see cref="Texture"/> and not from <c>CNA.Graphics.Texture2D</c>.
+    /// Reads texels back through the composed CNA texture while preserving this namespace's own
+    /// <see cref="Texture"/> hierarchy and value types.
     ///
     /// <b>Absent until the compat layer was first run against the library.</b> GetData was
     /// implemented on the CNA layer and never offered here, so a ported game -- which uses this
@@ -109,7 +117,7 @@ public class Texture2D : Texture
     public void GetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
         where T : struct
     {
-        ArgumentNullException.ThrowIfNull(data);
+        ValidateTransfer(level, rect, data, startIndex, elementCount);
 
         CNA.Rectangle? converted = rect is { } r ? new CNA.Rectangle(r.X, r.Y, r.Width, r.Height) : null;
 
@@ -117,13 +125,13 @@ public class Texture2D : Texture
             NativeHandleValue, (CNA.Graphics.SurfaceFormat)(int)Format,
             CompatTextureDataType.Of<T>(), level, converted,
             data, startIndex, elementCount);
+        GC.KeepAlive(this);
     }
 
     /// <summary>Matches real XNA's <c>Texture2D.FromStream</c>, re-typed to this namespace's own
-    /// <see cref="GraphicsDevice"/> and <see cref="Texture2D"/>. Cannot forward to the base
-    /// factory: that one builds a <c>CNA.Graphics.Texture2D</c>, and a compat texture is a separate
-    /// class -- so it goes through the same <c>protected internal</c> raw-handle constructor
-    /// <c>ContentManager</c> uses.</summary>
+    /// <see cref="GraphicsDevice"/> and <see cref="Texture2D"/>. The backend factory builds a
+    /// <c>CNA.Graphics.Texture2D</c>, so ownership is transferred into the strict facade through the
+    /// same raw-handle constructor <c>ContentManager</c> uses.</summary>
     public static Texture2D FromStream(GraphicsDevice graphicsDevice, Stream stream)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
@@ -154,4 +162,129 @@ public class Texture2D : Texture
     /// derives from its own namespace's texture base rather than from
     /// <c>CNA.Graphics.Texture2D</c>, so there is nothing to hide.</summary>
     public Rectangle Bounds => new(0, 0, Width, Height);
+
+    internal static void ValidateDimensions(int width, int height)
+    {
+        if (width <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(width));
+        }
+
+        if (height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(height));
+        }
+    }
+
+    private static CNA.Graphics.Texture2D CreateFrameworkTexture(
+        GraphicsDevice graphicsDevice, int width, int height, bool mipMap, SurfaceFormat format)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ValidateDimensions(width, height);
+        if (!Enum.IsDefined(format))
+        {
+            throw new NotSupportedException($"The surface format value {(int)format} is not supported.");
+        }
+
+        return new CNA.Graphics.Texture2D(
+            graphicsDevice.Framework, width, height, mipMap, (CNA.Graphics.SurfaceFormat)(int)format);
+    }
+
+    private void ValidateTransfer<T>(
+        int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
+
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
+
+        if ((uint)level >= (uint)LevelCount)
+        {
+            throw new InvalidOperationException("The mip level is invalid for this texture.");
+        }
+
+        ValidateDataWindow(data.Length, startIndex, elementCount);
+
+        int mipWidth = Math.Max(1, Width >> level);
+        int mipHeight = Math.Max(1, Height >> level);
+        int transferWidth = mipWidth;
+        int transferHeight = mipHeight;
+        if (rect is { } region)
+        {
+            if (region.X < 0 || region.Y < 0 || region.Width <= 0 || region.Height <= 0 ||
+                (long)region.X + region.Width > mipWidth ||
+                (long)region.Y + region.Height > mipHeight)
+            {
+                throw new ArgumentException("The rectangle is outside the texture level.", nameof(rect));
+            }
+
+            transferWidth = region.Width;
+            transferHeight = region.Height;
+        }
+
+        ValidateTransferSize<T>(Format, transferWidth, transferHeight, 1, elementCount);
+    }
+
+    internal static void ValidateDataWindow(int dataLength, int startIndex, int elementCount)
+    {
+        if (startIndex < 0 || startIndex > dataLength)
+        {
+            throw new ArgumentOutOfRangeException("dataIndex");
+        }
+
+        if ((long)elementCount + startIndex > dataLength || elementCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(elementCount));
+        }
+    }
+
+    internal static void ValidateTransferSize<T>(
+        SurfaceFormat format, int width, int height, int depth, int elementCount)
+        where T : struct
+    {
+        int elementSize = System.Runtime.InteropServices.Marshal.SizeOf<T>();
+        int formatSize = GetFormatSize(format);
+        if (elementSize != formatSize && (formatSize <= elementSize || formatSize % elementSize != 0))
+        {
+            throw new ArgumentException("The element size is incompatible with the surface format.");
+        }
+
+        long expectedBytes;
+        if (format is SurfaceFormat.Dxt1 or SurfaceFormat.Dxt3 or SurfaceFormat.Dxt5)
+        {
+            int blockBytes = format == SurfaceFormat.Dxt1 ? 8 : 16;
+            expectedBytes = (long)((width + 3) >> 2) * ((height + 3) >> 2) * blockBytes * depth;
+        }
+        else
+        {
+            expectedBytes = (long)width * height * depth * formatSize;
+        }
+
+        if ((long)elementSize * elementCount != expectedBytes)
+        {
+            throw new ArgumentException("The element count does not match the requested texture region.");
+        }
+    }
+
+    private static int GetFormatSize(SurfaceFormat format) => format switch
+    {
+        SurfaceFormat.Alpha8 => 1,
+        SurfaceFormat.Bgr565 or SurfaceFormat.Bgra5551 or SurfaceFormat.Bgra4444 or
+            SurfaceFormat.NormalizedByte2 or SurfaceFormat.HalfSingle => 2,
+        SurfaceFormat.Color or SurfaceFormat.NormalizedByte4 or SurfaceFormat.Rgba1010102 or
+            SurfaceFormat.Rg32 or SurfaceFormat.Single or SurfaceFormat.HalfVector2 => 4,
+        SurfaceFormat.Rgba64 or SurfaceFormat.Vector2 or SurfaceFormat.HalfVector4 or
+            SurfaceFormat.HdrBlendable => 8,
+        SurfaceFormat.Vector4 => 16,
+        SurfaceFormat.Dxt1 => 8,
+        SurfaceFormat.Dxt3 or SurfaceFormat.Dxt5 => 16,
+        _ => throw new NotSupportedException($"The surface format value {(int)format} is not supported."),
+    };
 }

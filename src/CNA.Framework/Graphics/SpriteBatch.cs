@@ -15,9 +15,7 @@ namespace CNA.Graphics;
 /// <c>Draw</c>-before-<see cref="Begin()"/>, <see cref="End"/>-before-<see cref="Begin()"/>, and
 /// calling <see cref="Begin()"/> twice without an intervening <see cref="End"/> all now throw
 /// <see cref="InvalidOperationException"/>, matching real XNA/MonoGame's own behavior there
-/// (message text recalled from memory, not independently verified against a live binary or
-/// decompiled source -- flagged the same way this session flags other recalled-not-verified
-/// details, e.g. the rare <c>Keys</c> ordinals).
+/// using the same validation order as XNA's implementation.
 ///
 /// Despite all of the above being pure managed logic, still not independently testable: unlike
 /// <see cref="GraphicsDevice"/>/<see cref="Texture2D"/>, <see cref="SpriteBatch"/> has no
@@ -60,7 +58,7 @@ public class SpriteBatch : IDisposable
         CnaResult result = Native.cna_sprite_batch_create(graphicsDevice.ResolveNativeDeviceHandle(), out CnaHandle handle);
         CnaException.ThrowIfFailed(result, nameof(SpriteBatch));
 
-        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_sprite_batch_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_sprite_batch_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     private nint NativeHandleValue => _handle.DangerousGetHandle();
@@ -85,8 +83,8 @@ public class SpriteBatch : IDisposable
     /// Matches real XNA's five-argument <c>Begin</c>.
     ///
     /// A <see langword="null"/> state means "the canonical default for that slot" -- AlphaBlend,
-    /// LinearClamp, and so on -- which is both what XNA documents and what the ABI's own null
-    /// pointer selects, so nothing has to be substituted here.
+    /// LinearClamp, DepthStencilState.None, or CullCounterClockwise. The current native converter
+    /// rejects null descriptor pointers, so this layer supplies those four descriptors explicitly.
     /// </summary>
     public unsafe void Begin(
         SpriteSortMode sortMode,
@@ -97,18 +95,22 @@ public class SpriteBatch : IDisposable
     {
         BeginGuard();
 
-        CnaBlendState blend = blendState?.ToNative() ?? default;
-        CnaSamplerState sampler = samplerState?.ToNative() ?? default;
-        CnaDepthStencilState depthStencil = depthStencilState?.ToNative() ?? default;
-        CnaRasterizerState rasterizer = rasterizerState?.ToNative() ?? default;
+        BlendState effectiveBlend = blendState ?? BlendState.AlphaBlend;
+        SamplerState effectiveSampler = samplerState ?? SamplerState.LinearClamp;
+        DepthStencilState effectiveDepthStencil = depthStencilState ?? DepthStencilState.None;
+        RasterizerState effectiveRasterizer = rasterizerState ?? RasterizerState.CullCounterClockwise;
+        CnaBlendState blend = effectiveBlend.ToNative();
+        CnaSamplerState sampler = effectiveSampler.ToNative();
+        CnaDepthStencilState depthStencil = effectiveDepthStencil.ToNative();
+        CnaRasterizerState rasterizer = effectiveRasterizer.ToNative();
 
         CnaResult result = Native.cna_sprite_batch_begin_with_states(
             new CnaHandle(NativeHandleValue),
             (uint)sortMode,
-            blendState is null ? null : &blend,
-            samplerState is null ? null : &sampler,
-            depthStencilState is null ? null : &depthStencil,
-            rasterizerState is null ? null : &rasterizer);
+            &blend,
+            &sampler,
+            &depthStencil,
+            &rasterizer);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Begin));
 
@@ -139,19 +141,23 @@ public class SpriteBatch : IDisposable
     {
         BeginGuard();
 
-        CnaBlendState blend = blendState?.ToNative() ?? default;
-        CnaSamplerState sampler = samplerState?.ToNative() ?? default;
-        CnaDepthStencilState depthStencil = depthStencilState?.ToNative() ?? default;
-        CnaRasterizerState rasterizer = rasterizerState?.ToNative() ?? default;
+        BlendState effectiveBlend = blendState ?? BlendState.AlphaBlend;
+        SamplerState effectiveSampler = samplerState ?? SamplerState.LinearClamp;
+        DepthStencilState effectiveDepthStencil = depthStencilState ?? DepthStencilState.None;
+        RasterizerState effectiveRasterizer = rasterizerState ?? RasterizerState.CullCounterClockwise;
+        CnaBlendState blend = effectiveBlend.ToNative();
+        CnaSamplerState sampler = effectiveSampler.ToNative();
+        CnaDepthStencilState depthStencil = effectiveDepthStencil.ToNative();
+        CnaRasterizerState rasterizer = effectiveRasterizer.ToNative();
         CnaMatrix transform = transformMatrix?.ToNative() ?? default;
 
         CnaResult result = Native.cna_sprite_batch_begin_with_effect(
             new CnaHandle(NativeHandleValue),
             (uint)sortMode,
-            blendState is null ? null : &blend,
-            samplerState is null ? null : &sampler,
-            depthStencilState is null ? null : &depthStencil,
-            rasterizerState is null ? null : &rasterizer,
+            &blend,
+            &sampler,
+            &depthStencil,
+            &rasterizer,
             effect is null ? CnaHandle.Zero : new CnaHandle(effect.NativeEffectHandleValue),
             transformMatrix is null ? null : &transform);
         GC.KeepAlive(this);
@@ -363,32 +369,20 @@ public class SpriteBatch : IDisposable
         }
     }
 
-    /// <summary>
-    /// Wraps the flush + native end call in <c>try</c>/<c>finally</c> specifically so a native
-    /// failure can't permanently strand this instance: without it, a thrown <see cref="CnaException"/>
-    /// would leave <see cref="_hasBegun"/> stuck <c>true</c> forever, since nothing else ever
-    /// resets it and there is no public API to do so directly -- every future <see cref="Begin()"/>
-    /// call would then throw "cannot be called again until End has been successfully called"
-    /// with no way to recover short of disposing this instance and constructing a new one. Resetting
-    /// unconditionally lets a caller retry <see cref="Begin()"/> after a failure instead.
-    /// </summary>
+    /// <summary>XNA leaves the batch begun when setup or flushing throws; only a successful End
+    /// closes the pair. This matters for the observable state after an invalid sort mode or a
+    /// rendering failure.</summary>
     public void End()
     {
         EnsureHasBegun(nameof(End));
 
-        try
-        {
-            FlushCommandBuffer();
+        FlushCommandBuffer();
 
-            CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));
+        CnaResult result = Native.cna_sprite_batch_end(new CnaHandle(NativeHandleValue));
 
-            GC.KeepAlive(this);
-            CnaException.ThrowIfFailed(result, nameof(End));
-        }
-        finally
-        {
-            _hasBegun = false;
-        }
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(End));
+        _hasBegun = false;
     }
 
     /// <summary>The one native call the whole buffered batch flushes through -- a no-op if
@@ -406,6 +400,7 @@ public class SpriteBatch : IDisposable
         {
             CnaResult result = Native.cna_sprite_batch_submit_scaled_many(
                 new CnaHandle(NativeHandleValue), commands, (ulong)_commandBuffer.Count);
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(End));
         }
 

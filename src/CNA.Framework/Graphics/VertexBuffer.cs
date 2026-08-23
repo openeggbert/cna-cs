@@ -70,7 +70,7 @@ public class VertexBuffer : IDisposable
             CnaResult result = Native.cna_vertex_buffer_create(graphicsDevice.ResolveNativeDeviceHandle(), in createInfo, out CnaHandle handle);
             CnaException.ThrowIfFailed(result, nameof(VertexBuffer));
 
-            _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_vertex_buffer_destroy(new CnaHandle(h)));
+            _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_vertex_buffer_destroy(new CnaHandle(h)).IsSuccess());
         }
         finally
         {
@@ -92,43 +92,128 @@ public class VertexBuffer : IDisposable
     public void SetData<T>(T[] data) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
-        SetData(0, data, 0, data.Length, VertexDeclaration.VertexStride);
+        SetData(0, data, 0, data.Length, 0);
     }
 
     public void SetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
-        SetData(0, data, startIndex, elementCount, VertexDeclaration.VertexStride);
+        SetData(0, data, startIndex, elementCount, 0);
 
     public unsafe void SetData<T>(int offsetInBytes, T[] data, int startIndex, int elementCount, int vertexStride) where T : struct
+        => SetDataWithOptions(offsetInBytes, data, startIndex, elementCount, vertexStride, 0, null);
+
+    internal unsafe void SetDataWithOptions<T>(
+        int offsetInBytes,
+        T[] data,
+        int startIndex,
+        int elementCount,
+        int vertexStride,
+        uint options,
+        UserVertexSource? compatTypedSource)
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
         BufferRangeValidation.ValidateRange(data.Length, startIndex, elementCount);
+        if (data.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
+
+        if (elementCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(elementCount));
+        }
+
         if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
             throw new ArgumentException($"Vertex element type {typeof(T)} contains managed references.", nameof(data));
+        }
+
+        int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+        if (vertexStride != 0 && vertexStride < elementSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(vertexStride));
+        }
+
+        long copiedByteCount = vertexStride == 0
+            ? (long)elementCount * elementSize
+            : (long)(elementCount - 1) * vertexStride + elementSize;
+        long bufferByteCount = (long)VertexCount * VertexDeclaration.VertexStride;
+        if ((long)offsetInBytes + copiedByteCount > bufferByteCount)
+        {
+            throw new InvalidOperationException("The data does not fit in this VertexBuffer.");
+        }
+
+        UserVertexSource? typedSource = compatTypedSource ?? BuiltInVertexSourceFor<T>();
+        bool canUseOptionedTypedRoute = offsetInBytes == 0
+            && (vertexStride == 0 || vertexStride == VertexDeclaration.VertexStride)
+            && elementSize == VertexDeclaration.VertexStride
+            && typedSource is not null;
+
+        if (options != 0 && !canUseOptionedTypedRoute)
+        {
+            throw new NotSupportedException(
+                "The CNA C ABI carries SetDataOptions only on its built-in typed vertex upload. " +
+                "Raw/custom-stride and buffer-offset vertex uploads cannot represent Discard or NoOverwrite.");
         }
 
         System.Runtime.InteropServices.GCHandle pinned =
             System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
         try
         {
-            int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+            if (options != 0)
+            {
+                var transfer = new CnaVertexBufferTransfer
+                {
+                    VertexType = VertexTypeFor(typedSource!.Value),
+                    Options = options,
+                    StartIndex = (ulong)startIndex,
+                    ElementCount = (ulong)elementCount,
+                };
+                CnaResult typedResult = Native.cna_vertex_buffer_set_data(
+                    new CnaHandle(NativeHandleValue), in transfer,
+                    (void*)pinned.AddrOfPinnedObject(), (ulong)data.Length);
+                GC.KeepAlive(this);
+                CnaException.ThrowIfFailed(typedResult, nameof(SetData));
+                return;
+            }
+
             byte* bytePtr = (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * elementSize);
-            ulong byteCount = (ulong)((long)elementCount * elementSize);
+            int nativeStride;
+            ulong nativeVertexCount;
+            if (vertexStride == 0)
+            {
+                nativeStride = VertexDeclaration.VertexStride;
+                if (copiedByteCount % nativeStride != 0 || offsetInBytes % nativeStride != 0)
+                {
+                    throw new NotSupportedException(
+                        "The CNA raw VertexBuffer ABI can upload only complete declaration-sized vertices; " +
+                        "this contiguous generic byte window ends inside a vertex.");
+                }
 
-            // A nonzero offsetInBytes threw here until cna_vertex_buffer_set_data_raw_at landed.
-            // The plain _raw route has no buffer offset and always starts at native vertex zero, so
-            // the two are genuinely different calls rather than one with a defaulted argument.
-            CnaResult result = offsetInBytes == 0
-                ? Native.cna_vertex_buffer_set_data_raw(
-                    new CnaHandle(NativeHandleValue), bytePtr, byteCount, (ulong)elementCount, (uint)vertexStride)
-                : Native.cna_vertex_buffer_set_data_raw_at(
-                    new CnaHandle(NativeHandleValue), (ulong)offsetInBytes, bytePtr, byteCount,
-                    (ulong)elementCount, (uint)vertexStride);
+                nativeVertexCount = (ulong)(copiedByteCount / nativeStride);
+                UploadRaw(offsetInBytes, bytePtr, (ulong)copiedByteCount, nativeVertexCount, nativeStride);
+                return;
+            }
 
-            GC.KeepAlive(this);
-            CnaException.ThrowIfFailed(result, nameof(SetData));
+            nativeStride = vertexStride;
+            if (elementSize != nativeStride)
+            {
+                throw new NotSupportedException(
+                    "XNA copies only sizeof(T) bytes at each vertexStride and preserves the gaps. " +
+                    "The CNA raw VertexBuffer ABI writes complete strides and cannot represent that scatter update.");
+            }
+
+            if (nativeStride != VertexDeclaration.VertexStride || offsetInBytes % nativeStride != 0)
+            {
+                throw new NotSupportedException(
+                    "The CNA raw VertexBuffer ABI requires a declaration-sized, vertex-aligned window.");
+            }
+
+            nativeVertexCount = (ulong)elementCount;
+            UploadRaw(
+                offsetInBytes, bytePtr, (ulong)((long)elementCount * elementSize),
+                nativeVertexCount, nativeStride);
         }
         finally
         {
@@ -136,14 +221,33 @@ public class VertexBuffer : IDisposable
         }
     }
 
+    private unsafe void UploadRaw(
+        int offsetInBytes,
+        void* data,
+        ulong dataByteCount,
+        ulong vertexCount,
+        int vertexStride)
+    {
+        // A nonzero offset uses the ABI's buffer-window route; zero replaces from vertex zero.
+        CnaResult result = offsetInBytes == 0
+            ? Native.cna_vertex_buffer_set_data_raw(
+                new CnaHandle(NativeHandleValue), (byte*)data, dataByteCount, vertexCount, (uint)vertexStride)
+            : Native.cna_vertex_buffer_set_data_raw_at(
+                new CnaHandle(NativeHandleValue), (ulong)offsetInBytes, data, dataByteCount,
+                vertexCount, (uint)vertexStride);
+
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(SetData));
+    }
+
     public void GetData<T>(T[] data) where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
-        GetData(0, data, 0, data.Length, VertexDeclaration.VertexStride);
+        GetData(0, data, 0, data.Length, 0);
     }
 
     public void GetData<T>(T[] data, int startIndex, int elementCount) where T : struct =>
-        GetData(0, data, startIndex, elementCount, VertexDeclaration.VertexStride);
+        GetData(0, data, startIndex, elementCount, 0);
 
     /// <summary>
     /// Reads vertices back into <paramref name="data"/>.
@@ -167,32 +271,81 @@ public class VertexBuffer : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+        if (data.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
+
+        if (elementCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(elementCount));
+        }
 
         ArgumentOutOfRangeException.ThrowIfNegative(offsetInBytes);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(vertexStride, 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(vertexStride);
         if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
             throw new ArgumentException($"Vertex element type {typeof(T)} contains managed references.", nameof(data));
         }
 
+        int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+        long copiedByteCount = vertexStride == 0
+            ? (long)elementCount * elementSize
+            : (long)(elementCount - 1) * vertexStride + elementSize;
+        long bufferByteCount = (long)VertexCount * VertexDeclaration.VertexStride;
+        if ((long)offsetInBytes + copiedByteCount > bufferByteCount)
+        {
+            throw new InvalidOperationException("The requested data does not fit in this VertexBuffer.");
+        }
+
         // The typed route reads whole vertices of a built-in type from native vertex zero, with no
         // stride override -- so anything that needs an offset, a different stride, or a layout the
         // built-in set does not name goes through the raw route instead.
-        if (offsetInBytes != 0 || vertexStride != VertexDeclaration.VertexStride || !HasBuiltInVertexType<T>())
+        bool contiguousBuiltIn = offsetInBytes == 0
+            && (vertexStride == 0 || vertexStride == elementSize)
+            && elementSize == VertexDeclaration.VertexStride
+            && HasBuiltInVertexType<T>();
+        if (!contiguousBuiltIn)
         {
+            int nativeStride;
+            ulong nativeVertexCount;
+            if (vertexStride == 0)
+            {
+                nativeStride = VertexDeclaration.VertexStride;
+                if (copiedByteCount % nativeStride != 0)
+                {
+                    throw new NotSupportedException(
+                        "The CNA raw VertexBuffer ABI can read only complete declaration-sized vertices; " +
+                        "this contiguous generic byte window ends inside a vertex.");
+                }
+
+                nativeVertexCount = (ulong)(copiedByteCount / nativeStride);
+            }
+            else
+            {
+                if (elementSize != vertexStride)
+                {
+                    throw new NotSupportedException(
+                        "XNA reads sizeof(T) bytes at each vertexStride and skips the gaps. " +
+                        "The CNA raw VertexBuffer ABI reads complete strides and cannot represent that scatter readback.");
+                }
+
+                nativeStride = vertexStride;
+                nativeVertexCount = (ulong)elementCount;
+            }
+
             System.Runtime.InteropServices.GCHandle pinned =
                 System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
             try
             {
-                int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
                 byte* destination = (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * elementSize);
                 CnaResult rawResult = Native.cna_vertex_buffer_get_data_raw(
                     new CnaHandle(NativeHandleValue),
                     (ulong)offsetInBytes,
                     destination,
-                    (ulong)((long)elementCount * elementSize),
-                    (ulong)elementCount,
-                    (uint)vertexStride);
+                    (ulong)copiedByteCount,
+                    nativeVertexCount,
+                    (uint)nativeStride);
 
                 GC.KeepAlive(this);
                 CnaException.ThrowIfFailed(rawResult, nameof(GetData));
@@ -242,6 +395,40 @@ public class VertexBuffer : IDisposable
         || typeof(T) == typeof(VertexPositionColorTexture)
         || typeof(T) == typeof(VertexPositionNormalTexture)
         || typeof(T) == typeof(VertexPositionTexture);
+
+    private static UserVertexSource? BuiltInVertexSourceFor<T>() where T : struct
+    {
+        if (typeof(T) == typeof(VertexPositionColor))
+        {
+            return UserVertexSource.PositionColor;
+        }
+
+        if (typeof(T) == typeof(VertexPositionColorTexture))
+        {
+            return UserVertexSource.PositionColorTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionNormalTexture))
+        {
+            return UserVertexSource.PositionNormalTexture;
+        }
+
+        if (typeof(T) == typeof(VertexPositionTexture))
+        {
+            return UserVertexSource.PositionTexture;
+        }
+
+        return null;
+    }
+
+    private static CnaVertexType VertexTypeFor(UserVertexSource source) => source switch
+    {
+        UserVertexSource.PositionColor => CnaVertexType.PositionColor,
+        UserVertexSource.PositionColorTexture => CnaVertexType.PositionColorTexture,
+        UserVertexSource.PositionNormalTexture => CnaVertexType.PositionNormalTexture,
+        UserVertexSource.PositionTexture => CnaVertexType.PositionTexture,
+        _ => throw new NotSupportedException($"{source} is not a built-in typed vertex layout."),
+    };
 
     private static CnaVertexType VertexTypeFor<T>() where T : struct
     {

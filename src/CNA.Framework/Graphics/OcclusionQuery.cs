@@ -23,7 +23,7 @@ public class OcclusionQuery : IDisposable
         CnaException.ThrowIfFailed(result, nameof(OcclusionQuery));
 
         GraphicsDevice = graphicsDevice;
-        _handle = new NativeResourceHandle(query.AsNint, h => Native.cna_occlusion_query_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(query.AsNint, h => Native.cna_occlusion_query_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     public GraphicsDevice GraphicsDevice { get; }

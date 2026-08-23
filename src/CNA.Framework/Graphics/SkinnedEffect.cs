@@ -167,6 +167,7 @@ public class SkinnedEffect : StockEffect, IEffectMatrices, IEffectFog, IEffectLi
     public void EnableDefaultLighting()
     {
         CnaResult result = Native.cna_effect_lights_enable_default(Handle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(EnableDefaultLighting));
     }
 

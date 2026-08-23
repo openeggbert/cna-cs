@@ -7,12 +7,16 @@ public abstract class Texture : GraphicsResource
         FrameworkFacades = new();
 
     private readonly CNA.Graphics.Texture _frameworkTexture;
+    private readonly int _levelCount;
+    private readonly SurfaceFormat _format;
 
     internal Texture(GraphicsDevice graphicsDevice, CNA.Graphics.Texture frameworkTexture)
         : base(graphicsDevice)
     {
         ArgumentNullException.ThrowIfNull(frameworkTexture);
         _frameworkTexture = frameworkTexture;
+        _levelCount = frameworkTexture.LevelCount;
+        _format = (SurfaceFormat)(int)frameworkTexture.Format;
         FrameworkFacades.Add(frameworkTexture, this);
     }
 
@@ -34,12 +38,14 @@ public abstract class Texture : GraphicsResource
 
     internal nint DetachNativeHandle() => _frameworkTexture.DetachNativeHandle();
 
-    public int LevelCount => _frameworkTexture.LevelCount;
+    public int LevelCount => _levelCount;
 
-    public SurfaceFormat Format => (SurfaceFormat)(int)_frameworkTexture.Format;
+    public SurfaceFormat Format => _format;
 
     internal void DisposeFrameworkTexture()
     {
-        _frameworkTexture.Dispose();
+        // A throwing derived constructor still leaves a finalizable GraphicsResource instance.
+        // Its backend field has not necessarily been assigned yet.
+        _frameworkTexture?.Dispose();
     }
 }

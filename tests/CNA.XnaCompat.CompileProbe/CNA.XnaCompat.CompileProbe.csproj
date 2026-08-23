@@ -4,6 +4,9 @@
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
     <CompatibilityTarget Condition="'$(CompatibilityTarget)' == ''">CNA</CompatibilityTarget>
+    <TargetFramework Condition="'$(XnaWindowsSnapshot)' == 'true'">net48</TargetFramework>
+    <PlatformTarget Condition="'$(XnaWindowsSnapshot)' == 'true'">x86</PlatformTarget>
+    <Prefer32Bit Condition="'$(XnaWindowsSnapshot)' == 'true'">true</Prefer32Bit>
     <XnaReferencePath Condition="'$(XnaReferencePath)' == '' and '$(XNA_REFERENCE_PATH)' != ''">$(XNA_REFERENCE_PATH)</XnaReferencePath>
     <FnaFrameworkPath Condition="'$(FnaFrameworkPath)' == '' and '$(FNA_FRAMEWORK_PATH)' != ''">$(FNA_FRAMEWORK_PATH)</FnaFrameworkPath>
   </PropertyGroup>

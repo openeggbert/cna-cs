@@ -196,34 +196,27 @@ internal sealed class NativeEventBridge : IDisposable
 
     public void Dispose()
     {
-        if (_disposed)
+        if (_disposed && _registration.Value == 0)
         {
             return;
         }
 
+        // Mark first so a callback racing an unsubscribe failure becomes a no-op while its root is
+        // deliberately retained. A later Dispose retries the still-live registration.
         _disposed = true;
 
-        try
+        // Unsubscribe BEFORE freeing the root. If this throws, leave both the registration value
+        // and GCHandle intact: leaking a disabled bridge until a retry is safe; handing native a
+        // dangling context pointer is not.
+        if (_registration.Value != 0)
         {
-            // Unsubscribe BEFORE freeing the root: the other order leaves native holding a context
-            // pointer into a freed GCHandle for as long as the registration lives.
-            if (_registration.Value != 0)
-            {
-                _unsubscribe(_registration);
-                _registration = CnaHandle.Zero;
-            }
+            _unsubscribe(_registration);
+            _registration = CnaHandle.Zero;
         }
-        finally
+
+        if (_selfHandle.IsAllocated)
         {
-            // In a finally because a throwing unsubscribe would otherwise leak the GC root
-            // permanently -- a GCHandle nothing else holds a reference to can never be freed, so it
-            // pins its target for the process. Losing the root is strictly worse than losing the
-            // unsubscribe: native calling a stale context is a crash, but native calling a context
-            // that is still alive and whose bridge is marked disposed is a no-op.
-            if (_selfHandle.IsAllocated)
-            {
-                _selfHandle.Free();
-            }
+            _selfHandle.Free();
         }
     }
 }

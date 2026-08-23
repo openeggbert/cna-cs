@@ -26,6 +26,11 @@ public class GraphicsDevice : IDisposable
     /// <see cref="_boundRenderTargets"/> already uses.</summary>
     private VertexBufferBinding[] _boundVertexBuffers = [];
 
+    /// <summary>Whether at least one vertex stream was successfully bound through this facade.
+    /// Used by the strict XNA facade to reproduce XNA's managed pre-dispatch validation without
+    /// asking native code to translate a missing-data failure back into an arbitrary exception.</summary>
+    internal bool HasBoundVertexBuffers => _boundVertexBuffers.Length != 0;
+
     /// <summary>
     /// The raw native *game* handle value -- not the device handle; see this class's own doc
     /// comment for why holding a cached device handle across calls is unsafe under the real ABI.
@@ -525,17 +530,15 @@ public class GraphicsDevice : IDisposable
         return (VertexBufferBinding[])_boundVertexBuffers.Clone();
     }
 
-    /// <summary>Raised when a graphics resource is created on this device. The native callback
-    /// carries the resource handle; it is not surfaced, because a bare handle cannot be mapped back
-    /// to its managed wrapper -- real XNA's <c>ResourceCreatedEventArgs.Resource</c> therefore
-    /// reports <see langword="null"/> here rather than a wrong object.</summary>
+    /// <summary>Raised when a graphics resource is created on this device. Native subscription is
+    /// deliberately disabled: ABI 0.6 invokes a three-argument payload callback, while the old
+    /// managed bridge was two-argument and could interpret the payload address as a
+    /// <see cref="System.Runtime.InteropServices.GCHandle"/>. More importantly, the ABI reports
+    /// presence only and cannot supply XNA's actual managed resource object. Handlers are retained
+    /// safely until the ABI can represent the contract.</summary>
     public event EventHandler<ResourceCreatedEventArgs>? ResourceCreated
     {
-        add
-        {
-            EnsureResourceSubscribed(created: true);
-            _resourceCreated += value;
-        }
+        add => _resourceCreated += value;
         remove => _resourceCreated -= value;
     }
 
@@ -543,47 +546,12 @@ public class GraphicsDevice : IDisposable
     /// <see cref="ResourceCreated"/>.</summary>
     public event EventHandler<ResourceDestroyedEventArgs>? ResourceDestroyed
     {
-        add
-        {
-            EnsureResourceSubscribed(created: false);
-            _resourceDestroyed += value;
-        }
+        add => _resourceDestroyed += value;
         remove => _resourceDestroyed -= value;
     }
 
     private EventHandler<ResourceCreatedEventArgs>? _resourceCreated;
     private EventHandler<ResourceDestroyedEventArgs>? _resourceDestroyed;
-    private NativeEventBridge? _resourceCreatedBridge;
-    private NativeEventBridge? _resourceDestroyedBridge;
-
-    private void EnsureResourceSubscribed(bool created)
-    {
-        if (created)
-        {
-            _resourceCreatedBridge ??= NativeEventBridge.SubscribeWithSender(
-                () => _resourceCreated?.Invoke(this, new ResourceCreatedEventArgs(null)),
-                (callback, context) =>
-                {
-                    CnaResult result = Native.cna_graphics_device_subscribe_resource_created(
-                        ResolveNativeDeviceHandle(), callback, context, out CnaHandle registration);
-                    CnaException.ThrowIfFailed(result, nameof(ResourceCreated));
-                    return registration;
-                },
-                registration => Native.cna_graphics_device_unsubscribe(registration));
-            return;
-        }
-
-        _resourceDestroyedBridge ??= NativeEventBridge.SubscribeWithSender(
-            () => _resourceDestroyed?.Invoke(this, new ResourceDestroyedEventArgs(null, null)),
-            (callback, context) =>
-            {
-                CnaResult result = Native.cna_graphics_device_subscribe_resource_destroyed(
-                    ResolveNativeDeviceHandle(), callback, context, out CnaHandle registration);
-                CnaException.ThrowIfFailed(result, nameof(ResourceDestroyed));
-                return registration;
-            },
-            registration => Native.cna_graphics_device_unsubscribe(registration));
-    }
 
     private void RaiseDeviceEvent(CnaGraphicsDeviceEvent which)
     {
@@ -1144,7 +1112,7 @@ public class GraphicsDevice : IDisposable
         {
             CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
             CnaResult result = Native.cna_graphics_device_set_index_buffer(ResolveNativeDeviceHandle(), handle);
-        GC.KeepAlive(value);
+            GC.KeepAlive(value);
             CnaException.ThrowIfFailed(result, nameof(Indices));
             _indices = value;
         }
@@ -1216,7 +1184,7 @@ public class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// Releases only the managed roots used by native event subscriptions. A game's device handle
+    /// Releases the managed roots used by native device-event subscriptions. A game's device handle
     /// is borrowable during lifecycle callbacks only, but the subscriptions must be detached before
     /// its owner destroys the game outside one. The XNA facade uses this exact path during game
     /// teardown; ordinary explicit device disposal still follows <see cref="Dispose(bool)"/>.
@@ -1228,11 +1196,6 @@ public class GraphicsDevice : IDisposable
             _deviceEventBridges[i]?.Dispose();
             _deviceEventBridges[i] = null;
         }
-
-        _resourceCreatedBridge?.Dispose();
-        _resourceCreatedBridge = null;
-        _resourceDestroyedBridge?.Dispose();
-        _resourceDestroyedBridge = null;
     }
 
     private bool _deviceDisposed;

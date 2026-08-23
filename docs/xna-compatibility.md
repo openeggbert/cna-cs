@@ -74,12 +74,15 @@ composition, internal adapters, and single-owner backends.
 
 - preserve strict metadata, CNA-leak, base-hierarchy, interface, unexpected-member, and allowlist
   counts at zero as hard regression gates;
-- execute the combined 106-observation math/geometry and input corpus on a Windows XNA runtime.
-  CNA, FNA, and MonoGame snapshots already exist, and direct XNA source/IL has resolved the strict
-  operation order and edge semantics; the installed XNA C++/CLI assemblies cannot run on Linux;
-- expand differential behavior coverage for input, graphics state/resources, collections,
-  validation and exceptions, lifecycle/events, audio/XACT, media, storage, and disposal;
-- expand managed XNB fixtures and malformed/error paths;
+- execute the combined 299-observation snapshot on a Windows XNA runtime. CNA and MonoGame execute
+  all observations on Linux; FNA executes all safe paths and emits 48 deterministic placeholders
+  for comparator paths that can abort the process. Direct XNA source/IL resolves implemented strict
+  behavior, but the installed XNA C++/CLI assemblies cannot run on Linux;
+- continue differential work for device lost/reset/resource event ordering, cross-device graphics
+  validation, additional format/mip/rectangle cases, audio/XACT, media, storage, and native input;
+- deepen the current 27 malformed/error XNB observations beyond their initial external-reference
+  and failed-OpenStream-disposal cases into nested/missing references, successful-stream ownership,
+  and broader compressed/built-in-reader failures;
 - GamerServices, networking, device/sensor, Xbox/Phone, and Content Pipeline scope needs separate
   authoritative inventories rather than blanket exclusion.
 
@@ -87,13 +90,15 @@ composition, internal adapters, and single-owner backends.
 
 `tests/CNA.XnaCompat.CompileProbe` builds with the solution and locks in assignments for the
 repaired component, dynamic-buffer, dynamic-audio, content-manager, graphics-resource, curve,
-model-effect, state, vertex-declaration, and SpriteBatch relationships. It also contains
-deterministic 83-observation math/geometry and 23-observation input behavior corpora. Their output
-records IEEE-754 bits, exact hash/string results, state flags, exception kinds, and collection edge
-semantics. The combined 106 observations run on CNA, FNA, and MonoGame; identical source compiles
-against XNA, whose native C++/CLI runtime still requires Windows. Direct XNA source/IL adjudicates
-the strict expected values. This remains a focused corpus, not proof that arbitrary games compile
-or behave identically.
+model-effect, state, vertex-declaration, and SpriteBatch relationships. It contains 83
+math/geometry, 23 input, and 27 content-error observations. The device-backed
+`CNA.XnaCompat.GraphicsProbe` adds 153 graphics and 13 resource/lifetime observations. Output
+records IEEE-754 bits, exact hash/string results, state flags, exception kinds, identity, and
+lifecycle/collection behavior. The complete 299 observations run on CNA and MonoGame; FNA runs the
+133 pure and 118 safe graphics/resource paths, with 48 deterministic opt-in placeholders for
+process-fatal comparator paths. Identical source compiles against XNA, whose native C++/CLI runtime
+still requires Windows. Direct XNA source/IL adjudicates implemented strict values. This remains a
+focused corpus, not proof that arbitrary games compile or behave identically.
 
 The identical compile-probe source passes against the local Microsoft XNA reference assemblies,
 CNA.XnaCompat, FNA, and MonoGame. It fails against Kni at one deliberate XNA assertion:
@@ -115,19 +120,27 @@ A build is not a runtime claim.
 
 ## Behavior and content
 
-The managed suites currently pass 533 framework and 199 compat tests. A current ABI 0.6.0 CNA
-library passes all 104 native integration tests in both Debug and Release under Xvfb. That proves
+The managed suites currently pass 543 framework and 199 compat tests. A current ABI 0.6.0 CNA
+library passes all 114 native integration tests in both Debug and Release under Xvfb. The isolated
+ownership runner also passes 100 game teardown/recreation cycles in both configurations. That proves
 the exercised routes, not all XNA behavior.
 
 The XNA reader type system and ordinary custom `Content.Load<MyType>()` path are implemented,
 including reader activation/versioning, shared resources, existing instances, disposable
-tracking, and LZX handling. Remaining content work is differential fixture breadth: external
-references, malformed tables, stream ownership, and exact exception behavior.
+tracking, and LZX handling. Twenty-seven malformed/error observations now cover compact invalid
+headers, reader tables/indices, partial failures, wrong types, duplicate disposables, and cache/
+dispose behavior. Initial external-reference and failed-stream-disposal paths are included.
+Remaining content work is differential fixture breadth: nested/missing references, compressed
+corruption, built-in tables, successful-stream ownership, and the Windows XNA exception snapshot.
 
-Behavioral differential coverage is also incomplete for validation order, disposed behavior,
-lifecycle/event order, graphics state transitions, SpriteBatch rules, input transitions, audio,
-media, and storage. Unsupported exceptions are assessed case by case; their presence alone neither
-proves a bug nor compatibility.
+Behavioral differential coverage now includes graphics state/collection identity, transfer
+limitations, dynamic buffer options, SpriteBatch ordering/failure recovery, draw validation,
+resource/device disposal, and Present argument handling. `GraphicsDevice.Disposing` now has
+sender/count/disposed-state/double-dispose observations. Coverage remains incomplete for lost/reset
+event order, cross-device/resource-format breadth, native input transitions, audio/XACT, media,
+and storage.
+Unsupported exceptions are assessed case by case; their presence alone neither proves a bug nor
+compatibility. Exact native capability blockers live in `docs/native-behavior-blockers.md`.
 
 The expanded corpus corrected XNA's fixed-adjugate `Matrix.Invert` behavior (including NaNs for a
 singular zero matrix), reciprocal-once scalar vector division, XNA-local `Viewport.Project` and

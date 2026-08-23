@@ -2435,8 +2435,11 @@ internal static partial class Native
     internal static unsafe partial CnaResult cna_graphics_device_get_backbuffer_data_window(
         CnaHandle device, in CnaBackBufferReadback readback, CnaColor* destination, ulong capacity);
 
-    /// <summary>The resource events carry the resource handle alongside the context, so they go
-    /// through <c>NativeEventBridge.SubscribeWithSender</c> like the ContentLost pair.</summary>
+    /// <summary>The resource callbacks have three arguments: device, a callback-scoped event-info
+    /// pointer, and context. They must not use the two-argument sender bridge. The current ABI
+    /// reports only resource presence (created) or name/tag-presence (destroyed), not the managed
+    /// resource and tag objects required by XNA, so the strict facade deliberately does not wire
+    /// these declarations yet.</summary>
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_subscribe_resource_created(
         CnaHandle device, nint callback, nint context, out CnaHandle outRegistration);
@@ -2827,9 +2830,15 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_vertex_buffer_get_info(CnaHandle vertexBuffer, ref CnaVertexBufferInfo info);
 
-    /// <summary>Typed readback for the built-in vertex layouts (<c>vertex_resources.h:329</c>).
-    /// There is no raw-bytes equivalent, which is why <c>VertexBuffer.GetData</c> is limited to
-    /// the types <see cref="CnaVertexType"/> names.</summary>
+    /// <summary>Typed transfer for the built-in vertex layouts. Unlike the raw upload routes,
+    /// the write descriptor carries <c>CNA_SetDataOptions</c>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertex_buffer_set_data(
+        CnaHandle vertexBuffer,
+        in CnaVertexBufferTransfer transfer,
+        void* data,
+        ulong capacity);
+
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_vertex_buffer_get_data(
         CnaHandle vertexBuffer,
@@ -2868,10 +2877,8 @@ internal static partial class Native
     internal static partial CnaResult cna_vertex_buffer_destroy(CnaHandle vertexBuffer);
 
     /// <summary>Matches <c>cna_vertex_buffer_set_data_raw</c> exactly
-    /// (<c>vertex_resources.h:346</c>) -- always uploads starting at native buffer vertex zero (no
-    /// offset parameter exists in the real function at all); see
-    /// <c>CNA.Graphics.VertexBuffer.SetData</c>'s own doc comment for why a nonzero
-    /// <c>offsetInBytes</c> can't be honored.</summary>
+    /// (<c>vertex_resources.h:346</c>) -- always uploads starting at native buffer vertex zero and
+    /// has no <c>SetDataOptions</c> parameter.</summary>
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_vertex_buffer_set_data_raw(
         CnaHandle vertexBuffer,

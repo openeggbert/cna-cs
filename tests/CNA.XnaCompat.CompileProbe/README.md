@@ -3,8 +3,9 @@
 The source files in this project are the assertion. `XnaAssignabilityProbe.cs` exercises inheritance
 and invariant generic contracts that a name/count API inventory cannot prove. The executable
 `MathBehaviorCorpus` emits stable IEEE-754 bit-pattern observations for math, color, and geometry,
-while `InputBehaviorCorpus` records deterministic keyboard, mouse, game-pad, and touch value
-semantics. Capture their combined output for each engine and diff the resulting text files.
+`InputBehaviorCorpus` records deterministic keyboard, mouse, game-pad, and touch value semantics,
+and `ContentErrorCorpus` exercises compact in-memory malformed XNB/error paths. Capture their
+combined output for each engine and diff the resulting text files.
 
 The solution builds it against CNA by default. The identical source can be compiled against other
 available implementations:
@@ -31,11 +32,12 @@ XNA/FNA assemblies are supplied externally and are never committed. A passing ta
 the relationships and observations explicitly written in this project; expand both corpora from
 metadata and differential findings rather than treating them as general API parity.
 
-Measured on 2026-08-22: XNA, CNA, FNA, and MonoGame compile. The combined 106-observation executable
-corpus (83 math/geometry and 23 input) runs on CNA, FNA, and MonoGame. Direct XNA source/IL was used
-to adjudicate arithmetic grouping, matrix/viewport, color/packed-value, geometry, curve, hash,
-string, and input-construction differences; alternate engines remain comparators, not authorities.
-The Windows XNA runtime snapshot is still open because the installed XNA assemblies use a C++/CLI
-module initializer that cannot execute on Linux. Kni fails the `VertexDeclaration`-to-
-`GraphicsResource` assignment because its public hierarchy differs from XNA; do not conditionalize
-that assertion away when using this project as the strict corpus.
+Measured on 2026-08-22: XNA, CNA, FNA, and MonoGame compile. The pure executable contains 133
+observations: 83 math/geometry, 23 input, and 27 content-error observations. It runs on CNA, FNA,
+and MonoGame on Linux. Together with the device-backed graphics/resource probe, the complete
+snapshot contains 299 observations. Direct XNA source/IL was used to adjudicate known behavior;
+alternate engines remain comparators, not authorities. The Windows XNA runtime snapshot is still
+open because the installed XNA assemblies use a C++/CLI module initializer that cannot execute on
+Linux. Kni fails the `VertexDeclaration`-to-`GraphicsResource` assignment because its public
+hierarchy differs from XNA; do not conditionalize that assertion away when using this project as
+the strict corpus.

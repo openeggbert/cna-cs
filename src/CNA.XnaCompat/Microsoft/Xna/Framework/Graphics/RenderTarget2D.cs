@@ -11,14 +11,16 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// <c>CNA.Graphics.RenderTarget2D</c>, it does not inherit that type's own
 /// <c>ReleaseNative</c>/<c>Width</c>/<c>Height</c> overrides -- without overriding them here too,
 /// this class would silently call the plain-texture natives on a handle that
-/// <c>cna_render_target2d_create</c> actually created, exactly the bug this migration's step 5
-/// fixed on the CNA.Framework side. Reuses <c>CNA.Graphics.RenderTarget2D</c>'s own
+/// <c>cna_render_target2d_create</c> actually created. It reuses
+/// <c>CNA.Graphics.RenderTarget2D</c>'s
 /// <c>internal static</c> helpers rather than duplicating the native calls.
 /// </summary>
 public class RenderTarget2D : Texture2D, IDynamicGraphicsResource
 {
     public RenderTarget2D(GraphicsDevice graphicsDevice, int width, int height)
-        : base(graphicsDevice, new CNA.Graphics.RenderTarget2D(graphicsDevice.Framework, width, height))
+        : base(graphicsDevice, CreateFrameworkRenderTarget(
+            graphicsDevice, width, height, false, SurfaceFormat.Color, DepthFormat.None,
+            0, RenderTargetUsage.DiscardContents))
     {
     }
 
@@ -44,21 +46,15 @@ public class RenderTarget2D : Texture2D, IDynamicGraphicsResource
         DepthFormat preferredDepthFormat,
         int preferredMultiSampleCount,
         RenderTargetUsage usage)
-        : base(graphicsDevice, new CNA.Graphics.RenderTarget2D(
-            graphicsDevice.Framework,
-            width,
-            height,
-            mipMap,
-            (CNA.Graphics.SurfaceFormat)(int)preferredFormat,
-            (CNA.Graphics.DepthFormat)(int)preferredDepthFormat,
-            preferredMultiSampleCount,
-            (CNA.Graphics.RenderTargetUsage)(int)usage))
+        : base(graphicsDevice, CreateFrameworkRenderTarget(
+            graphicsDevice, width, height, mipMap, preferredFormat, preferredDepthFormat,
+            preferredMultiSampleCount, usage))
     {
     }
 
     /// <summary>Reads from <c>cna_render_target_get_info</c> through
-    /// <c>CNA.Graphics.RenderTarget2D</c>'s own internal reader, the same source its inherited
-    /// texture dimensions use -- this class derives from its own
+    /// <c>CNA.Graphics.RenderTarget2D</c>'s own internal reader, the same source used to cache the
+    /// texture dimensions -- this class derives from its own
     /// namespace's texture base, not from <c>CNA.Graphics.RenderTarget2D</c>, so there is no base
     /// property to re-type.</summary>
     public DepthFormat DepthStencilFormat =>
@@ -85,4 +81,30 @@ public class RenderTarget2D : Texture2D, IDynamicGraphicsResource
     private EventHandler<EventArgs>? _contentLost;
 
     protected override void Dispose(bool arg0) => base.Dispose(arg0);
+
+    private static CNA.Graphics.RenderTarget2D CreateFrameworkRenderTarget(
+        GraphicsDevice graphicsDevice,
+        int width,
+        int height,
+        bool mipMap,
+        SurfaceFormat preferredFormat,
+        DepthFormat preferredDepthFormat,
+        int preferredMultiSampleCount,
+        RenderTargetUsage usage)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        Texture2D.ValidateDimensions(width, height);
+
+        // XNA's adapter query maps every request of one sample or less to no multisampling.
+        int selectedMultiSampleCount = preferredMultiSampleCount <= 1 ? 0 : preferredMultiSampleCount;
+        return new CNA.Graphics.RenderTarget2D(
+            graphicsDevice.Framework,
+            width,
+            height,
+            mipMap,
+            (CNA.Graphics.SurfaceFormat)(int)preferredFormat,
+            (CNA.Graphics.DepthFormat)(int)preferredDepthFormat,
+            selectedMultiSampleCount,
+            (CNA.Graphics.RenderTargetUsage)(int)usage);
+    }
 }

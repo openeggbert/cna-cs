@@ -28,17 +28,21 @@ Binary compatibility with Microsoft's strong-named assemblies is not the primary
 As of 2026-08-22:
 
 - Debug and Release solution builds: 0 warnings, 0 errors;
-- managed tests: 533/533 framework and 199/199 XNA-compat passing;
-- native integration tests: 104/104 passing in Debug and Release against an ABI 0.6.0 CNA library
+- managed tests: 543/543 framework and 199/199 XNA-compat passing;
+- native integration tests: 114/114 passing in Debug and Release against an ABI 0.6.0 CNA library
   under Xvfb on Linux x64;
 - strict metadata profile: 257 reference types versus 257 target types, 0 differences, 0
   allowlisted;
 - standalone public/protected CNA-type leak gate: 0 findings;
 - compile-time hierarchy corpus: passes unchanged on XNA, CNA, FNA, and MonoGame; records one Kni
   hierarchy difference (`VertexDeclaration` is not a `GraphicsResource` there);
-- deterministic behavior corpora: 83 math/geometry plus 23 input observations run on CNA, FNA,
-  and MonoGame; identical source compiles against XNA and direct XNA source/IL establishes the
-  strict edge semantics, while the Windows XNA runtime snapshot is still pending;
+- deterministic behavior corpora: 299 observations (83 math/geometry, 23 input, 153 graphics, 13
+  resource/lifetime, and 27 content-error); identical source compiles against XNA, CNA, FNA, and
+  MonoGame. CNA and MonoGame execute all 299 on Linux, while FNA executes all safe paths and emits
+  deterministic placeholders for 48 process-fatal comparator paths. Direct XNA source/IL
+  establishes implemented strict semantics; the Windows XNA runtime snapshot is still pending;
+- isolated native ownership stress: 100/100 game create/use/finalize/destroy/recreate cycles pass
+  in both Debug and Release;
 - sibling template: CNA build, generated-project build, and 60/600-frame CNA runs pass;
 - FNA, MonoGame, and Kni template source builds pass; 60-frame MonoGame and Kni runs pass, while the
   configured FNA assembly reports unavailable at runtime with a clean exit code 2;

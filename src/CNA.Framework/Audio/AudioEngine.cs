@@ -26,7 +26,7 @@ public class AudioEngine : IDisposable
             settingsFile, view => Native.cna_audio_engine_create(CnaAmbientGame.Current, view, out engine));
         CnaException.ThrowIfFailed(result, nameof(AudioEngine));
 
-        _handle = new NativeResourceHandle(engine.AsNint, h => Native.cna_audio_engine_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(engine.AsNint, h => Native.cna_audio_engine_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     internal CnaHandle NativeHandle => new(_handle.DangerousGetHandle());

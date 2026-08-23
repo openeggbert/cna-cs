@@ -19,7 +19,7 @@ public class ContentReader : BinaryReader
     internal ContentReader(Stream stream, nint nativeHandleValue, ContentManager contentManager, string assetName)
         : base(stream)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_content_reader_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_content_reader_destroy(new CnaHandle(h)).IsSuccess());
         _contentManager = contentManager;
         _assetName = assetName;
     }
@@ -46,7 +46,7 @@ public class ContentReader : BinaryReader
         : base(stream)
     {
         // ownsHandle: false, so the release is never invoked -- native destroys its own reader.
-        _handle = new NativeResourceHandle(nativeHandleValue, static _ => { }, ownsHandle: false);
+        _handle = new NativeResourceHandle(nativeHandleValue, static _ => true, ownsHandle: false);
     }
 
     internal CnaHandle NativeHandle => new(_handle.DangerousGetHandle());

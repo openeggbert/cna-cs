@@ -33,6 +33,12 @@ public sealed class ContentTypeReaderManager
             string serializedName = input.ReadString();
             readers[index] = CreateReader(serializedName, input.AssetName);
             versions[index] = input.ReadInt32();
+            if (versions[index] != readers[index].TypeVersion)
+            {
+                throw new ContentLoadException(
+                    $"Content asset '{input.AssetName}' has an incompatible version for reader " +
+                    $"'{readers[index].TargetType}'.");
+            }
 
             // A single target type can legitimately appear under more than one reader in an XNB,
             // but ReadRawObject<T>() follows XNA's first-table-entry lookup.

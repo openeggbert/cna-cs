@@ -26,7 +26,7 @@ public class EffectTechnique : IDisposable
 
     internal EffectTechnique(CnaHandle handle)
     {
-        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_technique_destroy(new CnaHandle(h)));
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_technique_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
@@ -40,12 +40,10 @@ public class EffectTechnique : IDisposable
     /// these types SafeHandle ownership is what fixed their leak; it is also what introduced this
     /// hazard, since before that they held a bare handle with no finalizer at all.
     ///
-    /// <see cref="GC.KeepAlive(object)"/> rather than
-    /// <see cref="System.Runtime.InteropServices.SafeHandle.DangerousAddRef"/>/<c>DangerousRelease</c>:
-    /// it closes the reachability hazard, which is the real one here, but it does not make a
-    /// concurrent <c>Dispose</c> from another thread safe. Nothing in this project is thread-safe,
-    /// so that is consistent rather than a new gap -- and the ref-counted form is what
-    /// <c>plan.md</c> WP17 will apply project-wide.
+    /// <see cref="GC.KeepAlive(object)"/> closes the ordinary reachability hazard. In addition,
+    /// <see cref="NativeResourceHandle"/> defers finalizer-thread and cross-thread releases to an
+    /// owner-thread safe point, so an unreachable wrapper cannot destroy this raw handle during a
+    /// native call. This project still does not promise concurrent <c>Dispose</c>/operation safety.
     /// </summary>
     internal CnaHandle NativeHandle => new(_ownedHandle.DangerousGetHandle());
 
@@ -53,6 +51,8 @@ public class EffectTechnique : IDisposable
     {
         _passes?.Dispose();
         _passes = null;
+        _annotations?.Dispose();
+        _annotations = null;
 
         _ownedHandle.Dispose();
         GC.SuppressFinalize(this);
@@ -91,14 +91,22 @@ public class EffectTechnique : IDisposable
         }
     }
 
+    private EffectAnnotationCollection? _annotations;
+
     public EffectAnnotationCollection Annotations
     {
         get
         {
+            if (_annotations is not null)
+            {
+                return _annotations;
+            }
+
             CnaResult result = Native.cna_effect_technique_get_annotations(NativeHandle, out CnaHandle collection);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(Annotations));
-            return new EffectAnnotationCollection(collection);
+            _annotations = new EffectAnnotationCollection(collection);
+            return _annotations;
         }
     }
 }

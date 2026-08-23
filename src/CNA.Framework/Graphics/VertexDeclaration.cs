@@ -22,7 +22,7 @@ public class VertexDeclaration
     public VertexDeclaration(int vertexStride, params VertexElement[] elements)
     {
         ValidateNotEmpty(elements);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(vertexStride);
+        ValidateLayout(vertexStride, elements);
 
         _elements = (VertexElement[])elements.Clone();
         VertexStride = vertexStride;
@@ -123,7 +123,7 @@ public class VertexDeclaration
         int stride = 0;
         foreach (VertexElement element in elements)
         {
-            int end = element.Offset + GetTypeSize(element.VertexElementFormat);
+            int end = element.Offset + GetValidationTypeSize(element.VertexElementFormat);
             if (end > stride)
             {
                 stride = end;
@@ -132,6 +132,82 @@ public class VertexDeclaration
 
         return stride;
     }
+
+    /// <summary>XNA validates declaration layout at construction time, before any device is
+    /// involved: four-byte stride/offset alignment, element bounds, unique usage/index pairs and
+    /// non-overlapping byte ranges. Keeping that validation here prevents malformed declarations
+    /// from reaching a renderer with a backend-specific error (or unsafe read).</summary>
+    private static void ValidateLayout(int vertexStride, VertexElement[] elements)
+    {
+        if (vertexStride <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(vertexStride));
+        }
+
+        if ((vertexStride & 3) != 0)
+        {
+            throw new ArgumentException("Vertex stride and element offsets must be multiples of four bytes.");
+        }
+
+        var occupiedBy = new int[vertexStride];
+        Array.Fill(occupiedBy, -1);
+        for (int i = 0; i < elements.Length; i++)
+        {
+            VertexElement element = elements[i];
+            int size = GetValidationTypeSize(element.VertexElementFormat);
+            if (element.VertexElementUsage < VertexElementUsage.Position ||
+                element.VertexElementUsage > VertexElementUsage.TessellateFactor)
+            {
+                throw new ArgumentException($"Vertex element {i} has an invalid usage.");
+            }
+
+            if (element.Offset < 0 || element.Offset + size > vertexStride)
+            {
+                throw new ArgumentException($"Vertex element {i} lies outside the declared stride.");
+            }
+
+            if ((element.Offset & 3) != 0)
+            {
+                throw new ArgumentException("Vertex stride and element offsets must be multiples of four bytes.");
+            }
+
+            for (int previous = 0; previous < i; previous++)
+            {
+                if (element.VertexElementUsage == elements[previous].VertexElementUsage &&
+                    element.UsageIndex == elements[previous].UsageIndex)
+                {
+                    throw new ArgumentException("A vertex declaration cannot contain duplicate usage/index pairs.");
+                }
+            }
+
+            for (int offset = element.Offset; offset < element.Offset + size; offset++)
+            {
+                if (occupiedBy[offset] >= 0)
+                {
+                    throw new ArgumentException("Vertex declaration elements cannot overlap.");
+                }
+
+                occupiedBy[offset] = i;
+            }
+        }
+    }
+
+    private static int GetValidationTypeSize(VertexElementFormat elementFormat) => elementFormat switch
+    {
+        VertexElementFormat.Single => 4,
+        VertexElementFormat.Vector2 => 8,
+        VertexElementFormat.Vector3 => 12,
+        VertexElementFormat.Vector4 => 16,
+        VertexElementFormat.Color => 4,
+        VertexElementFormat.Byte4 => 4,
+        VertexElementFormat.Short2 => 4,
+        VertexElementFormat.Short4 => 8,
+        VertexElementFormat.NormalizedShort2 => 4,
+        VertexElementFormat.NormalizedShort4 => 8,
+        VertexElementFormat.HalfVector2 => 4,
+        VertexElementFormat.HalfVector4 => 8,
+        _ => 0,
+    };
 
     public static int GetTypeSize(VertexElementFormat elementFormat) => elementFormat switch
     {

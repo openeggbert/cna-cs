@@ -51,7 +51,8 @@ public class TextureCube : Texture
         return handle.AsNint;
     }
 
-    protected override void ReleaseNative(nint handleValue) => Native.cna_texturecube_destroy(new CnaHandle(handleValue));
+    protected override bool ReleaseNative(nint handleValue) =>
+        Native.cna_texturecube_destroy(new CnaHandle(handleValue)).IsSuccess();
 
     /// <summary>Width and height of each square face. Real XNA spells this <c>Size</c> on
     /// <c>TextureCube</c> (not <c>Width</c>/<c>Height</c>), matching the C API's own field

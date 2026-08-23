@@ -98,16 +98,17 @@ public sealed class ContentReader : BinaryReader
     }
 
     /// <summary>Reads an object selected by the next type-reader table index.</summary>
-    public T ReadObject<T>() => InnerReadObject<T>(default!);
+    public T ReadObject<T>() => InnerReadObject<T>(default!, hasExistingInstance: false);
 
     /// <summary>Reads an object selected by the next type-reader table index into an existing value.</summary>
-    public T ReadObject<T>(T existingInstance) => InnerReadObject(existingInstance);
+    public T ReadObject<T>(T existingInstance) =>
+        InnerReadObject(existingInstance, existingInstance is not null);
 
     /// <summary>Reads a raw object body with an explicitly selected type reader.</summary>
     public T ReadObject<T>(ContentTypeReader typeReader)
     {
         ArgumentNullException.ThrowIfNull(typeReader);
-        return ReadAndRecord<T>(typeReader, default!);
+        return ReadAndRecord<T>(typeReader, default!, hasExistingInstance: false);
     }
 
     /// <summary>Reads an object using the supplied reader or the stream-selected reader as appropriate.</summary>
@@ -118,40 +119,36 @@ public sealed class ContentReader : BinaryReader
         // Reference-type objects carry their reader tag in the stream. Value types are written
         // directly by their known reader, which is why XNA's overload branches here.
         return typeReader.TargetType.IsValueType
-            ? ReadAndRecord<T>(typeReader, existingInstance)
-            : InnerReadObject(existingInstance);
+            ? ReadAndRecord(typeReader, existingInstance, hasExistingInstance: true)
+            : InnerReadObject(existingInstance, existingInstance is not null);
     }
 
     /// <summary>Reads an untagged object body using the type reader for <typeparamref name="T"/>.</summary>
-    public T ReadRawObject<T>() => ReadRawObject<T>((T)default!);
+    public T ReadRawObject<T>()
+    {
+        ContentTypeReader typeReader = FindTypeReader(typeof(T));
+        return ReadAndRecord<T>(typeReader, default!, hasExistingInstance: false);
+    }
 
     /// <summary>Reads an untagged object body using an explicitly selected type reader.</summary>
     public T ReadRawObject<T>(ContentTypeReader typeReader)
     {
         ArgumentNullException.ThrowIfNull(typeReader);
-        return ReadRawObject<T>(typeReader, default!);
+        return ReadAndRecord<T>(typeReader, default!, hasExistingInstance: false);
     }
 
     /// <summary>Reads an untagged object body into an existing instance.</summary>
     public T ReadRawObject<T>(T existingInstance)
     {
-        Type targetType = typeof(T);
-        foreach (ContentTypeReader typeReader in _typeReaders)
-        {
-            if (typeReader.TargetType == targetType)
-            {
-                return ReadRawObject(typeReader, existingInstance);
-            }
-        }
-
-        throw new NotSupportedException($"The XNB reader table has no reader for '{targetType}'.");
+        ContentTypeReader typeReader = FindTypeReader(typeof(T));
+        return ReadAndRecord(typeReader, existingInstance, existingInstance is not null);
     }
 
     /// <summary>Reads an untagged object body using an explicit reader and existing instance.</summary>
     public T ReadRawObject<T>(ContentTypeReader typeReader, T existingInstance)
     {
         ArgumentNullException.ThrowIfNull(typeReader);
-        return CastResult<T>(typeReader.Read(this, existingInstance));
+        return ReadAndRecord(typeReader, existingInstance, existingInstance is not null);
     }
 
     /// <summary>Records a deferred fix-up for a resource stored after the root object.</summary>
@@ -216,12 +213,12 @@ public sealed class ContentReader : BinaryReader
 
     internal int Read7BitEncodedInt32() => Read7BitEncodedInt();
 
-    private T InnerReadObject<T>(T existingInstance)
+    private T InnerReadObject<T>(T existingInstance, bool hasExistingInstance)
     {
         int typeReaderIndex = Read7BitEncodedInt32();
         if (typeReaderIndex == 0)
         {
-            return existingInstance;
+            return default!;
         }
 
         if (typeReaderIndex < 1 || typeReaderIndex > _typeReaders.Length)
@@ -230,18 +227,40 @@ public sealed class ContentReader : BinaryReader
                 $"Content asset '{AssetName}' contains invalid type reader index {typeReaderIndex}.");
         }
 
-        return ReadAndRecord<T>(_typeReaders[typeReaderIndex - 1], existingInstance);
+        return ReadAndRecord(_typeReaders[typeReaderIndex - 1], existingInstance, hasExistingInstance);
     }
 
-    private T ReadAndRecord<T>(ContentTypeReader typeReader, T existingInstance)
+    private T ReadAndRecord<T>(ContentTypeReader typeReader, T existingInstance, bool hasExistingInstance)
     {
         T result = CastResult<T>(typeReader.Read(this, existingInstance));
-        if (result is IDisposable disposable)
+        if (hasExistingInstance)
+        {
+            if (!ReferenceEquals(existingInstance, result))
+            {
+                throw new InvalidOperationException(
+                    $"Content type reader '{typeReader.GetType()}' constructed a new instance " +
+                    "instead of populating the supplied instance.");
+            }
+        }
+        else if (!typeReader.TargetType.IsValueType && result is IDisposable disposable)
         {
             _recordDisposableObject?.Invoke(disposable);
         }
 
         return result;
+    }
+
+    private ContentTypeReader FindTypeReader(Type targetType)
+    {
+        foreach (ContentTypeReader typeReader in _typeReaders)
+        {
+            if (typeReader.TargetType == targetType)
+            {
+                return typeReader;
+            }
+        }
+
+        throw new NotSupportedException($"The XNB reader table has no reader for '{targetType}'.");
     }
 
     private void ReadSharedResources()
@@ -254,7 +273,7 @@ public sealed class ContentReader : BinaryReader
         var sharedResources = new object?[_sharedResourceCount];
         for (int index = 0; index < sharedResources.Length; index++)
         {
-            sharedResources[index] = InnerReadObject<object?>(null);
+            sharedResources[index] = InnerReadObject<object?>(null, hasExistingInstance: false);
         }
 
         foreach (KeyValuePair<int, Action<object>> fixup in _sharedResourceFixups)

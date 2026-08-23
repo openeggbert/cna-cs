@@ -22,7 +22,7 @@ public class VideoPlayer : IDisposable
         CnaResult result = Native.cna_video_player_create(CnaAmbientGame.Current, out CnaHandle player);
         CnaException.ThrowIfFailed(result, nameof(VideoPlayer));
 
-        _handle = new NativeResourceHandle(player.AsNint, h => Native.cna_video_player_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(player.AsNint, h => Native.cna_video_player_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
@@ -121,6 +121,7 @@ public class VideoPlayer : IDisposable
     {
         ArgumentNullException.ThrowIfNull(video);
         CnaResult result = Native.cna_video_player_play(NativeHandle, video.NativeHandle);
+        GC.KeepAlive(video);
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Play));
         _video = video;

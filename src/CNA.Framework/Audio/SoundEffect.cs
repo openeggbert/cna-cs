@@ -75,7 +75,8 @@ public class SoundEffect : IDisposable
         _handle = new NativeResourceHandle(nativeHandleValue, ReleaseNative);
     }
 
-    private static void ReleaseNative(nint handleValue) => Native.cna_sound_effect_destroy(new CnaHandle(handleValue));
+    private static bool ReleaseNative(nint handleValue) =>
+        Native.cna_sound_effect_destroy(new CnaHandle(handleValue)).IsSuccess();
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
 

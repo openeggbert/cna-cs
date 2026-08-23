@@ -111,16 +111,32 @@ public class Texture2D : Texture
     /// Overrides <see cref="Texture.ReleaseNative"/> (abstract there -- there is no shared
     /// <c>cna_texture_destroy</c>) and stays overridable itself so <see cref="RenderTarget2D"/> can
     /// release through <c>cna_render_target_destroy</c> instead.</summary>
-    protected override void ReleaseNative(nint handleValue) => ReleaseNativeTexture2D(handleValue);
+    protected override bool ReleaseNative(nint handleValue) => ReleaseNativeTexture2D(handleValue);
 
     /// <summary>Sourced from <c>cna_texture2d_get_info</c> (<c>graphics.h</c>'s own
     /// <c>CNA_Texture2DInfo</c>, which reports real width/height) -- not <c>texture.h</c>'s
     /// differently-shaped <c>CNA_TextureInfo</c>, which has no dimensions at all. <see langword="virtual"/>
     /// so <see cref="RenderTarget2D"/> can source its own dimensions from
     /// <c>cna_render_target_get_info</c> instead.</summary>
-    public virtual int Width => GetTexture2DDimensions(NativeHandleValue).Width;
+    public virtual int Width
+    {
+        get
+        {
+            int value = GetTexture2DDimensions(NativeHandleValue).Width;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
-    public virtual int Height => GetTexture2DDimensions(NativeHandleValue).Height;
+    public virtual int Height
+    {
+        get
+        {
+            int value = GetTexture2DDimensions(NativeHandleValue).Height;
+            GC.KeepAlive(this);
+            return value;
+        }
+    }
 
     /// <summary>Returns a plain tuple rather than <see cref="CnaTexture2DInfo"/> so CNA.XnaCompat
     /// can call it without naming a CNA.Interop type -- identical in shape and rationale to
@@ -135,7 +151,8 @@ public class Texture2D : Texture
         return ((int)info.Width, (int)info.Height);
     }
 
-    internal static void ReleaseNativeTexture2D(nint handleValue) => Native.cna_texture2d_destroy(new CnaHandle(handleValue));
+    internal static bool ReleaseNativeTexture2D(nint handleValue) =>
+        Native.cna_texture2d_destroy(new CnaHandle(handleValue)).IsSuccess();
 
     /// <summary>The shared body of both <c>SetData</c> overloads' native call, reusable by
     /// CNA.XnaCompat's parallel <c>Texture2D</c> -- see <c>CreateNativeTexture2DHandle</c>.</summary>
@@ -165,6 +182,7 @@ public class Texture2D : Texture
     {
         ArgumentNullException.ThrowIfNull(data);
         SetDataRgba8(NativeHandleValue, data);
+        GC.KeepAlive(this);
     }
 
     /// <summary>The whole surface as a rectangle at the origin. Matches real XNA.</summary>
@@ -448,6 +466,7 @@ public class Texture2D : Texture
     {
         ArgumentNullException.ThrowIfNull(data);
         SetDataRgba8(NativeHandleValue, PackColors(data));
+        GC.KeepAlive(this);
     }
 
     /// <summary>Packs a managed <see cref="Color"/> array into the RGBA8 byte layout

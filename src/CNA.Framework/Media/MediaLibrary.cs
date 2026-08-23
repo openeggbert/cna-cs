@@ -50,7 +50,7 @@ public class MediaLibrary : IDisposable
 
     private MediaLibrary(CnaHandle handle)
     {
-        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_media_library_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(handle.AsNint, h => Native.cna_media_library_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     private static CnaHandle CreateDefault()

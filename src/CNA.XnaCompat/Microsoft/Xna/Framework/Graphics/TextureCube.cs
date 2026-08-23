@@ -4,32 +4,38 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// for the pattern.</summary>
 public class TextureCube : Texture
 {
+    private readonly int _size;
+
     internal TextureCube(GraphicsDevice graphicsDevice, int size)
-        : this(graphicsDevice, new CNA.Graphics.TextureCube(graphicsDevice.Framework, size))
+        : this(graphicsDevice, new CNA.Graphics.TextureCube(
+            (graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice))).Framework,
+            size))
     {
     }
 
     public TextureCube(GraphicsDevice graphicsDevice, int size, bool mipMap, SurfaceFormat format)
-        : this(graphicsDevice, new CNA.Graphics.TextureCube(
-            graphicsDevice.Framework, size, mipMap, (CNA.Graphics.SurfaceFormat)(int)format))
+        : this(graphicsDevice, CreateFrameworkTexture(graphicsDevice, size, mipMap, format))
     {
     }
 
     /// <summary>Forwards an already-created handle, for <see cref="RenderTargetCube"/> -- see the
     /// base class's own equivalent constructor.</summary>
     internal TextureCube(GraphicsDevice graphicsDevice, nint nativeHandleValue)
-        : this(graphicsDevice, new CNA.Graphics.TextureCube(graphicsDevice.Framework, nativeHandleValue))
+        : this(graphicsDevice, new CNA.Graphics.TextureCube(
+            (graphicsDevice ?? throw new ArgumentNullException(nameof(graphicsDevice))).Framework,
+            nativeHandleValue))
     {
     }
 
     internal TextureCube(GraphicsDevice graphicsDevice, CNA.Graphics.TextureCube frameworkTexture)
         : base(graphicsDevice, frameworkTexture)
     {
+        _size = frameworkTexture.Size;
     }
 
     private CNA.Graphics.TextureCube FrameworkTextureCube => (CNA.Graphics.TextureCube)FrameworkTexture;
 
-    public int Size => FrameworkTextureCube.Size;
+    public int Size => _size;
 
     protected override void Dispose(bool arg0)
     {
@@ -63,7 +69,7 @@ public class TextureCube : Texture
         int elementCount)
         where T : struct
     {
-        ArgumentNullException.ThrowIfNull(data);
+        ValidateTransfer(cubeMapFace, level, rect, data, startIndex, elementCount);
         FrameworkTextureCube.SetData(
             (CNA.Graphics.CubeMapFace)(int)cubeMapFace, level,
             rect.ToFramework(),
@@ -92,10 +98,7 @@ public class TextureCube : Texture
         int elementCount)
         where T : struct
     {
-        ArgumentNullException.ThrowIfNull(data);
-        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
-        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+        ValidateTransfer(cubeMapFace, level, rect, data, startIndex, elementCount);
         RequireColorElement<T>();
 
         CNA.Color[] values = FrameworkTextureCube.GetData(
@@ -130,6 +133,78 @@ public class TextureCube : Texture
         {
             throw new NotSupportedException(
                 $"CNA's current TextureCube C ABI transfers Color elements only; {typeof(T)} requires an upstream typed/raw route.");
+        }
+    }
+
+    internal static void ValidateSize(int size)
+    {
+        if (size <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(size));
+        }
+    }
+
+    private static CNA.Graphics.TextureCube CreateFrameworkTexture(
+        GraphicsDevice graphicsDevice, int size, bool mipMap, SurfaceFormat format)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ValidateSize(size);
+        if (!Enum.IsDefined(format))
+        {
+            throw new NotSupportedException($"The surface format value {(int)format} is not supported.");
+        }
+
+        return new CNA.Graphics.TextureCube(
+            graphicsDevice.Framework, size, mipMap, (CNA.Graphics.SurfaceFormat)(int)format);
+    }
+
+    private void ValidateTransfer<T>(
+        CubeMapFace cubeMapFace,
+        int level,
+        Rectangle? rect,
+        T[] data,
+        int startIndex,
+        int elementCount)
+        where T : struct
+    {
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
+
+        ArgumentNullException.ThrowIfNull(data);
+        if (data.Length == 0)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
+
+        if ((uint)level >= (uint)LevelCount)
+        {
+            throw new InvalidOperationException("The mip level is invalid for this texture.");
+        }
+
+        Texture2D.ValidateDataWindow(data.Length, startIndex, elementCount);
+
+        int mipSize = Math.Max(1, Size >> level);
+        int transferWidth = mipSize;
+        int transferHeight = mipSize;
+        if (rect is { } region)
+        {
+            if (region.X < 0 || region.Y < 0 || region.Width <= 0 || region.Height <= 0 ||
+                (long)region.X + region.Width > mipSize ||
+                (long)region.Y + region.Height > mipSize)
+            {
+                throw new ArgumentException("The rectangle is outside the texture level.", nameof(rect));
+            }
+
+            transferWidth = region.Width;
+            transferHeight = region.Height;
+        }
+
+        Texture2D.ValidateTransferSize<T>(Format, transferWidth, transferHeight, 1, elementCount);
+        if (!Enum.IsDefined(cubeMapFace))
+        {
+            throw new InvalidOperationException("The cube-map face is invalid.");
         }
     }
 }

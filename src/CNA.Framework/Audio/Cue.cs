@@ -17,7 +17,7 @@ public class Cue : IDisposable
 
     internal Cue(nint nativeHandleValue)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_cue_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_cue_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>

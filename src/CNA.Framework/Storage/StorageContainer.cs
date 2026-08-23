@@ -15,7 +15,7 @@ public class StorageContainer : IDisposable
 
     internal StorageContainer(nint nativeHandleValue, StorageDevice storageDevice)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_storage_container_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_storage_container_destroy(new CnaHandle(h)).IsSuccess());
         StorageDevice = storageDevice;
     }
 
@@ -185,6 +185,7 @@ public class StorageContainer : IDisposable
     {
         ArgumentNullException.ThrowIfNull(path);
         CnaResult result = CnaStringMarshal.WithStringView(path, view => call(NativeHandle, view));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, context);
     }
 
@@ -194,6 +195,7 @@ public class StorageContainer : IDisposable
 
         byte exists = 0;
         CnaResult result = CnaStringMarshal.WithStringView(path, view => call(NativeHandle, view, out exists));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, context);
         return exists != 0;
     }
@@ -208,6 +210,7 @@ public class StorageContainer : IDisposable
         ulong count = 0;
         CnaResult countResult = CnaStringMarshal.WithStringView(
             searchPattern, view => countCall(NativeHandle, view, out count));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(countResult, context);
 
         var names = new string[count];
@@ -220,6 +223,7 @@ public class StorageContainer : IDisposable
             // this ABI uses -- there is no separate size function for an indexed name.
             CnaResult sizeResult = CnaStringMarshal.WithStringView(
                 searchPattern, view => copyCall(NativeHandle, view, index, null, 0, out needed));
+            GC.KeepAlive(this);
 
             if (sizeResult.IsFailure() && sizeResult != CnaResult.BufferTooSmall)
             {
@@ -233,6 +237,7 @@ public class StorageContainer : IDisposable
                 byte* ptr = bufferPtr;
                 CnaResult copyResult = CnaStringMarshal.WithStringView(
                     searchPattern, view => copyCall(NativeHandle, view, index, ptr, needed, out written));
+                GC.KeepAlive(this);
                 CnaException.ThrowIfFailed(copyResult, context);
             }
 

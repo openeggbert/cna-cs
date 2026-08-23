@@ -4,8 +4,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>XNA 4.0-compatible <c>EffectParameterCollection</c>. Wraps the CNA.Graphics collection and
 /// re-types each element on the way out -- see <see cref="EffectParameter"/> for why these
-/// reflection types wrap rather than subclass. Holds no state of its own, so it cannot go stale
-/// relative to the effect.</summary>
+/// reflection types wrap rather than subclass. The underlying collection and facade factory both
+/// preserve XNA's stable element identity.</summary>
 public sealed class EffectParameterCollection : IEnumerable<EffectParameter>
 {
     private readonly CNA.Graphics.EffectParameterCollection _collection;
@@ -17,25 +17,32 @@ public sealed class EffectParameterCollection : IEnumerable<EffectParameter>
 
     public int Count => _collection.Count;
 
-    public EffectParameter this[int index] => new(_collection[index]);
+    public EffectParameter this[int index]
+    {
+        get
+        {
+            CNA.Graphics.EffectParameter? element = _collection[index];
+            return element is null ? null! : EffectParameter.Wrap(element);
+        }
+    }
 
     public EffectParameter? this[string name]
     {
         get
         {
             CNA.Graphics.EffectParameter? element = _collection[name];
-            return element is null ? null : new EffectParameter(element);
+            return element is null ? null : EffectParameter.Wrap(element);
         }
     }
 
     public EffectParameter? GetParameterBySemantic(string semantic)
     {
-        ArgumentNullException.ThrowIfNull(semantic);
-        foreach (CNA.Graphics.EffectParameter element in _collection)
+        for (int i = 0; i < _collection.Count; i++)
         {
-            if (string.Equals(element.Semantic, semantic, StringComparison.Ordinal))
+            EffectParameter element = this[i];
+            if (string.Equals(element.Semantic, semantic, StringComparison.OrdinalIgnoreCase))
             {
-                return new EffectParameter(element);
+                return element;
             }
         }
 
@@ -45,9 +52,9 @@ public sealed class EffectParameterCollection : IEnumerable<EffectParameter>
     public List<EffectParameter>.Enumerator GetEnumerator()
     {
         var parameters = new List<EffectParameter>(_collection.Count);
-        foreach (CNA.Graphics.EffectParameter element in _collection)
+        for (int i = 0; i < _collection.Count; i++)
         {
-            parameters.Add(new EffectParameter(element));
+            parameters.Add(this[i]);
         }
 
         return parameters.GetEnumerator();

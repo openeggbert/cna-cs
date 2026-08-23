@@ -23,7 +23,7 @@ public class StorageDevice
 
     private StorageDevice(nint nativeHandleValue)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_storage_device_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_storage_device_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>

@@ -6,7 +6,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class BasicEffect : Effect, IEffectMatrices, IEffectFog, IEffectLights
 {
     public BasicEffect(GraphicsDevice device)
-        : base(device, new CNA.Graphics.BasicEffect(device.Framework))
+        : base(device, new CNA.Graphics.BasicEffect(
+            (device ?? throw new ArgumentNullException(nameof(device))).Framework))
     {
     }
 

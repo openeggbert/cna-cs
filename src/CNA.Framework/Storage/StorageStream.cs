@@ -35,10 +35,10 @@ internal sealed class StorageStream : Stream
     /// <summary>Closes the stream before destroying it: <c>cna_storage_stream_close</c> is what
     /// flushes and releases the underlying file, while <c>_destroy</c> only frees the handle.
     /// Ordering them the other way would drop buffered writes.</summary>
-    private static void ReleaseNative(nint handleValue)
+    private static bool ReleaseNative(nint handleValue)
     {
         var handle = new CnaHandle(handleValue);
-        Native.cna_storage_stream_close(handle);
+        return Native.cna_storage_stream_close(handle).IsSuccess();
     }
 
     public override bool CanRead => GetFlag(Native.cna_storage_stream_get_can_read, nameof(CanRead));

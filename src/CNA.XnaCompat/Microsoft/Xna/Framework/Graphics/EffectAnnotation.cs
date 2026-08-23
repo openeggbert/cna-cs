@@ -4,12 +4,19 @@ namespace Microsoft.Xna.Framework.Graphics;
 /// reason <see cref="EffectParameter"/> is one.</summary>
 public sealed class EffectAnnotation
 {
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        CNA.Graphics.EffectAnnotation,
+        EffectAnnotation> FrameworkFacades = new();
+
     private readonly CNA.Graphics.EffectAnnotation _annotation;
 
-    internal EffectAnnotation(CNA.Graphics.EffectAnnotation annotation)
+    private EffectAnnotation(CNA.Graphics.EffectAnnotation annotation)
     {
         _annotation = annotation;
     }
+
+    internal static EffectAnnotation Wrap(CNA.Graphics.EffectAnnotation annotation) =>
+        FrameworkFacades.GetValue(annotation, static value => new EffectAnnotation(value));
 
     public string Name => _annotation.Name;
 

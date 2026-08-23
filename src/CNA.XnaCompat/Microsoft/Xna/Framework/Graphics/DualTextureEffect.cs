@@ -6,7 +6,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 public class DualTextureEffect : Effect, IEffectMatrices, IEffectFog
 {
     public DualTextureEffect(GraphicsDevice device)
-        : base(device, new CNA.Graphics.DualTextureEffect(device.Framework))
+        : base(device, new CNA.Graphics.DualTextureEffect(
+            (device ?? throw new ArgumentNullException(nameof(device))).Framework))
     {
     }
 

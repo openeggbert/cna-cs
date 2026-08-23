@@ -38,7 +38,7 @@ namespace CNA.Content;
 public class ContentManager : IDisposable
 {
     private nint _nativeHandleValue;
-    private readonly bool _ownsNativeHandle;
+    private readonly NativeResourceHandle? _ownedHandle;
 
     /// <summary>
     /// <c>protected internal</c> so CNA.XnaCompat's <c>ContentManager</c> subclass constructor
@@ -52,10 +52,16 @@ public class ContentManager : IDisposable
     internal ContentManager(nint nativeHandleValue, bool ownsNativeHandle)
     {
         _nativeHandleValue = nativeHandleValue;
-        _ownsNativeHandle = ownsNativeHandle;
+        if (ownsNativeHandle)
+        {
+            _ownedHandle = new NativeResourceHandle(
+                nativeHandleValue,
+                handle => Native.cna_content_manager_destroy(new CnaHandle(handle)).IsSuccess());
+        }
     }
 
-    internal nint NativeHandleValue => _nativeHandleValue;
+    internal nint NativeHandleValue =>
+        _ownedHandle is null ? _nativeHandleValue : _ownedHandle.DangerousGetHandle();
 
     /// <summary>Creates an independently owned native manager. This is used by the strict XNA
     /// facade's public service-provider constructors once a callback-scoped graphics device is
@@ -100,16 +106,22 @@ public class ContentManager : IDisposable
     /// </summary>
     public unsafe string RootDirectory
     {
-        get => NativeStringReader.Read(
-            Native.cna_content_manager_get_root_directory_size,
-            Native.cna_content_manager_copy_root_directory,
-            new CnaHandle(_nativeHandleValue),
-            nameof(RootDirectory));
+        get
+        {
+            string value = NativeStringReader.Read(
+                Native.cna_content_manager_get_root_directory_size,
+                Native.cna_content_manager_copy_root_directory,
+                new CnaHandle(NativeHandleValue),
+                nameof(RootDirectory));
+            GC.KeepAlive(this);
+            return value;
+        }
         set
         {
             ArgumentNullException.ThrowIfNull(value);
             CnaResult result = CnaStringMarshal.WithStringView(
-                value, view => Native.cna_content_manager_set_root_directory(new CnaHandle(_nativeHandleValue), view));
+                value, view => Native.cna_content_manager_set_root_directory(new CnaHandle(NativeHandleValue), view));
+            GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(RootDirectory));
         }
     }
@@ -126,9 +138,10 @@ public class ContentManager : IDisposable
     /// </summary>
     public IServiceProvider? ServiceProvider => null;
 
-    /// <summary>Unloads every asset, then releases nothing else -- the native manager belongs to
-    /// the game that created it. Matches real XNA's <c>ContentManager.Dispose</c>, which is
-    /// <c>Unload</c> plus a disposed flag.</summary>
+    /// <summary>Unloads every asset. A game-provided native manager remains borrowed; a manager
+    /// created for the strict service-provider constructor also releases its independently owned
+    /// native handle. Matches real XNA's observable <c>ContentManager.Dispose</c> contract while
+    /// respecting the two distinct CNA ownership routes.</summary>
     public void Dispose()
     {
         Dispose(true);
@@ -163,11 +176,10 @@ public class ContentManager : IDisposable
         }
         finally
         {
-            if (_ownsNativeHandle && _nativeHandleValue != 0)
+            if (_ownedHandle is not null)
             {
-                CnaResult result = Native.cna_content_manager_destroy(new CnaHandle(_nativeHandleValue));
+                _ownedHandle.Dispose();
                 _nativeHandleValue = 0;
-                CnaException.ThrowIfFailed(result, nameof(Dispose));
             }
         }
     }
@@ -178,7 +190,8 @@ public class ContentManager : IDisposable
     /// manager stays usable and can load again afterwards.</summary>
     public virtual void Unload()
     {
-        CnaResult result = Native.cna_content_manager_unload(new CnaHandle(_nativeHandleValue));
+        CnaResult result = Native.cna_content_manager_unload(new CnaHandle(NativeHandleValue));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Unload));
     }
 
@@ -401,7 +414,8 @@ public class ContentManager : IDisposable
     {
         CnaHandle texture = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
-            assetName, view => Native.cna_content_manager_load_texture2d(new CnaHandle(_nativeHandleValue), view, out texture));
+            assetName, view => Native.cna_content_manager_load_texture2d(new CnaHandle(NativeHandleValue), view, out texture));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Load));
         return texture.AsNint;
     }
@@ -413,7 +427,8 @@ public class ContentManager : IDisposable
     {
         CnaHandle texture = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
-            assetName, view => Native.cna_content_manager_load_texture_cube(new CnaHandle(_nativeHandleValue), view, out texture));
+            assetName, view => Native.cna_content_manager_load_texture_cube(new CnaHandle(NativeHandleValue), view, out texture));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Load));
         return texture.AsNint;
     }
@@ -422,7 +437,8 @@ public class ContentManager : IDisposable
     {
         CnaHandle soundEffect = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
-            assetName, view => Native.cna_content_manager_load_sound_effect(new CnaHandle(_nativeHandleValue), view, out soundEffect));
+            assetName, view => Native.cna_content_manager_load_sound_effect(new CnaHandle(NativeHandleValue), view, out soundEffect));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Load));
         return soundEffect.AsNint;
     }
@@ -450,7 +466,8 @@ public class ContentManager : IDisposable
     public CnjLoaderRegistration RegisterCnjLoader(string typeName, CnjLoader loader)
     {
         CnjLoaderRegistration registration =
-            CnjLoaderRegistration.Register(_nativeHandleValue, typeName, loader);
+            CnjLoaderRegistration.Register(NativeHandleValue, typeName, loader);
+        GC.KeepAlive(this);
 
         _cnjLoaders.Add(registration);
         return registration;
@@ -487,7 +504,8 @@ public class ContentManager : IDisposable
         CnaResult result = CnaStringMarshal.WithStringView(
             assetName,
             view => Native.cna_content_manager_load_foreign_ext(
-                new CnaHandle(_nativeHandleValue), view, out produced));
+                new CnaHandle(NativeHandleValue), view, out produced));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(LoadForeign));
 
         object? value = ContentTypeReaderRegistration.Resolve(produced);
@@ -517,7 +535,8 @@ public class ContentManager : IDisposable
     {
         CnaHandle effect = CnaHandle.Zero;
         CnaResult result = CnaStringMarshal.WithStringView(
-            assetName, view => Native.cna_content_manager_load_effect(new CnaHandle(_nativeHandleValue), view, out effect));
+            assetName, view => Native.cna_content_manager_load_effect(new CnaHandle(NativeHandleValue), view, out effect));
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Load));
         return effect.AsNint;
     }
@@ -617,7 +636,8 @@ public class ContentManager : IDisposable
         CnaResult load = CnaStringMarshal.WithStringView(
             assetName,
             view => Native.cna_content_manager_load_sprite_font(
-                new CnaHandle(_nativeHandleValue), view, out font, out texture));
+                new CnaHandle(NativeHandleValue), view, out font, out texture));
+        GC.KeepAlive(this);
 
         if (load.IsFailure())
         {

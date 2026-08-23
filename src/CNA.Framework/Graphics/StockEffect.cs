@@ -24,7 +24,7 @@ public abstract class StockEffect : Effect
     private protected StockEffect(GraphicsDevice graphicsDevice, CnaHandle handle)
         : base(graphicsDevice)
     {
-        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)));
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
@@ -45,6 +45,7 @@ public abstract class StockEffect : Effect
     protected override void OnApply()
     {
         CnaResult result = Native.cna_effect_apply(Handle);
+        GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Apply));
     }
 

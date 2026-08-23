@@ -70,7 +70,8 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
     /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
-    private static void ReleaseNative(nint handleValue) => Native.cna_graphics_device_manager_destroy(new CnaHandle(handleValue));
+    private static bool ReleaseNative(nint handleValue) =>
+        Native.cna_graphics_device_manager_destroy(new CnaHandle(handleValue)).IsSuccess();
 
     public int PreferredBackBufferWidth
     {

@@ -4,6 +4,7 @@ namespace XnaCompatibilityCompileProbe;
 
 internal static class Program
 {
+    [STAThread]
     private static void Main()
     {
         LoadXnaRuntimeAssembliesIfRequested();
@@ -14,6 +15,11 @@ internal static class Program
         }
 
         foreach (string observation in InputBehaviorCorpus.Capture())
+        {
+            Console.WriteLine(observation);
+        }
+
+        foreach (string observation in ContentErrorCorpus.Capture())
         {
             Console.WriteLine(observation);
         }

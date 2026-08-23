@@ -11,6 +11,172 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Graphics behavior and native ownership hardening (2026-08-22)
+
+This run started from the completed 257-type metadata profile and did not change its public
+contract. Final verification remains **257 reference types / 257 target types, 0 total diagnostics,
+0 CNA leaks, 0 base mismatches, 0 interface mismatches, and 0 allowlist entries**. No upstream CNA
+source was modified.
+
+The deterministic behavior snapshot grew from 106 to **299 observations**:
+
+| Corpus | Observations |
+| --- | ---: |
+| Math/geometry | 83 |
+| Input value semantics | 23 |
+| Graphics behavior/validation | 153 |
+| Resource/lifetime | 13 |
+| Content error paths | 27 |
+| **Total** | **299** |
+
+The original 106 observations remain unchanged. The pure 133-observation executable adds the 27
+content-error paths; the device-backed executable adds 166 graphics/resource observations. The
+identical source compiles against CNA, Microsoft XNA 4.0, FNA, and MonoGame. CNA and MonoGame
+execute all 299 observations on Linux. FNA executes all 133 pure observations and 118 safe
+device-backed observations; 48 process-fatal comparator paths emit deterministic
+`not-run(opt-in-required)` values. This gating is evidence isolation, not an XNA expectation. The
+Microsoft assemblies compile both probes as 32-bit .NET Framework 4.8 programs with zero errors;
+their independent Windows XNA runtime snapshot is still pending.
+
+### Graphics differences and fixes
+
+- `GraphicsDevice.Present(source,destination,window)` no longer discards its arguments. The CNA C
+  ABI has only parameterless presentation, so the all-default tuple forwards safely and every
+  non-default tuple throws `NotSupportedException`. A versioned presentation descriptor is the
+  required upstream fix.
+- Dynamic vertex/index uploads now preserve `SetDataOptions.None`, `Discard`, and `NoOverwrite`
+  wherever the ABI can carry them. Complete built-in typed vertex uploads and complete index
+  uploads work. Raw/custom/offset vertex uploads and optioned index slices fail explicitly when the
+  native route cannot represent the option; no overload silently aliases every value to `None`.
+- Contiguous raw vertex-byte upload/readback now round-trips, which is required by model XNB data.
+  The explicit partial-element stride overload no longer zero-fills XNA-preserved gaps:
+  `sizeof(T) < vertexStride` now fails deterministically until CNA exposes independent element-size
+  and buffer-stride scatter/gather fields. An initially over-broad guard also rejected CNA's valid
+  custom byte-window readback; the existing custom-layout integration test failed immediately, and
+  the final guard distinguishes complete raw byte windows from unrepresentable scatter/gather.
+- Generic texture/backbuffer readback no longer performs misleading managed reinterpretation.
+  Texture2D uses the native named semantic types and rejects an untagged compatible struct such as
+  `uint`; backbuffer, Texture3D readback, and TextureCube transfers remain Color-only. The missing
+  raw, format-aware native operations are specified in `docs/native-behavior-blockers.md`.
+- Repeated reads of graphics states, state/texture/sampler collections, current effect technique,
+  technique/pass/annotation collections, and their indexers now return stable facade objects when
+  XNA does. Stock states preserve singleton identity and XNA defaults. State mutation freezes after
+  binding; slot bounds, null/disposed assignments, and repeat reads have regression observations.
+  Caches never create two owning wrappers for one native handle.
+- SpriteBatch now enforces and recovers from XNA-style order failures (`End` before `Begin`, double
+  `Begin`, draw outside a batch), validates null texture/font/string/StringBuilder arguments, and
+  only transitions to ended after a successful backend `End`. Invalid rectangles, dimensions,
+  non-finite values, sort values, state/effect combinations, disposal during a batch, and state
+  after failure are recorded. Unknown sort modes and non-finite values still expose an upstream
+  native behavior difference rather than a fake managed success.
+- DrawUser/DrawIndexed/DrawInstanced paths now validate null/empty arrays, offsets/counts,
+  available vertices/indices, blittability, index element types, declarations/stride, disposed or
+  missing buffers, and topology before native dispatch. The graphics corpus contains 29 dedicated
+  draw-validation names.
+- GraphicsResource disposal now exposes `IsDisposed == true` inside the single `Disposing` event,
+  keeps Name/Tag stable after disposal, remains disposed when a handler throws, and tolerates a
+  second `Dispose`.
+- `GraphicsDevice.Disposing` no longer disappears during facade teardown. XNA source/IL sets the
+  disposed flag and releases the device before raising the event; explicit and game-owned CNA
+  teardown now reproduces the visible ordering, sender, one-shot count, self-unsubscription, and
+  idempotent second Dispose. A handler may throw only through the managed Dispose call, while
+  native game cleanup still runs from `finally`.
+- Native resource-event subscription remains deliberately disabled. The historical managed thunk
+  had two arguments while the native callback has three and could crash on first delivery. The
+  corrected native payload is still insufficient: it does not provide a stable actual resource
+  identity or round-trippable destruction tag, including for native content-created resources.
+  Therefore `ResourceCreated`/`ResourceDestroyed` safely emit zero events instead of fake/null
+  resources. GraphicsDeviceManager disposal ordering, DeviceLost/DeviceResetting/DeviceReset
+  ordering, and resource-event delivery remain open for Windows/native adjudication; callback
+  exceptions never unwind through unmanaged code.
+
+### Ownership and lifetime findings
+
+A new isolated `CNA.OwnershipStress` executable completed **100/100 cycles in Debug and 100/100 in
+Release**. Each run split into 50 explicit/double-dispose cycles and 50 abandoned/finalizer cycles;
+every cycle created a game, created/used a representative resource graph, forced finalization where
+intentional, destroyed the game, and created the next game. Ten cycles per run deliberately threw
+from `GraphicsDevice.Disposing`; the managed exception propagated after the native cleanup path was
+secured, and recreation still succeeded.
+
+The exercised graph includes owned textures, dynamic/static buffers, SpriteBatch, SpriteFont atlas,
+effects, SoundEffect, media objects, storage devices/containers, an adopted
+`Texture2D.FromStream` handle, and a content-managed model; it also traverses parent-owned effect
+techniques/passes/parameters/reflection collections. Results: explicit Dispose succeeded, double
+Dispose was idempotent, finalizers were drained on the game owner thread, borrowed children did not
+destroy parent handles, the adopted texture had one owner, and every second-game creation
+succeeded. There were no native crashes, refused game destroys, stale-callback failures,
+use-after-free reports, or observed double frees.
+
+The stress runner found one real leak: service-provider-created `CNA.Content.ContentManager`
+instances owned a raw native handle but had no finalizer. Abandoning one left a native game child
+alive and prevented subsequent game creation. The owned route now uses `NativeResourceHandle`;
+the game-provided content manager remains borrowed. A model XNB regression also exposed and fixed
+raw byte transfer through vertex/index buffers.
+
+All `DangerousGetHandle()` call sites were audited. Native-call lifetimes are now protected by
+explicit managed liveness, and `NativeResourceHandle` records its owner thread, queues
+finalizer/cross-thread releases, and retries failed parent destruction after child release at game
+safe points. New tests cover finalizer deferral, cross-thread Dispose, parent retry,
+callback-exception containment, and failed-unsubscribe rooting.
+
+### Content malformed/error behavior
+
+The 27 new observations use tiny in-memory fixtures and cover bad XNB magic, unsupported platform,
+version/profile and compression flags, truncated/inconsistent headers and payloads, reader-table
+activation/version/index failures, invalid shared-resource indices, custom-reader exceptions,
+wrong target type, missing assets, duplicate disposables, cache/root-directory behavior, and
+Unload/Dispose after partial failure. Fixes include strict Windows header validation, normalized
+truncation as `ContentLoadException` with an inner IO error, XNA reader version/index checks,
+existing-instance/disposable behavior, per-occurrence duplicate disposable tracking, `finally`
+cleanup during Unload, and a permanently disposed state even if disposal cleanup throws.
+
+The corpus includes successful and empty external references plus disposal of a failed
+`OpenStream`. Nested/missing/path-normalization references, successful-stream ownership, broader
+compressed corruption, built-in reader tables, and the independent XNA exception snapshot remain
+open.
+
+### Exact native blockers
+
+`docs/native-behavior-blockers.md` records the affected XNA API, current C ABI limitation,
+observable safe behavior, and required upstream operation for: argument-bearing Present; dynamic
+buffer optioned raw/window updates; arbitrary Texture2D structs; generic backbuffer readback; raw
+Texture3D readback; raw TextureCube face transfers; compressed DXT font atlases; resource event
+identity/tag delivery; dynamic-buffer ContentLost; and SpriteBatch unknown/non-finite handling.
+The binding fails deterministically where no correct route exists. `../cna` was inspected only and
+was not modified.
+
+### Final verification evidence
+
+- solution Debug and Release: **0 warnings, 0 errors**;
+- `CNA.Framework.Tests`: **543/543 passed**;
+- `CNA.XnaCompat.Tests`: **199/199 passed**;
+- native integration under Xvfb: **114/114 Debug, 114/114 Release**;
+- ownership stress under Xvfb: **100/100 Debug, 100/100 Release**;
+- strict verifier: **257/257 types, 0 diagnostics, 0 allowed, 0 failures**;
+- leak-only verifier: **257 target types, 0 diagnostics, 0 allowed, 0 failures**;
+- CNA behavior execution: **133 pure + 166 device-backed = 299**;
+- MonoGame behavior execution: **299**; FNA: **133 pure + 118 safe device-backed + 48 gated
+  placeholders**; Microsoft XNA: both probes compile, Windows execution pending;
+- Microsoft XNA and FNA probe builds: **0 warnings, 0 errors**. MonoGame builds have **0 errors**;
+  the pure build reports two sandboxed NuGet vulnerability-feed warnings, and the graphics build
+  reports those two plus five MonoGame-only obsolete-overload warnings;
+- `git diff --check`: clean.
+
+The Windows workflow is one command:
+
+```powershell
+.\scripts\Capture-XnaSnapshots.ps1 `
+  -XnaReferencePath 'C:\Program Files (x86)\Microsoft XNA\XNA Game Studio\v4.0\References\Windows\x86'
+```
+
+It builds the exact sources for x86/net48, enables all gated groups, normalizes lowercase dotted
+observation lines to LF UTF-8 without BOM, validates 133/166/299 counts, and writes
+`artifacts/xna-snapshots/xna-math-input-content.txt`, `xna-graphics-resource.txt`, and
+`xna-all.txt`. The XNA runtime/redistributable, .NET Framework 4.8 developer pack, Direct3D display,
+and legal external reference/runtime assemblies are prerequisites; proprietary DLLs are not
+checked in.
+
 ## Math/geometry and input behavioral baseline expands to 106 observations (2026-08-22)
 
 This run began from the exact-metadata state below and treated every structural zero as a hard

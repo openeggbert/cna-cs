@@ -56,9 +56,10 @@ public class TextureCollection
             CnaHandle handle = value is null ? CnaHandle.Zero : new CnaHandle(value.NativeHandleValue);
             CnaResult result = Native.cna_graphics_device_set_texture(
                 _graphicsDevice.ResolveNativeDeviceHandle(), _stage, (uint)index, handle);
+            GC.KeepAlive(value);
             CnaException.ThrowIfFailed(result, nameof(TextureCollection));
 
-            // Also what keeps `value` reachable across the native call above -- see plan.md WP17.
+            // Retaining the wrapper is also what keeps the native texture alive while bound.
             _bound[index] = value;
         }
     }

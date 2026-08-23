@@ -29,13 +29,13 @@ public class Video : IDisposable
             fileName, view => Native.cna_video_create(graphicsDevice.ResolveNativeDeviceHandle(), view, out video));
         CnaException.ThrowIfFailed(result, nameof(Video));
 
-        _handle = new NativeResourceHandle(video.AsNint, h => Native.cna_video_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(video.AsNint, h => Native.cna_video_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     internal Video(GraphicsDevice graphicsDevice, nint nativeHandleValue)
     {
         GraphicsDevice = graphicsDevice;
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_video_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_video_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>The device this video decodes into. Held so <see cref="VideoPlayer.GetTexture"/>

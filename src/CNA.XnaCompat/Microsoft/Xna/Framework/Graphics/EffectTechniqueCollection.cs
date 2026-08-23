@@ -4,8 +4,8 @@ namespace Microsoft.Xna.Framework.Graphics;
 
 /// <summary>XNA 4.0-compatible <c>EffectTechniqueCollection</c>. Wraps the CNA.Graphics collection and
 /// re-types each element on the way out -- see <see cref="EffectParameter"/> for why these
-/// reflection types wrap rather than subclass. Holds no state of its own, so it cannot go stale
-/// relative to the effect.</summary>
+/// reflection types wrap rather than subclass. The underlying collection and facade factory both
+/// preserve XNA's stable element identity.</summary>
 public sealed class EffectTechniqueCollection : IEnumerable<EffectTechnique>
 {
     private readonly CNA.Graphics.EffectTechniqueCollection _collection;
@@ -17,23 +17,30 @@ public sealed class EffectTechniqueCollection : IEnumerable<EffectTechnique>
 
     public int Count => _collection.Count;
 
-    public EffectTechnique this[int index] => new(_collection[index]);
+    public EffectTechnique this[int index]
+    {
+        get
+        {
+            CNA.Graphics.EffectTechnique? element = _collection[index];
+            return element is null ? null! : EffectTechnique.Wrap(element);
+        }
+    }
 
     public EffectTechnique? this[string name]
     {
         get
         {
             CNA.Graphics.EffectTechnique? element = _collection[name];
-            return element is null ? null : new EffectTechnique(element);
+            return element is null ? null : EffectTechnique.Wrap(element);
         }
     }
 
     public List<EffectTechnique>.Enumerator GetEnumerator()
     {
         var techniques = new List<EffectTechnique>(_collection.Count);
-        foreach (CNA.Graphics.EffectTechnique element in _collection)
+        for (int i = 0; i < _collection.Count; i++)
         {
-            techniques.Add(new EffectTechnique(element));
+            techniques.Add(this[i]);
         }
 
         return techniques.GetEnumerator();

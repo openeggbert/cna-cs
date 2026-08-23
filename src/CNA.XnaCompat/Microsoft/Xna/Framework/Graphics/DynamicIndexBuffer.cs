@@ -65,8 +65,7 @@ public class DynamicIndexBuffer : IndexBuffer, IDynamicGraphicsResource
         SetDataOptions options)
         where T : struct
     {
-        _ = options;
-        base.SetData(offsetInBytes, data, startIndex, elementCount);
+        FrameworkBuffer.SetDataWithOptions(offsetInBytes, data, startIndex, elementCount, (uint)options);
     }
 
     private Exception? DisposeDynamicState()

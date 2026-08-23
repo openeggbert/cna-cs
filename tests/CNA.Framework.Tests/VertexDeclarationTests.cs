@@ -67,6 +67,53 @@ public class VertexDeclarationTests
     }
 
     [Fact]
+    public void Constructor_ZeroStride_ThrowsArgumentOutOfRange()
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => new VertexDeclaration(
+            0,
+            new VertexElement(0, VertexElementFormat.Single, VertexElementUsage.Position, 0)));
+
+        Assert.Equal("vertexStride", exception.ParamName);
+    }
+
+    [Fact]
+    public void Constructor_NonAlignedStrideOrOffset_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => new VertexDeclaration(
+            6,
+            new VertexElement(0, VertexElementFormat.Single, VertexElementUsage.Position, 0)));
+        Assert.Throws<ArgumentException>(() => new VertexDeclaration(
+            8,
+            new VertexElement(2, VertexElementFormat.Single, VertexElementUsage.Position, 0)));
+    }
+
+    [Fact]
+    public void Constructor_ElementOutsideStride_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => new VertexDeclaration(
+            4,
+            new VertexElement(0, VertexElementFormat.Vector2, VertexElementUsage.Position, 0)));
+    }
+
+    [Fact]
+    public void Constructor_DuplicateUsageAndIndex_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => new VertexDeclaration(
+            8,
+            new VertexElement(0, VertexElementFormat.Single, VertexElementUsage.TextureCoordinate, 0),
+            new VertexElement(4, VertexElementFormat.Single, VertexElementUsage.TextureCoordinate, 0)));
+    }
+
+    [Fact]
+    public void Constructor_OverlappingElements_ThrowsArgumentException()
+    {
+        Assert.Throws<ArgumentException>(() => new VertexDeclaration(
+            16,
+            new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
+            new VertexElement(8, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 0)));
+    }
+
+    [Fact]
     public void GetVertexElements_ReturnsACopy_NotTheInternalArray()
     {
         var element = new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0);

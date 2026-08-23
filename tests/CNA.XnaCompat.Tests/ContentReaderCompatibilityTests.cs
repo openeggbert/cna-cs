@@ -30,9 +30,9 @@ public class ContentReaderCompatibilityTests
 
         content.Unload();
 
-        // The root and its one shared resource were both returned by a ContentTypeReader and are
-        // therefore owned by ContentManager exactly as normal XNA content is.
-        Assert.Equal(2, TestContent.DisposeCount);
+        // The nested value was supplied by the caller as an existing instance and remains caller
+        // owned. Only the separately constructed shared resource is tracked by ContentManager.
+        Assert.Equal(1, TestContent.DisposeCount);
     }
 
     private static byte[] BuildCustomAsset()

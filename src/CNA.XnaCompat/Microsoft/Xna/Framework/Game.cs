@@ -152,14 +152,32 @@ public class Game : IDisposable
         }
 
         _disposed = true;
-        if (disposing)
+        try
         {
-            _content?.Dispose();
-            _backend?.DisposeCompatGraphicsDevice();
-            _graphicsDeviceManager?.DisposeFromGame();
+            if (disposing)
+            {
+                try
+                {
+                    _content?.Dispose();
+                }
+                finally
+                {
+                    try
+                    {
+                        _backend?.DisposeCompatGraphicsDevice();
+                    }
+                    finally
+                    {
+                        _graphicsDeviceManager?.DisposeFromGame();
+                    }
+                }
+            }
         }
-
-        _backend?.Dispose();
+        finally
+        {
+            // A managed disposal handler may throw, but native game teardown must still run.
+            _backend?.Dispose();
+        }
     }
 
     protected virtual void Update(GameTime gameTime)

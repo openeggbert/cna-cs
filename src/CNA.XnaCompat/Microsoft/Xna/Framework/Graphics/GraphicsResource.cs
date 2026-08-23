@@ -5,13 +5,19 @@ public abstract class GraphicsResource : IDisposable
 {
     private bool _disposed;
     private string _name = string.Empty;
-    private readonly GraphicsDevice? _graphicsDevice;
+    private GraphicsDevice? _graphicsDevice;
 
     internal GraphicsResource()
     {
     }
 
     internal GraphicsResource(GraphicsDevice graphicsDevice)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        _graphicsDevice = graphicsDevice;
+    }
+
+    internal void AttachGraphicsDevice(GraphicsDevice graphicsDevice)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         _graphicsDevice = graphicsDevice;
@@ -49,12 +55,12 @@ public abstract class GraphicsResource : IDisposable
             return;
         }
 
+        _disposed = true;
+
         if (arg0)
         {
             Disposing?.Invoke(this, EventArgs.Empty);
         }
-
-        _disposed = true;
     }
 
     public override string ToString() => string.IsNullOrEmpty(Name) ? base.ToString()! : Name;

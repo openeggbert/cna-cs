@@ -26,7 +26,7 @@ public class ContentTypeReader : IDisposable
 
     internal ContentTypeReader(nint nativeHandleValue)
     {
-        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_content_type_reader_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(nativeHandleValue, h => Native.cna_content_type_reader_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>

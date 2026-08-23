@@ -6,18 +6,17 @@ namespace CNA.Graphics;
 /// <summary>
 /// Matches real XNA's <c>EffectAnnotationCollection</c>: the annotations attached to a parameter, technique or pass, reached by index or by name.
 ///
-/// An OWNED native collection view -- <c>effects.h</c> mints a fresh one per call rather than
-/// aliasing something the effect owns, so this releases it (see <see cref="EffectParameter"/>).
-/// Nothing is cached: <see cref="Count"/> and the indexers each round-trip
-/// to native, so the collection cannot go stale relative to the effect it belongs to.
+/// An owned native collection view. Elements are cached by index because each native lookup mints
+/// another owned handle while XNA exposes stable managed objects.
 /// </summary>
 public class EffectAnnotationCollection : IEnumerable<EffectAnnotation>, IDisposable
 {
     private readonly NativeResourceHandle _ownedHandle;
+    private readonly Dictionary<int, EffectAnnotation> _byIndex = [];
 
     internal EffectAnnotationCollection(CnaHandle handle)
     {
-        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_annotation_collection_destroy(new CnaHandle(h)));
+        _ownedHandle = new NativeResourceHandle(handle.AsNint, h => Native.cna_effect_annotation_collection_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
@@ -31,12 +30,10 @@ public class EffectAnnotationCollection : IEnumerable<EffectAnnotation>, IDispos
     /// these types SafeHandle ownership is what fixed their leak; it is also what introduced this
     /// hazard, since before that they held a bare handle with no finalizer at all.
     ///
-    /// <see cref="GC.KeepAlive(object)"/> rather than
-    /// <see cref="System.Runtime.InteropServices.SafeHandle.DangerousAddRef"/>/<c>DangerousRelease</c>:
-    /// it closes the reachability hazard, which is the real one here, but it does not make a
-    /// concurrent <c>Dispose</c> from another thread safe. Nothing in this project is thread-safe,
-    /// so that is consistent rather than a new gap -- and the ref-counted form is what
-    /// <c>plan.md</c> WP17 will apply project-wide.
+    /// <see cref="GC.KeepAlive(object)"/> closes the ordinary reachability hazard. In addition,
+    /// <see cref="NativeResourceHandle"/> defers finalizer-thread and cross-thread releases to an
+    /// owner-thread safe point, so an unreachable wrapper cannot destroy this raw handle during a
+    /// native call. This project still does not promise concurrent <c>Dispose</c>/operation safety.
     /// </summary>
     private CnaHandle _handle => new(_ownedHandle.DangerousGetHandle());
 
@@ -44,6 +41,12 @@ public class EffectAnnotationCollection : IEnumerable<EffectAnnotation>, IDispos
     /// handle, released by its SafeHandle whether or not a caller disposes it.</summary>
     public void Dispose()
     {
+        foreach (EffectAnnotation annotation in _byIndex.Values)
+        {
+            annotation.Dispose();
+        }
+
+        _byIndex.Clear();
         _ownedHandle.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -63,11 +66,22 @@ public class EffectAnnotationCollection : IEnumerable<EffectAnnotation>, IDispos
     {
         get
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            if (index < 0 || index >= Count)
+            {
+                return null!;
+            }
+
+            if (_byIndex.TryGetValue(index, out EffectAnnotation? existing))
+            {
+                return existing;
+            }
+
             CnaResult result = Native.cna_effect_annotation_collection_get_at(_handle, (ulong)index, out CnaHandle element);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(EffectAnnotationCollection));
-            return new EffectAnnotation(element);
+            var created = new EffectAnnotation(element);
+            _byIndex[index] = created;
+            return created;
         }
     }
 
@@ -77,17 +91,17 @@ public class EffectAnnotationCollection : IEnumerable<EffectAnnotation>, IDispos
     {
         get
         {
-            ArgumentNullException.ThrowIfNull(name);
+            int count = Count;
+            for (int i = 0; i < count; i++)
+            {
+                EffectAnnotation annotation = this[i];
+                if (annotation.Name == name)
+                {
+                    return annotation;
+                }
+            }
 
-            CnaHandle element = default;
-            byte found = 0;
-            CnaResult result = CnaStringMarshal.WithStringView(
-                name, view => Native.cna_effect_annotation_collection_find(_handle, view, out found, out element));
-            GC.KeepAlive(this);
-                GC.KeepAlive(this);
-            CnaException.ThrowIfFailed(result, nameof(EffectAnnotationCollection));
-
-            return found != 0 ? new EffectAnnotation(element) : null;
+            return null;
         }
     }
 

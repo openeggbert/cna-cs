@@ -21,7 +21,7 @@ public class SoundBank : IDisposable
         GC.KeepAlive(audioEngine);
         CnaException.ThrowIfFailed(result, nameof(SoundBank));
 
-        _handle = new NativeResourceHandle(soundBank.AsNint, h => Native.cna_sound_bank_destroy(new CnaHandle(h)));
+        _handle = new NativeResourceHandle(soundBank.AsNint, h => Native.cna_sound_bank_destroy(new CnaHandle(h)).IsSuccess());
     }
 
     /// <summary>
