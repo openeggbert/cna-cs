@@ -6,7 +6,21 @@
       for direct use by application code -- see CNA.Framework and CNA.XnaCompat.
     </Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <IsPackable>false</IsPackable>
+    <IsPackable Condition="'$(CnaPackageAcceptance)' != 'true'">false</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(CnaPackageAcceptance)' == 'true' and '$(CnaNativeLibrary)' != '' and '$(CnaNativeRid)' != ''">
+    <None Include="$(CnaNativeLibrary)"
+          Pack="true"
+          PackagePath="runtimes/$(CnaNativeRid)/native/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <Target Name="ValidateCnaAcceptanceNativeAsset" BeforeTargets="Pack"
+          Condition="'$(CnaPackageAcceptance)' == 'true' and ('$(CnaNativeLibrary)' != '' or '$(CnaNativeRid)' != '')">
+    <Error Condition="'$(CnaNativeLibrary)' == '' or '$(CnaNativeRid)' == ''"
+           Text="CnaNativeLibrary and CnaNativeRid must either both be set or both be empty." />
+    <Error Condition="!Exists('$(CnaNativeLibrary)')"
+           Text="CnaNativeLibrary='$(CnaNativeLibrary)' does not exist." />
+  </Target>
 
 </Project>

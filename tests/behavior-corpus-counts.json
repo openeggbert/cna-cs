@@ -1,21 +1,118 @@
 {
-  "probes": {
-    "compile": 187,
-    "graphics": 166,
-    "runtime": 104
-  },
-  "categories": {
-    "mathGeometry": 83,
-    "input": 23,
-    "graphics": 153,
-    "resourceLifetime": 13,
-    "contentErrorBaseline": 27,
-    "audio": 83,
-    "xact": 7,
-    "media": 20,
-    "video": 17,
-    "storage": 20,
-    "deviceLifecycle": 4,
-    "contentAdditional": 7
-  }
+  "schemaVersion": 1,
+  "description": "Authoritative metadata for every deterministic CNA/XNA behavior observation. Probe and category totals are derived from this file; scripts must not duplicate them.",
+  "combinedExpectedObservationCount": 469,
+  "combinedSnapshotFilename": "xna-all.txt",
+  "candidateCombinedSnapshotFilename": "cna-all.txt",
+  "probes": [
+    {
+      "id": "compile",
+      "sourceProject": "tests/CNA.XnaCompat.CompileProbe/CNA.XnaCompat.CompileProbe.csproj",
+      "classification": "pure",
+      "xnaRuntimeRequirement": "Windows x86 with XNA Framework 4.0 runtime and .NET Framework 4.8",
+      "fnaSupportStatus": "emits all observations before an FNA SoundEffect finalizer abort in the measured Linux environment",
+      "monoGameSupportStatus": "emits the math/geometry and input prefix, then aborts during audio initialization in the measured Linux environment",
+      "assetRequirement": "tiny synthetic in-memory XNB, LZX, stream, and temporary-file fixtures only",
+      "expectedSnapshotFilename": "xna-math-input-audio-content.txt",
+      "categories": ["mathGeometry", "input", "audioPure", "contentError"]
+    },
+    {
+      "id": "graphics",
+      "sourceProject": "tests/CNA.XnaCompat.GraphicsProbe/CNA.XnaCompat.GraphicsProbe.csproj",
+      "classification": "device",
+      "xnaRuntimeRequirement": "Windows x86 with XNA Framework 4.0 runtime, Direct3D-capable display, and .NET Framework 4.8",
+      "fnaSupportStatus": "118 safe observations execute and 48 destructive comparator paths are explicitly gated in the measured Linux environment",
+      "monoGameSupportStatus": "all observations execute in the measured Linux DesktopGL environment",
+      "assetRequirement": "no external assets; generated textures, buffers, states, and effects only",
+      "expectedSnapshotFilename": "xna-graphics-resource.txt",
+      "categories": ["graphics", "resourceLifetime"]
+    },
+    {
+      "id": "runtime",
+      "sourceProject": "tests/CNA.XnaCompat.RuntimeProbe/CNA.XnaCompat.RuntimeProbe.csproj",
+      "classification": "runtime",
+      "xnaRuntimeRequirement": "Windows x86 with XNA Framework 4.0 runtime, Direct3D/audio/storage services, and .NET Framework 4.8",
+      "fnaSupportStatus": "source builds, but the measured Linux native runtime cannot initialize a video device",
+      "monoGameSupportStatus": "not source-compatible with the selected DesktopGL profile because XNA Storage and authored XACT are absent",
+      "assetRequirement": "generated PCM, malformed XACT settings, isolated storage, and no authored bank/video assets",
+      "expectedSnapshotFilename": "xna-audio-xact-media-video-storage-lifecycle.txt",
+      "categories": ["audioRuntime", "xact", "media", "video", "storage", "deviceLifecycle"]
+    }
+  ],
+  "categories": [
+    {
+      "id": "mathGeometry",
+      "displayName": "Math / geometry",
+      "expectedObservationCount": 83,
+      "observationPrefixes": ["v2.", "v3.", "v4.", "vector.", "q.", "matrix.", "viewport.", "color.", "packed.", "integer.", "negate.", "frustum.", "box.", "sphere.", "ray.", "plane.", "curve.", "math."]
+    },
+    {
+      "id": "input",
+      "displayName": "Input",
+      "expectedObservationCount": 23,
+      "observationPrefixes": ["keyboard.", "mouse.", "thumbs.", "triggers.", "gamepad.", "buttons.", "dpad.", "touch."]
+    },
+    {
+      "id": "graphics",
+      "displayName": "Graphics",
+      "expectedObservationCount": 153,
+      "observationPrefixes": ["graphics."]
+    },
+    {
+      "id": "resourceLifetime",
+      "displayName": "Resource / lifetime",
+      "expectedObservationCount": 13,
+      "observationPrefixes": ["resource."]
+    },
+    {
+      "id": "contentError",
+      "displayName": "Content error",
+      "expectedObservationCount": 46,
+      "observationPrefixes": ["content."]
+    },
+    {
+      "id": "audioPure",
+      "displayName": "Audio",
+      "expectedObservationCount": 47,
+      "aggregateAs": "audio",
+      "observationPrefixes": ["audio."]
+    },
+    {
+      "id": "audioRuntime",
+      "displayName": "Audio",
+      "expectedObservationCount": 36,
+      "aggregateAs": "audio",
+      "observationPrefixes": ["audio."]
+    },
+    {
+      "id": "xact",
+      "displayName": "XACT",
+      "expectedObservationCount": 7,
+      "observationPrefixes": ["xact."]
+    },
+    {
+      "id": "media",
+      "displayName": "Media",
+      "expectedObservationCount": 20,
+      "observationPrefixes": ["media."]
+    },
+    {
+      "id": "video",
+      "displayName": "Video",
+      "expectedObservationCount": 17,
+      "observationPrefixes": ["video."]
+    },
+    {
+      "id": "storage",
+      "displayName": "Storage",
+      "expectedObservationCount": 20,
+      "observationPrefixes": ["storage."]
+    },
+    {
+      "id": "deviceLifecycle",
+      "displayName": "DeviceLifecycle",
+      "expectedObservationCount": 4,
+      "observationPrefixes": ["devicelifecycle."]
+    }
+  ]
 }

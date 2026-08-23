@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "description": "Future XNA profiles kept separate from the completed seven-assembly Windows runtime baseline.",
+  "baselineProfile": "../api-compat/profiles/xna40-windows-runtime.json",
+  "profiles": [
+    {
+      "id": "gamer-services",
+      "name": "GamerServices and Avatar",
+      "platform": "XNA 4.0 Windows",
+      "profileAssemblies": [
+        "Microsoft.Xna.Framework.GamerServices.dll",
+        "Microsoft.Xna.Framework.Avatar.dll"
+      ],
+      "namespacePrefixes": ["Microsoft.Xna.Framework.GamerServices"],
+      "referenceAssemblySetStatus": "authoritative for the locally archived Windows XNA 4.0 GamerServices/Avatar extension assemblies",
+      "serviceAvailability": "Historical Games for Windows LIVE/Guide services are not qualified and may be extinct or unavailable.",
+      "recommendedSupportStatus": "inventory-only; consider deterministic unsupported behavior for service-backed operations",
+      "inventoryEnabled": true
+    },
+    {
+      "id": "net",
+      "name": "Networking / Net",
+      "platform": "XNA 4.0 Windows",
+      "profileAssemblies": ["Microsoft.Xna.Framework.Net.dll"],
+      "namespacePrefixes": ["Microsoft.Xna.Framework.Net"],
+      "referenceAssemblySetStatus": "authoritative for the locally archived Windows XNA 4.0 Net extension assembly",
+      "serviceAvailability": "Packet APIs are local; discovery, sessions, transport, and gamer identity require unqualified historical services/runtime behavior.",
+      "recommendedSupportStatus": "inventory-only; separate future compatibility profile",
+      "inventoryEnabled": true
+    },
+    {
+      "id": "xbox-360",
+      "name": "Xbox 360 runtime",
+      "platform": "Xbox 360",
+      "profileAssemblies": [],
+      "namespacePrefixes": ["Microsoft.Xna.Framework"],
+      "referenceAssemblySetStatus": "not-established: no legally supplied Xbox 360 XNA 4.0 reference pack is available locally",
+      "serviceAvailability": "Requires Xbox 360 hardware/runtime and platform services unavailable in this checkpoint.",
+      "recommendedSupportStatus": "out-of-scope until an authoritative reference pack and executable platform evidence are supplied",
+      "inventoryEnabled": false
+    },
+    {
+      "id": "windows-phone",
+      "name": "Windows Phone runtime and sensors/devices",
+      "platform": "Windows Phone",
+      "profileAssemblies": [],
+      "namespacePrefixes": ["Microsoft.Xna.Framework"],
+      "referenceAssemblySetStatus": "not-established: no legally supplied Windows Phone XNA reference pack is available locally",
+      "serviceAvailability": "Requires phone-specific reference assemblies, device APIs, and executable device/emulator evidence unavailable in this checkpoint.",
+      "recommendedSupportStatus": "out-of-scope until an authoritative reference pack and executable platform evidence are supplied",
+      "inventoryEnabled": false
+    },
+    {
+      "id": "content-pipeline",
+      "name": "Content Pipeline / build-time",
+      "platform": "XNA Game Studio 4.0 Windows build host",
+      "profileAssemblies": [
+        "Microsoft.Xna.Framework.Content.Pipeline.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.AudioImporters.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.EffectImporter.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.FBXImporter.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.TextureImporter.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.VideoImporters.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.XImporter.dll"
+      ],
+      "namespacePrefixes": ["Microsoft.Xna.Framework.Content.Pipeline"],
+      "referenceAssemblySetStatus": "authoritative for the locally archived Windows XNA Game Studio 4.0 pipeline/importer assemblies",
+      "serviceAvailability": "Build-time Windows/D3D/D3DX tooling surface; not a runtime game assembly profile.",
+      "recommendedSupportStatus": "separate future build-time product and roadmap; never merge into the 257-type runtime profile",
+      "inventoryEnabled": true
+    }
+  ]
+}

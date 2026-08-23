@@ -1,35 +1,307 @@
-name: build
-
-# Builds and tests the managed solution. This checkout does not include an ABI-matched native CNA
-# library or redistributable Microsoft XNA reference assemblies, so native integration and the
-# full strict comparison run in protected/dependency-provisioned jobs. The reference-independent
-# CNA-leak invariant is enforced here on every push and pull request.
+name: release-qualification
 
 on:
   push:
     branches: [main, develop]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  CNA_UPSTREAM_COMMIT: 1bb2145d99ed572dd4eb15009c34e2e5f410fcf0
+  CNA_PACKAGE_VERSION: 0.1.0-ci.${{ github.run_number }}
 
 jobs:
-  build-and-test:
+  restore:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      - run: dotnet restore CNA.sln
 
-      - name: Restore
-        run: dotnet restore CNA.sln
+  debug-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore CNA.sln
+      - run: dotnet build CNA.sln -c Debug --no-restore -m:1
 
-      - name: Build
-        run: dotnet build CNA.sln --no-restore --configuration Release
+  release-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore CNA.sln
+      - run: dotnet build CNA.sln -c Release --no-restore -m:1
 
-      - name: Test
-        run: dotnet test CNA.sln --no-build --configuration Release
+  framework-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore tests/CNA.Framework.Tests/CNA.Framework.Tests.csproj
+      - run: dotnet test tests/CNA.Framework.Tests/CNA.Framework.Tests.csproj -c ${{ matrix.configuration }} --no-restore -m:1
 
-      - name: Verify strict facade has no CNA signature leaks
+  xna-compat-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore tests/CNA.XnaCompat.Tests/CNA.XnaCompat.Tests.csproj
+      - run: dotnet test tests/CNA.XnaCompat.Tests/CNA.XnaCompat.Tests.csproj -c ${{ matrix.configuration }} --no-restore -m:1
+
+  compile-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore tests/CNA.XnaCompat.CompileProbe/CNA.XnaCompat.CompileProbe.csproj
+      - run: dotnet build tests/CNA.XnaCompat.CompileProbe/CNA.XnaCompat.CompileProbe.csproj -c Release --no-restore -m:1
+
+  leak-only-verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore tools/api-compat/CNA.ApiCompat.csproj
+      - run: dotnet build src/CNA.XnaCompat/CNA.XnaCompat.csproj -c Release --no-restore -m:1
+      - run: dotnet build tools/api-compat/CNA.ApiCompat.csproj -c Release --no-restore -m:1
+      - name: Require zero CNA public/protected leaks
         run: >-
-          dotnet run --project tools/api-compat --configuration Release --no-build --
+          dotnet run --project tools/api-compat/CNA.ApiCompat.csproj -c Release --no-build --
           --leak-only --target src/CNA.XnaCompat/bin/Release/net8.0/CNA.XnaCompat.dll
+
+  behavior-pure-corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore CNA.sln
+      - run: dotnet build tests/CNA.XnaCompat.CompileProbe/CNA.XnaCompat.CompileProbe.csproj -c Release --no-restore -m:1
+      - run: dotnet build tools/behavior-corpus/CNA.BehaviorCorpus.csproj -c Release --no-restore -m:1
+      - run: dotnet run --project tools/behavior-corpus/CNA.BehaviorCorpus.csproj -c Release --no-build -- verify
+      - run: dotnet run --project tests/CNA.XnaCompat.CompileProbe/CNA.XnaCompat.CompileProbe.csproj -c Release --no-build > /tmp/cna-pure.txt
+      - run: >-
+          dotnet run --project tools/behavior-corpus/CNA.BehaviorCorpus.csproj -c Release --no-build --
+          validate --probe compile --input /tmp/cna-pure.txt
+      - run: >-
+          dotnet run --project tools/behavior-corpus/CNA.BehaviorCorpus.csproj -c Release --no-build --
+          docs --output docs/generated/behavior-corpus.md --check
+
+  portable-abi-header:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            report: linux-x64
+          - os: windows-latest
+            report: windows-x64
+          - os: macos-13
+            report: osx-x64
+          - os: macos-14
+            report: osx-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: openeggbert/cna
+          ref: ${{ env.CNA_UPSTREAM_COMMIT }}
+          path: cna-upstream
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore tools/abi-verify/CNA.AbiVerify.csproj
+      - name: Verify C authority against managed ABI (Unix)
+        if: runner.os != 'Windows'
+        run: >-
+          dotnet run --project tools/abi-verify/CNA.AbiVerify.csproj -c Release --
+          --include cna-upstream/modules/c-api/include --output artifacts/abi/${{ matrix.report }}.json
+      - name: Verify C authority against managed ABI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          dotnet run --project tools/abi-verify/CNA.AbiVerify.csproj -c Release --
+          --include cna-upstream/modules/c-api/include --output artifacts/abi/${{ matrix.report }}.json
+          --compiler clang
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abi-${{ matrix.report }}
+          path: artifacts/abi/${{ matrix.report }}.json
+
+  template-development:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: openeggbert/cna-cs-template
+          path: cna-cs-template
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Verify repository and generated project-reference modes
+        env:
+          CNA_CS_ROOT: ${{ github.workspace }}
+        run: cna-cs-template/scripts/verify-template.sh --mode development
+
+  package-consumer-managed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: openeggbert/cna-cs-template
+          path: cna-cs-template
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore CNA.sln
+      - run: dotnet pack src/CNA.Interop/CNA.Interop.csproj -c Release --no-restore -m:1 -p:CnaPackageAcceptance=true -p:CnaPackageVersion=${CNA_PACKAGE_VERSION} -o /tmp/cna-feed
+      - run: dotnet pack src/CNA.Framework/CNA.Framework.csproj -c Release --no-restore -m:1 -p:CnaPackageAcceptance=true -p:CnaPackageVersion=${CNA_PACKAGE_VERSION} -o /tmp/cna-feed
+      - run: dotnet pack src/CNA.XnaCompat/CNA.XnaCompat.csproj -c Release --no-restore -m:1 -p:CnaPackageAcceptance=true -p:CnaPackageVersion=${CNA_PACKAGE_VERSION} -o /tmp/cna-feed
+      - name: Verify generated package consumer without source paths
+        env:
+          CNA_CS_ROOT: ${{ github.workspace }}
+        run: >-
+          cna-cs-template/scripts/verify-template.sh --mode package
+          --package-feed /tmp/cna-feed --package-version ${CNA_PACKAGE_VERSION}
+
+  strict-api:
+    if: vars.XNA_REFERENCE_ARTIFACT_CONFIGURED == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Materialize protected, legally supplied XNA references
+        shell: pwsh
+        env:
+          XNA_REFERENCE_ARCHIVE_BASE64: ${{ secrets.XNA_REFERENCE_ARCHIVE_BASE64 }}
+        run: |
+          if (-not $env:XNA_REFERENCE_ARCHIVE_BASE64) { throw "Protected XNA reference archive is configured but empty." }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\xna-references.zip", [Convert]::FromBase64String($env:XNA_REFERENCE_ARCHIVE_BASE64))
+          Expand-Archive "$env:RUNNER_TEMP\xna-references.zip" "$env:RUNNER_TEMP\xna-references"
+      - run: dotnet restore CNA.sln
+      - run: dotnet build src/CNA.XnaCompat/CNA.XnaCompat.csproj -c Release --no-restore -m:1
+      - run: dotnet build tools/api-compat/CNA.ApiCompat.csproj -c Release --no-restore -m:1
+      - name: Require exact 257-type, zero-diagnostic contract
+        shell: pwsh
+        run: >-
+          dotnet run --project tools/api-compat/CNA.ApiCompat.csproj -c Release --no-build --
+          --reference-dir "$env:RUNNER_TEMP\xna-references"
+          --target src/CNA.XnaCompat/bin/Release/net8.0/CNA.XnaCompat.dll --format github
+
+  strict-api-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report legal reference configuration
+        run: |
+          if [[ "${{ vars.XNA_REFERENCE_ARTIFACT_CONFIGURED }}" == "true" ]]; then
+            echo "WINDOWS_XNA_STRICT_STATUS=configured; see strict-api job"
+          else
+            echo "WINDOWS_XNA_STRICT_STATUS=not-configured (protected legal reference archive is absent)"
+          fi
+
+  native-qualified-linux-x64:
+    if: vars.CNA_NATIVE_LINUX_X64_CONFIGURED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: openeggbert/cna-cs-template
+          path: cna-cs-template
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Materialize protected ABI-matched native library
+        env:
+          CNA_NATIVE_LINUX_X64_BASE64: ${{ secrets.CNA_NATIVE_LINUX_X64_BASE64 }}
+        run: |
+          test -n "$CNA_NATIVE_LINUX_X64_BASE64"
+          printf '%s' "$CNA_NATIVE_LINUX_X64_BASE64" | base64 --decode > "$RUNNER_TEMP/libcna_c_api.so"
+          chmod 755 "$RUNNER_TEMP/libcna_c_api.so"
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - run: dotnet restore CNA.sln
+      - run: dotnet build CNA.sln -c Debug --no-restore -m:1
+      - run: dotnet build CNA.sln -c Release --no-restore -m:1
+      - name: Native integration Debug
+        env:
+          CNA_NATIVE_LIBRARY: ${{ runner.temp }}/libcna_c_api.so
+          SDL_AUDIODRIVER: dummy
+        run: xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj -c Debug --no-build -m:1
+      - name: Native integration Release
+        env:
+          CNA_NATIVE_LIBRARY: ${{ runner.temp }}/libcna_c_api.so
+          SDL_AUDIODRIVER: dummy
+        run: xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj -c Release --no-build -m:1
+      - name: Ownership 100 cycles Debug and Release
+        env:
+          CNA_NATIVE_LIBRARY: ${{ runner.temp }}/libcna_c_api.so
+          CNA_OWNERSHIP_STRESS_FAMILY: all
+          SDL_AUDIODRIVER: dummy
+          SDL_VIDEODRIVER: offscreen
+        run: |
+          dotnet run --project tests/CNA.OwnershipStress/CNA.OwnershipStress.csproj -c Debug --no-build -- 100
+          dotnet run --project tests/CNA.OwnershipStress/CNA.OwnershipStress.csproj -c Release --no-build -- 100
+      - name: Full 469-observation CNA corpus
+        env:
+          CNA_NATIVE_LIBRARY: ${{ runner.temp }}/libcna_c_api.so
+          SDL_AUDIODRIVER: dummy
+          SDL_VIDEODRIVER: offscreen
+        run: scripts/Capture-CnaSnapshots.sh --output "$RUNNER_TEMP/cna-snapshots" --force
+      - name: Local package/RID acceptance (never publishes)
+        env:
+          CNA_TEMPLATE_ROOT: ${{ github.workspace }}/cna-cs-template
+        run: >-
+          scripts/Package-Acceptance.sh --native-library "$RUNNER_TEMP/libcna_c_api.so"
+          --package-version "${CNA_PACKAGE_VERSION}" --output "$RUNNER_TEMP/package-acceptance"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64-local-qualification
+          path: |
+            ${{ runner.temp }}/cna-snapshots
+            ${{ runner.temp }}/package-acceptance/acceptance-report.json
+
+  native-qualified-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report native configuration
+        run: |
+          if [[ "${{ vars.CNA_NATIVE_LINUX_X64_CONFIGURED }}" == "true" ]]; then
+            echo "NATIVE_LINUX_X64_STATUS=configured; see native-qualified-linux-x64 job"
+          else
+            echo "NATIVE_LINUX_X64_STATUS=not-configured (protected ABI-matched library is absent)"
+          fi

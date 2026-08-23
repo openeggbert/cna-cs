@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "requiredGates": [
+    "restore",
+    "debugBuild",
+    "releaseBuild",
+    "managedTests",
+    "abiProbe",
+    "nativeLoader",
+    "generatedTemplate",
+    "frames60",
+    "frames600"
+  ],
+  "candidates": [
+    {
+      "rid": "linux-x64",
+      "status": "measured-local-evidence; not an official shipping claim",
+      "nativeEvidence": "OPENGLES3 ABI-compatible local build",
+      "crossCompilationCountsAsQualification": false
+    },
+    {
+      "rid": "linux-arm64",
+      "status": "pending native runner and all executable gates",
+      "nativeEvidence": "none",
+      "crossCompilationCountsAsQualification": false
+    },
+    {
+      "rid": "win-x64",
+      "status": "pending PE ABI and native runtime runner",
+      "nativeEvidence": "none",
+      "crossCompilationCountsAsQualification": false
+    },
+    {
+      "rid": "win-arm64",
+      "status": "pending native ARM64 Windows runner and all executable gates",
+      "nativeEvidence": "none",
+      "crossCompilationCountsAsQualification": false
+    },
+    {
+      "rid": "osx-x64",
+      "status": "pending Mach-O ABI and native runtime runner",
+      "nativeEvidence": "none",
+      "crossCompilationCountsAsQualification": false
+    },
+    {
+      "rid": "osx-arm64",
+      "status": "pending native Apple Silicon runner and all executable gates",
+      "nativeEvidence": "none",
+      "crossCompilationCountsAsQualification": false
+    }
+  ]
+}

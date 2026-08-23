@@ -18,6 +18,11 @@ internal sealed class NativeResourceHandle : SafeHandle
 
     private static readonly object PendingLock = new();
     private static readonly Dictionary<int, Queue<PendingRelease>> PendingByOwnerThread = [];
+    private static long _queuedOwnerThreadReleases;
+    private static long _releaseAttempts;
+    private static long _successfulReleases;
+    private static long _failedReleaseAttempts;
+    private static long _scheduledRetries;
 
     public NativeResourceHandle(nint handleValue, Func<nint, bool> release)
         : this(handleValue, release, ownsHandle: true)
@@ -69,6 +74,7 @@ internal sealed class NativeResourceHandle : SafeHandle
         {
             if (!TryRelease(pending))
             {
+                Interlocked.Increment(ref _scheduledRetries);
                 Enqueue(_ownerThreadId, pending);
             }
 
@@ -125,6 +131,8 @@ internal sealed class NativeResourceHandle : SafeHandle
                 return;
             }
 
+            Interlocked.Add(ref _scheduledRetries, failed.Count);
+
             if (!madeProgress)
             {
                 lock (PendingLock)
@@ -150,16 +158,23 @@ internal sealed class NativeResourceHandle : SafeHandle
 
     private static bool TryRelease(PendingRelease pending)
     {
+        Interlocked.Increment(ref _releaseAttempts);
         try
         {
-            return pending.Release(pending.Handle);
+            if (pending.Release(pending.Handle))
+            {
+                Interlocked.Increment(ref _successfulReleases);
+                return true;
+            }
         }
         catch
         {
             // ReleaseHandle cannot throw, particularly from the critical-finalizer path. Retain
             // the work so a later owner-thread drain can retry it.
-            return false;
         }
+
+        Interlocked.Increment(ref _failedReleaseAttempts);
+        return false;
     }
 
     private static void Enqueue(int ownerThreadId, PendingRelease pending)
@@ -173,8 +188,44 @@ internal sealed class NativeResourceHandle : SafeHandle
             }
 
             queue.Enqueue(pending);
+            Interlocked.Increment(ref _queuedOwnerThreadReleases);
         }
     }
 
+    internal static NativeReleaseMetrics GetMetrics()
+    {
+        long pending;
+        lock (PendingLock)
+        {
+            pending = PendingByOwnerThread.Values.Sum(static queue => (long)queue.Count);
+        }
+
+        return new NativeReleaseMetrics(
+            Interlocked.Read(ref _queuedOwnerThreadReleases),
+            Interlocked.Read(ref _releaseAttempts),
+            Interlocked.Read(ref _successfulReleases),
+            Interlocked.Read(ref _failedReleaseAttempts),
+            Interlocked.Read(ref _scheduledRetries),
+            pending);
+    }
+
     private readonly record struct PendingRelease(nint Handle, Func<nint, bool> Release);
+}
+
+internal readonly record struct NativeReleaseMetrics(
+    long QueuedOwnerThreadReleases,
+    long ReleaseAttempts,
+    long SuccessfulReleases,
+    long FailedReleaseAttempts,
+    long ScheduledRetries,
+    long PendingOwnerThreadReleases)
+{
+    public static NativeReleaseMetrics operator -(NativeReleaseMetrics end, NativeReleaseMetrics start) =>
+        new(
+            end.QueuedOwnerThreadReleases - start.QueuedOwnerThreadReleases,
+            end.ReleaseAttempts - start.ReleaseAttempts,
+            end.SuccessfulReleases - start.SuccessfulReleases,
+            end.FailedReleaseAttempts - start.FailedReleaseAttempts,
+            end.ScheduledRetries - start.ScheduledRetries,
+            end.PendingOwnerThreadReleases);
 }

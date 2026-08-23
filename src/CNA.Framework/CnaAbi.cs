@@ -75,7 +75,10 @@ public static class CnaAbi
                 $"The loaded cna-native library implements C ABI {nativeMajor}.{nativeMinor}.{nativePatch}, " +
                 $"but this build of CNA.NET was written against {expectedMajor}.{expectedMinor}.{expectedPatch}. " +
                 "Major versions differ, so the two are not interoperable -- every struct layout and handle " +
-                "convention in this binding assumes the version it was built against.");
+                "convention in this binding assumes the version it was built against. " +
+                NativeLibraryResolver.DescribeSelection(ExpectedVersion) + " " +
+                $"Install the CNA native asset for this RID or correct {NativeLibraryResolver.PathVariable}/" +
+                $"{NativeLibraryResolver.DirectoryVariable}.");
         }
 
         // A same-major library that is *older* than this binding is missing routes this binding
@@ -89,7 +92,10 @@ public static class CnaAbi
                 $"The loaded cna-native library implements C ABI {nativeMajor}.{nativeMinor}.{nativePatch}, " +
                 $"older than the {expectedMajor}.{expectedMinor}.{expectedPatch} this build of CNA.NET was " +
                 "written against. A newer minor is additive and fine; an older one is missing routes this " +
-                "binding calls, which would otherwise surface later as a missing entry point.");
+                "binding calls, which would otherwise surface later as a missing entry point. " +
+                NativeLibraryResolver.DescribeSelection(ExpectedVersion) + " " +
+                $"Install the CNA native asset for this RID or correct {NativeLibraryResolver.PathVariable}/" +
+                $"{NativeLibraryResolver.DirectoryVariable}.");
         }
 
         _checked = true;

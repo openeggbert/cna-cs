@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-08-23T08:10:43.926326+00:00",
+  "referenceDirectoryEvidence": "caller-supplied legal local reference assemblies; binaries are not copied into this repository",
+  "baseline": {
+    "profile": "XNA 4.0 Windows runtime",
+    "typeCount": 257,
+    "assemblyCount": 7
+  },
+  "profiles": [
+    {
+      "Id": "gamer-services",
+      "Name": "GamerServices and Avatar",
+      "Platform": "XNA 4.0 Windows",
+      "referenceAssemblies": [
+        "Microsoft.Xna.Framework.GamerServices.dll",
+        "Microsoft.Xna.Framework.Avatar.dll"
+      ],
+      "ReferenceAssemblySetStatus": "authoritative for the locally archived Windows XNA 4.0 GamerServices/Avatar extension assemblies",
+      "ServiceAvailability": "Historical Games for Windows LIVE/Guide services are not qualified and may be extinct or unavailable.",
+      "RecommendedSupportStatus": "inventory-only; consider deterministic unsupported behavior for service-backed operations",
+      "evidenceStatus": "measured",
+      "typeCount": 51,
+      "memberCount": 502,
+      "overlapWithCurrentRuntimeTypes": 0,
+      "assemblies": [
+        {
+          "FileName": "Microsoft.Xna.Framework.GamerServices.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.GamerServices",
+          "Version": "4.0.0.0",
+          "Sha256": "7c6effed97aa25a95c5e095d9c261f5581e402180cc073271a367b9eef79c8af"
+        },
+        {
+          "FileName": "Microsoft.Xna.Framework.Avatar.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Avatar",
+          "Version": "4.0.0.0",
+          "Sha256": "b3c70bbe469000b9e11507cc63b88d54a4e0bc5c27afc826d66e0aee51640871"
+        }
+      ]
+    },
+    {
+      "Id": "net",
+      "Name": "Networking / Net",
+      "Platform": "XNA 4.0 Windows",
+      "referenceAssemblies": [
+        "Microsoft.Xna.Framework.Net.dll"
+      ],
+      "ReferenceAssemblySetStatus": "authoritative for the locally archived Windows XNA 4.0 Net extension assembly",
+      "ServiceAvailability": "Packet APIs are local; discovery, sessions, transport, and gamer identity require unqualified historical services/runtime behavior.",
+      "RecommendedSupportStatus": "inventory-only; separate future compatibility profile",
+      "evidenceStatus": "measured",
+      "typeCount": 23,
+      "memberCount": 174,
+      "overlapWithCurrentRuntimeTypes": 0,
+      "assemblies": [
+        {
+          "FileName": "Microsoft.Xna.Framework.Net.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Net",
+          "Version": "4.0.0.0",
+          "Sha256": "39739dbf5f6ba02e1d0b02ed404f6fe0692497848bc1a6a25be132d47ed9c151"
+        }
+      ]
+    },
+    {
+      "Id": "xbox-360",
+      "Name": "Xbox 360 runtime",
+      "Platform": "Xbox 360",
+      "referenceAssemblies": [],
+      "ReferenceAssemblySetStatus": "not-established: no legally supplied Xbox 360 XNA 4.0 reference pack is available locally",
+      "ServiceAvailability": "Requires Xbox 360 hardware/runtime and platform services unavailable in this checkpoint.",
+      "RecommendedSupportStatus": "out-of-scope until an authoritative reference pack and executable platform evidence are supplied",
+      "evidenceStatus": "not-configured",
+      "typeCount": null,
+      "memberCount": null,
+      "overlapWithCurrentRuntimeTypes": null,
+      "assemblies": []
+    },
+    {
+      "Id": "windows-phone",
+      "Name": "Windows Phone runtime and sensors/devices",
+      "Platform": "Windows Phone",
+      "referenceAssemblies": [],
+      "ReferenceAssemblySetStatus": "not-established: no legally supplied Windows Phone XNA reference pack is available locally",
+      "ServiceAvailability": "Requires phone-specific reference assemblies, device APIs, and executable device/emulator evidence unavailable in this checkpoint.",
+      "RecommendedSupportStatus": "out-of-scope until an authoritative reference pack and executable platform evidence are supplied",
+      "evidenceStatus": "not-configured",
+      "typeCount": null,
+      "memberCount": null,
+      "overlapWithCurrentRuntimeTypes": null,
+      "assemblies": []
+    },
+    {
+      "Id": "content-pipeline",
+      "Name": "Content Pipeline / build-time",
+      "Platform": "XNA Game Studio 4.0 Windows build host",
+      "referenceAssemblies": [
+        "Microsoft.Xna.Framework.Content.Pipeline.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.AudioImporters.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.EffectImporter.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.FBXImporter.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.TextureImporter.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.VideoImporters.dll",
+        "Microsoft.Xna.Framework.Content.Pipeline.XImporter.dll"
+      ],
+      "ReferenceAssemblySetStatus": "authoritative for the locally archived Windows XNA Game Studio 4.0 pipeline/importer assemblies",
+      "ServiceAvailability": "Build-time Windows/D3D/D3DX tooling surface; not a runtime game assembly profile.",
+      "RecommendedSupportStatus": "separate future build-time product and roadmap; never merge into the 257-type runtime profile",
+      "evidenceStatus": "measured",
+      "typeCount": 128,
+      "memberCount": 743,
+      "overlapWithCurrentRuntimeTypes": 0,
+      "assemblies": [
+        {
+          "FileName": "Microsoft.Xna.Framework.Content.Pipeline.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Content.Pipeline",
+          "Version": "4.0.0.0",
+          "Sha256": "1ea481da62eb9e66bad8589df83f173725e62d22362801e1264cd02347721c69"
+        },
+        {
+          "FileName": "Microsoft.Xna.Framework.Content.Pipeline.AudioImporters.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Content.Pipeline.AudioImporters",
+          "Version": "4.0.0.0",
+          "Sha256": "1daca08f4e4f12da5ff095e7861e7702fd41f761a8c2ece5ee714894b7684165"
+        },
+        {
+          "FileName": "Microsoft.Xna.Framework.Content.Pipeline.EffectImporter.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Content.Pipeline.EffectImporter",
+          "Version": "4.0.0.0",
+          "Sha256": "9f30ac3db23c14afce527ac18fdf29905dcd7bad48273a88b3040c918b789c8d"
+        },
+        {
+          "FileName": "Microsoft.Xna.Framework.Content.Pipeline.FBXImporter.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Content.Pipeline.FbxImporter",
+          "Version": "4.0.0.0",
+          "Sha256": "01a22ab5ed7a08f0e4b7a856fe73b1e3fa12a8789026d43125bedb7edcf93f91"
+        },
+        {
+          "FileName": "Microsoft.Xna.Framework.Content.Pipeline.TextureImporter.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Content.Pipeline.TextureImporter",
+          "Version": "4.0.0.0",
+          "Sha256": "3b418ce4a72f1d090563363530a9fc0859b0d6a9c637a500dab1a4901696eba6"
+        },
+        {
+          "FileName": "Microsoft.Xna.Framework.Content.Pipeline.VideoImporters.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Content.Pipeline.VideoImporters",
+          "Version": "4.0.0.0",
+          "Sha256": "8768d9992c303af401fed6af20eb4d3548bed48a9c05f125f22e278b2fc0b492"
+        },
+        {
+          "FileName": "Microsoft.Xna.Framework.Content.Pipeline.XImporter.dll",
+          "AssemblyName": "Microsoft.Xna.Framework.Content.Pipeline.XImporter",
+          "Version": "4.0.0.0",
+          "Sha256": "ccb90834938ee0ab129f0a9089cff8dcd7827759d05cd86ea97e70be1b1928e8"
+        }
+      ]
+    }
+  ]
+}

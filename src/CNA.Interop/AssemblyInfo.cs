@@ -5,3 +5,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("CNA.Framework")]
 [assembly: InternalsVisibleTo("CNA.Interop.Tests")]
 [assembly: InternalsVisibleTo("CNA.Framework.Tests")]
+[assembly: InternalsVisibleTo("CNA.AbiVerify")]

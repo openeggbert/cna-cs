@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../api-compat/ContractModel.cs" Link="ContractModel.cs" />
+    <Compile Include="../api-compat/MetadataContractReader.cs" Link="MetadataContractReader.cs" />
+  </ItemGroup>
+
+</Project>

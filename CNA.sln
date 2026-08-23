@@ -1,4 +1,4 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.35222.181
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -35,7 +35,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{C69A1311-EA6A-466E-BEF7-FAEBDEB77FA1}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{17BFBD5D-8868-4C1B-B83F-BA8D818F3BA5}"
-	ProjectSection(SolutionItems) = preSolution
+	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
 		plan.md = plan.md
 		NEXT.md = NEXT.md
@@ -44,6 +44,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		Directory.Build.props = Directory.Build.props
 		.editorconfig = .editorconfig
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CNA.BehaviorCorpus", "tools\behavior-corpus\CNA.BehaviorCorpus.csproj", "{BA8CAFD1-0FDD-40A2-B89C-C8CCAA038246}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CNA.AbiVerify", "tools\abi-verify\CNA.AbiVerify.csproj", "{BEF56DF2-84FE-478B-83D6-9A5055DDBF1B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CNA.ProfileInventory", "tools\profile-inventory\CNA.ProfileInventory.csproj", "{4831AE21-63A2-43F1-BBDB-FE6FECAFDCB9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -99,6 +105,18 @@ Global
 		{53B3DD71-8E26-4958-8D7B-E7C286DF1801}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{53B3DD71-8E26-4958-8D7B-E7C286DF1801}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{53B3DD71-8E26-4958-8D7B-E7C286DF1801}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BA8CAFD1-0FDD-40A2-B89C-C8CCAA038246}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BA8CAFD1-0FDD-40A2-B89C-C8CCAA038246}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BA8CAFD1-0FDD-40A2-B89C-C8CCAA038246}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BA8CAFD1-0FDD-40A2-B89C-C8CCAA038246}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BEF56DF2-84FE-478B-83D6-9A5055DDBF1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BEF56DF2-84FE-478B-83D6-9A5055DDBF1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BEF56DF2-84FE-478B-83D6-9A5055DDBF1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BEF56DF2-84FE-478B-83D6-9A5055DDBF1B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4831AE21-63A2-43F1-BBDB-FE6FECAFDCB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4831AE21-63A2-43F1-BBDB-FE6FECAFDCB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4831AE21-63A2-43F1-BBDB-FE6FECAFDCB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4831AE21-63A2-43F1-BBDB-FE6FECAFDCB9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -116,6 +134,9 @@ Global
 		{4AC391A3-B335-4DD1-B1E8-6083EB7B816E} = {0B4A16A4-71B3-4603-BD4F-8B4325ABC15F}
 		{B1958768-C321-4751-A5C8-E53C2C58F948} = {C69A1311-EA6A-466E-BEF7-FAEBDEB77FA1}
 		{53B3DD71-8E26-4958-8D7B-E7C286DF1801} = {3464C8FB-D3EA-4D36-A183-5C2BF8EF10B1}
+		{BA8CAFD1-0FDD-40A2-B89C-C8CCAA038246} = {C69A1311-EA6A-466E-BEF7-FAEBDEB77FA1}
+		{BEF56DF2-84FE-478B-83D6-9A5055DDBF1B} = {C69A1311-EA6A-466E-BEF7-FAEBDEB77FA1}
+		{4831AE21-63A2-43F1-BBDB-FE6FECAFDCB9} = {C69A1311-EA6A-466E-BEF7-FAEBDEB77FA1}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {99B27873-E001-4C1E-B5E4-777769287C5A}

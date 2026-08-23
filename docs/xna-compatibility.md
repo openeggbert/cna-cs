@@ -74,29 +74,29 @@ composition, internal adapters, and single-owner backends.
 
 - preserve strict metadata, CNA-leak, base-hierarchy, interface, unexpected-member, and allowlist
   counts at zero as hard regression gates;
-- execute the combined 457-observation snapshot on a Windows XNA runtime. CNA executes all 457 on
-  Linux. FNA completes the 187-line pure snapshot before its own `SoundEffect` finalizer aborts;
+- execute the combined 469-observation snapshot on a Windows XNA runtime. CNA executes all 469 on
+  Linux. FNA completes the 199-line pure snapshot before its own `SoundEffect` finalizer aborts;
   MonoGame builds the pure source but aborts during audio initialization and omits the Storage/XACT
   runtime surface. Direct XNA source/IL resolves implemented strict behavior, but the installed XNA
   C++/CLI assemblies cannot run on Linux;
 - obtain legal authored XACT, Song, and Video fixtures for success/lifetime/event observations;
   continue device-loss and true cross-device work only when the C ABI exposes deterministic routes;
-- deepen the current 34 malformed/error XNB observations with legal built-in-reader/LZX fixtures,
-  shared-resource cycles, and nested/multiple failure ownership;
-- GamerServices, networking, device/sensor, Xbox/Phone, and Content Pipeline scope needs separate
-  authoritative inventories rather than blanket exclusion.
+- adjudicate the current 46 malformed/error XNB observations on Windows XNA and add further legal
+  fixture breadth only for distinct reader/graph/ownership routes;
+- keep the measured GamerServices/Avatar, Net, and Content Pipeline inventories separate from the
+  runtime baseline; Xbox and Phone remain pending authoritative legal reference packs.
 
 ## Source compatibility corpus
 
 `tests/CNA.XnaCompat.CompileProbe` builds with the solution and locks in assignments for the
 repaired component, dynamic-buffer, dynamic-audio, content-manager, graphics-resource, curve,
 model-effect, state, vertex-declaration, and SpriteBatch relationships. It contains 83
-math/geometry, 23 input, 47 pure Audio, and 34 content-error observations. The device-backed
+math/geometry, 23 input, 47 pure Audio, and 46 content-error observations. The device-backed
 `CNA.XnaCompat.GraphicsProbe` adds 153 graphics and 13 resource/lifetime observations. Output
 records IEEE-754 bits, exact hash/string results, state flags, exception kinds, identity, and
 lifecycle/collection behavior. `CNA.XnaCompat.RuntimeProbe` adds 36 native Audio, 7 XACT, 20 Media,
-17 Video, 20 Storage, and 4 DeviceLifecycle observations. The resulting total is 457. CNA runs all
-457. FNA emits all 187 pure observations before its finalizer abort, and MonoGame emits the old 106
+17 Video, 20 Storage, and 4 DeviceLifecycle observations. The resulting total is 469. CNA runs all
+469. FNA emits all 199 pure observations before its finalizer abort, and MonoGame emits the old 106
 pure observations before its audio subsystem aborts. Identical source builds against XNA through
 the Windows snapshot workflow, whose native C++/CLI runtime still requires Windows. Direct XNA
 source/IL adjudicates implemented strict values. This remains a focused corpus, not proof that
@@ -122,19 +122,22 @@ A build is not a runtime claim.
 
 ## Behavior and content
 
-The managed suites currently pass 549 framework and 199 compat tests. A pinned ABI 0.6.0 CNA
-library passes all 119 native integration tests in both Debug and Release under Xvfb. The isolated
-ownership runner also passes 100 game teardown/recreation cycles in both configurations. That proves
-the exercised routes, not all XNA behavior. An optional `CNA_OWNERSHIP_STRESS_DEEP=1` mode selects
-1000 cycles; it was added but not run in this checkpoint.
+The managed suites currently pass 549 framework and 199 compat tests. The selected ABI 0.8.0 CNA
+library passes all 119 native integration tests in both Debug and Release on Linux x64. The
+isolated ownership runner also passes 100 game teardown/recreation cycles in both configurations.
+The optional Release deep mode passes 1000 cycles: 500 explicit, 500 finalizer, and 100
+throwing-handler cycles, with 15,000 queued releases, 29,000 successful release attempts, and zero
+release failures/retries/pending releases, refused game destroys, or native crashes. That proves
+the exercised routes, not allocator-level leak freedom or all XNA behavior.
 
 The XNA reader type system and ordinary custom `Content.Load<MyType>()` path are implemented,
 including reader activation/versioning, shared resources, existing instances, disposable
-tracking, and LZX handling. Thirty-four malformed/error observations now cover compact invalid
-headers, nested/missing/normalized external references, successful and failing stream disposal,
-reader tables/indices, partial failures, wrong types, duplicate disposables, and repeated unload/
-dispose failures. Remaining content work is differential fixture breadth: broader compressed
-corruption, legal built-in reader tables, shared cycles, and the Windows XNA exception snapshot.
+tracking, and LZX handling. Forty-six malformed/error observations now cover compact invalid
+headers, built-in readers, legal/truncated/malformed LZX blocks, nested/missing/normalized external
+references, successful and failing stream disposal, reader tables/indices, partial/shared-cycle
+failures, wrong types, duplicate and multiple throwing disposables, and deterministic post-failure
+state. Remaining content work is differential fixture breadth and the Windows XNA exception
+snapshot.
 
 Behavioral differential coverage now includes graphics state/collection identity, transfer
 limitations, dynamic buffer options, SpriteBatch ordering/failure recovery, draw validation,

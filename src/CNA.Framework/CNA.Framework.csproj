@@ -6,7 +6,7 @@
       CNA.XnaCompat's Microsoft.Xna.Framework-compatible facade is built on top of.
     </Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <IsPackable>false</IsPackable>
+    <IsPackable Condition="'$(CnaPackageAcceptance)' != 'true'">false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

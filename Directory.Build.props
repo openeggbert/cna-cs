@@ -22,4 +22,27 @@
     <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
+  <!-- Production projects stay non-packable by default. The release-qualification harness opts
+       only these three managed projects into isolated local preview packing. -->
+  <PropertyGroup Condition="'$(CnaPackageAcceptance)' == 'true' and
+      ('$(MSBuildProjectName)' == 'CNA.Interop' or '$(MSBuildProjectName)' == 'CNA.Framework' or '$(MSBuildProjectName)' == 'CNA.XnaCompat')">
+    <IsPackable>true</IsPackable>
+    <Version Condition="'$(CnaPackageVersion)' != ''">$(CnaPackageVersion)</Version>
+    <PackageId>$(MSBuildProjectName)</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(CnaPackageAcceptance)' == 'true' and
+      ('$(MSBuildProjectName)' == 'CNA.Interop' or '$(MSBuildProjectName)' == 'CNA.Framework' or '$(MSBuildProjectName)' == 'CNA.XnaCompat')">
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)NOTICE.md" Pack="true" PackagePath="" />
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+
 </Project>

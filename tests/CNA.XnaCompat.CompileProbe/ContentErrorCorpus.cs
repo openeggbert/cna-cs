@@ -29,6 +29,22 @@ public static class ContentErrorCorpus
             Load<int>([(byte)'X', (byte)'N', (byte)'B', (byte)'w', 5, 0x80, 10, 0, 0, 0]));
         Observe(observations, "content.truncated_compressed.short_block", () =>
             Load<int>(Container([1, 0, 0, 0, 0, 0], flags: 0x80)));
+        Observe(observations, "content.builtin.int32.uncompressed", () => Load<int>(Container(
+            BuiltinPayload("Int32Reader", writer => writer.Write(42)))));
+        Observe(observations, "content.builtin.string.truncated", () => Load<string>(Container(
+            BuiltinPayload("StringReader", writer => writer.Write((byte)0x81)))));
+        Observe(observations, "content.builtin.vector3.truncated", () => Load<Microsoft.Xna.Framework.Vector3>(Container(
+            BuiltinPayload("Vector3Reader", writer =>
+            {
+                writer.Write(1f);
+                writer.Write(2f);
+            }))));
+        Observe(observations, "content.lzx.uncompressed_block", () => Load<int>(
+            LzxContainer(BuiltinPayload("Int32Reader", writer => writer.Write(42)))));
+        Observe(observations, "content.lzx.truncated_block", () => Load<int>(
+            LzxContainer(BuiltinPayload("Int32Reader", writer => writer.Write(42)), truncateBytes: 1)));
+        Observe(observations, "content.lzx.malformed_block", () => Load<int>(
+            LzxContainer(BuiltinPayload("Int32Reader", writer => writer.Write(42)), blockType: 7)));
 
         var truncatedBody = new byte[valid.Length - 1];
         Array.Copy(valid, truncatedBody, truncatedBody.Length);
@@ -58,6 +74,7 @@ public static class ContentErrorCorpus
         Observe(observations, "content.external_reference_nested", LoadNestedExternalReference);
         Observe(observations, "content.external_reference_missing", LoadMissingExternalReference);
         Observe(observations, "content.external_reference_normalized", LoadNormalizedExternalReference);
+        Observe(observations, "content.external_reference_normalized_chain", LoadNormalizedExternalReferenceChain);
         Observe(observations, "content.missing_asset", LoadMissingAsset);
 
         observations.Add("content.open_stream_disposed=" + Flag(StreamIsDisposedAfterFailure()));
@@ -67,6 +84,11 @@ public static class ContentErrorCorpus
         observations.Add("content.duplicate_disposable=" + DuplicateDisposable());
         observations.Add("content.unload_throw_clears=" + UnloadThrowClears());
         observations.Add("content.dispose_throw_poisons=" + DisposeThrowPoisons());
+        observations.Add("content.shared_cycle=" + SharedResourceCycle());
+        observations.Add("content.graph_late_failure_cleanup=" + GraphLateFailureCleanup());
+        observations.Add("content.multiple_throwing_unload=" + MultipleThrowingUnload());
+        observations.Add("content.multiple_throwing_dispose=" + MultipleThrowingDispose());
+        observations.Add("content.nested_failure_state=" + NestedFailureState());
 
         return observations;
     }
@@ -130,6 +152,18 @@ public static class ContentErrorCorpus
         var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["folder/sub/root"] = ExternalReferenceAsset("../child"),
+            ["folder/child"] = Container(IntPayload()),
+        };
+        using var content = new MappedContentManager(assets);
+        return content.Load<int>("folder/sub/root");
+    }
+
+    private static int LoadNormalizedExternalReferenceChain()
+    {
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/sub/root"] = ExternalReferenceAsset("../mid/./middle"),
+            ["folder/mid/middle"] = ExternalReferenceAsset("../child"),
             ["folder/child"] = Container(IntPayload()),
         };
         using var content = new MappedContentManager(assets);
@@ -240,6 +274,104 @@ public static class ContentErrorCorpus
         return $"{dispose}/{reload}";
     }
 
+    private static string SharedResourceCycle()
+    {
+        byte[] asset = Container(Payload(
+            [(typeof(GraphNodeReader).AssemblyQualifiedName!, 0)],
+            sharedResourceCount: 2,
+            writer =>
+            {
+                Write7Bit(writer, 1); // root
+                Write7Bit(writer, 1); // root -> shared 1
+                Write7Bit(writer, 1); // shared 1
+                Write7Bit(writer, 2); // shared 1 -> shared 2
+                Write7Bit(writer, 1); // shared 2
+                Write7Bit(writer, 1); // shared 2 -> shared 1
+            }));
+        using var content = new MemoryContentManager(() => new TrackingStream(asset));
+        CorpusNode root = content.Load<CorpusNode>("fixture");
+        return Flag(root.Next is not null &&
+            root.Next.Next is not null &&
+            ReferenceEquals(root.Next.Next.Next, root.Next)).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string GraphLateFailureCleanup()
+    {
+        CorpusDisposable.Reset();
+        byte[] asset = Container(Payload(
+            [
+                (typeof(SharedReferenceReader).AssemblyQualifiedName!, 0),
+                (typeof(NewDisposableReader).AssemblyQualifiedName!, 0),
+                (typeof(ThrowingReader).AssemblyQualifiedName!, 0),
+            ],
+            sharedResourceCount: 2,
+            writer =>
+            {
+                Write7Bit(writer, 1); // disposable root
+                Write7Bit(writer, 1); // root fixup -> shared 1
+                Write7Bit(writer, 2); // successful disposable shared resource
+                Write7Bit(writer, 3); // later shared resource throws
+            }));
+        using var content = new MemoryContentManager(() => new TrackingStream(asset));
+        string load = ExceptionName(() => content.Load<CorpusDisposable>("fixture"));
+        content.Unload();
+        return $"{load}/{CorpusDisposable.DisposeCount.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    private static string MultipleThrowingUnload()
+    {
+        MultipleThrowingDisposableReader.Reset();
+        byte[] asset = MultipleThrowingDisposableAsset();
+        using var content = new MemoryContentManager(() => new TrackingStream(asset));
+        content.Load<CorpusDisposable>("fixture");
+        string unload = ExceptionName(content.Unload);
+        return $"{unload}/{MultipleThrowingDisposableReader.Counts}";
+    }
+
+    private static string MultipleThrowingDispose()
+    {
+        MultipleThrowingDisposableReader.Reset();
+        byte[] asset = MultipleThrowingDisposableAsset();
+        var content = new MemoryContentManager(() => new TrackingStream(asset));
+        string dispose;
+        try
+        {
+            content.Load<CorpusDisposable>("fixture");
+            dispose = ExceptionName(content.Dispose);
+        }
+        finally
+        {
+            _ = ExceptionName(content.Dispose);
+        }
+
+        return $"{dispose}/{MultipleThrowingDisposableReader.Counts}";
+    }
+
+    private static byte[] MultipleThrowingDisposableAsset() => Container(Payload(
+        [(typeof(MultipleThrowingDisposableReader).AssemblyQualifiedName!, 0)],
+        sharedResourceCount: 2,
+        writer =>
+        {
+            Write7Bit(writer, 1);
+            Write7Bit(writer, 1);
+            Write7Bit(writer, 1);
+        }));
+
+    private static string NestedFailureState()
+    {
+        var streams = new List<TrackingStream>();
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/root"] = ExternalReferenceAsset("middle"),
+            ["folder/middle"] = [0],
+        };
+        using var content = new TrackingMappedContentManager(assets, streams);
+        string first = ExceptionName(() => content.Load<int>("folder/root"));
+        string second = ExceptionName(() => content.Load<int>("folder/root"));
+        return $"{first}/{second}/{streams.Count}/" +
+            Flag(streams.All(static stream => stream.WasDisposed));
+    }
+
     private static byte[] SequencedDisposableAsset() => Container(Payload(
         typeof(SequencedDisposableReader).AssemblyQualifiedName!, 0, 1,
         writer =>
@@ -254,6 +386,17 @@ public static class ContentErrorCorpus
         {
             Write7Bit(writer, 1);
             writer.Write(42);
+        });
+
+    private static byte[] BuiltinPayload(string readerTypeName, Action<BinaryWriter> writeBody) => Payload(
+        $"Microsoft.Xna.Framework.Content.{readerTypeName}, Microsoft.Xna.Framework, " +
+        "Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553",
+        readerVersion: 0,
+        sharedResourceCount: 0,
+        writer =>
+        {
+            Write7Bit(writer, 1);
+            writeBody(writer);
         });
 
     private static byte[] ReaderCountZeroPayload()
@@ -299,6 +442,28 @@ public static class ContentErrorCorpus
         return payload.ToArray();
     }
 
+    private static byte[] Payload(
+        IReadOnlyList<(string Name, int Version)> readers,
+        int sharedResourceCount,
+        Action<BinaryWriter> writeBody)
+    {
+        using var payload = new MemoryStream();
+        using (var writer = new BinaryWriter(payload, Encoding.UTF8, leaveOpen: true))
+        {
+            Write7Bit(writer, readers.Count);
+            foreach ((string name, int version) in readers)
+            {
+                writer.Write(name);
+                writer.Write(version);
+            }
+
+            Write7Bit(writer, sharedResourceCount);
+            writeBody(writer);
+        }
+
+        return payload.ToArray();
+    }
+
     private static byte[] Container(byte[] payload, byte flags = 0)
     {
         using var stream = new MemoryStream();
@@ -315,6 +480,62 @@ public static class ContentErrorCorpus
         }
 
         return stream.ToArray();
+    }
+
+    /// <summary>Builds the legal LZX "uncompressed" block form used by XNB. The frame contains
+    /// no compressor-produced/copyrighted data: it is a four-byte bit header, the three standard
+    /// repeated-offset seeds, and this probe's own tiny payload.</summary>
+    private static byte[] LzxContainer(byte[] payload, int blockType = 3, int truncateBytes = 0)
+    {
+        using var compressed = new MemoryStream();
+        using (var writer = new BinaryWriter(compressed, Encoding.UTF8, leaveOpen: true))
+        {
+            uint bits = ((uint)blockType & 7u) << 28 |
+                ((uint)payload.Length & 0x00ff_ffffu) << 4;
+            writer.Write((ushort)(bits >> 16));
+            writer.Write((ushort)bits);
+            if (blockType == 3)
+            {
+                writer.Write(1u);
+                writer.Write(1u);
+                writer.Write(1u);
+                writer.Write(payload);
+            }
+        }
+
+        byte[] block = compressed.ToArray();
+        if (truncateBytes > 0)
+        {
+            Array.Resize(ref block, block.Length - truncateBytes);
+        }
+
+        using var framed = new MemoryStream();
+        using (var writer = new BinaryWriter(framed, Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write((byte)0xff);
+            writer.Write((byte)(payload.Length >> 8));
+            writer.Write((byte)payload.Length);
+            writer.Write((byte)(block.Length >> 8));
+            writer.Write((byte)block.Length);
+            writer.Write(block);
+        }
+
+        byte[] framedBytes = framed.ToArray();
+        using var container = new MemoryStream();
+        using (var writer = new BinaryWriter(container, Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write((byte)'X');
+            writer.Write((byte)'N');
+            writer.Write((byte)'B');
+            writer.Write((byte)'w');
+            writer.Write((byte)5);
+            writer.Write((byte)0x80);
+            writer.Write(14 + framedBytes.Length);
+            writer.Write(payload.Length);
+            writer.Write(framedBytes);
+        }
+
+        return container.ToArray();
     }
 
     private static byte[] Mutate(byte[] source, int index, byte value)
@@ -388,6 +609,19 @@ public static class ContentErrorCorpus
     {
         protected override Stream OpenStream(string assetName) =>
             new TrackingStream(assets[assetName.Replace('\\', '/')]);
+    }
+
+    private sealed class TrackingMappedContentManager(
+        IReadOnlyDictionary<string, byte[]> assets,
+        List<TrackingStream> streams)
+        : ContentManager(new NullServiceProvider())
+    {
+        protected override Stream OpenStream(string assetName)
+        {
+            var stream = new TrackingStream(assets[assetName.Replace('\\', '/')]);
+            streams.Add(stream);
+            return stream;
+        }
     }
 
     private sealed class TrackingStream(byte[] bytes) : MemoryStream(bytes, writable: false)
@@ -520,6 +754,48 @@ public sealed class SequencedDisposableReader : ContentTypeReader<CorpusDisposab
             {
                 throw new InvalidOperationException("dispose");
             }
+        }
+    }
+}
+
+public sealed class CorpusNode
+{
+    public CorpusNode? Next { get; set; }
+}
+
+public sealed class GraphNodeReader : ContentTypeReader<CorpusNode>
+{
+    protected override CorpusNode Read(ContentReader input, CorpusNode existingInstance)
+    {
+        var node = new CorpusNode();
+        input.ReadSharedResource<CorpusNode>(next => node.Next = next);
+        return node;
+    }
+}
+
+public sealed class MultipleThrowingDisposableReader : ContentTypeReader<CorpusDisposable>
+{
+    private static readonly List<CountingDisposable> Instances = [];
+
+    public static string Counts => string.Join(",", Instances.Select(static instance => instance.Count));
+
+    public static void Reset() => Instances.Clear();
+
+    protected override CorpusDisposable Read(ContentReader input, CorpusDisposable existingInstance)
+    {
+        var value = new CountingDisposable();
+        Instances.Add(value);
+        return value;
+    }
+
+    private sealed class CountingDisposable : CorpusDisposable
+    {
+        public int Count { get; private set; }
+
+        public override void Dispose()
+        {
+            Count++;
+            throw new InvalidOperationException("dispose");
         }
     }
 }

@@ -11,6 +11,131 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Release qualification, portable evidence, and isolated package consumers (2026-08-23)
+
+This run did not expand the completed selected XNA surface. The final strict invariants remain
+`REFERENCE_TYPES=257`, `TARGET_TYPES=257`, `STRICT_DIAGNOSTICS=0`, `CNA_LEAKS=0`,
+`BASE_MISMATCHES=0`, `INTERFACE_MISMATCHES=0`, and `ALLOWLIST=0`. Upstream CNA was inspected at
+commit `1bb2145d99ed572dd4eb15009c34e2e5f410fcf0` (header ABI 0.7.0) and was not modified. The
+runtime/package evidence used the explicitly selected same-major ABI 0.8.0 OPENGLES3 library at
+`/tmp/cna-cs-software-pinned/modules/c-api/libcna_c_api.so`.
+
+### One behavior manifest and release-grade snapshot tooling
+
+`tests/behavior-corpus-counts.json` is now the authoritative machine-readable manifest for
+category, source project, expected count, pure/device/runtime classification, XNA requirement,
+FNA/MonoGame status, asset requirement, and snapshot filename. `tools/behavior-corpus` validates,
+queries, combines, compares, and generates documentation from it. Windows capture, CNA capture,
+CI, and `docs/generated/behavior-corpus.md` derive their counts from this one file.
+
+| Category | Before | Added | Final |
+| --- | ---: | ---: | ---: |
+| Math / geometry | 83 | 0 | 83 |
+| Input | 23 | 0 | 23 |
+| Graphics | 153 | 0 | 153 |
+| Resource / lifetime | 13 | 0 | 13 |
+| Content error | 34 | 12 | 46 |
+| Audio | 83 | 0 | 83 |
+| XACT | 7 | 0 | 7 |
+| Media | 20 | 0 | 20 |
+| Video | 17 | 0 | 17 |
+| Storage | 20 | 0 | 20 |
+| DeviceLifecycle | 4 | 0 | 4 |
+| **Total** | **457** | **12** | **469** |
+
+The split is 199 pure, 166 graphics/resource device, and 104 native runtime. CNA executed and
+validated all 469 locally. The twelve new legal synthetic Content observations cover uncompressed
+`Int32` success, truncated built-in string and `Vector3`, a legal LZX uncompressed block,
+truncated/malformed LZX, normalized external-reference chains, a representable shared-resource
+cycle, late shared-graph cleanup, multiple throwing resources during `Unload` and `Dispose`, and
+deterministic nested-failure/cache/stream state.
+
+`Capture-XnaSnapshots.ps1` retains the existing workflow shape but now validates Windows,
+Windows PowerShell 5.1 Desktop, .NET Framework 4.8 developer-pack targeting, the seven exact XNA
+assembly identities, optional expected hashes, runtime/GAC availability, x86/net48 builds, all
+manifest counts, UTF-8/LF normalization, and deterministic staged output. Its manifest records
+XNA hashes, source revision/dirty state, counts, timestamp, and OS/runtime data. Comparison against
+a CNA normalized directory produces machine-readable JSON and exits nonzero on unexpected
+differences. The platform-independent manifest/combine/compare paths were tested on Linux. Actual
+Windows XNA capture is still `not-run`; no Linux result was presented as XNA evidence.
+
+### Ownership, ABI, CI, and future profiles
+
+The ownership runner now reports release attempts, successes/failures/retries, queued and pending
+owner-thread releases, refused game destroys, destroy retries, and native crashes. Normal Debug
+and Release each passed 100 cycles: 50 explicit, 50 finalizer, 10 throwing-handler, 100/100 game
+recreations, 1,500 queued releases, 2,900/2,900 successful release attempts, and zeros for every
+failure/retry/pending/refused/crash counter. Release deep mode passed 1000 cycles: 500 explicit,
+500 finalizer, 100 throwing-handler, 1000/1000 recreation, 15,000 queued releases,
+29,000/29,000 successful release attempts, and the same zero failure counters. This is not an
+allocator-level leak claim. No exact ABI-matched ASan/UBSan build was available, so
+`SANITIZER_STATUS=not-run`.
+
+`tools/abi-verify` and matching Bash/PowerShell launchers use the platform C compiler as authority
+with one portable probe source. Linux ELF x64 passed 86 native and 86 managed size/alignment/
+offset/type measurements with zero mismatches and compiled the reviewed prototypes for enum
+widths, byte booleans, pointer handles/depth, string views, callbacks, return/parameter types,
+signedness, and platform calling-convention annotations. Windows PE and macOS Mach-O jobs reuse
+the same logic in CI, but neither result was executed or claimed locally.
+
+The release-qualification workflow now contains restore, Debug/Release builds, each managed suite,
+compile probe, leak-only verification, pure corpus/count/generated-doc validation, portable ABI
+matrix jobs, development-template generation, isolated managed package consumption, protected
+strict-XNA verification, and protected native integration/ownership/full-corpus/package jobs.
+XNA references are accepted only from a protected base64 artifact/secret and never downloaded
+from a public source. Missing protected XNA or native inputs report explicit `not-configured`
+statuses. `eng/platform-matrix.json` defines the same required gates for linux-x64, linux-arm64,
+win-x64, win-arm64, osx-x64, and osx-arm64 without labeling unexecuted RIDs supported.
+
+Separate inventory generation measured locally supplied legal references without merging any type
+into the 257-type baseline: GamerServices/Avatar is 51 types/502 members across two assemblies;
+Net is 23/174 across one; Content Pipeline is 128/743 across seven. Each has zero overlap with the
+baseline. Xbox 360 and Windows Phone/sensors remain pending because no authoritative legal
+reference pack was configured. No local authored XGS/XSB/XWB bank fixture exists. The inspected
+MIT synthetic MP4 exercises CNA's direct-file extension, not a supported XNA compiled Video XNB,
+so XACT/Video success remains honestly fixture-pending.
+
+### Loader, packages, and template modes
+
+The native resolver now has deterministic precedence: absolute `CNA_NATIVE_LIBRARY`, absolute
+`CNA_NATIVE_DIR` containing exactly one recognized file, then application/package-native
+locations such as `runtimes/<rid>/native`. Explicit configurations fail fast. Source-tree, bare
+system-name, and accidental process-wide fallback searches were removed. Ordinary errors identify
+configuration, selected path, detected/expected ABI when readable, RID, and remediation;
+`CNA_NATIVE_DIAGNOSTICS=1` retains low-level load detail.
+
+Production projects remain `IsPackable=false`. The explicit `CnaPackageAcceptance=true` path and
+`scripts/Package-Acceptance.sh` produced local `0.1.0-local.1` packages for `CNA.Interop`,
+`CNA.Framework`, and `CNA.XnaCompat`, plus symbol packages, without publication. Each package has
+the managed DLL, XML documentation, license, notice, README, and repository metadata; symbol
+packages have portable PDBs. Interop additionally contained the selected
+`runtimes/linux-x64/native/libcna_c_api.so`.
+
+The final isolated acceptance at `/tmp/cna-package-acceptance-20260823-final-with-arch` passed restore,
+build, source/sibling-path absence, package-native resolution with both CNA environment variables
+unset, 60 frames, 600 frames, missing-library, wrong-architecture, wrong-ABI, missing-symbol,
+invalid-explicit-path, conflicting-directory, and explicit-override-precedence checks. This is a local mechanics
+experiment, not a published-package or supported-RID declaration.
+
+The sibling `cna-cs-template` keeps its default development `ProjectReference` mode and adds an
+explicit package mode with only `PackageReference` to the local version. Both generated modes
+build. Package output has no `CnaCsRoot`, `CNA_CS_ROOT`, sibling `ProjectReference`, repository
+path, or developer absolute path and is the consumer used by the native acceptance run.
+
+### Final executable checkpoint
+
+- Debug solution build: 0 warnings / 0 errors;
+- Release solution build: 0 warnings / 0 errors;
+- `CNA.Framework.Tests`: 549/549 in Debug and Release;
+- `CNA.XnaCompat.Tests`: 199/199 in Debug and Release;
+- native integration: 119/119 in Debug and Release;
+- ownership: 100/100 in Debug and Release, optional deep Release 1000/1000;
+- behavior: 469/469 with generated count documentation consistent;
+- strict verifier and leak-only verifier: zero diagnostics, empty allowlist;
+- Linux ABI verifier: 86/86 native/managed measurements, zero mismatches, prototype pass;
+- package acceptance and both template modes: pass;
+- no new upstream CNA blocker was discovered; the existing exact blockers remain unchanged.
+
 ## Audio/XACT, Media/Video, Storage, pumping and ownership hardening (2026-08-23)
 
 This run preserved the completed public contract: **257 reference types / 257 target types, zero

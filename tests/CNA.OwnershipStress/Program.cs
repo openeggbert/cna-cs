@@ -32,6 +32,8 @@ internal static class Program
         int explicitCycles = 0;
         int finalizerCycles = 0;
         int throwingDisposalCycles = 0;
+        global::CNA.NativeReleaseMetrics releaseMetricsBefore = global::CNA.NativeResourceHandle.GetMetrics();
+        global::CNA.GameDestroyMetrics destroyMetricsBefore = global::CNA.Game.GetDestroyMetrics();
         try
         {
             for (int cycle = 0; cycle < cycles; cycle++)
@@ -111,10 +113,18 @@ internal static class Program
                 ForceFinalizers();
             }
 
+            global::CNA.NativeResourceHandle.DrainPendingReleasesForCurrentThread();
+            global::CNA.NativeReleaseMetrics releases = global::CNA.NativeResourceHandle.GetMetrics() - releaseMetricsBefore;
+            global::CNA.GameDestroyMetrics destroys = global::CNA.Game.GetDestroyMetrics() - destroyMetricsBefore;
             Console.WriteLine(
                 $"ownership-stress cycles={cycles} explicit={explicitCycles} finalizer={finalizerCycles} " +
                 $"throwing-device-dispose={throwingDisposalCycles} family={FinalizerFamily} " +
-                "game-recreate=ok");
+                $"game-recreate={cycles}/{cycles} queued-owner-thread-releases={releases.QueuedOwnerThreadReleases} " +
+                $"release-attempts={releases.ReleaseAttempts} release-successes={releases.SuccessfulReleases} " +
+                $"release-attempt-failures={releases.FailedReleaseAttempts} release-retries={releases.ScheduledRetries} " +
+                $"pending-owner-thread-releases={releases.PendingOwnerThreadReleases} " +
+                $"refused-game-destroys={destroys.RefusedDestroys} game-destroy-retries={destroys.RetryAttempts} " +
+                $"game-destroy-retry-successes={destroys.RetrySuccesses} native-crashes=0");
             return 0;
         }
         catch (Exception exception)

@@ -1,50 +1,94 @@
-# Packaging and native distribution plan
+# Packaging and native distribution qualification
 
-No CNA.NET NuGet package is published yet. The three projects intentionally remain
-`IsPackable=false`; a source checkout and an explicitly located native CNA library are currently
-required. This document describes the acceptance target, not shipped support.
+No CNA.NET NuGet package has been published. Production builds of all three projects still have
+`IsPackable=false`; only the dedicated `CnaPackageAcceptance=true` path enables local preview
+packing. The results below prove mechanics for one selected local native build. They do not approve
+package IDs/versioning, native redistribution, signing, or an officially supported RID.
 
-## Proposed package graph
+## Validated managed graph
 
-| Package | Purpose | Dependencies |
+| Local package | Purpose | Package dependency |
 | --- | --- | --- |
-| `CNA.Interop` | Internal ABI assembly; normally transitive, not a user API | RID-native CNA package |
-| `CNA.Framework` | Idiomatic `CNA.*` API | `CNA.Interop` exact compatible version |
-| `CNA.XnaCompat` | Strict XNA facade plus explicit CNA extension namespace | `CNA.Framework` exact compatible version |
-| `CNA.Xna` | Optional convenience metapackage for game authors | `CNA.XnaCompat` plus selected native runtime policy |
+| `CNA.Interop` | Internal ABI assembly; may carry the explicitly selected experimental RID asset | none |
+| `CNA.Framework` | Idiomatic `CNA.*` API | aligned local `CNA.Interop` preview version in the isolated feed |
+| `CNA.XnaCompat` | Strict XNA facade plus explicit CNA extensions | aligned local `CNA.Framework` preview version in the isolated feed |
 
-Start at `0.x` SemVer. A managed breaking change increments the minor version while pre-1.0. The
-minimum compatible CNA C ABI remains an explicit runtime check; package dependency ranges must not
-replace that check.
+The proposed `CNA.Xna` convenience metapackage was not needed to prove this graph and is not
+created by the harness. Start-at-`0.x` SemVer and final package-ID policy still require release
+approval. Package dependency ranges never replace `CnaAbi.EnsureCompatible()`.
 
-## Native assets
+## Reproducible local acceptance
 
-Preferred layout when redistribution/licensing and builds are ready:
+On the measured Linux x64 host, this command completed the complete acceptance path without
+publishing anything:
 
-```text
-runtimes/<rid>/native/<platform library name>
+```bash
+DOTNET_COMMAND=/path/to/dotnet \
+  scripts/Package-Acceptance.sh \
+  --native-library /absolute/path/to/libcna_c_api.so \
+  --output /tmp/cna-package-acceptance
 ```
 
-Candidate RIDs are added only after real validation, for example `linux-x64`, `linux-arm64`,
-`win-x64`, `win-arm64`, `osx-x64`, and `osx-arm64`. Do not publish an empty placeholder RID.
+The native input is mandatory and explicit. The script refuses a non-Linux-x64 host, creates an
+isolated feed and package cache, performs a clean Release solution build, packs, inspects, installs,
+builds and runs a newly generated consumer, and writes `acceptance-report.json`. Omitting
+`--output` uses an automatically removed temporary directory. It never invokes `nuget push`.
 
-If CNA native binaries remain separately distributed, `CNA_NATIVE_LIBRARY` and `CNA_NATIVE_DIR`
-are the supported explicit configuration hooks, and loader errors must name both. Accidental system
-library search paths are not an installation story.
+The measured preview version was `0.1.0-local.1`, producing:
 
-## Package acceptance test
+- `CNA.Interop.0.1.0-local.1.nupkg` and `.snupkg`;
+- `CNA.Framework.0.1.0-local.1.nupkg` and `.snupkg`;
+- `CNA.XnaCompat.0.1.0-local.1.nupkg` and `.snupkg`.
 
-For each claimed RID:
+Every main package contained its managed DLL, XML documentation, `LICENSE`, `NOTICE.md`, and
+`README.md`. Every symbol package contained its portable PDB. Nuspec repository metadata recorded
+the source URL and base Git commit. Because this acceptance checkpoint has uncommitted changes,
+that commit is not claimed to identify the package contents exactly; clean/reproducible Source Link
+policy remains a release decision. The local `CNA.Interop` package additionally contained:
 
-1. pack Release assemblies, XML docs, symbols and Source Link metadata;
-2. inspect package contents and licenses/notices;
-3. restore into an empty temporary consumer with no repository-relative references;
-4. build a generated `dotnet new cna-game` project;
-5. resolve the intended native library and verify its ABI/symbol set;
-6. run 60-frame smoke and 600-frame stability tests;
-7. verify a missing/wrong native library produces one actionable diagnostic;
-8. repeat in a clean CI image for the claimed OS and architecture.
+```text
+runtimes/linux-x64/native/libcna_c_api.so
+```
 
-Package IDs, native redistribution policy, signing, and final versioning must be approved before
-changing `IsPackable`. A package that builds but cannot locate a compatible native library is not a
-release candidate.
+## Measured linux-x64 experiment
+
+The isolated generated `dotnet new cna-game` project restored from the local feed and built with no
+`CnaCsRoot`, `CNA_CS_ROOT`, sibling `ProjectReference`, developer absolute path, or source-checkout
+reference. Its package-native library resolved from the RID asset with both `CNA_NATIVE_LIBRARY`
+and `CNA_NATIVE_DIR` unset. It completed 60 frames and 600 frames with the OPENGLES3 renderer.
+
+Negative/precedence cases also executed in fresh processes:
+
+- removing the packaged native asset produced the actionable no-library/RID diagnostic;
+- a dependency-free ELF32 fixture on the x64 host produced the wrong-architecture/binary-format
+  diagnostic with platform/RID context;
+- a major-version-1 fixture reported detected ABI 1.0.0 versus expected 0.6.0 and the selected path;
+- a loadable fixture missing a core export named the missing symbol;
+- an invalid explicit path failed without package fallback;
+- two recognized files in `CNA_NATIVE_DIR` produced a conflict diagnostic;
+- a valid `CNA_NATIVE_LIBRARY` override took precedence over both the packaged asset and
+  `CNA_NATIVE_DIR` and completed 60 frames.
+
+This is `linux-x64` local acceptance evidence only. It does not make the RID officially shipped.
+No empty Windows, macOS, or ARM package placeholders exist.
+
+## Native loader policy proven by the harness
+
+Resolution precedence is:
+
+1. absolute `CNA_NATIVE_LIBRARY` (fail fast, no fallback);
+2. absolute `CNA_NATIVE_DIR` containing exactly one recognized library (fail fast, no fallback);
+3. application/package-native locations beside the managed application, including
+   `runtimes/<rid>/native`.
+
+The resolver does not search the source tree, bare system-library names, or accidental process-wide
+loader paths. Ordinary diagnostics identify the selected configuration, detected/expected ABI
+when readable, platform/RID and remediation. Set `CNA_NATIVE_DIAGNOSTICS=1` only when low-level
+loader details are needed.
+
+## Remaining release decisions
+
+Before public packaging, approve native redistribution/licensing, package IDs and version policy,
+signing, Source Link/reproducible-build policy, the qualified CNA revision/configuration for every
+RID, and clean CI evidence on every claimed OS and architecture. The candidate matrix is
+`eng/platform-matrix.json`; cross-compilation alone is never qualification.

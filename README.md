@@ -29,26 +29,34 @@ As of 2026-08-23:
 
 - Debug and Release solution builds: 0 warnings, 0 errors;
 - managed tests: 549/549 framework and 199/199 XNA-compat passing;
-- native integration tests: 119/119 passing in Debug and Release against an ABI 0.6.0 CNA library
-  under Xvfb on Linux x64;
+- native integration tests: 119/119 passing in Debug and Release against the selected ABI 0.8.0
+  CNA OPENGLES3 library on Linux x64;
 - strict metadata profile: 257 reference types versus 257 target types, 0 differences, 0
   allowlisted;
 - standalone public/protected CNA-type leak gate: 0 findings;
 - compile-time hierarchy corpus: passes unchanged on XNA, CNA, FNA, and MonoGame; records one Kni
   hierarchy difference (`VertexDeclaration` is not a `GraphicsResource` there);
-- deterministic behavior corpora: 457 observations. The original 299 remain stable; additions are
-  83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, 4 DeviceLifecycle, and 7 Content observations.
-  CNA executes all 457 on Linux. FNA completes the 187 pure lines before its own SoundEffect
+- deterministic behavior corpora: one manifest defines 469 observations: 83 Math, 23 Input, 153
+  Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 4
+  DeviceLifecycle. CNA executes all 469 on Linux: 199 pure, 166 device, and 104 runtime. FNA
+  completes all 199 pure observations before its own SoundEffect
   finalizer aborts the process; its native runtime is unavailable here. MonoGame compiles the pure
   probe but its audio initialization aborts before the new audio group, and its profile omits the
   XACT/Storage runtime surface. Direct XNA IL establishes implemented strict semantics; the
   independent Windows XNA snapshot remains pending;
 - isolated native ownership stress: 100/100 game create/use/finalize/destroy/recreate cycles pass
-  in both Debug and Release; `CNA_OWNERSHIP_STRESS_DEEP=1` selects the optional 1000-cycle mode;
-- sibling template: CNA build, generated-project build, and 60/600-frame CNA runs pass;
+  in both Debug and Release. The optional Release deep mode passes 1000/1000 with zero release
+  failures/retries, pending releases, refused game destroys, or native crashes; this is not an
+  allocator-level leak claim;
+- portable C-authority ABI verification passes 86 native/managed measurements and prototype
+  compilation on Linux ELF x64; Windows PE and macOS Mach-O workflow execution remains pending;
+- sibling template: development/project-reference and isolated package-consumer builds pass; the
+  package-generated source has no checkout/sibling path and native 60/600-frame runs pass;
 - FNA, MonoGame, and Kni template source builds pass; 60-frame MonoGame and Kni runs pass, while the
   configured FNA assembly reports unavailable at runtime with a clean exit code 2;
-- NuGet/RID packages: not yet available.
+- NuGet/RID packages: none published. An explicit local-only harness successfully creates and
+  consumes `CNA.Interop`, `CNA.Framework`, and `CNA.XnaCompat` previews with an experimental
+  `linux-x64` native layout; this is not a shipping-RID claim.
 
 The earlier name-level coverage claim that the XNA API was complete was false. The metadata tool
 now proves exactness for the selected runtime profile by checking type identity and hierarchy,
@@ -75,8 +83,10 @@ CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
   xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj
 ```
 
-The loader also accepts `CNA_NATIVE_DIR`. An ABI-incompatible library is rejected with a diagnostic
-before missing symbols fail later.
+The loader also accepts `CNA_NATIVE_DIR`. Explicit configuration is fail-fast and takes precedence
+over package-native lookup. Wrong ABI, missing symbols, conflicts, wrong architecture/load failure,
+and missing-library cases report the attempted configuration, expected/detected ABI where
+available, RID, and remediation; `CNA_NATIVE_DIAGNOSTICS=1` enables low-level loader details.
 
 ## Strict API verification
 
@@ -103,7 +113,10 @@ tests/CNA.XnaCompat.Tests/        managed strict-facade behavior tests
 tests/CNA.XnaCompat.CompileProbe/ source-assignability corpus
 tests/CNA.Integration.Tests/      real native ABI/runtime tests
 tools/api-compat/                 signature-aware XNA metadata verifier
+tools/abi-verify/                 portable C-authority ABI/layout/prototype verifier
+tools/behavior-corpus/            authoritative corpus manifest/count/snapshot tooling
 tools/coverage/                   portable header/symbol discovery tools
+tools/profile-inventory/          separate future-XNA-profile inventory generator
 samples/HelloGame/                small managed sample
 ```
 
@@ -118,7 +131,7 @@ profile now has no public `CNA.*` base types or public/protected CNA-type signat
 
 - [`docs/architecture.md`](docs/architecture.md) — layer and ownership rules.
 - [`docs/xna-compatibility.md`](docs/xna-compatibility.md) — measured profile and extension boundaries.
-- [`docs/packaging.md`](docs/packaging.md) — proposed package/RID graph and release tests.
+- [`docs/packaging.md`](docs/packaging.md) — proposed package/RID graph and measured local acceptance harness.
 - [`plan.md`](plan.md) — current measurable roadmap.
 - [`NEXT.md`](NEXT.md) — chronological engineering history.
 

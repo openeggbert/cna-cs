@@ -63,6 +63,9 @@ public class Game : IDisposable
     /// only ever set when the call failed.
     /// </summary>
     private static CnaHandle _undestroyedGame = CnaHandle.Zero;
+    private static long _destroyRefusals;
+    private static long _destroyRetryAttempts;
+    private static long _destroyRetrySuccesses;
 
     private GCHandle _selfHandle;
     private bool _graphicsDeviceInitialized;
@@ -115,8 +118,10 @@ public class Game : IDisposable
             GC.WaitForPendingFinalizers();
             NativeResourceHandle.DrainPendingReleasesForCurrentThread();
 
+            Interlocked.Increment(ref _destroyRetryAttempts);
             if (Native.cna_game_destroy(_undestroyedGame).IsSuccess())
             {
+                Interlocked.Increment(ref _destroyRetrySuccesses);
                 _undestroyedGame = CnaHandle.Zero;
                 _lastDestroyFailure = null;
                 result = Native.cna_game_create(in createInfo, out _nativeHandle);
@@ -698,6 +703,7 @@ public class Game : IDisposable
         // failure baffling in the first place.
         if (destroyResult.IsFailure())
         {
+            Interlocked.Increment(ref _destroyRefusals);
             _undestroyedGame = _nativeHandle;
             _lastDestroyFailure =
                 $"a previous game failed to release: cna_game_destroy answered {destroyResult}, which " +
@@ -829,6 +835,11 @@ public class Game : IDisposable
     /// and <c>Game_CallsInitializeOnce_BeforeLoadContent</c> now measures native's real order
     /// rather than this binding's correction of it.
     /// </summary>
+    internal static GameDestroyMetrics GetDestroyMetrics() => new(
+        Interlocked.Read(ref _destroyRefusals),
+        Interlocked.Read(ref _destroyRetryAttempts),
+        Interlocked.Read(ref _destroyRetrySuccesses));
+
     private void RunInitializeOnce()
     {
         if (_initialized)
@@ -897,4 +908,16 @@ public class Game : IDisposable
             return game.ReportCallbackFailure(outError, ex);
         }
     }
+}
+
+internal readonly record struct GameDestroyMetrics(
+    long RefusedDestroys,
+    long RetryAttempts,
+    long RetrySuccesses)
+{
+    public static GameDestroyMetrics operator -(GameDestroyMetrics end, GameDestroyMetrics start) =>
+        new(
+            end.RefusedDestroys - start.RefusedDestroys,
+            end.RetryAttempts - start.RetryAttempts,
+            end.RetrySuccesses - start.RetrySuccesses);
 }

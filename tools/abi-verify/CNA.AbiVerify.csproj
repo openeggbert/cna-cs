@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/CNA.Interop/CNA.Interop.csproj" />
+    <None Include="native_layout_probe.c" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="native_prototype_probe.c" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,7 +1,9 @@
 # Native blockers for strict XNA behavior
 
-Measured against the checked-out CNA C ABI headers and implementation on 2026-08-23. This file is
-an implementation handoff, not permission to change the upstream `cna` repository. Microsoft XNA
+Measured against read-only CNA commit `1bb2145d99ed572dd4eb15009c34e2e5f410fcf0` (C ABI 0.7.0)
+on 2026-08-23. None of the listed capabilities appeared in that revision, and no upstream source
+was modified. This file is an implementation handoff, not permission to change the upstream `cna`
+repository. Microsoft XNA
 4.0 source/IL and a future Windows runtime snapshot are authoritative; FNA and MonoGame results are
 only differential evidence.
 
@@ -35,3 +37,21 @@ safe points and before game destruction. This closes the exercised game lifecycl
 failed parent release retried after its child. An upstream process-wide owner-thread pump would be
 needed if future owned native handles can legitimately outlive every managed `Game` safe point;
 the binding must not destroy those handles directly from the finalizer thread.
+
+The measured 100-cycle Debug and Release runs each queued 1,500 owner-thread releases and completed
+2,900 release attempts with zero failure/retry residue or refused game destroys. The optional
+1,000-cycle Release run queued 15,000 and completed 29,000 with the same zero residue. These are
+lifecycle/order observations, not allocator-level leak or sanitizer evidence.
+
+## Legal fixture inventory
+
+No valid XGS/XSB/XWB authored-bank fixture exists in this repository, the read-only CNA tree, or
+the inspected local example repositories. A valid future fixture must be legally redistributable,
+produced by a compatible XNA audio authoring tool, and include matched XGS settings, XSB sound bank,
+XWB wave bank, and license/provenance.
+
+The local `cna-examples` repository does contain an MIT-licensed, procedurally generated H.264/AAC
+MP4. It proves CNA's direct-file extension route but is not an XNA-compatible compiled Video XNB or
+a supported Windows XNA WMV asset, so it was not mislabeled as reference-XNA fixture evidence. A
+future XNA video fixture needs a legally generated supported source plus its compiled Video XNB and
+documented redistribution rights.

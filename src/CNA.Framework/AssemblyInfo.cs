@@ -6,3 +6,4 @@ using System.Runtime.CompilerServices;
 // "CNA.XnaCompat never references CNA.Interop directly" (plan.md invariant #5) true at compile time.
 [assembly: InternalsVisibleTo("CNA.XnaCompat")]
 [assembly: InternalsVisibleTo("CNA.Framework.Tests")]
+[assembly: InternalsVisibleTo("CNA.OwnershipStress")]
