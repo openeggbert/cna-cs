@@ -17,6 +17,9 @@
 
   <ItemGroup>
     <None Include="assets\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\eng\cna-native-abi-policy.json"
+          Link="cna-native-abi-policy.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

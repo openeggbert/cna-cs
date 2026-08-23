@@ -15,7 +15,8 @@ package IDs/versioning, native redistribution, signing, or an officially support
 
 The proposed `CNA.Xna` convenience metapackage was not needed to prove this graph and is not
 created by the harness. Start-at-`0.x` SemVer and final package-ID policy still require release
-approval. Package dependency ranges never replace `CnaAbi.EnsureCompatible()`.
+approval. Package dependency ranges never replace the explicit
+[`cna-cs-native-abi/1`](native-abi-compatibility.md) loader contract.
 
 ## Reproducible local acceptance
 
@@ -62,8 +63,13 @@ Negative/precedence cases also executed in fresh processes:
 - removing the packaged native asset produced the actionable no-library/RID diagnostic;
 - a dependency-free ELF32 fixture on the x64 host produced the wrong-architecture/binary-format
   diagnostic with platform/RID context;
-- a major-version-1 fixture reported detected ABI 1.0.0 versus expected 0.6.0 and the selected path;
-- a loadable fixture missing a core export named the missing symbol;
+- the complete ABI fixture matrix accepted exact 0.6.0, additive 0.7.0, additive 0.7.0 with an
+  unrelated export, and the reviewed CNA.NET subset of 0.8.0;
+- the same matrix rejected a missing required export, testable changed signature, incompatible
+  major, structurally incompatible same-major library, malformed 0.0.0 metadata, and unreadable
+  metadata;
+- a major-version-1 fixture reported detected ABI 1.0.0 versus consumer ABI 0.6.0 and the selected path;
+- a loadable fixture missing one of all 841 required imports named the missing symbol;
 - an invalid explicit path failed without package fallback;
 - two recognized files in `CNA_NATIVE_DIR` produced a conflict diagnostic;
 - a valid `CNA_NATIVE_LIBRARY` override took precedence over both the packaged asset and
@@ -82,9 +88,11 @@ Resolution precedence is:
    `runtimes/<rid>/native`.
 
 The resolver does not search the source tree, bare system-library names, or accidental process-wide
-loader paths. Ordinary diagnostics identify the selected configuration, detected/expected ABI
-when readable, platform/RID and remediation. Set `CNA_NATIVE_DIAGNOSTICS=1` only when low-level
-loader details are needed.
+loader paths. It admits only exact versions in the reviewed matrix, resolves all 841 imported
+symbols, and executes core signature/shape canaries before returning the handle. Additional
+unrelated exports are allowed. Ordinary diagnostics identify the selected configuration,
+detected/consumer ABI when readable, policy, platform/RID and remediation. Set
+`CNA_NATIVE_DIAGNOSTICS=1` only when low-level loader details are needed.
 
 ## Remaining release decisions
 

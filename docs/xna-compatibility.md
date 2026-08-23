@@ -122,7 +122,7 @@ A build is not a runtime claim.
 
 ## Behavior and content
 
-The managed suites currently pass 549 framework and 199 compat tests. The selected ABI 0.8.0 CNA
+The managed suites currently pass 560 framework and 199 compat tests. The selected ABI 0.8.0 CNA
 library passes all 119 native integration tests in both Debug and Release on Linux x64. The
 isolated ownership runner also passes 100 game teardown/recreation cycles in both configurations.
 The optional Release deep mode passes 1000 cycles: 500 explicit, 500 finalizer, and 100

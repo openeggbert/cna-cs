@@ -28,7 +28,7 @@ Binary compatibility with Microsoft's strong-named assemblies is not the primary
 As of 2026-08-23:
 
 - Debug and Release solution builds: 0 warnings, 0 errors;
-- managed tests: 549/549 framework and 199/199 XNA-compat passing;
+- managed tests: 560/560 framework and 199/199 XNA-compat passing;
 - native integration tests: 119/119 passing in Debug and Release against the selected ABI 0.8.0
   CNA OPENGLES3 library on Linux x64;
 - strict metadata profile: 257 reference types versus 257 target types, 0 differences, 0
@@ -49,7 +49,11 @@ As of 2026-08-23:
   failures/retries, pending releases, refused game destroys, or native crashes; this is not an
   allocator-level leak claim;
 - portable C-authority ABI verification passes 86 native/managed measurements and prototype
-  compilation on Linux ELF x64; Windows PE and macOS Mach-O workflow execution remains pending;
+  compilation against reviewed ABI 0.7.0 and 0.8.0 headers on Linux ELF x64; Windows PE and macOS
+  Mach-O workflow execution remains pending;
+- native loading follows the reviewed `cna-cs-native-abi/1` matrix, resolves all 841 imports, and
+  passes 10 isolated compatibility fixtures (4 accepted, 6 rejected); ABI 0.8 remains accepted only
+  as a documented consumer-specific exception, not through a same-major rule;
 - sibling template: development/project-reference and isolated package-consumer builds pass; the
   package-generated source has no checkout/sibling path and native 60/600-frame runs pass;
 - FNA, MonoGame, and Kni template source builds pass; 60-frame MonoGame and Kni runs pass, while the
@@ -84,9 +88,12 @@ CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
 ```
 
 The loader also accepts `CNA_NATIVE_DIR`. Explicit configuration is fail-fast and takes precedence
-over package-native lookup. Wrong ABI, missing symbols, conflicts, wrong architecture/load failure,
-and missing-library cases report the attempted configuration, expected/detected ABI where
-available, RID, and remediation; `CNA_NATIVE_DIAGNOSTICS=1` enables low-level loader details.
+over package-native lookup. Admission follows
+[`cna-cs-native-abi/1`](docs/native-abi-compatibility.md), not a same-major range: the version must
+have a reviewed matrix entry, all 841 imports must exist, and signature/shape canaries must pass.
+Wrong ABI, missing symbols, conflicts, wrong architecture/load failure, and missing-library cases
+report the attempted configuration, consumer/detected ABI where available, RID, and remediation;
+`CNA_NATIVE_DIAGNOSTICS=1` enables low-level loader details.
 
 ## Strict API verification
 
@@ -114,6 +121,7 @@ tests/CNA.XnaCompat.CompileProbe/ source-assignability corpus
 tests/CNA.Integration.Tests/      real native ABI/runtime tests
 tools/api-compat/                 signature-aware XNA metadata verifier
 tools/abi-verify/                 portable C-authority ABI/layout/prototype verifier
+tools/native-abi-probe/           isolated managed native-loader admission probe
 tools/behavior-corpus/            authoritative corpus manifest/count/snapshot tooling
 tools/coverage/                   portable header/symbol discovery tools
 tools/profile-inventory/          separate future-XNA-profile inventory generator

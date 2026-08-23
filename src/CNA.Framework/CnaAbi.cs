@@ -15,7 +15,7 @@ public static class CnaAbi
 {
     /// <summary>
     /// The ABI this binding was written against
-    /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.3.0).
+    /// (<c>CNA_ABI_VERSION_MAJOR</c>/<c>_MINOR</c>/<c>_PATCH</c> = 0.6.0).
     ///
     /// 0.1.0 -> 0.2.0 was the content-reader registration, SpriteFont and launch-parameter routes.
     /// 0.3.0 -> 0.4.0 added the <c>.cnj</c> loader registration and 0.4.0 -> 0.5.0 the native-window
@@ -30,15 +30,16 @@ public static class CnaAbi
     ///
     /// This binding is unaffected, and that was checked rather than assumed: every Bool it emits
     /// comes from <c>value ? (byte)1 : (byte)0</c> or a literal, and every Bool it reads is
-    /// compared <c>!= 0</c>. Only the major component gates compatibility, so none of this ever
-    /// blocked anything -- the constant is kept accurate so the integration test's
-    /// "native ABI x, binding expects y" line stays worth reading.
+    /// compared <c>!= 0</c>. Compatibility is not inferred from the shared major: CNA's
+    /// experimental 0.x contract allows a minor to identify an incompatible generation. The
+    /// resolver admits only exact versions in the reviewed matrix and then verifies the complete
+    /// imported symbol set plus side-effect-free signature and versioned-structure canaries.
     ///
     /// Not to be confused with the ELF symbol version the library exports, which is
     /// <c>CNA_C_API_0.1</c> and deliberately does <em>not</em> track this. Moving a version node on
     /// a minor bump would break every already-linked consumer.
     /// </summary>
-    public const uint ExpectedVersion = (0u << 16) | (6u << 8) | 0u;
+    public const uint ExpectedVersion = CnaNativeAbiPolicy.ConsumerVersion;
 
     private static bool _checked;
 
@@ -51,9 +52,10 @@ public static class CnaAbi
     /// <summary>
     /// Throws unless the loaded library's ABI is compatible with what this binding expects.
     ///
-    /// Compatible means the same major version. Minor and patch may differ: the encoding reserves
-    /// 16 bits for major and 8 each for the rest, which is the usual "major breaks, minor adds"
-    /// split, and refusing on a patch bump would make the binding brittle for no safety gain.
+    /// Compatibility is established by <see cref="NativeLibraryResolver"/> before the first native
+    /// import returns. The version selects a reviewed profile; the resolver also requires every
+    /// imported symbol and executes core-signature and structure-shape canaries. Experimental 0.x
+    /// minor or patch values outside that matrix are rejected.
     ///
     /// Runs once. Every subsequent call is free, so <see cref="Game"/> can call it on construction
     /// without paying for it per game.
@@ -66,38 +68,23 @@ public static class CnaAbi
         }
 
         uint native = NativeVersion;
-        (int expectedMajor, int expectedMinor, int expectedPatch) = Decode(ExpectedVersion);
-        (int nativeMajor, int nativeMinor, int nativePatch) = Decode(native);
-
-        if (nativeMajor != expectedMajor)
+        if (!CnaNativeAbiPolicy.TryGetProfile(native, out _))
         {
+            // The assembly-local resolver normally makes this unreachable. Retain the assertion at
+            // the public check boundary so alternate hosting cannot turn registration or ordering
+            // into a silent version-only bypass.
             throw new CnaException(
-                $"The loaded cna-native library implements C ABI {nativeMajor}.{nativeMinor}.{nativePatch}, " +
-                $"but this build of CNA.NET was written against {expectedMajor}.{expectedMinor}.{expectedPatch}. " +
-                "Major versions differ, so the two are not interoperable -- every struct layout and handle " +
-                "convention in this binding assumes the version it was built against. " +
-                NativeLibraryResolver.DescribeSelection(ExpectedVersion) + " " +
-                $"Install the CNA native asset for this RID or correct {NativeLibraryResolver.PathVariable}/" +
-                $"{NativeLibraryResolver.DirectoryVariable}.");
-        }
-
-        // A same-major library that is *older* than this binding is missing routes this binding
-        // binds, and the symptom is an EntryPointNotFoundException from whichever call happens to
-        // reach one first -- naming a symbol rather than the mismatch that caused it. The check is
-        // a floor rather than an equality for the reason ABI_VERSIONING.md gives and the installed
-        // CMake package enforces with SameMajorVersion: a *newer* minor is additive and fine.
-        if (nativeMinor < expectedMinor || (nativeMinor == expectedMinor && nativePatch < expectedPatch))
-        {
-            throw new CnaException(
-                $"The loaded cna-native library implements C ABI {nativeMajor}.{nativeMinor}.{nativePatch}, " +
-                $"older than the {expectedMajor}.{expectedMinor}.{expectedPatch} this build of CNA.NET was " +
-                "written against. A newer minor is additive and fine; an older one is missing routes this " +
-                "binding calls, which would otherwise surface later as a missing entry point. " +
-                NativeLibraryResolver.DescribeSelection(ExpectedVersion) + " " +
-                $"Install the CNA native asset for this RID or correct {NativeLibraryResolver.PathVariable}/" +
-                $"{NativeLibraryResolver.DirectoryVariable}.");
+                $"The loaded cna-native library implements C ABI {Format(native)}, which is not " +
+                $"accepted by {CnaNativeAbiPolicy.PolicyVersion} for consumer ABI {Format(ExpectedVersion)}. " +
+                NativeLibraryResolver.DescribeSelection(ExpectedVersion));
         }
 
         _checked = true;
+    }
+
+    private static string Format(uint version)
+    {
+        (int major, int minor, int patch) = Decode(version);
+        return $"{major}.{minor}.{patch}";
     }
 }

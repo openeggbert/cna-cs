@@ -118,6 +118,15 @@ repository only *consumes* that ABI from `CNA.Interop`. See
 `analysis_binding.md` §3–§16 for the ABI design itself; this repository
 treats it as an external contract, not something to redesign locally.
 
+Consumption is nevertheless governed locally by the versioned
+[`cna-cs-native-abi/1`](native-abi-compatibility.md) policy. CNA 0.x minors are reviewed ABI
+generations, not a same-major compatibility range. The resolver accepts only audited versions,
+requires the complete managed import set, and runs safe signature/shape canaries. Build-time C
+compiler probes and CNA's upstream ABI baseline remain the authority for facts that a loaded
+binary cannot self-describe. This separates three questions that version-only loading formerly
+collapsed: whether a release is admitted, whether every required capability symbol exists, and
+whether selected foundational machine shapes behave as declared.
+
 ## Sharp Runtime is invisible here, on purpose
 
 CNA's native C++ implementation may use

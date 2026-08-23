@@ -11,13 +11,60 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## CNA native ABI policy formalized and fixture-gated (2026-08-23)
+
+This run was deliberately limited to the CNA native boundary. It did not expand the completed XNA
+surface and did not modify upstream CNA. The former rule in `CnaAbi.EnsureCompatible()` accepted
+every native version whose major matched 0 and whose minor/patch was at least 0.6.0; the resolver
+then checked only four symbols. That encoded the unproved assumption that every later 0.x minor
+was additive.
+
+Read-only CNA history disproved the general rule. CNA's own `ABI_VERSIONING.md` says experimental
+0.x minors may be incompatible. The 0.6→0.7 transition is explicitly additive, but 0.8 changes
+`CNA_GRAPHICS_CAPABILITY_MAXIMUM` from 13 to 18 and `CNA_GRAPHICS_RENDERER_MAXIMUM` from 49 to 50.
+It is therefore not generally ABI-compatible with 0.7 consumers. This managed consumer binds
+neither sentinel; the upstream baseline otherwise preserves every existing constant, export,
+prototype, callback, and struct it consumes. ABI 0.8 remains admitted for that reviewed narrow
+reason, not because its major is zero.
+
+Policy `cna-cs-native-abi/1` now lives in code, the machine-readable
+`eng/cna-native-abi-policy.json`, and `docs/native-abi-compatibility.md`. It accepts only exact
+0.6.0, additive 0.7.0, and the consumer-specific 0.8.0 profile. Every other version, including
+unaudited patch releases, is rejected by default. The resolver checks all 841 `LibraryImport`
+entry points and executes a core result/out-parameter signature canary plus a guarded 16-byte
+`CNA_TouchCapabilities` version/shape/write-bound canary before returning the handle. Added
+unrelated exports remain allowed.
+
+`scripts/Verify-NativeAbiCompatibility.sh` builds ten dependency-free shared libraries and runs
+each in a fresh managed process. It accepts exact 0.6, additive 0.7, 0.7 with an unrelated added
+symbol, and the reviewed 0.8 subset. It rejects a missing required symbol, changed testable
+signature, major 1, structurally incompatible same-major library, malformed 0.0.0 metadata, and
+missing/unreadable metadata. The fixture gate passes, and the selected real ABI 0.8.0 library also
+passes all 841 symbol checks and both canaries. `tools/abi-verify` now records the header ABI and
+requires the same policy matrix; both local read-only ABI 0.7 and 0.8 header trees pass 86/86
+measurements with zero mismatches and the prototype compile.
+
+Package acceptance invokes the fixture/selected-library policy gate before packing, and CI has an
+unprotected `native-abi-policy` job in addition to the portable header and protected runtime jobs.
+The exact struct/export/enum/callback evolution rules and the limit of what runtime introspection
+can prove are recorded in the dedicated ABI document.
+
+Final regression evidence after the loader change: Debug/Release solution builds are clean with
+zero warnings; framework tests pass 560/560 and compat tests 199/199; native integration passes
+119/119 in both Debug and Release; ownership passes 100/100 in both with 2,900/2,900 successful
+releases and every failure/retry/pending/refused/crash counter zero; the behavior corpus validates
+199 + 166 + 104 = 469 observations; strict metadata remains 257/257 with zero diagnostics, zero
+CNA leaks, and an empty allowlist. Isolated package acceptance passes the ABI fixtures and selected
+library, package inspection/restore/build, 60/600 frames, and all loader diagnostics without
+publishing anything.
+
 ## Release qualification, portable evidence, and isolated package consumers (2026-08-23)
 
 This run did not expand the completed selected XNA surface. The final strict invariants remain
 `REFERENCE_TYPES=257`, `TARGET_TYPES=257`, `STRICT_DIAGNOSTICS=0`, `CNA_LEAKS=0`,
 `BASE_MISMATCHES=0`, `INTERFACE_MISMATCHES=0`, and `ALLOWLIST=0`. Upstream CNA was inspected at
 commit `1bb2145d99ed572dd4eb15009c34e2e5f410fcf0` (header ABI 0.7.0) and was not modified. The
-runtime/package evidence used the explicitly selected same-major ABI 0.8.0 OPENGLES3 library at
+runtime/package evidence used the explicitly selected ABI 0.8.0 OPENGLES3 library at
 `/tmp/cna-cs-software-pinned/modules/c-api/libcna_c_api.so`.
 
 ### One behavior manifest and release-grade snapshot tooling

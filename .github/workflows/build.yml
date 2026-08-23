@@ -159,6 +159,24 @@ jobs:
           name: abi-${{ matrix.report }}
           path: artifacts/abi/${{ matrix.report }}.json
 
+  native-abi-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore tools/native-abi-probe/CNA.NativeAbiProbe.csproj
+      - run: dotnet build tools/native-abi-probe/CNA.NativeAbiProbe.csproj -c Release --no-restore -m:1
+      - name: Verify reviewed native ABI matrix, required symbols, signatures, and shapes
+        run: >-
+          scripts/Verify-NativeAbiCompatibility.sh --configuration Release --no-build
+          --output artifacts/native-abi-policy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-abi-policy
+          path: artifacts/native-abi-policy/abi-compatibility-report.json
+
   template-development:
     runs-on: ubuntu-latest
     steps:

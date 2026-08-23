@@ -6,6 +6,7 @@
     "releaseBuild",
     "managedTests",
     "abiProbe",
+    "nativeAbiPolicy",
     "nativeLoader",
     "generatedTemplate",
     "frames60",

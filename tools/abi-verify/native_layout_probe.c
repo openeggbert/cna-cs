@@ -12,6 +12,7 @@
 
 int main(void)
 {
+    printf("abi.version=%u\n", CNA_ABI_VERSION);
     PRINT_SIZE(void*);
     PRINT_ALIGN(void*);
     PRINT_SIZE(CNA_Result);

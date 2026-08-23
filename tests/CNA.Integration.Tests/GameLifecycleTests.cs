@@ -114,11 +114,8 @@ public class GameLifecycleTests(ITestOutputHelper output)
 
         output.WriteLine($"native ABI {major}.{minor}.{patch}, binding expects {expectedMajor}.{expectedMinor}.{expectedPatch}");
 
-        // Major must match; minor and patch may drift, per CnaAbi's own compatibility rule.
-        Assert.Equal(expectedMajor, major);
-
-        // The real assertion: EnsureCompatible is what Game's constructor calls, so if it throws
-        // here every game fails at construction.
+        // EnsureCompatible is what Game's constructor calls. Its first import triggers the
+        // resolver's exact reviewed-version, all-symbol, signature, and shape admission contract.
         CnaAbi.EnsureCompatible();
     }
 

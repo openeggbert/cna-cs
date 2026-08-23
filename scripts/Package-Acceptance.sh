@@ -70,6 +70,10 @@ export NUGET_AUDIT_MODE=direct
 "$dotnet_command" clean "$repo_root/CNA.sln" -c Release -m:1 -v:quiet
 "$dotnet_command" build "$repo_root/CNA.sln" -c Release --no-restore -m:1
 
+abi_compatibility_root="$work_root/abi-compatibility"
+DOTNET_COMMAND="$dotnet_command" "$script_dir/Verify-NativeAbiCompatibility.sh" \
+  --configuration Release --native-library "$native_library" --output "$abi_compatibility_root"
+
 pack_project()
 {
   local project=$1
@@ -188,17 +192,15 @@ if CNA_NATIVE_LIBRARY="$work_root/wrong-abi.so" CNA_NATIVE_DIR=/deliberately/ign
   exit 1
 fi
 grep -Fq 'implements C ABI 1.0.0' "$logs_root/wrong-abi.log"
-grep -Fq 'expected ABI: 0.6.0' "$logs_root/wrong-abi.log"
+grep -Fq 'consumer ABI 0.6.0' "$logs_root/wrong-abi.log"
 grep -Fq 'explicit CNA_NATIVE_LIBRARY' "$logs_root/wrong-abi.log"
 
-cc -shared -fPIC -Wall -Wextra -Werror "$script_dir/package-fixtures/missing_symbol.c" \
-  -o "$work_root/missing-symbol.so"
-if CNA_NATIVE_LIBRARY="$work_root/missing-symbol.so" \
+if CNA_NATIVE_LIBRARY="$abi_compatibility_root/fixtures/missing-required-symbol.so" \
    "$dotnet_command" "$consumer_dll" --frames 1 >"$logs_root/missing-symbol.log" 2>&1; then
   echo "Missing-symbol diagnostic case unexpectedly succeeded." >&2
   exit 1
 fi
-grep -Fq "required symbol 'cna_error_get_last_message_size' is missing" "$logs_root/missing-symbol.log"
+grep -Fq "required symbol 'cna_game_destroy' is missing" "$logs_root/missing-symbol.log"
 
 if CNA_NATIVE_LIBRARY="$work_root/does-not-exist.so" \
    "$dotnet_command" "$consumer_dll" --frames 1 >"$logs_root/invalid-explicit-path.log" 2>&1; then
@@ -253,6 +255,9 @@ jq -n \
     invalidExplicitPathDiagnostic: "passed",
     conflictingLibrariesDiagnostic: "passed",
     explicitOverridePrecedence: "passed",
+    nativeAbiPolicy: "cna-cs-native-abi/1",
+    nativeAbiCompatibilityFixtures: "4 accepted / 6 rejected",
+    nativeAbiSelectedLibrary: "passed",
     published: false,
     supportedRidClaim: false
   }' >"$output_root/acceptance-report.json"

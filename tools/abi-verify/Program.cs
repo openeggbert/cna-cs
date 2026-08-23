@@ -65,8 +65,30 @@ try
 
     string nativeOutput = Run(executable, [], temporaryDirectory);
     Dictionary<string, long> native = ParseValues(nativeOutput);
+    if (!native.Remove("abi.version", out long nativeAbiValue) || nativeAbiValue is < 0 or > uint.MaxValue)
+    {
+        throw new InvalidDataException("The native layout probe did not report a valid encoded CNA ABI version.");
+    }
+
+    uint nativeAbiVersion = (uint)nativeAbiValue;
     Dictionary<string, long> managed = BuildManagedValues();
     List<object> mismatches = [];
+
+    CnaNativeAbiProfile? acceptedProfile = null;
+    if (CnaNativeAbiPolicy.TryGetProfile(nativeAbiVersion, out CnaNativeAbiProfile profile))
+    {
+        acceptedProfile = profile;
+    }
+    else
+    {
+        mismatches.Add(new
+        {
+            key = "abi.version",
+            native = (long?)nativeAbiVersion,
+            managed = (long?)CnaNativeAbiPolicy.ConsumerVersion,
+            issue = CnaNativeAbiPolicy.ExplainRejection(nativeAbiVersion),
+        });
+    }
 
     foreach ((string key, long managedValue) in managed.OrderBy(pair => pair.Key, StringComparer.Ordinal))
     {
@@ -102,6 +124,9 @@ try
         compiler,
         compilerVersion,
         includeDirectory,
+        abiPolicyVersion = CnaNativeAbiPolicy.PolicyVersion,
+        headerAbiVersion = FormatVersion(nativeAbiVersion),
+        headerAbiProfile = acceptedProfile?.Compatibility ?? "rejected",
         categories = new[]
         {
             "sizeof", "alignof", "field-offsets", "enum-widths", "bool-representation",
@@ -125,6 +150,8 @@ try
 
     Console.WriteLine($"ABI_PLATFORM={RuntimeInformation.RuntimeIdentifier}");
     Console.WriteLine($"ABI_COMPILER={compiler}");
+    Console.WriteLine($"ABI_HEADER_VERSION={FormatVersion(nativeAbiVersion)}");
+    Console.WriteLine($"ABI_POLICY={CnaNativeAbiPolicy.PolicyVersion}");
     Console.WriteLine($"ABI_NATIVE_VALUES={native.Count}");
     Console.WriteLine($"ABI_MANAGED_VALUES={managed.Count}");
     Console.WriteLine($"ABI_MISMATCHES={mismatches.Count}");
@@ -135,6 +162,9 @@ finally
 {
     Directory.Delete(temporaryDirectory, recursive: true);
 }
+
+static string FormatVersion(uint version) =>
+    $"{(version >> 16) & 0xFFFF}.{(version >> 8) & 0xFF}.{version & 0xFF}";
 
 static string RequireValue(string[] values, ref int index)
 {

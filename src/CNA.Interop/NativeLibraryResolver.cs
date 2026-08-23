@@ -23,14 +23,6 @@ public static class NativeLibraryResolver
     public const string DiagnosticsVariable = "CNA_NATIVE_DIAGNOSTICS";
 
     private static readonly string[] CandidateNames = ["cna-native", "cna_c_api"];
-    private static readonly string[] RequiredSymbols =
-    [
-        "cna_get_abi_version",
-        "cna_error_get_last_message_size",
-        "cna_game_create",
-        "cna_game_destroy",
-    ];
-
     private static int _registered;
     private static string? _loadedLibraryPath;
     private static string? _resolutionSource;
@@ -119,13 +111,21 @@ public static class NativeLibraryResolver
 
             uint abi = Marshal.GetDelegateForFunctionPointer<GetAbiVersion>(versionSymbol)();
             _detectedAbiVersion = abi;
-            foreach (string symbol in RequiredSymbols)
+            if (!CnaNativeAbiPolicy.TryGetProfile(abi, out _))
+            {
+                throw IncompatibleAbi(path, source, abi);
+            }
+
+            foreach (string symbol in CnaNativeAbiPolicy.RequiredSymbols)
             {
                 if (!NativeLibrary.TryGetExport(handle, symbol, out _))
                 {
                     throw MissingSymbol(path, source, symbol, abi);
                 }
             }
+
+            ProbeCoreSignature(handle, path, source, abi);
+            ProbeVersionedStructShape(handle, path, source, abi);
 
             Volatile.Write(ref _loadedLibraryPath, path);
             Volatile.Write(ref _resolutionSource, source);
@@ -258,6 +258,69 @@ public static class NativeLibraryResolver
             "do not rename an unrelated CNA library to a recognized filename.");
     }
 
+    private static DllNotFoundException IncompatibleAbi(string path, string source, uint detectedAbi)
+    {
+        return new DllNotFoundException(
+            $"The CNA library '{path}' selected through {source} implements C ABI {FormatVersion(detectedAbi)}, " +
+            $"but {CnaNativeAbiPolicy.PolicyVersion} for consumer ABI " +
+            $"{FormatVersion(CnaNativeAbiPolicy.ConsumerVersion)} rejects it: " +
+            $"{CnaNativeAbiPolicy.ExplainRejection(detectedAbi)}. {PlatformSummary()} " +
+            "Use a library from the audited ABI matrix; a matching major number alone is not proof of compatibility.");
+    }
+
+    private static void ProbeCoreSignature(nint handle, string path, string source, uint abi)
+    {
+        NativeLibrary.TryGetExport(handle, "cna_error_get_last_message_size", out nint symbol);
+        GetLastErrorMessageSize probe = Marshal.GetDelegateForFunctionPointer<GetLastErrorMessageSize>(symbol);
+        ulong bytes = 0xA55A_A55A_A55A_A55AUL;
+        uint result = probe(ref bytes);
+        if (result != 0 || bytes == 0xA55A_A55A_A55A_A55AUL)
+        {
+            throw FailedProbe(path, source, abi, "cna_error_get_last_message_size",
+                $"returned result {result} and output 0x{bytes:X16}");
+        }
+    }
+
+    private static unsafe void ProbeVersionedStructShape(nint handle, string path, string source, uint abi)
+    {
+        const int PrefixBytes = 8;
+        const int StructBytes = 16;
+        const int SuffixBytes = 8;
+        Span<byte> storage = stackalloc byte[PrefixBytes + StructBytes + SuffixBytes];
+        storage.Fill(0xA5);
+
+        NativeLibrary.TryGetExport(handle, "cna_touch_capabilities_init", out nint symbol);
+        TouchCapabilitiesInit probe = Marshal.GetDelegateForFunctionPointer<TouchCapabilitiesInit>(symbol);
+        uint result;
+        fixed (byte* start = storage)
+        {
+            result = probe((nint)(start + PrefixBytes));
+        }
+
+        ReadOnlySpan<byte> value = storage.Slice(PrefixBytes, StructBytes);
+        bool guardsIntact = storage[..PrefixBytes].IndexOfAnyExcept((byte)0xA5) < 0 &&
+                            storage[(PrefixBytes + StructBytes)..].IndexOfAnyExcept((byte)0xA5) < 0;
+        uint structSize = BitConverter.ToUInt32(value);
+        uint structVersion = BitConverter.ToUInt32(value[4..]);
+        bool canonicalBody = value[8] == 0 && value[9] == 0 && value[10] == 0 && value[11] == 0 &&
+                             BitConverter.ToUInt32(value[12..]) == 0;
+        if (result != 0 || !guardsIntact || structSize != StructBytes || structVersion != 1 || !canonicalBody)
+        {
+            throw FailedProbe(path, source, abi, "cna_touch_capabilities_init",
+                $"returned result {result}, struct_size {structSize}, struct_version {structVersion}, " +
+                $"canonical body {canonicalBody}, guards intact {guardsIntact}");
+        }
+    }
+
+    private static DllNotFoundException FailedProbe(
+        string path, string source, uint abi, string probe, string detail)
+    {
+        return new DllNotFoundException(
+            $"The CNA library '{path}' selected through {source} reports C ABI {FormatVersion(abi)}, " +
+            $"but failed required signature/shape probe '{probe}': {detail}. {PlatformSummary()} " +
+            "The version number and symbol names alone do not prove this library is compatible.");
+    }
+
     private static string BuildNotFoundMessage(string source)
     {
         StringBuilder message = new();
@@ -292,4 +355,10 @@ public static class NativeLibraryResolver
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersion();
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate uint GetLastErrorMessageSize(ref ulong outBytes);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate uint TouchCapabilitiesInit(nint outCapabilities);
 }

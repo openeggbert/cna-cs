@@ -13,8 +13,8 @@ native-platform validation, content fixtures, packaging, and release engineering
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 549 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
-| Native integration | 119/119 passing in Debug and Release on Linux x64 with the selected ABI 0.8.0 CNA OPENGLES3 library; the binding's expected ABI remains 0.6.0 and same-major additive versions are accepted |
+| Managed tests | 560 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
+| Native integration | 119/119 passing in Debug and Release on Linux x64 with the selected ABI 0.8.0 CNA OPENGLES3 library; consumer ABI 0.6.0 uses the exact reviewed `cna-cs-native-abi/1` matrix, all 841 imports, and signature/shape canaries rather than same-major admission |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 469 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 4 DeviceLifecycle. CNA executes all 469: 199 pure, 166 device, and 104 native-runtime. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
@@ -237,12 +237,26 @@ latest header sweep found no declared imports absent from the selected headers a
 mismatches. An older ABI 0.1.0 library was correctly rejected; the selected ABI 0.8.0 library
 passes all 119 integration tests in both configurations. `tools/abi-verify` uses the platform C
 compiler as authority: Linux ELF x64 passes 86 native/managed measurements with zero mismatches
-and compiles the reviewed function/callback prototypes. PE and Mach-O jobs reuse the same source
+and compiles the reviewed function/callback prototypes against both reviewed 0.7.0 and 0.8.0
+header trees. PE and Mach-O jobs reuse the same source
 and test logic, but have not been executed in this local Linux checkpoint.
+
+Native admission is now explicit policy `cna-cs-native-abi/1`; see
+[`docs/native-abi-compatibility.md`](docs/native-abi-compatibility.md) and the machine-readable
+[`eng/cna-native-abi-policy.json`](eng/cna-native-abi-policy.json). CNA's experimental 0.x minors
+are not assumed compatible. The reviewed matrix accepts exact 0.6.0, additive 0.7.0, and a narrow
+0.8.0 consumer exception. CNA 0.8 is not generally backward-compatible because it changes the two
+public graphics `MAXIMUM` constants; this binding consumes neither, and the upstream baseline
+preserves every existing shape/value/prototype it does consume. Every other version is rejected by
+default. The loader additionally requires all 841 imported symbols and executes guarded core
+signature/struct-shape probes. Ten dependency-free fixture libraries prove four positive and six
+negative cases in fresh processes.
 
 Next criteria:
 
 - extend the portable manifest when additional interop categories are reviewed;
+- require a reviewed policy-matrix entry and upstream baseline diff before admitting any new CNA
+  ABI generation; never restore a same-major 0.x range;
 - symbol resolution against current Linux, Windows, and macOS builds using the platform's real
   export mechanism;
 - callback rooting/concurrency tests and systematic SafeHandle add-ref/keep-alive audit;
@@ -306,7 +320,7 @@ The release-qualification workflow now wires:
 2. both managed test suites and the compile probe;
 3. strict metadata diff plus a separately runnable CNA leak check;
 4. portable ABI/header validation;
-5. native integration when an ABI-matched library is supplied;
+5. fixture-based native ABI policy admission plus native integration when an admitted library is supplied;
 6. development-template and generated-project builds;
 7. pure behavior corpus/count/generated-doc validation;
 8. local package creation and isolated package-consumer install/build test;
@@ -395,6 +409,8 @@ CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
   scripts/Capture-CnaSnapshots.sh --output /tmp/cna-snapshots --force
 
 CNA_UPSTREAM_ROOT=/path/to/cna scripts/Verify-Abi.sh /tmp/cna-abi.json
+
+scripts/Verify-NativeAbiCompatibility.sh --output /tmp/cna-abi-policy
 
 scripts/Package-Acceptance.sh \
   --native-library /path/to/libcna_c_api.so \
