@@ -264,6 +264,27 @@ public class ContentManager : IDisposable
         throw new ContentLoadException($"Unsupported built-in content type {typeof(T)}.");
     }
 
+    /// <summary>
+    /// Whether an asset whose root type reader has this name loads through CNA's own content
+    /// loader rather than the managed XNB path.
+    ///
+    /// For <c>tools/content-survey</c>. Such an asset needs no managed reader for anything in its
+    /// table, so counting its nested readers as unresolvable would report a model or a font as
+    /// unreadable when it loads perfectly well. Derived from the same list
+    /// <see cref="IsNativeBackedBuiltIn"/> uses, so the two cannot disagree.
+    /// </summary>
+    internal static bool IsNativeBackedRootReaderForSurvey(string canonicalReaderName) =>
+        canonicalReaderName switch
+        {
+            "Microsoft.Xna.Framework.Content.Texture2DReader" => IsNativeBackedBuiltIn(typeof(Graphics.Texture2D)),
+            "Microsoft.Xna.Framework.Content.SpriteFontReader" => IsNativeBackedBuiltIn(typeof(Graphics.SpriteFont)),
+            "Microsoft.Xna.Framework.Content.TextureCubeReader" => IsNativeBackedBuiltIn(typeof(Graphics.TextureCube)),
+            "Microsoft.Xna.Framework.Content.SoundEffectReader" => IsNativeBackedBuiltIn(typeof(Audio.SoundEffect)),
+            "Microsoft.Xna.Framework.Content.ModelReader" => IsNativeBackedBuiltIn(typeof(Graphics.Model)),
+            "Microsoft.Xna.Framework.Content.EffectReader" => IsNativeBackedBuiltIn(typeof(Graphics.Effect)),
+            _ => false,
+        };
+
     private static bool IsNativeBackedBuiltIn(Type type) =>
         type == typeof(Graphics.Texture2D) ||
         type == typeof(Graphics.SpriteFont) ||

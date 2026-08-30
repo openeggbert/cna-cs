@@ -69,6 +69,49 @@ internal static class BuiltinGenericReaders
     /// here -- it takes the resolved <see cref="Type"/> instead, which is the same reader with one
     /// fewer layer of reflection.
     /// </summary>
+    /// <summary>
+    /// Whether a reader name that failed to resolve failed only because a type it names is not
+    /// loaded.
+    ///
+    /// For <c>tools/content-survey</c>, and the distinction it exists to draw. A reader over
+    /// <c>MyGame.Tile</c> is unresolvable in a survey and perfectly resolvable inside the game,
+    /// because the game's assembly is loaded there. Reporting it alongside a genuinely missing
+    /// built-in would bury the one finding that is actionable.
+    /// </summary>
+    internal static bool FailedOnlyOnAnAbsentType(string serializedName)
+    {
+        ArgumentNullException.ThrowIfNull(serializedName);
+
+        int bracket = serializedName.IndexOf('[');
+        if (bracket < 0)
+        {
+            // A non-generic reader that is not one of ours: the game's own ContentTypeReader.
+            return !serializedName.StartsWith(Prefix, StringComparison.Ordinal);
+        }
+
+        string open = serializedName[..bracket];
+        if (!open.StartsWith(Prefix, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        int closing = MatchingBracket(serializedName, bracket);
+        if (closing < 0)
+        {
+            return false;
+        }
+
+        foreach (string argument in SplitTypeArguments(serializedName[(bracket + 1)..closing]))
+        {
+            if (ContentTypeResolver.Resolve(argument) is null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static ContentTypeReader? Reflective(string targetTypeName)
     {
         Type? target = ContentTypeResolver.Resolve(targetTypeName);

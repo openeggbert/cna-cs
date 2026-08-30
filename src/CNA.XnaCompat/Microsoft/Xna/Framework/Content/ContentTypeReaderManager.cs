@@ -53,6 +53,29 @@ public sealed class ContentTypeReaderManager
         return readers;
     }
 
+    /// <summary>
+    /// Whether a serialized reader name resolves to something this binding can construct.
+    ///
+    /// Exists for <c>tools/content-survey</c>, which measures how much of a real game's compiled
+    /// content is readable. Asking the same code the loader asks is the point: a survey that
+    /// reimplemented the lookup would drift from it, and a drifted survey is worse than none
+    /// because it reports a number nobody can act on.
+    /// </summary>
+    internal static bool CanResolveForSurvey(string serializedName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serializedName);
+
+        try
+        {
+            _ = CreateReader(serializedName, "(survey)");
+            return true;
+        }
+        catch (ContentLoadException)
+        {
+            return false;
+        }
+    }
+
     private static ContentTypeReader CreateReader(string serializedName, string assetName)
     {
         if (string.IsNullOrWhiteSpace(serializedName))
@@ -130,6 +153,12 @@ internal static class BuiltinReaders
             "Microsoft.Xna.Framework.Content.BoundingFrustumReader" => new BoundingFrustumReader(),
             "Microsoft.Xna.Framework.Content.CurveReader" => new CurveReader(),
             "Microsoft.Xna.Framework.Content.ExternalReferenceReader" => new ExternalReferenceReader(),
+
+            // The texture readers, for a texture nested inside another asset. A top-level
+            // Load<Texture2D> never reaches here -- it goes to CNA's own content loader.
+            "Microsoft.Xna.Framework.Content.Texture2DReader" => new Texture2DContentReader(),
+            "Microsoft.Xna.Framework.Content.TextureCubeReader" => new TextureCubeContentReader(),
+            "Microsoft.Xna.Framework.Content.Texture3DReader" => new Texture3DContentReader(),
             _ => BuiltinGenericReaders.TryCreate(serializedName),
         };
         return reader is not null;
@@ -192,6 +221,9 @@ internal static class BuiltinReaders
             _ when targetType == typeof(BoundingSphere) => "BoundingSphereReader",
             _ when targetType == typeof(BoundingFrustum) => "BoundingFrustumReader",
             _ when targetType == typeof(Curve) => "CurveReader",
+            _ when targetType == typeof(Graphics.Texture2D) => "Texture2DReader",
+            _ when targetType == typeof(Graphics.TextureCube) => "TextureCubeReader",
+            _ when targetType == typeof(Graphics.Texture3D) => "Texture3DReader",
             _ => null,
         };
 

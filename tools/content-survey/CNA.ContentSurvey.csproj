@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>cna-content-survey</AssemblyName>
+    <RootNamespace>CnaCs.ContentSurvey</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <Description>
+      Reports how much of a directory of compiled XNA content this binding can read, by resolving
+      every asset's type-reader table. Points at a game's Content folder; vendors nothing.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CNA.XnaCompat\CNA.XnaCompat.csproj" />
+  </ItemGroup>
+
+</Project>
