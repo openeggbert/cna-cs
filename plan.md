@@ -711,13 +711,22 @@ records authority, source-portability value, implementation status, and namespac
   thing from OPENGLES3 passing.
 
   **VULKAN was attempted and is blocked upstream, not by this binding.** Its build directory already
-  holds 1,723 objects and needed only `CNA_BUILD_C_API=ON`, but configuring now fails cnanext's own
-  `PlatformRatchet` audit: `modules/c-api/tests/pure_c/GameSecondaryGraphicsDeviceContextSmoke.c` is
-  an untracked file another session created mid-session and has an unclassified SDL reference. The
-  same configure succeeded for HEADLESS an hour earlier, so this is that session's work in progress
-  rather than a property of the tree, and the audit runs from the root `CMakeLists.txt` -- so *every*
-  fresh cnanext configure is blocked while it stands, SOFTWARE and OPENGL33 included. Not worked
-  around: cnanext is read-only here.
+  holds 1,723 objects and needed only `CNA_BUILD_C_API=ON`, but every cnanext CMake configure at
+  `a2013068` is refused by cnanext's own `PlatformRatchet` SDL audit over
+  `modules/c-api/tests/pure_c/GameSecondaryGraphicsDeviceContextSmoke.c`. It first appeared as an
+  untracked file mid-session and is now committed, so it is a property of the tree rather than
+  somebody's work in progress.
+
+  Confirmed rather than assumed: re-configuring `cmake-build-headless` -- which configured cleanly
+  an hour earlier and produced the library this session tests against -- now fails identically. The
+  audit runs at *configure* time, so an already-configured directory still builds, which is why
+  upstream's own incremental builds are unaffected and why this is easy to miss. Every renderer
+  needing a fresh configure is blocked, SOFTWARE and OPENGL33 included.
+
+  Not worked around: cnanext is read-only here. Recorded in
+  [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.md) with the audit's own three
+  suggested remedies. The `cmake-build-vulkan` option was set back to `OFF` afterwards, so that
+  directory is as it was found.
 
 - E3. **Done.** The FNA configuration built cleanly and failed at startup with `Game framework
   dependency could not be loaded: FNA`, which is a confusing pair of outcomes and turned out not to
