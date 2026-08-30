@@ -105,9 +105,6 @@ public class RenderTarget2D : Texture2D
         return handle.AsNint;
     }
 
-    /// <summary>Matches <c>cna_render_target_destroy</c> exactly (<c>render_target.h:277</c>).
-    /// <c>internal static</c>, not just this override's body -- see this class's own doc comment
-    /// for why CNA.XnaCompat's parallel <c>RenderTarget2D</c> needs to call it directly too.</summary>
     /// <summary>Wraps a render-target handle whose real owner is something else, following
     /// <see cref="Texture2D.CreateBorrowed"/>. The engine layer's target pool hands out exactly such
     /// views: the pool owns the target, and the view is released separately.</summary>
@@ -116,9 +113,19 @@ public class RenderTarget2D : Texture2D
     {
     }
 
-    internal static RenderTarget2D CreateBorrowed(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
+    /// <summary>Hides <see cref="Texture2D.CreateBorrowed"/> deliberately: a borrowed render target
+    /// must come back typed as a <see cref="RenderTarget2D"/>, because <see cref="ReleaseNative"/>
+    /// here calls <c>cna_render_target_destroy</c> and the base call would build a
+    /// <see cref="Texture2D"/> that releases the same handle through <c>cna_texture2d_destroy</c>.
+    /// The two are different destroy routes for different native handle types, so this is a
+    /// different operation rather than a narrowed one -- <c>new</c> rather than <c>override</c>
+    /// because the base member is not virtual.</summary>
+    internal static new RenderTarget2D CreateBorrowed(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
         new(graphicsDevice, nativeHandleValue, ownsHandle: false);
 
+    /// <summary>Matches <c>cna_render_target_destroy</c> exactly (<c>render_target.h:277</c>).
+    /// <c>internal static</c>, not just this override's body -- see this class's own doc comment
+    /// for why CNA.XnaCompat's parallel <c>RenderTarget2D</c> needs to call it directly too.</summary>
     internal static bool ReleaseNativeRenderTarget(nint handleValue) =>
         Native.cna_render_target_destroy(new CnaHandle(handleValue)).IsSuccess();
 
