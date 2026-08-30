@@ -222,6 +222,12 @@ public class Game : IDisposable
     private void OnInitializeFromBackend()
     {
         _ = GraphicsDevice;
+
+        // Before Initialize, which is where XNA has already named the window: its window type sets
+        // the default title in its own constructor, so a game's Initialize can read Window.Title
+        // and see it.
+        Window.ApplyDefaultTitle();
+
         Initialize();
     }
 

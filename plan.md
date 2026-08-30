@@ -163,6 +163,46 @@ precondition held only by accident of test order and adding a test to the class 
 sweep for the same shape elsewhere -- an assertion about state a test did not establish is an
 assertion about what ran before it.
 
+### A8. Speedy Blupi reports silent audio that no measurement reproduces
+
+Reported from a real play session: the game runs and is playable, but sound is inaudible except for
+one click. Every layer was then measured rather than reasoned about, using SDL's `disk` audio driver
+(which writes the mixed output to a file, so "was it audible" becomes a number) and a PipeWire
+sink-monitor capture (which says what actually reached the speakers):
+
+- all 93 of the game's sound assets load, none empty, durations 0.052s to 4.489s
+- the generated-PCM route, the managed reader route and CNA's own loader route all produce full-scale
+  audio, and the three agree
+- pitch is correct, not merely accepted: 440 Hz becomes 880 Hz at pitch 1.0, XNA's own semantics
+- an instance returns to `Stopped` when its sound ends, which the game's `IsFree` depends on
+- eighteen overlapping undisposed instances plus a looping one keep playing, with nothing refused
+- **the game itself emits audio**, headless and on the real display: peak 29363 into the mixer and
+  peak 30602 measured on the speaker sink's own monitor
+- its stream is uncorked, unmuted, at 100%, on the default sink, which wakes SUSPENDED -> RUNNING
+
+So the binding is not silent and the reported fault is not reproducible from here. It is also
+intermittent for the reporter -- sound worked once and then stopped again -- which is the shape of an
+environment or a device-state problem rather than a code path. `build-probe/audio-capture.sh` exists
+to settle it from the reporter's own machine while the silence is happening: it captures the mixer
+output, the sink monitor, and the audio server's view of the stream, which are three things a
+listener cannot tell apart. Nothing further should be changed in the audio binding without that
+capture, because every hypothesis cheap enough to test blind has now been tested and rejected.
+
+One real defect did come out of the session, fixed below.
+
+### A9. The window had no title (fixed)
+
+XNA names the window before the game's `Initialize` runs -- `WindowsGameWindow`'s constructor does
+`base.Title = GetDefaultTitleName()` -- and almost no game sets a title itself. Speedy Blupi does
+not, and its window came up blank. CNA supplies no default either, so nothing named it.
+
+`GameWindow.ApplyDefaultTitle` now reproduces XNA's rule: the entry assembly's
+`AssemblyTitleAttribute` when non-empty, then the executable's file name, then the literal `Game`,
+with one addition XNA never needed -- a framework-dependent .NET app runs as `dotnet`, which names
+the host rather than the game, so that name is skipped in favour of the assembly name. It is applied
+in `Game`'s initialize path and yields to any title the game set itself, since a game that sets one
+in its constructor does so before the window exists.
+
 ### B. Deepen the ABI evidence
 
 The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 854 prototypes. That

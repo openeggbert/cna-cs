@@ -165,6 +165,7 @@ internal static class BuiltinReaders
             // background music failed at the call rather than in some nested corner.
             "Microsoft.Xna.Framework.Content.SongReader" => new SongContentReader(),
             "Microsoft.Xna.Framework.Content.VideoReader" => new VideoContentReader(),
+            "Microsoft.Xna.Framework.Content.SoundEffectReader" => new SoundEffectContentReader(),
 
             // The model pipeline, for a model nested inside another asset. A top-level
             // Load<Model> goes to CNA's own loader and never reaches these.
@@ -244,6 +245,7 @@ internal static class BuiltinReaders
             _ when targetType == typeof(Graphics.VertexBuffer) => "VertexBufferReader",
             _ when targetType == typeof(Graphics.IndexBuffer) => "IndexBufferReader",
             _ when targetType == typeof(Graphics.Model) => "ModelReader",
+            _ when targetType == typeof(Audio.SoundEffect) => "SoundEffectReader",
             _ => null,
         };
 
