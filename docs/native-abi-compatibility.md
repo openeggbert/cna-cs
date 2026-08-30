@@ -83,7 +83,7 @@ already-accepted generation against the proposed one across both evidence paths.
 
 | Measured | Result |
 | --- | --- |
-| Consumed entry points absent | 0 of 849 |
+| Consumed entry points absent | 0 of 850 |
 | Consumed entry points with a changed header prototype | 0 |
 | Exports removed / added | 0 / 0 |
 | Struct, scalar and string changes | 0 |
@@ -127,7 +127,7 @@ An operation is compatible only when it preserves every contract an existing con
 - clarify documentation without changing ownership, error, threading, lifetime, or behavior.
 
 Additional exports are deliberately allowed by the loader. They cannot collide with or substitute
-for the 849 names imported by this build.
+for the 850 names imported by this build.
 
 ## Breaking operations
 
@@ -179,7 +179,7 @@ error, and lifetime rules are ABI contract just as much as its machine-level pro
 Before returning a library handle, the managed resolver now requires:
 
 1. readable `cna_get_abi_version` metadata and an exact reviewed matrix entry;
-2. every one of the 849 `LibraryImport` entry points declared by `CNA.Interop.Native`;
+2. every one of the 850 `LibraryImport` entry points declared by `CNA.Interop.Native`;
 3. a successful `cna_error_get_last_message_size` result/out-parameter signature canary;
 4. a successful guarded `cna_touch_capabilities_init` canary proving the 16-byte version-1 shape,
    canonical body, and write bounds.

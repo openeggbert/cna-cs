@@ -103,7 +103,7 @@ public class CnaAbiTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(849, declared.Length);
+        Assert.Equal(850, declared.Length);
         Assert.Equal(declared, CnaNativeAbiPolicy.RequiredSymbols);
     }
 

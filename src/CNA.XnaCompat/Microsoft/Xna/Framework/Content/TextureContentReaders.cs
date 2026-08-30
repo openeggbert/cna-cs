@@ -125,20 +125,29 @@ internal static class ContentTextureLevels
         return levelCount;
     }
 
-    internal static byte[] ReadLevel(ContentReader input)
+    internal static byte[] ReadLevel(ContentReader input) =>
+        ReadExact(input, input.ReadInt32(), "mip level");
+
+    /// <summary>
+    /// Reads exactly <paramref name="byteCount"/> bytes, or reports the asset as truncated.
+    ///
+    /// <see cref="BinaryReader.ReadBytes(int)"/> returns a short array on a truncated stream rather
+    /// than throwing, so without this a corrupt asset produces an undersized buffer that the next
+    /// reader treats as data.
+    /// </summary>
+    internal static byte[] ReadExact(ContentReader input, int byteCount, string what)
     {
-        int byteCount = input.ReadInt32();
         if (byteCount < 0)
         {
             throw new ContentLoadException(
-                $"Content asset '{input.AssetName}' declares a negative mip level size {byteCount}.");
+                $"Content asset '{input.AssetName}' declares a negative {what} size {byteCount}.");
         }
 
         byte[] data = input.ReadBytes(byteCount);
         if (data.Length != byteCount)
         {
             throw new ContentLoadException(
-                $"Content asset '{input.AssetName}' is truncated: a mip level declared {byteCount} bytes and " +
+                $"Content asset '{input.AssetName}' is truncated: a {what} declared {byteCount} bytes and " +
                 $"{data.Length} were available.");
         }
 

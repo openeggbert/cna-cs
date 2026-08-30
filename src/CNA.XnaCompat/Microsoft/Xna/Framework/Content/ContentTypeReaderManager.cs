@@ -159,6 +159,22 @@ internal static class BuiltinReaders
             "Microsoft.Xna.Framework.Content.Texture2DReader" => new Texture2DContentReader(),
             "Microsoft.Xna.Framework.Content.TextureCubeReader" => new TextureCubeContentReader(),
             "Microsoft.Xna.Framework.Content.Texture3DReader" => new Texture3DContentReader(),
+
+            // A compiled song or video is a path plus the metadata the pipeline measured, not the
+            // media itself. SongReader is the root reader of every Load<Song>, so a game with
+            // background music failed at the call rather than in some nested corner.
+            "Microsoft.Xna.Framework.Content.SongReader" => new SongContentReader(),
+            "Microsoft.Xna.Framework.Content.VideoReader" => new VideoContentReader(),
+
+            // The model pipeline, for a model nested inside another asset. A top-level
+            // Load<Model> goes to CNA's own loader and never reaches these.
+            "Microsoft.Xna.Framework.Content.ModelReader" => new ModelContentReader(),
+            "Microsoft.Xna.Framework.Content.VertexDeclarationReader" => new VertexDeclarationContentReader(),
+            "Microsoft.Xna.Framework.Content.VertexBufferReader" => new VertexBufferContentReader(),
+            "Microsoft.Xna.Framework.Content.IndexBufferReader" => new IndexBufferContentReader(),
+            "Microsoft.Xna.Framework.Content.TextureReader" => new AbstractTextureContentReader(),
+            "Microsoft.Xna.Framework.Content.EffectReader" => new EffectContentReader(),
+            "Microsoft.Xna.Framework.Content.BasicEffectReader" => new BasicEffectContentReader(),
             _ => BuiltinGenericReaders.TryCreate(serializedName),
         };
         return reader is not null;
@@ -224,6 +240,10 @@ internal static class BuiltinReaders
             _ when targetType == typeof(Graphics.Texture2D) => "Texture2DReader",
             _ when targetType == typeof(Graphics.TextureCube) => "TextureCubeReader",
             _ when targetType == typeof(Graphics.Texture3D) => "Texture3DReader",
+            _ when targetType == typeof(Graphics.VertexDeclaration) => "VertexDeclarationReader",
+            _ when targetType == typeof(Graphics.VertexBuffer) => "VertexBufferReader",
+            _ when targetType == typeof(Graphics.IndexBuffer) => "IndexBufferReader",
+            _ when targetType == typeof(Graphics.Model) => "ModelReader",
             _ => null,
         };
 

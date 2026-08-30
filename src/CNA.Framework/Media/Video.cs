@@ -32,6 +32,39 @@ public class Video : IDisposable
         _handle = new NativeResourceHandle(video.AsNint, h => Native.cna_video_destroy(new CnaHandle(h)).IsSuccess());
     }
 
+    /// <summary>
+    /// Creation from a compiled asset's own metadata, matching real XNA's content constructor.
+    ///
+    /// A <c>.xnb</c> video records duration, dimensions, frame rate and soundtrack type beside the
+    /// file name, and XNA hands all five to the video rather than letting the decoder rediscover
+    /// them. Passing them through means a game reading <c>Video.Duration</c> before the first frame
+    /// gets the pipeline's answer, which is the one it was authored against.
+    /// </summary>
+    public Video(
+        GraphicsDevice graphicsDevice,
+        string fileName,
+        int durationMilliseconds,
+        int width,
+        int height,
+        float framesPerSecond,
+        VideoSoundtrackType soundtrackType)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        ArgumentNullException.ThrowIfNull(fileName);
+
+        GraphicsDevice = graphicsDevice;
+
+        CnaHandle video = default;
+        CnaResult result = CnaStringMarshal.WithStringView(
+            fileName,
+            view => Native.cna_video_create_with_metadata(
+                graphicsDevice.ResolveNativeDeviceHandle(), view, durationMilliseconds, width, height,
+                framesPerSecond, (uint)soundtrackType, out video));
+        CnaException.ThrowIfFailed(result, nameof(Video));
+
+        _handle = new NativeResourceHandle(video.AsNint, h => Native.cna_video_destroy(new CnaHandle(h)).IsSuccess());
+    }
+
     internal Video(GraphicsDevice graphicsDevice, nint nativeHandleValue)
     {
         GraphicsDevice = graphicsDevice;

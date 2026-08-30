@@ -10,9 +10,10 @@
 >
 > It reads headers in place, vendors nothing, and asks the loader's own reader resolution rather
 > than reimplementing it. Against the compiled content of the XNA 4.0 sample collection on
-> 2026-08-30: 510 assets, 492 loaded through CNA's own content loader, 14 naming a type only the
-> game's own assembly supplies, 4 needing a built-in reader this binding does not have, 0
-> unreadable.
+> 2026-08-30: 517 assets, 498 loaded through CNA's own content loader, 18 naming a type only the
+> game's own assembly supplies, **0 needing a built-in reader this binding does not have**, 0
+> unreadable. The number that moved was the last one: it was 4 before the nested model pipeline
+> landed, and 3 before the song reader did.
 
 These legacy sweeps answer native-binding questions mechanically against the
 `openeggbert/cna` headers. CNA headers are authoritative for native capability and the C ABI;

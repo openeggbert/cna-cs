@@ -6,6 +6,25 @@ public sealed class Video
     private readonly CNA.Media.Video _video;
     private readonly Graphics.GraphicsDevice _graphicsDevice;
 
+    /// <summary>Construction from a compiled asset's own metadata, for
+    /// <c>Microsoft.Xna.Framework.Content.VideoContentReader</c>. Internal because XNA's
+    /// <c>Video</c> has no public constructor: a video comes from content.</summary>
+    internal Video(
+        Graphics.GraphicsDevice graphicsDevice,
+        string fileName,
+        int durationMilliseconds,
+        int width,
+        int height,
+        float framesPerSecond,
+        VideoSoundtrackType soundtrackType)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        _graphicsDevice = graphicsDevice;
+        _video = new CNA.Media.Video(
+            graphicsDevice.Framework, fileName, durationMilliseconds, width, height, framesPerSecond,
+            (CNA.Media.VideoSoundtrackType)(int)soundtrackType);
+    }
+
     internal Video(Graphics.GraphicsDevice graphicsDevice, string fileName)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);

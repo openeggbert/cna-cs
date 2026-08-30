@@ -1518,6 +1518,26 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_video_create(CnaHandle device, CnaStringView fileName, out CnaHandle outVideo);
 
+    /// <summary>
+    /// <c>video.h</c>. Creation with the metadata a compiled <c>.xnb</c> carries alongside the file
+    /// name.
+    ///
+    /// XNA's <c>VideoReader</c> writes duration, dimensions, frame rate and soundtrack type into
+    /// the asset and passes them to the constructor rather than having the decoder rediscover
+    /// them. Without this route the managed reader would have to throw those values away and hope
+    /// the container agrees.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_create_with_metadata(
+        CnaHandle device,
+        CnaStringView fileName,
+        int durationMilliseconds,
+        int width,
+        int height,
+        float framesPerSecond,
+        uint soundtrackType,
+        out CnaHandle outVideo);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_video_destroy(CnaHandle video);
 

@@ -18,7 +18,7 @@ packaging, and release engineering.
 | Debug and Release solution build | 0 warnings, 0 errors |
 | Managed tests | 560 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
 | Native integration | 122/122 passing in Debug and Release on Linux x64 against the ABI 0.20.0 CNA OPENGLES3 library |
-| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 849 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 850 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
@@ -143,7 +143,7 @@ way 0.6/0.7/0.8 were, and a fixture proves it is refused.
 
 ### B. Deepen the ABI evidence
 
-The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 849 prototypes. That
+The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 850 prototypes. That
 was defensible against a one-minor step; against a twelve-minor one it is a floor, and it is now the
 weakest link in an admission that otherwise rests on the upstream baseline diff.
 
@@ -185,7 +185,7 @@ exported by every CNA build and returns `NOT_SUPPORTED` when the layer is absent
 symbol is not evidence of a capability. Any further engine-layer binding must gate on the
 availability query rather than on the symbol existing.
 
-CNA 0.20.0 exports 4,051 routes; this binding consumes 849. The remainder is not all product
+CNA 0.20.0 exports 4,051 routes; this binding consumes 850. The remainder is not all product
 surface -- most of `vectors.h`, `matrix.h`, `math.h`, `quaternion.h`, `curve.h`, `geometry.h` and
 `color.h` is deliberately managed by design invariant 3, and much of the rest is engine-internal.
 What is genuinely a CNA-beyond-XNA product surface, by header and unbound count:
@@ -401,7 +401,7 @@ are not assumed compatible. The reviewed matrix accepts exactly 0.19.0. It previ
 0.6.0, 0.7.0 and 0.8.0; those entries were retired when this binding began importing four routes
 CNA added after 0.8.0, which no earlier library exports -- a consequence of the consumer moving,
 not a finding against those reviews. Every other version is rejected by default. The loader
-additionally requires all 849 imported symbols and executes guarded core signature/struct-shape
+additionally requires all 850 imported symbols and executes guarded core signature/struct-shape
 probes. Eleven dependency-free fixture libraries prove two positive and nine negative cases in
 fresh processes, including that a retired generation and both neighbours of the accepted one are
 refused.

@@ -69,7 +69,7 @@ Negative/precedence cases also executed in fresh processes:
   major, structurally incompatible same-major library, malformed 0.0.0 metadata, and unreadable
   metadata;
 - a major-version-1 fixture reported detected ABI 1.0.0 versus consumer ABI 0.6.0 and the selected path;
-- a loadable fixture missing one of all 849 required imports named the missing symbol;
+- a loadable fixture missing one of all 850 required imports named the missing symbol;
 - an invalid explicit path failed without package fallback;
 - two recognized files in `CNA_NATIVE_DIR` produced a conflict diagnostic;
 - a valid `CNA_NATIVE_LIBRARY` override took precedence over both the packaged asset and
@@ -88,7 +88,7 @@ Resolution precedence is:
    `runtimes/<rid>/native`.
 
 The resolver does not search the source tree, bare system-library names, or accidental process-wide
-loader paths. It admits only exact versions in the reviewed matrix, resolves all 849 imported
+loader paths. It admits only exact versions in the reviewed matrix, resolves all 850 imported
 symbols, and executes core signature/shape canaries before returning the handle. Additional
 unrelated exports are allowed. Ordinary diagnostics identify the selected configuration,
 detected/consumer ABI when readable, policy, platform/RID and remediation. Set

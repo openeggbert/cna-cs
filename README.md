@@ -54,7 +54,7 @@ As of 2026-08-30, against CNA `next` `e178282fc` (C ABI 0.20.0), OPENGLES3, Linu
   0.8.0 → 0.19.0 as purely additive, and 0.19.0 → 0.20.0 as twelve renderer-identity constant
   differences and nothing else -- none of which this binding consumes, because it reads the
   renderer's name rather than its identity;
-- native loading follows the reviewed `cna-cs-native-abi/1` matrix, resolves all 849 imports, and
+- native loading follows the reviewed `cna-cs-native-abi/1` matrix, resolves all 850 imports, and
   passes 11 isolated compatibility fixtures (2 accepted, 9 rejected). The matrix accepts exactly
   0.20.0: 0.6.0/0.7.0/0.8.0 were retired when this binding began importing routes CNA added after
   them, 0.19.0 when 0.20.0 superseded it, and fixtures prove both kinds of retired generation are
@@ -96,7 +96,7 @@ CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
 The loader also accepts `CNA_NATIVE_DIR`. Explicit configuration is fail-fast and takes precedence
 over package-native lookup. Admission follows
 [`cna-cs-native-abi/1`](docs/native-abi-compatibility.md), not a same-major range: the version must
-have a reviewed matrix entry, all 849 imports must exist, and signature/shape canaries must pass.
+have a reviewed matrix entry, all 850 imports must exist, and signature/shape canaries must pass.
 The one accepted entry today is C ABI 0.20.0.
 Wrong ABI, missing symbols, conflicts, wrong architecture/load failure, and missing-library cases
 report the attempted configuration, consumer/detected ABI where available, RID, and remediation;
