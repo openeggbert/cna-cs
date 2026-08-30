@@ -17,16 +17,22 @@ public class ModelBone
 {
     private readonly List<ModelBone> _children = [];
 
-    public ModelBone(int index, string name)
+    /// <summary>
+    /// <paramref name="name"/> may be null, because XNA content permits an unnamed bone.
+    ///
+    /// This rejected null until the content *loading* survey ran: twenty models in the XNA sample
+    /// collection have unnamed bones or meshes, they shipped working on XNA, and this refused all of
+    /// them. Storing an empty string instead would be worse -- it invents a name the file does not
+    /// contain, and a game comparing bone names would then match the wrong bone.
+    /// </summary>
+    public ModelBone(int index, string? name)
     {
-        ArgumentNullException.ThrowIfNull(name);
-
         Index = index;
         Name = name;
         Children = new ModelBoneCollection(_children);
     }
 
-    public string Name { get; }
+    public string? Name { get; }
 
     public int Index { get; }
 

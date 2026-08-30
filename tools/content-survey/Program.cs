@@ -19,6 +19,7 @@ using Microsoft.Xna.Framework.Content;
 string? directory = null;
 string? jsonOutput = null;
 bool verbose = false;
+bool load = false;
 
 for (int index = 0; index < args.Length; index++)
 {
@@ -29,6 +30,9 @@ for (int index = 0; index < args.Length; index++)
             break;
         case "--verbose":
             verbose = true;
+            break;
+        case "--load":
+            load = true;
             break;
         default:
             if (directory is not null)
@@ -60,6 +64,7 @@ var missingBuiltIn = new SortedDictionary<string, List<string>>(StringComparer.O
 var compressed = new List<string>();
 var malformed = new SortedDictionary<string, string>(StringComparer.Ordinal);
 var readerUsage = new SortedDictionary<string, int>(StringComparer.Ordinal);
+var rootReaders = new SortedDictionary<string, string>(StringComparer.Ordinal);
 
 foreach (string asset in assets)
 {
@@ -127,6 +132,11 @@ foreach (string asset in assets)
         {
             readable.Add(relative);
         }
+
+        if (rootReader is not null)
+        {
+            rootReaders[relative] = rootReader;
+        }
     }
     catch (Exception exception) when (
         exception is IOException or EndOfStreamException or FormatException or ContentLoadException)
@@ -153,6 +163,45 @@ Console.WriteLine($"CONTENT_SURVEY_MISSING_BUILTIN={missingBuiltIn.Count}");
 Console.WriteLine($"CONTENT_SURVEY_COMPRESSED_AND_ANALYSED={compressed.Count}");
 Console.WriteLine($"CONTENT_SURVEY_MALFORMED={malformed.Count}");
 Console.WriteLine($"CONTENT_SURVEY_DISTINCT_READERS={readerUsage.Count}");
+
+if (load)
+{
+    // Everything the resolution pass believes this binding can read, loaded for real. Assets that
+    // need a game's own assembly are excluded because their types genuinely are not here, and
+    // malformed ones because there is nothing to load.
+    List<(string Relative, string RootReader)> loadable =
+    [
+        .. readable.Concat(nativeBacked)
+            .Where(rootReaders.ContainsKey)
+            .Select(relative => (relative, rootReaders[relative]))
+            .OrderBy(entry => entry.relative, StringComparer.Ordinal),
+    ];
+
+    using var survey = new CnaCs.ContentSurvey.LoadingSurvey(directory, loadable);
+    survey.RunOneFrame();
+
+    Console.WriteLine($"CONTENT_LOAD_ATTEMPTED={loadable.Count}");
+    Console.WriteLine($"CONTENT_LOAD_LOADED={survey.Loaded.Count}");
+    Console.WriteLine($"CONTENT_LOAD_NATIVE_NOT_SUPPORTED={survey.NativeNotSupported.Count}");
+    Console.WriteLine($"CONTENT_LOAD_RUNTIME_FAILURE={survey.RuntimeFailures.Count}");
+    Console.WriteLine($"CONTENT_LOAD_NO_MANAGED_TYPE={survey.NoManagedType.Count}");
+
+    int compressedLoaded = survey.Loaded.Keys.Count(compressed.Contains);
+    Console.WriteLine($"CONTENT_LOAD_COMPRESSED_LOADED={compressedLoaded} of {compressed.Count}");
+
+    if (verbose)
+    {
+        foreach ((string relative, string detail) in survey.RuntimeFailures)
+        {
+            Console.WriteLine($"  RUNTIME_FAILURE {relative}: {detail}");
+        }
+
+        foreach ((string relative, string detail) in survey.NativeNotSupported)
+        {
+            Console.WriteLine($"  NATIVE_NOT_SUPPORTED {relative}: {detail}");
+        }
+    }
+}
 
 if (missingReaders.Count > 0)
 {

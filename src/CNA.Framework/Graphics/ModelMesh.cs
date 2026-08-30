@@ -14,10 +14,11 @@ public class ModelMesh : IDisposable
     {
     }
 
-    public ModelMesh(GraphicsDevice graphicsDevice, string name, IReadOnlyList<ModelMeshPart> parts)
+    /// <summary><paramref name="name"/> may be null: XNA content permits an unnamed mesh. See
+    /// <see cref="ModelBone(int, string?)"/> for the measurement that established this.</summary>
+    public ModelMesh(GraphicsDevice graphicsDevice, string? name, IReadOnlyList<ModelMeshPart> parts)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
-        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(parts);
 
         _graphicsDevice = graphicsDevice;

@@ -177,8 +177,32 @@ is the honest limit of a resolution survey. Remaining work:
   pipeline-built effect this repository cannot produce. The test proves the reader is selected and
   runs, and it carries a control assertion, which earned its place immediately: the phrase first
   asserted on appeared nowhere in the path, so the test had been passing for any exception at all.
-- A6c. The compressed assets are analysed but never fully read here. A loading survey mode, behind a
-  graphics device, would close that gap.
+- A6c. **Done.** `tools/content-survey --load` builds a real game, graphics device and
+  `ContentManager` and calls `Load`, so the report says what was *materialised* rather than what
+  resolved. Against `cna-samples`: **529 attempted, 497 loaded, 24 of 26 compressed assets loaded**,
+  5 refused by the native loader, 27 failing.
+
+  It found two real defects immediately, both invisible to the resolution survey:
+
+  - `XnbModelReader` required a non-null string for bone and mesh names. XNA content permits an
+    unnamed bone -- a reference element with type index zero is null -- and twenty models in the XNA
+    sample collection have them. `ModelBone` and `ModelMesh` refused them on both layers. Storing an
+    empty string instead would have been worse than failing: it invents a name the file does not
+    contain, and a game comparing bone names would then match the wrong bone. **19 more assets load.**
+
+  The remaining 27 are recorded rather than fixed here:
+
+  - **26 need readers `CNA.Framework`'s XNB reader does not have.** There are two managed XNB
+    readers in this repository -- `CNA.Framework/Content/Xnb` knows nine readers, and
+    `CNA.XnaCompat`'s knows the full built-in set including `EffectMaterialReader`,
+    `DictionaryReader` and `ReflectiveReader`. Model loading goes through the weaker one, so an
+    `EffectMaterial` inside a model fails even though A6b built a reader for it. Making the two agree
+    is the next content task and is worth more than any individual reader.
+  - 1 asset passes an absolute path to `TitleContainer.OpenStream`, which is a survey-harness bug
+    rather than a binding one.
+  - **5 are an upstream limit**, not a defect here: CNA's C content loader answers
+    `NotSupported` with "The initial C content loader supports only Color TextureND assets" for
+    normal maps and other non-`Color` surface formats.
 
 ### A1b. The reason `SpriteFont` stayed managed was not true
 

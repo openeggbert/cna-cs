@@ -6,12 +6,17 @@ public sealed class ModelBone
     private readonly List<ModelBone> _children = [];
     private ModelBone? _parent;
 
-    internal ModelBone(int index, string name)
+    /// <summary><paramref name="name"/> may be null: XNA content permits an unnamed bone, and
+    /// twenty models in the XNA sample collection have them. XNA's own <c>Name</c> returns whatever
+    /// the file contained.</summary>
+    internal ModelBone(int index, string? name)
     {
-        ArgumentNullException.ThrowIfNull(name);
-
         Index = index;
-        Name = name;
+        // XNA's Name is declared non-nullable and returns whatever the file contained, which for
+        // an unnamed bone or mesh is null. Keeping the property's XNA signature exact matters more
+        // than the annotation, so the null is stored deliberately rather than papered over with an
+        // empty string that no file contains.
+        Name = name!;
         Transform = Matrix.Identity;
         Children = new ModelBoneCollection(_children);
     }

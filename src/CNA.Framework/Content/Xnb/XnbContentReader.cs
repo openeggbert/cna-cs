@@ -203,6 +203,21 @@ internal sealed class XnbContentReader
 
     internal T ReadObject<T>() where T : class => RequireType<T>(ReadObject(), "an object read from the stream");
 
+    /// <summary>
+    /// The same, for a value XNA permits to be absent.
+    ///
+    /// A reference element in an <c>.xnb</c> carries its own type-reader index, and index zero means
+    /// null. XNA's own <c>ModelReader</c> reads bone and mesh names this way and stores whatever it
+    /// gets, so a model whose bones are unnamed is well-formed content, not a corrupt file.
+    /// <see cref="ReadObject{T}"/> refused it, which failed twenty-one real model assets in the
+    /// cna-samples corpus -- found by loading them rather than by resolving their reader tables.
+    /// </summary>
+    internal T? ReadObjectOrNull<T>() where T : class
+    {
+        object? value = ReadObject();
+        return value is null ? null : RequireType<T>(value, "an object read from the stream");
+    }
+
     /// <summary>Shared cast-and-throw helper: one place defining what "wrong type" means for a
     /// <c>.xnb</c> value, used both by <see cref="ReadObject{T}"/> (a freshly-read object) and by
     /// <c>XnbModelReader</c>'s shared-resource fixups (an already-resolved object handed back

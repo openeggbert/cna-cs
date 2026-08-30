@@ -47,7 +47,7 @@ internal static class XnbModelReader
         var bones = new List<XnbBoneData>((int)boneCount);
         for (uint i = 0; i < boneCount; i++)
         {
-            string name = reader.ReadObject<string>();
+            string? name = reader.ReadObjectOrNull<string>();
             Matrix transform = reader.ReadMatrix();
             bones.Add(new XnbBoneData((int)i, name, transform));
         }
@@ -75,7 +75,7 @@ internal static class XnbModelReader
         var meshes = new List<XnbMeshData>(meshCount);
         for (int m = 0; m < meshCount; m++)
         {
-            string meshName = reader.ReadObject<string>();
+            string? meshName = reader.ReadObjectOrNull<string>();
             int parentBoneIndex = reader.ReadBoneReference(bones.Count);
             BoundingSphere boundingSphere = reader.ReadBoundingSphere();
             reader.RejectNonNullTag($"Mesh '{meshName}'");

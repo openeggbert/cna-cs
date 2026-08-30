@@ -11,13 +11,17 @@ public sealed class ModelMesh
     {
     }
 
-    internal ModelMesh(GraphicsDevice graphicsDevice, string name, IReadOnlyList<ModelMeshPart> parts)
+    /// <summary><paramref name="name"/> may be null, as XNA content permits an unnamed mesh.</summary>
+    internal ModelMesh(GraphicsDevice graphicsDevice, string? name, IReadOnlyList<ModelMeshPart> parts)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
-        ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(parts);
 
-        Name = name;
+        // XNA's Name is declared non-nullable and returns whatever the file contained, which for
+        // an unnamed bone or mesh is null. Keeping the property's XNA signature exact matters more
+        // than the annotation, so the null is stored deliberately rather than papered over with an
+        // empty string that no file contains.
+        Name = name!;
         ModelMeshPart[] partArray = [.. parts];
         foreach (ModelMeshPart part in partArray)
         {

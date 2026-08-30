@@ -14,6 +14,16 @@ public class CnaException : Exception
     {
     }
 
+    /// <summary>
+    /// The name of the native result that caused this, or null when it did not come from one.
+    ///
+    /// A caller frequently needs to tell "this renderer cannot do that" from "this went wrong",
+    /// and until now the only way was to read the message. The *name* rather than the value,
+    /// because <c>CnaResult</c> is a CNA.Interop type and no CNA.Interop type may appear in a
+    /// public signature -- the invariant this class exists to serve in the first place.
+    /// </summary>
+    public string? NativeResult { get; private init; }
+
     public CnaException(string message, Exception innerException)
         : base(message, innerException)
     {
@@ -29,6 +39,9 @@ public class CnaException : Exception
         string detail = CnaError.GetLastErrorMessage();
         throw new CnaException(string.IsNullOrEmpty(detail)
             ? $"{operation} failed with native result {result}."
-            : $"{operation} failed with native result {result}: {detail}");
+            : $"{operation} failed with native result {result}: {detail}")
+        {
+            NativeResult = result.ToString(),
+        };
     }
 }
