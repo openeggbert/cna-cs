@@ -1,6 +1,7 @@
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using CNA.XnaCompat.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 using XnaAudio = Microsoft.Xna.Framework.Audio;
@@ -163,6 +164,37 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
             game.Services.GetService(typeof(IGraphicsDeviceManager)));
         Assert.IsType<Microsoft.Xna.Framework.Graphics.GraphicsDevice>(game.Manager.GraphicsDevice);
         Assert.IsAssignableFrom<Microsoft.Xna.Framework.GameWindow>(game.Window);
+    }
+
+    /// <summary>
+    /// How the back buffer is fitted into the window -- a choice XNA does not offer.
+    ///
+    /// XNA 4.0 stretches the back buffer to the client area and gives a game no say, which is why
+    /// a fixed-aspect XNA game draws its own letterbox bars. CNA does it in the presentation step,
+    /// so this is one of the places where a ported game can delete code rather than port it.
+    ///
+    /// Every identity is round-tripped rather than just one: the enum is a straight numeric cast
+    /// across the ABI, and the failure mode of a wrong cast is an off-by-one that a single-value
+    /// test passes and every other value fails.
+    /// </summary>
+    [global::CNA.Integration.Tests.NativeFact]
+    public void GraphicsDeviceManager_PreferredPresentationMode_RoundTripsEveryIdentity()
+    {
+        using var game = new FacadeGroupProbe();
+
+        game.RunOneFrame();
+
+        CnaPresentationMode initial = game.Manager.GetCnaPreferredPresentationMode();
+        output.WriteLine($"initial mode: {initial}");
+
+        foreach (CnaPresentationMode mode in Enum.GetValues<CnaPresentationMode>())
+        {
+            game.Manager.SetCnaPreferredPresentationMode(mode);
+            Assert.Equal(mode, game.Manager.GetCnaPreferredPresentationMode());
+        }
+
+        game.Manager.SetCnaPreferredPresentationMode(initial);
+        Assert.Equal(initial, game.Manager.GetCnaPreferredPresentationMode());
     }
 
     /// <summary>A texture created and uploaded through the compat types, with the compat

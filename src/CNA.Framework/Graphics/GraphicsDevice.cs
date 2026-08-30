@@ -114,6 +114,28 @@ public class GraphicsDevice : IDisposable
     /// engine layer's whole surface is exported by every build and answers <c>NOT_SUPPORTED</c>
     /// when the layer is absent, so a resolved symbol proves nothing and this is what to ask.
     /// </summary>
+    /// <summary>
+    /// Tells every content-losable resource on this device that its content is gone.
+    ///
+    /// <b>A test hook, not a game route.</b> A real device loses content when the platform takes it
+    /// away, and the subscription that matters is the one a game already has on
+    /// <c>RenderTarget2D.ContentLost</c>. The problem is that the renderers available here do not
+    /// lose devices, so nothing ever fires and the subscription is untested -- and an event that
+    /// has never fired is an event nobody knows is wired up.
+    ///
+    /// Calling this from an ordinary game path would tell every render target its content is gone
+    /// while it demonstrably is not, which is the one thing a game must be able to trust here.
+    ///
+    /// Native iterates a snapshot rather than the live list, because a subscriber is free to
+    /// dispose the resource it is being told about.
+    /// </summary>
+    public void NotifyContentLostResourcesForTesting()
+    {
+        CnaResult result = Native.cna_graphics_device_notify_content_lost_resources_ext(
+            ResolveNativeDeviceHandle());
+        CnaException.ThrowIfFailed(result, nameof(NotifyContentLostResourcesForTesting));
+    }
+
     public static bool IsCnaEngineLayerAvailable()
     {
         CnaResult result = Native.cna_graphics_ext_is_available(out byte available);

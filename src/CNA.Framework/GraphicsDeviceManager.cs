@@ -70,6 +70,32 @@ public class GraphicsDeviceManager : IGraphicsDeviceService, IGraphicsDeviceMana
     /// </summary>
     private CnaHandle NativeHandle => new(_handle.DangerousGetHandle());
 
+    /// <summary>
+    /// How the back buffer is fitted into the window.
+    ///
+    /// Not XNA. XNA 4.0 presents the back buffer stretched to the client area and offers no say in
+    /// it; CNA's renderers can letterbox, overscan, stretch, present at the native back-buffer size,
+    /// or hold the height and let the width follow the window. A game that wants a fixed aspect
+    /// ratio has to letterbox by hand under XNA, and does not here.
+    /// </summary>
+    public PresentationMode PreferredPresentationMode
+    {
+        get
+        {
+            CnaResult result = Native.cna_graphics_device_manager_get_preferred_presentation_mode_ext(
+                NativeHandle, out uint mode);
+            CnaException.ThrowIfFailed(result, nameof(PreferredPresentationMode));
+            return (PresentationMode)mode;
+        }
+
+        set
+        {
+            CnaResult result = Native.cna_graphics_device_manager_set_preferred_presentation_mode_ext(
+                NativeHandle, (uint)value);
+            CnaException.ThrowIfFailed(result, nameof(PreferredPresentationMode));
+        }
+    }
+
     private static bool ReleaseNative(nint handleValue) =>
         Native.cna_graphics_device_manager_destroy(new CnaHandle(handleValue)).IsSuccess();
 

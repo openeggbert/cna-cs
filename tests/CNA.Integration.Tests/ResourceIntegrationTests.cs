@@ -132,10 +132,51 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
             Assert.True(presentation.BackBufferWidth > 0, "A back buffer with no width cannot be presented.");
             Assert.Equal(presentation.Bounds.Width, presentation.BackBufferWidth);
 
-            // Clone is a real XNA member and a separate native route.
+            // Clone is a real XNA member and, since A3, really is a separate native route rather
+            // than the struct copy this comment used to describe.
             PresentationParameters clone = presentation.Clone();
             Assert.Equal(presentation.BackBufferWidth, clone.BackBufferWidth);
         });
+    }
+
+    /// <summary>
+    /// <c>Bounds</c> and <c>Clone</c> now read and copy through
+    /// <c>cna_presentation_parameters_get_bounds</c> and <c>cna_presentation_parameters_clone</c>
+    /// instead of being rebuilt here.
+    ///
+    /// The point of the change is that native is the authority on what these mean, not that the
+    /// answers were wrong -- so this asserts the rule the managed reconstruction encoded, which is
+    /// XNA's own: the back buffer at the origin. If native ever disagreed, this is where it would
+    /// show, and the disagreement would be the finding.
+    ///
+    /// A clone must also be independent. A route that returned the same underlying value would pass
+    /// every equality check above and fail the moment a game edited the copy -- which is most of
+    /// why XNA games clone presentation parameters at all.
+    /// </summary>
+    [NativeFact]
+    public void PresentationParameters_BoundsAndCloneComeFromNative()
+    {
+        var parameters = new PresentationParameters
+        {
+            BackBufferWidth = 1280,
+            BackBufferHeight = 720,
+        };
+
+        Rectangle bounds = parameters.Bounds;
+        output.WriteLine($"native bounds: {bounds.X},{bounds.Y} {bounds.Width}x{bounds.Height}");
+
+        Assert.Equal(0, bounds.X);
+        Assert.Equal(0, bounds.Y);
+        Assert.Equal(1280, bounds.Width);
+        Assert.Equal(720, bounds.Height);
+
+        PresentationParameters copy = parameters.Clone();
+        Assert.Equal(1280, copy.BackBufferWidth);
+
+        copy.BackBufferWidth = 640;
+        Assert.Equal(640, copy.BackBufferWidth);
+        Assert.Equal(1280, parameters.BackBufferWidth);
+        Assert.Equal(1280, parameters.Bounds.Width);
     }
 
     /// <summary>

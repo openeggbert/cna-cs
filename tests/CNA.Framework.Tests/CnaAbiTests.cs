@@ -103,7 +103,11 @@ public class CnaAbiTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(854, declared.Length);
+        // 859 since A3/A4/A5 bound five more routes CNA already had: presentation-parameter clone
+        // and bounds, the preferred-presentation-mode pair, and the content-lost notification.
+        // The literal is a tripwire, not a fact about CNA -- it exists so that adding an import is
+        // a deliberate act rather than something that happens on the way to something else.
+        Assert.Equal(859, declared.Length);
         Assert.Equal(declared, CnaNativeAbiPolicy.RequiredSymbols);
     }
 

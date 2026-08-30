@@ -71,6 +71,61 @@ public static class CnaGraphicsDeviceExtensions
     /// </summary>
     public static int CnaEngineLayerVersion() =>
         CNA.Graphics.GraphicsDevice.CnaEngineLayerVersion();
+
+    /// <summary>
+    /// Tells every content-losable resource on this device that its content is gone.
+    ///
+    /// <b>For tests, not for games.</b> See
+    /// <see cref="CNA.Graphics.GraphicsDevice.NotifyContentLostResourcesForTesting"/>: it exists so
+    /// a <c>RenderTarget2D.ContentLost</c> subscription can be made to fire on renderers that never
+    /// lose a device, and calling it from a game would tell every render target its content is gone
+    /// while it is not.
+    /// </summary>
+    public static void NotifyCnaContentLostForTesting(this GraphicsDevice graphicsDevice)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+        graphicsDevice.Framework.NotifyContentLostResourcesForTesting();
+    }
+}
+
+/// <summary>How the back buffer is fitted into the window. See
+/// <see cref="CnaGraphicsDeviceManagerExtensions.GetCnaPreferredPresentationMode"/>.</summary>
+public enum CnaPresentationMode : uint
+{
+    Letterbox = 0,
+    Overscan = 1,
+    Stretch = 2,
+    NativeBackBuffer = 3,
+    FixedHeightDynamicWidth = 4,
+}
+
+/// <summary>
+/// How CNA presents the back buffer, which XNA has no say in.
+///
+/// XNA 4.0 stretches the back buffer to the client area, full stop -- a fixed-aspect XNA game
+/// letterboxes by drawing its own bars. CNA does this in the presentation step, so a ported game
+/// can drop that code and ask for <see cref="CnaPresentationMode.Letterbox"/> instead. It cannot go
+/// on <c>Microsoft.Xna.Framework.GraphicsDeviceManager</c>, whose surface is checked member for
+/// member against XNA's metadata.
+/// </summary>
+public static class CnaGraphicsDeviceManagerExtensions
+{
+    /// <summary>Reads how the back buffer is currently fitted into the window.</summary>
+    public static CnaPresentationMode GetCnaPreferredPresentationMode(
+        this Microsoft.Xna.Framework.GraphicsDeviceManager manager)
+    {
+        ArgumentNullException.ThrowIfNull(manager);
+        return (CnaPresentationMode)(uint)manager.Framework.PreferredPresentationMode;
+    }
+
+    /// <summary>Chooses how the back buffer is fitted into the window.</summary>
+    public static void SetCnaPreferredPresentationMode(
+        this Microsoft.Xna.Framework.GraphicsDeviceManager manager,
+        CnaPresentationMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(manager);
+        manager.Framework.PreferredPresentationMode = (CNA.Graphics.PresentationMode)(uint)mode;
+    }
 }
 
 /// <summary>

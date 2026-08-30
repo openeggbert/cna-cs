@@ -92,7 +92,15 @@ public class PresentationParameters
 
     /// <summary>Matches real XNA's <c>Bounds</c>: the back buffer as a rectangle at the
     /// origin.</summary>
-    public Rectangle Bounds => new(0, 0, BackBufferWidth, BackBufferHeight);
+    public Rectangle Bounds
+    {
+        get
+        {
+            CnaResult result = Native.cna_presentation_parameters_get_bounds(in _native, out CnaRectangle bounds);
+            CnaException.ThrowIfFailed(result, nameof(Bounds));
+            return new Rectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        }
+    }
 
     /// <summary>
     /// The native window this device presents into. Matches real XNA's <c>DeviceWindowHandle</c>.
@@ -105,7 +113,12 @@ public class PresentationParameters
     /// </summary>
     public nint DeviceWindowHandle => 0;
 
-    public PresentationParameters Clone() => new(_native);
+    public PresentationParameters Clone()
+    {
+        CnaResult result = Native.cna_presentation_parameters_clone(in _native, out CnaPresentationParameters clone);
+        CnaException.ThrowIfFailed(result, nameof(Clone));
+        return new PresentationParameters(clone);
+    }
 
     internal CnaPresentationParameters ToNative() => _native;
 

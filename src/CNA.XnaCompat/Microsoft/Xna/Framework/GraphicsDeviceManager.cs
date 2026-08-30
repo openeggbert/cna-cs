@@ -13,6 +13,11 @@ public class GraphicsDeviceManager : Graphics.IGraphicsDeviceService, IGraphicsD
     public static readonly int DefaultBackBufferHeight = 480;
 
     private readonly CNA.GraphicsDeviceManager _backend;
+
+    /// <summary>The CNA manager behind this facade, for <c>CNA.XnaCompat.Extensions</c>. Internal
+    /// for the same reason <c>GraphicsDevice.Framework</c> is: the strict facade's public surface is
+    /// checked member for member against XNA's own metadata.</summary>
+    internal CNA.GraphicsDeviceManager Framework => _backend;
     private bool _disposed;
     private EventHandler<PreparingDeviceSettingsEventArgs>? _preparingDeviceSettings;
 

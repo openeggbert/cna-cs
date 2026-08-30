@@ -171,6 +171,10 @@ public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fix
     /// device reports one, and that a caller-initiated <c>Reset</c> is not loss, so on this
     /// renderer a silent subscription is the correct outcome and a test that demanded a callback
     /// would be demanding a fabrication.
+    ///
+    /// <see cref="RenderTarget2D_ContentLostFiresWhenNativeIsToldContentIsGone"/> now covers the
+    /// firing half, through the explicit notify route rather than by waiting for a loss that this
+    /// renderer will never have.
     /// </summary>
     [NativeFact]
     public void RenderTarget2D_ContentLostSubscriptionIsTakenAndReleased()
@@ -201,6 +205,55 @@ public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fix
             target.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => target.ContentLost += (_, _) => { });
+        });
+    }
+
+    /// <summary>
+    /// The other half: a subscription that actually delivers.
+    ///
+    /// The test above can only show the registration is taken and released, because a renderer that
+    /// cannot lose a device never raises the event -- so the handler side had never run, and a
+    /// handler that has never run is a handler nobody knows is connected. Between the managed
+    /// subscription and a game's callback sit an event bridge, a sender projection and a native
+    /// registration, and any of the three could be wrong in a way the registration test cannot see.
+    ///
+    /// <c>cna_graphics_device_notify_content_lost_resources_ext</c> exists for exactly this and is
+    /// bound as a test hook only. It is not a fabrication in the way a synthetic callback would be:
+    /// the notification travels the real native path to the real subscription.
+    ///
+    /// The removed handler is the point of the second counter. An event bridge that fired every
+    /// handler it had ever seen would pass a test that only counted the surviving one.
+    /// </summary>
+    [NativeFact]
+    public void RenderTarget2D_ContentLostFiresWhenNativeIsToldContentIsGone()
+    {
+        fixture.InsideAFrame(game =>
+        {
+            using var target = new RenderTarget2D(game.GraphicsDevice, 16, 16);
+
+            int kept = 0;
+            int removed = 0;
+            object? senderSeen = null;
+
+            void Kept(object? sender, EventArgs args)
+            {
+                kept++;
+                senderSeen = sender;
+            }
+
+            void Removed(object? sender, EventArgs args) => removed++;
+
+            target.ContentLost += Kept;
+            target.ContentLost += Removed;
+            target.ContentLost -= Removed;
+
+            game.GraphicsDevice.NotifyContentLostResourcesForTesting();
+
+            output.WriteLine($"after notify: kept={kept} removed={removed} sender={senderSeen?.GetType().Name}");
+
+            Assert.Equal(1, kept);
+            Assert.Equal(0, removed);
+            Assert.Same(target, senderSeen);
         });
     }
 

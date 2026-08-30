@@ -2408,6 +2408,25 @@ internal static partial class Native
     internal static partial CnaResult cna_presentation_parameters_init(out CnaPresentationParameters outParameters);
 
     [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_get_preferred_presentation_mode_ext(
+        CnaHandle manager, out uint outMode);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_manager_set_preferred_presentation_mode_ext(
+        CnaHandle manager, uint mode);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_notify_content_lost_resources_ext(CnaHandle device);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_presentation_parameters_clone(
+        in CnaPresentationParameters source, out CnaPresentationParameters outParameters);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_presentation_parameters_get_bounds(
+        in CnaPresentationParameters parameters, out CnaRectangle outBounds);
+
+    [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_get_presentation_parameters(
         CnaHandle device, ref CnaPresentationParameters parameters);
 
