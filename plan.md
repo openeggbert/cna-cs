@@ -190,14 +190,28 @@ is the honest limit of a resolution survey. Remaining work:
     empty string instead would have been worse than failing: it invents a name the file does not
     contain, and a game comparing bone names would then match the wrong bone. **19 more assets load.**
 
-  The remaining 27 are recorded rather than fixed here:
+  Across the XNA sample collection (`/rv/tmp/samples`), the wider corpus: **1,936 attempted, 1,772
+  loaded (91.5%), 48 of 52 compressed assets loaded**, 110 failing, 34 needing a game's own assembly,
+  20 refused by the native loader.
 
-  - **26 need readers `CNA.Framework`'s XNB reader does not have.** There are two managed XNB
-    readers in this repository -- `CNA.Framework/Content/Xnb` knows nine readers, and
-    `CNA.XnaCompat`'s knows the full built-in set including `EffectMaterialReader`,
-    `DictionaryReader` and `ReflectiveReader`. Model loading goes through the weaker one, so an
-    `EffectMaterial` inside a model fails even though A6b built a reader for it. Making the two agree
-    is the next content task and is worth more than any individual reader.
+  The remaining failures are recorded rather than fixed here:
+
+  - **20 need readers `CNA.Framework`'s XNB reader does not have** (11 `EffectMaterialReader`,
+    5 `DictionaryReader`, 2 `EnvironmentMapEffectReader`, 1 `DualTextureEffectReader`, 1 other).
+    There are two managed XNB readers here -- `CNA.Framework/Content/Xnb` knows nine, and
+    `CNA.XnaCompat`'s knows the full built-in set -- and model loading goes through the weaker one,
+    so an `EffectMaterial` inside a model fails even though A6b built a reader for it.
+
+    **Routing models through the compat chain was tried and measured worse**: loaded fell 497 -> 436
+    and failures rose 27 -> 78, so the compat `ModelContentReader` is not ready to replace the
+    framework path. Recorded so nobody repeats it.
+
+    Adding `EffectMaterialReader` to the framework path is *not* the fix on its own either. An
+    `EffectMaterial` names its effect through an external reference, and that path resolves no
+    external references -- `BasicEffect`'s texture reference is left unresolved for the same reason.
+    A model would then load with null part effects and fail when drawn, which is worse than failing
+    to load. **The prerequisite is external-reference resolution in `CNA.Framework`'s XNB path**, and
+    that is the real next content task.
   - 1 asset passes an absolute path to `TitleContainer.OpenStream`, which is a survey-harness bug
     rather than a binding one.
   - **5 are an upstream limit**, not a defect here: CNA's C content loader answers

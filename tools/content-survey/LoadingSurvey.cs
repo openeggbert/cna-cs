@@ -42,6 +42,16 @@ internal sealed class LoadingSurvey : Game
     public SortedDictionary<string, string> NoManagedType { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Assets that failed because they name a type only the game's own assembly defines.
+    ///
+    /// Counting these as runtime failures overstates the gap: a <c>ReflectiveReader</c> over a
+    /// game's settings class is *supposed* to be unreadable here, and no reader this binding could
+    /// add would change it. They are separated so the failure count means "this binding could not
+    /// read content it should have been able to read".
+    /// </summary>
+    public SortedDictionary<string, string> ExternalGameTypes { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The type to ask for, from the asset's own root reader.
     ///
     /// <c>Load&lt;object&gt;</c> is not a substitute: the strict facade routes several built-ins to
@@ -96,6 +106,10 @@ internal sealed class LoadingSurvey : Game
                 {
                     NativeNotSupported[relative] = actual.Message;
                 }
+                else if (NamesAGameType(actual.Message))
+                {
+                    ExternalGameTypes[relative] = actual.Message;
+                }
                 else
                 {
                     RuntimeFailures[relative] = $"{actual.GetType().Name}: {actual.Message}";
@@ -106,6 +120,18 @@ internal sealed class LoadingSurvey : Game
         Exit();
         base.Update(gameTime);
     }
+
+    /// <summary>
+    /// Whether a failure names a reader over a type the game supplies rather than a built-in.
+    ///
+    /// <c>ReflectiveReader</c> is XNA's reader for a plain class in the game's own assembly, so a
+    /// file naming one can only be read inside that game. A reader name with no
+    /// <c>Microsoft.Xna.Framework</c> prefix is the same situation spelled differently.
+    /// </summary>
+    private static bool NamesAGameType(string message) =>
+        message.Contains("ReflectiveReader", StringComparison.Ordinal) ||
+        (message.Contains("content type reader '", StringComparison.Ordinal) &&
+         !message.Contains("reader 'Microsoft.Xna.Framework", StringComparison.Ordinal));
 
     /// <summary>A property or two that only a materialised object can answer, so the report shows
     /// the asset was really built and not merely returned.</summary>

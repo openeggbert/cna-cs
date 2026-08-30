@@ -184,6 +184,7 @@ if (load)
     Console.WriteLine($"CONTENT_LOAD_LOADED={survey.Loaded.Count}");
     Console.WriteLine($"CONTENT_LOAD_NATIVE_NOT_SUPPORTED={survey.NativeNotSupported.Count}");
     Console.WriteLine($"CONTENT_LOAD_RUNTIME_FAILURE={survey.RuntimeFailures.Count}");
+    Console.WriteLine($"CONTENT_LOAD_EXTERNAL_GAME_TYPE={survey.ExternalGameTypes.Count}");
     Console.WriteLine($"CONTENT_LOAD_NO_MANAGED_TYPE={survey.NoManagedType.Count}");
 
     int compressedLoaded = survey.Loaded.Keys.Count(compressed.Contains);
