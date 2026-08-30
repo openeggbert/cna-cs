@@ -261,6 +261,59 @@ public class BuiltInContentReaderTests
         Assert.Equal(0, value.Ignored);
     }
 
+    /// <summary>
+    /// Every platform byte CNA accepts loads here too.
+    ///
+    /// This path used to accept three -- XNA's own 'w', 'm' and 'x' -- while the native loader
+    /// accepted all sixteen, so one binding gave two answers for one file: an asset MonoGame built
+    /// for DesktopGL ('d') loaded natively and was refused here. Six assets in CNA's own MonoGame
+    /// test corpus are exactly that.
+    ///
+    /// The list is asserted element by element rather than by count, so adding a byte to one side
+    /// without the other fails here and names which byte.
+    /// </summary>
+    [Theory]
+    [InlineData('w')] [InlineData('x')] [InlineData('m')] [InlineData('i')]
+    [InlineData('a')] [InlineData('d')] [InlineData('X')] [InlineData('W')]
+    [InlineData('n')] [InlineData('u')] [InlineData('p')] [InlineData('M')]
+    [InlineData('r')] [InlineData('P')] [InlineData('g')] [InlineData('l')]
+    public void EveryPlatformCnaAcceptsIsLoadable(char platform)
+    {
+        int value = Load<int>(
+            ["Microsoft.Xna.Framework.Content.Int32Reader" + Corlib],
+            writer =>
+            {
+                writer.Write7BitEncodedInt(1);
+                writer.Write(1234);
+            },
+            platform);
+
+        Assert.Equal(1234, value);
+    }
+
+    /// <summary>
+    /// A byte outside that set is refused, and the message names it.
+    ///
+    /// 'b' is the real case: KNI stamps it on web builds, 140 assets on this machine carry it, and
+    /// neither FNA nor CNA accepts it. Matching CNA is a fix; going past CNA would be a decision
+    /// about a format nothing else here supports, so this asserts the refusal rather than leaving
+    /// the boundary untested.
+    /// </summary>
+    [Fact]
+    public void APlatformCnaRejects_IsRefusedByName()
+    {
+        ContentLoadException thrown = Assert.Throws<ContentLoadException>(() => Load<int>(
+            ["Microsoft.Xna.Framework.Content.Int32Reader" + Corlib],
+            writer =>
+            {
+                writer.Write7BitEncodedInt(1);
+                writer.Write(1234);
+            },
+            'b'));
+
+        Assert.Contains("'b'", thrown.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void UnresolvableElementType_FailsByNameRatherThanMisreading()
     {
@@ -305,13 +358,13 @@ public class BuiltInContentReaderTests
         Third = 2,
     }
 
-    private static T Load<T>(string[] readerNames, Action<BinaryWriter> writeBody)
+    private static T Load<T>(string[] readerNames, Action<BinaryWriter> writeBody, char platform = 'w')
     {
-        using var content = new MemoryContentManager(BuildAsset(readerNames, writeBody));
+        using var content = new MemoryContentManager(BuildAsset(readerNames, writeBody, platform));
         return content.Load<T>("asset");
     }
 
-    private static byte[] BuildAsset(string[] readerNames, Action<BinaryWriter> writeBody)
+    private static byte[] BuildAsset(string[] readerNames, Action<BinaryWriter> writeBody, char platform = 'w')
     {
         using var payload = new MemoryStream();
         using (var writer = new BinaryWriter(payload, Encoding.UTF8, leaveOpen: true))
@@ -334,7 +387,7 @@ public class BuiltInContentReaderTests
             writer.Write((byte)'X');
             writer.Write((byte)'N');
             writer.Write((byte)'B');
-            writer.Write((byte)'w');
+            writer.Write((byte)platform);
             writer.Write((byte)5);
             writer.Write((byte)0);
             writer.Write(10 + bytes.Length);

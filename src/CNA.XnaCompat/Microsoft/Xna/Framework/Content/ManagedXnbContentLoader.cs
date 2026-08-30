@@ -88,6 +88,29 @@ internal static class ManagedXnbContentLoader
     /// cases; what genuinely differs is which surface formats the pipeline chose, and an
     /// unsupported format fails later with a message about the format.
     /// </summary>
+    /// <summary>
+    /// The platform bytes an <c>.xnb</c> may carry, matching CNA's own
+    /// <c>XnbHeader.hpp:XnbAcceptedPlatforms()</c> exactly -- which takes them verbatim from FNA's
+    /// <c>ContentManager.targetPlatformIdentifiers</c>, including the two deprecated ones
+    /// (<c>'g'</c>, <c>'l'</c>) FNA still accepts.
+    ///
+    /// <b>This used to accept three.</b> Only XNA's own <c>'w'</c>, <c>'m'</c> and <c>'x'</c>, which
+    /// is right for XNA and wrong here: the native loader accepts all sixteen, so an asset built by
+    /// MonoGame for DesktopGL (<c>'d'</c>) loaded natively and was refused managed-side -- two
+    /// answers from one binding for one file. Measured on real corpora: six assets in CNA's own
+    /// MonoGame test set are <c>'d'</c>, and every one of them was unreadable through this path.
+    ///
+    /// The list is deliberately CNA's rather than longer. KNI's web build stamps <c>'b'</c>, which
+    /// appears on 140 assets in the Speedy Blupi web builds on this machine and which neither FNA
+    /// nor CNA accepts; matching CNA is a fix, and going past it would be a decision about a format
+    /// this binding does not otherwise support.
+    /// </summary>
+    private static readonly char[] AcceptedPlatforms =
+    [
+        'w', 'x', 'm', 'i', 'a', 'd', 'X', 'W',
+        'n', 'u', 'p', 'M', 'r', 'P', 'g', 'l',
+    ];
+
     private static XnaHeader ReadHeader(BinaryReader reader, Stream stream, string assetName)
     {
         if (reader.ReadByte() != (byte)'X' ||
@@ -98,11 +121,10 @@ internal static class ManagedXnbContentLoader
         }
 
         byte platform = reader.ReadByte();
-        if (platform is not ((byte)'w' or (byte)'m' or (byte)'x'))
+        if (Array.IndexOf(AcceptedPlatforms, (char)platform) < 0)
         {
             throw new ContentLoadException(
-                $"Error loading '{assetName}'. Invalid XNB platform '{(char)platform}'; " +
-                "expected 'w' (Windows), 'm' (Windows Phone) or 'x' (Xbox 360).");
+                $"Error loading '{assetName}'. Unrecognized XNB platform identifier '{(char)platform}'.");
         }
 
         ushort versionAndProfile = reader.ReadUInt16();

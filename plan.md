@@ -137,10 +137,29 @@ any `Content` folder. Against the XNA 4.0 sample collection there are no missing
 left. What that does *not* say is that the bytes after each reader table are read correctly, which
 is the honest limit of a resolution survey. Remaining work:
 
-- A6a. Done for a second corpus, and it paid for itself. `cna-samples` is 527 assets and **80
-  distinct readers** against the first corpus's much narrower spread: 0 missing built-ins, 0
-  malformed, 507 native-backed, 19 naming a game's own types. Doing this found A6b's premise to be
-  false. Still worth pointing at more games; one corpus is one corpus, and two is two.
+- A6a. **Done, across every corpus on this machine, and it paid for itself twice.** 2,879 assets
+  surveyed with **0 missing built-in readers and 0 malformed**:
+
+  | corpus | assets | distinct readers |
+  | --- | --- | --- |
+  | XNA sample collection (`/rv/tmp/samples`) | 1,914 | 88 |
+  | `cna-samples` | 532 | 80 |
+  | `mobile-eggbert-legacy` (Speedy Blupi) | 420 | 2 |
+  | `cna`'s own MonoGame test assets | 13 | 18 |
+
+  The first corpus survey found A6b's premise false. This wider sweep found a second defect, and a
+  worse one: **the managed loader accepted three platform bytes where the native loader accepts
+  sixteen.** One binding, two answers for one file -- an asset MonoGame built for DesktopGL
+  (`'d'`) loaded natively and was refused managed-side. Six assets in CNA's own test corpus, and
+  five more in `cna-samples`, were unreadable through the managed path for that reason alone. The
+  list now matches `XnbHeader.hpp:XnbAcceptedPlatforms()` exactly, which takes it verbatim from
+  FNA's `targetPlatformIdentifiers`, and a theory asserts every byte individually so adding one to
+  either side without the other fails and names the byte.
+
+  One corpus stays unreadable and that is the correct answer: 140 assets under `_webs` are Speedy
+  Blupi's web builds, stamped `'b'`, which is KNI's BlazorGL identifier and which **neither FNA nor
+  CNA accepts**. Matching CNA is a fix; going past CNA would be a decision about a format nothing
+  else in this binding supports, so the refusal is asserted rather than left untested.
 - A6b. **Done.** `EffectMaterialReader` is built and registered. The note here used to say "no asset
   in the surveyed corpus reaches it" -- eleven assets in `cna-samples` name it, so the reader was
   missing under assets that really exist. It is transcribed from the decompiled reader, including
