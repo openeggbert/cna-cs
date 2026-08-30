@@ -124,7 +124,7 @@ cursor surface. The routes below exist upstream and are still unbound.
 
 | Task | Route | Completion criterion |
 | --- | --- | --- |
-| A1. `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | Measure it against the current per-glyph quad path first. Adopt only if it is not observably different in glyph placement on the authored `FontCalibri14` fixture; record the measurement either way. |
+| A1. `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | **Unblocked, not yet adopted.** See A1b: the recorded reason for not doing this was false. |
 | A2. **Already done, under a different route.** Batched sprite submission | `cna_sprite_batch_submit_scaled_many` | The completion criterion -- one native call per batch, not one per sprite -- has been met since the buffered-flush change. The route named here originally was the wrong one for this binding: `submit_many` is destination-rectangle-based, and CNA's position+scale route is the one this facade needs, because `Draw(texture, Rectangle, ...)` is converted managed-side to `position = rect.XY`, `scale = rect.Size / source.Size`. What was genuinely missing is any check that the conversion lands where the rectangle asked; see the pixel tests below. |
 | A3. **Done.** `PresentationParameters` bounds and clone | `cna_presentation_parameters_get_bounds`, `cna_presentation_parameters_clone` | Both go through native. Native agrees with the managed reconstruction that was there (the back buffer at the origin), which is the expected outcome and not the point -- the point is that native is the authority, so a future disagreement shows up here instead of being silently overridden. The clone is asserted independent, since a route returning the same value would pass every equality check and fail the moment a game edited the copy. |
 | A4. **Done.** Preferred presentation mode | `cna_graphics_device_manager_get/set_preferred_presentation_mode_ext` | `CnaGraphicsDeviceManagerExtensions.Get/SetCnaPreferredPresentationMode`, outside the strict namespace. All five identities round-trip, not one: the enum crosses the ABI as a numeric cast, and an off-by-one there passes a single-value test. Worth having because XNA stretches the back buffer and offers no say, so a fixed-aspect XNA game letterboxes by hand -- code a port can now delete. |
@@ -160,6 +160,34 @@ is the honest limit of a resolution survey. Remaining work:
   asserted on appeared nowhere in the path, so the test had been passing for any exception at all.
 - A6c. The compressed assets are analysed but never fully read here. A loading survey mode, behind a
   graphics device, would close that gap.
+
+### A1b. The reason `SpriteFont` stayed managed was not true
+
+`SpriteFont`'s doc comment said the native SpriteFont resource "exposes no per-glyph readback -- no
+bounds, no cropping, no kerning", and concluded that a native-owned font "could be measured and never
+drawn". All three are returned by `cna_sprite_font_copy_glyphs`, whose own header says it exists
+precisely because measuring is not drawing -- and `ContentManager.LoadSpriteFontData` has been
+calling it in this repository the whole time. It loads a native font, copies the glyph table out, and
+destroys the font. The stated blocker was contradicted by the binding's own code, which is the third
+premise in this plan found stale by checking rather than reasoning (after A6b and A2).
+
+The true statement is narrower and is now in the comment: nothing *retains* a native font, so there
+is no handle to give `cna_sprite_batch_draw_string`. The load path destroys it after copying, and the
+public constructor -- which XNA has, for third-party font tools -- never makes one at all.
+
+Adopting A1 therefore means:
+
+- giving `SpriteFont` a native handle and a lifetime, retained from the load path instead of
+  destroyed, and built with `cna_sprite_font_create` for the public-constructor case
+- keeping the managed glyph table regardless, because `MeasureString` is pure managed code today and
+  is real, tested, and free of a native round trip
+- then measuring, which is the part that was always the point: render the same string both ways into
+  a `RenderTarget2D` and compare pixels. `SpritePixelTests` now makes that a mechanical exercise --
+  it did not exist when A1 was written, which is why A1 said "measure" without saying how.
+
+Adopt only if glyph placement is not observably different, and record the measurement either way.
+The win if it holds is one native call per string instead of one per glyph, which is worth having in
+a text-heavy game and is worth nothing if the glyphs move.
 
 ### A2b. Sprite drawing is now checked by reading the pixels back
 

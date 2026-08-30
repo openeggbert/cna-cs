@@ -14,12 +14,19 @@ namespace CNA.Graphics;
 /// (<c>cna_sprite_font_create</c> from a glyph table, <c>_get_info</c>, <c>_copy_characters</c>,
 /// the three setters, <c>_measure_utf8</c>, <c>_destroy</c>).
 ///
-/// It is still managed, on purpose rather than by accident: that resource can be *built* from a
-/// glyph table and can *measure* text, but exposes no per-glyph readback -- no bounds, no cropping,
-/// no kerning. <c>SpriteBatch.DrawString</c> needs exactly those to place each glyph
-/// (<see cref="AppendGlyphPlacements"/>), so a native-owned font could be measured and never drawn.
-/// Holding the table here keeps one source of truth; mirroring it into a native font as well would
-/// mean two, with no reader for the native copy.
+/// It is still managed, but <b>the reason recorded here was wrong and is corrected</b>. This used to
+/// say the native resource "exposes no per-glyph readback -- no bounds, no cropping, no kerning", so
+/// a native-owned font "could be measured and never drawn". <c>cna_sprite_font_copy_glyphs</c>
+/// returns exactly those three things, its own header explains that it exists *because* measuring is
+/// not drawing, and <c>ContentManager.LoadSpriteFontData</c> in this repository has been calling it
+/// all along -- it loads a native font, reads the glyph table back, and destroys the font. The
+/// stated blocker was contradicted by the binding's own code.
+///
+/// What is actually true is narrower: nothing here *retains* a native font. The load path destroys
+/// it once the table has been copied out, and the public constructor never creates one, so there is
+/// no native font handle to hand to <c>cna_sprite_batch_draw_string</c>. Adopting that route means
+/// giving this type a native handle and a lifetime, which is a real change and not a blocked one --
+/// see plan.md A1, where it is measured rather than assumed.
 ///
 /// <c>ContentManager.Load&lt;SpriteFont&gt;</c> parses the <c>.xnb</c> container managed-side, the
 /// same as <c>Model</c> -- see <c>ContentManager.LoadSpriteFontData</c> for why, and for the
