@@ -42,7 +42,7 @@ internal sealed class XnbModelData
 /// shape).</summary>
 internal sealed class XnbBoneData
 {
-    internal XnbBoneData(int index, string name, Matrix transform)
+    internal XnbBoneData(int index, string? name, Matrix transform)
     {
         Index = index;
         Name = name;
@@ -51,7 +51,7 @@ internal sealed class XnbBoneData
 
     internal int Index { get; }
 
-    internal string Name { get; }
+    internal string? Name { get; }
 
     internal Matrix Transform { get; }
 
@@ -61,7 +61,7 @@ internal sealed class XnbBoneData
 /// <summary>One mesh read by <c>ModelReader</c>.</summary>
 internal sealed class XnbMeshData
 {
-    internal XnbMeshData(string name, int parentBoneIndex, BoundingSphere boundingSphere, IReadOnlyList<XnbMeshPartData> parts)
+    internal XnbMeshData(string? name, int parentBoneIndex, BoundingSphere boundingSphere, IReadOnlyList<XnbMeshPartData> parts)
     {
         Name = name;
         ParentBoneIndex = parentBoneIndex;
@@ -69,7 +69,7 @@ internal sealed class XnbMeshData
         Parts = parts;
     }
 
-    internal string Name { get; }
+    internal string? Name { get; }
 
     /// <summary>-1 means no parent bone -- see <see cref="XnbModelData.RootBoneIndex"/>'s own doc
     /// comment for the same convention.</summary>

@@ -338,25 +338,9 @@ static string ResolveCompiler(string? configured)
     throw new InvalidOperationException("No platform C compiler was found. Set CC or pass --compiler.");
 }
 
-static string FindSource(string name)
-{
-    string candidate = Path.Combine(AppContext.BaseDirectory, name);
-    if (File.Exists(candidate))
-    {
-        return candidate;
-    }
 
-    candidate = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", name));
-    if (File.Exists(candidate))
-    {
-        return candidate;
-    }
-
-    throw new FileNotFoundException($"ABI probe source was not copied or found: {name}");
-}
-
-/// <summary>Runs a command and reports whether it succeeded, for the negative controls, where a
-/// failure is the expected and required outcome.</summary>
+// Runs a command and reports whether it succeeded, for the negative controls, where a failure is
+// the expected and required outcome.
 static bool TryRun(string executable, IReadOnlyList<string> arguments, string workingDirectory)
 {
     try
@@ -488,13 +472,10 @@ static Dictionary<string, long> BuildManagedValues()
     return values;
 }
 
-/// <summary>
-/// Records a measurement, refusing to let two managed spellings of one C type disagree.
-///
-/// <c>CnaRect</c> and <c>CnaRectangle</c> are both <c>CNA_Rectangle</c>. Letting the second
-/// assignment win would hide exactly the case worth catching -- two managed views of one native
-/// type that have drifted apart -- behind a dictionary write.
-/// </summary>
+// Records a measurement, refusing to let two managed spellings of one C type disagree. CnaRect and
+// CnaRectangle are both CNA_Rectangle; letting the second assignment win would hide exactly the case
+// worth catching -- two managed views of one native type that have drifted apart -- behind a
+// dictionary write.
 static void Record(Dictionary<string, long> values, string key, long value, Type type)
 {
     if (values.TryGetValue(key, out long existing) && existing != value)
@@ -507,23 +488,12 @@ static void Record(Dictionary<string, long> values, string key, long value, Type
     values[key] = value;
 }
 
-/// <summary>The same measurement <see cref="AlignmentOf{T}"/> makes, for a type only known at run
-/// time: a byte followed by the type, so the padding the compiler inserts is the alignment.</summary>
+// The same measurement AlignmentOf<T> makes, for a type only known at run time: a byte followed by
+// the type, so the padding the compiler inserts is the alignment.
 static int AlignmentOfType(Type type)
 {
     Type probe = typeof(AlignmentProbe<>).MakeGenericType(type);
     return checked((int)Marshal.OffsetOf(probe, "Value").ToInt64());
-}
-
-static void AddStruct<T>(Dictionary<string, long> values, string nativeName, params (string Native, string Managed)[] fields)
-    where T : unmanaged
-{
-    values[$"sizeof.{nativeName}"] = Unsafe.SizeOf<T>();
-    values[$"alignof.{nativeName}"] = AlignmentOf<T>();
-    foreach ((string native, string managed) in fields)
-    {
-        values[$"offsetof.{nativeName}.{native}"] = Marshal.OffsetOf<T>(managed).ToInt64();
-    }
 }
 
 static int AlignmentOf<T>() where T : unmanaged =>

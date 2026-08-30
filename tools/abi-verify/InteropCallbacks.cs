@@ -55,7 +55,7 @@ static class InteropCallbacks
                 string?[] parameters = [.. method.GetParameters().Select(p => InteropPrototypes.CType(p.ParameterType))];
                 return returned is null || parameters.Any(p => p is null)
                     ? null
-                    : (returned, parameters!);
+                    : (returned, parameters.Select(p => p!).ToArray());
             }
 
             FieldInfo? field = type.GetField(
@@ -67,7 +67,7 @@ static class InteropCallbacks
                     [.. field.FieldType.GetFunctionPointerParameterTypes().Select(InteropPrototypes.CType)];
                 return returned is null || parameters.Any(p => p is null)
                     ? null
-                    : (returned, parameters!);
+                    : (returned, parameters.Select(p => p!).ToArray());
             }
         }
 

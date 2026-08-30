@@ -39,7 +39,7 @@ public class ModelMesh : IDisposable
 
     public ModelMeshPartCollection MeshParts { get; }
 
-    public string Name { get; }
+    public string? Name { get; }
 
     public ModelBone? ParentBone { get; set; }
 
