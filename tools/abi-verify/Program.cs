@@ -64,6 +64,9 @@ File.WriteAllText(prototypeSource, prototypeUnit);
 string callbackSource = Path.Combine(temporaryDirectoryForSource, "native_callback_probe.c");
 string callbackUnit = InteropCallbacks.Generate(out List<string> callbackUnresolved);
 File.WriteAllText(callbackSource, callbackUnit);
+string constantSource = Path.Combine(temporaryDirectoryForSource, "native_constant_probe.c");
+string constantUnit = InteropConstants.Generate(out int constantsChecked, out List<string> constantsSkipped);
+File.WriteAllText(constantSource, constantUnit);
 
 try
 {
@@ -87,6 +90,13 @@ try
         ? ["/nologo", "/std:c11", "/W4", "/WX", "/c", $"/I{includeDirectory}", callbackSource, $"/Fo:{callbackObject}"]
         : ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", "-I", includeDirectory, callbackSource, "-o", callbackObject];
     Run(compiler, callbackArguments, temporaryDirectory);
+
+    // B3: the enum-like identities, whose values no other check constrains.
+    string constantObject = Path.Combine(temporaryDirectory, OperatingSystem.IsWindows() ? "native-constant.obj" : "native-constant.o");
+    List<string> constantArguments = isMsvc
+        ? ["/nologo", "/std:c11", "/W4", "/WX", "/c", $"/I{includeDirectory}", constantSource, $"/Fo:{constantObject}"]
+        : ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", "-I", includeDirectory, constantSource, "-o", constantObject];
+    Run(compiler, constantArguments, temporaryDirectory);
 
     string nativeOutput = Run(executable, [], temporaryDirectory);
     Dictionary<string, long> native = ParseValues(nativeOutput);
@@ -147,7 +157,12 @@ try
 
         foreach (PrototypeNegativeControls.Control control in PrototypeNegativeControls.All())
         {
-            string unit = control.Layout ? layoutUnit : prototypeUnit;
+            string unit = control.In switch
+            {
+                PrototypeNegativeControls.Unit.Layout => layoutUnit,
+                PrototypeNegativeControls.Unit.Constants => constantUnit,
+                _ => prototypeUnit,
+            };
             if (!unit.Contains(control.Original, StringComparison.Ordinal))
             {
                 // The declaration this control corrupts is no longer generated, so the control is
@@ -245,6 +260,14 @@ try
     Console.WriteLine($"PROTO_UNMAPPABLE={prototypeUnmappable.Count}");
     Console.WriteLine($"CALLBACKS_CHECKED={InteropCallbacks.Pairings.Length - callbackUnresolved.Count}");
     Console.WriteLine($"CALLBACKS_UNRESOLVED={callbackUnresolved.Count}");
+    Console.WriteLine($"CONSTANTS_CHECKED={constantsChecked}");
+    Console.WriteLine($"CONSTANTS_NOT_HEADER_IDENTITIES={constantsSkipped.Count}");
+    Console.WriteLine(
+        $"CONSTANTS_FRAMEWORK_WITHOUT_MACRO_GROUP={InteropConstants.FrameworkIdentitiesWithoutAMacroGroup.Length}");
+    if (constantsSkipped.Count > 0)
+    {
+        Console.WriteLine($"CONSTANTS_NOT_HEADER_IDENTITY_NAMES={string.Join(",", constantsSkipped)}");
+    }
     if (callbackUnresolved.Count > 0)
     {
         Console.WriteLine($"CALLBACKS_UNRESOLVED_NAMES={string.Join(",", callbackUnresolved)}");

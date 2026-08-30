@@ -17,7 +17,9 @@
 static class PrototypeNegativeControls
 {
     /// <summary>A control, and which generated unit it corrupts.</summary>
-    internal sealed record Control(string Name, string Original, string Mutated, string Why, bool Layout = false);
+    internal enum Unit { Prototype, Layout, Constants }
+
+    internal sealed record Control(string Name, string Original, string Mutated, string Why, Unit In = Unit.Prototype);
 
     /// <summary>
     /// One real generated declaration, and the corruption each control applies to it.
@@ -72,13 +74,19 @@ static class PrototypeNegativeControls
             "uint32_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
             "int32_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
             "a struct field's signedness must be checked; the offsets agree either way",
-            Layout: true),
+            In: Unit.Layout),
 
         new("field-wrong-width",
             "uint32_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
             "uint64_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
             "a struct field's width must be checked",
-            Layout: true),
+            In: Unit.Layout),
+
+        new("constant-value",
+            "_Static_assert(CNA_RESULT_SUCCESS == 0u, \"CnaResult.Success disagrees with CNA_RESULT_SUCCESS\");",
+            "_Static_assert(CNA_RESULT_SUCCESS == 1u, \"CnaResult.Success disagrees with CNA_RESULT_SUCCESS\");",
+            "a renumbered identity is invisible to every other check and must fail here",
+            In: Unit.Constants),
 
         new("absent-import",
             "uint32_t (*const p_cna_game_run)(CNA_Handle) = cna_game_run;",

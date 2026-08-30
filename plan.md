@@ -411,7 +411,30 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
 - B2 (was). Extend the prototype probe from 4 routes to every callback-taking route and every route whose
   managed declaration uses `in`/`out`/`ref` on a versioned descriptor -- the shapes `sweep.py`'s
   arity check cannot see.
-- B3. Emit every consumed enum-like constant from the C probe and compare it against the managed
+- B3. **Done.** `CONSTANTS_CHECKED=286`, 0 mismatches. Every enum-like identity this binding
+  consumes is a `_Static_assert` against the macro of the same identity, so the preprocessor supplies
+  the value and the managed literal has to agree. These are the values no other check constrains: a
+  renumbered constant passes every layout and prototype check, compiles cleanly, and goes wrong at
+  run time.
+
+  Coverage is CNA.Interop's 20 `Cna*` enums plus **30 CNA.Framework enums whose values cross to
+  native as plain integers** -- a framework enum cast to `uint` at a call site is as much an ABI value
+  as one declared in the interop assembly. The 30 were chosen by measurement: their derived prefix
+  exists among the 883 macro groups the headers define.
+
+  The other 24 framework enums are listed with reasons rather than dropped:
+  `ContainmentType` and `PlaneIntersectionType` are results of managed geometry and never cross;
+  `ClearOptions` and `TouchLocationState` do cross but CNA spells the group differently and they are
+  already checked through their CNA.Interop twin; `Keys` is a 100-plus identity set CNA names per key
+  rather than as a group. `CnaVertexType` and `CnaUserVertexSource` are this binding's own vocabulary,
+  which no header declares.
+
+  The macro name is derived (`CnaGraphicsProfile.HiDef` is `CNA_GRAPHICS_PROFILE_HI_DEF`), with three
+  prefix and twelve member exceptions -- every one found by the compiler refusing the derived spelling
+  rather than by reading the header hopefully. One rule differs from the struct-field spelling: a
+  capital after a digit takes no separator, because C writes `TEXTURE1D` and `VECTOR2`.
+
+- B3 (was). Emit every consumed enum-like constant from the C probe and compare it against the managed
   enum member, so a renumbered identity fails a gate instead of a game.
 - B4. Execute the Windows PE and macOS Mach-O `portable-abi-header` jobs. They are wired and have
   never run.
