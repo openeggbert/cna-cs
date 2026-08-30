@@ -299,3 +299,108 @@ internal sealed class ModelContentReader : ContentTypeReader<Model>
         return bones[raw - 1];
     }
 }
+
+/// <summary>
+/// A model mesh part's material: an effect cloned from an external one, plus the parameter values
+/// the pipeline recorded for it.
+///
+/// Eleven assets in the cna-samples corpus name this reader. The earlier note that "no asset in the
+/// surveyed corpus reaches it" was true of the corpus surveyed at the time and is not true of this
+/// one -- which is the argument for surveying more than one.
+///
+/// <b>A parameter the effect does not have is skipped, not an error.</b> That is XNA's own rule and
+/// it is load-bearing: the pipeline records what the material declared, and a custom effect is free
+/// to have dropped a parameter since. Failing here would make a model unloadable over a value
+/// nothing reads.
+/// </summary>
+internal sealed class EffectMaterialContentReader : ContentTypeReader<EffectMaterial>
+{
+    protected internal override EffectMaterial Read(ContentReader input, EffectMaterial existingInstance)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+
+        var material = new EffectMaterial(input.ReadExternalReference<Effect>());
+
+        foreach (KeyValuePair<string, object> setting in input.ReadObject<Dictionary<string, object>>())
+        {
+            TryToSetParameter(material, setting.Key, setting.Value);
+        }
+
+        return material;
+    }
+
+    private static void TryToSetParameter(Effect effect, string parameterName, object value)
+    {
+        if (effect.Parameters[parameterName] is not { } parameter)
+        {
+            return;
+        }
+
+        // XNA sets the value directly and catches InvalidCastException to retry through a widened
+        // Vector4 when the parameter turned out to be a narrower vector or a scalar. Reproducing
+        // that control flow here would mean catching whatever exception this stack raises for a
+        // shape mismatch, which is a CnaException from native rather than the InvalidCastException
+        // XNA's own backend raised -- and catching that broadly would swallow real failures.
+        //
+        // The widening path is used up front instead, because for these types it is not a fallback
+        // at all: when the shapes already agree it reduces to the identity. A Vector3 into a
+        // three-column parameter widens to Vector4(v, 1) and narrows back to exactly v. So the two
+        // routes agree wherever XNA would not have thrown, and this one does not depend on which
+        // exception a mismatch produces.
+        if (IsAVectorOrASingle(parameter) && AsVector4(value) is { } widened)
+        {
+            switch (parameter.ColumnCount)
+            {
+                case 1: parameter.SetValue(widened.X); return;
+                case 2: parameter.SetValue(new Vector2(widened.X, widened.Y)); return;
+                case 3: parameter.SetValue(new Vector3(widened.X, widened.Y, widened.Z)); return;
+                default: parameter.SetValue(widened); return;
+            }
+        }
+
+        switch (value)
+        {
+            case int[] values: parameter.SetValue(values); break;
+            case bool[] values: parameter.SetValue(values); break;
+            case float[] values: parameter.SetValue(values); break;
+            case Vector2[] values: parameter.SetValue(values); break;
+            case Vector3[] values: parameter.SetValue(values); break;
+            case Vector4[] values: parameter.SetValue(values); break;
+            case Matrix[] values: parameter.SetValue(values); break;
+            case int scalar: parameter.SetValue(scalar); break;
+            case bool scalar: parameter.SetValue(scalar); break;
+            case float scalar: parameter.SetValue(scalar); break;
+            case Vector2 vector: parameter.SetValue(vector); break;
+            case Vector3 vector: parameter.SetValue(vector); break;
+            case Vector4 vector: parameter.SetValue(vector); break;
+            case Matrix matrix: parameter.SetValue(matrix); break;
+            case string text: parameter.SetValue(text); break;
+            case Texture texture: parameter.SetValue(texture); break;
+
+            // XNA's chain ends without an else, so an unrecognised type is left alone rather than
+            // reported. A material carrying one is not a broken material.
+            default: break;
+        }
+    }
+
+    /// <summary>
+    /// XNA's <c>IsAVectorOrASingle</c>: a non-array vector of two to four columns, or a non-array
+    /// scalar. <c>ElementCount</c> is internal to XNA's own parameter; it is
+    /// <see cref="EffectParameterCollection.Count"/> of the elements here.
+    /// </summary>
+    private static bool IsAVectorOrASingle(EffectParameter parameter) =>
+        parameter.Elements.Count == 0 &&
+        parameter.RowCount == 1 &&
+        ((parameter.ParameterClass == EffectParameterClass.Vector &&
+          parameter.ColumnCount is >= 2 and <= 4) ||
+         (parameter.ParameterClass == EffectParameterClass.Scalar &&
+          parameter.ColumnCount == 1));
+
+    private static Vector4? AsVector4(object value) => value switch
+    {
+        Vector2 vector => new Vector4(vector, 0f, 1f),
+        Vector3 vector => new Vector4(vector, 1f),
+        Vector4 vector => vector,
+        _ => null,
+    };
+}

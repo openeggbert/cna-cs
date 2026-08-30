@@ -191,6 +191,51 @@ public class CompatWindowAndAudioContentTests
         });
     }
 
+    /// <summary>
+    /// A material reaches its reader at all.
+    ///
+    /// Eleven assets in the cna-samples corpus name <c>EffectMaterialReader</c>, and until now the
+    /// reader table had none -- an asset naming it failed at resolution, before a single byte of the
+    /// material was read. Proving the reader is *selected* needs no real compiled effect: the asset
+    /// here names an external reference that does not exist, so the failure has to be about that
+    /// missing effect. A complaint about the reader table instead would mean resolution never got
+    /// as far as running the reader.
+    ///
+    /// What this deliberately does not prove is that a real material's parameters land correctly.
+    /// That needs a pipeline-built effect, which this repository cannot produce; the parameter rule
+    /// is transcribed from the decompiled reader and reasoned about in its own comment instead.
+    /// </summary>
+    [global::CNA.Integration.Tests.NativeFact]
+    public void EffectMaterial_ReachesItsReader()
+    {
+        RunInAFrame(game =>
+        {
+            ContentLoadException thrown = Assert.Throws<ContentLoadException>(() => WithLoaded<object>(
+                game,
+                ["Microsoft.Xna.Framework.Content.EffectMaterialReader" + Xna],
+                writer =>
+                {
+                    writer.Write7BitEncodedInt(1);
+                    writer.Write("effects/no-such-effect");   // the external reference
+                },
+                _ => { }));
+
+            Assert.DoesNotContain("Could not find ContentTypeReader", thrown.ToString(), StringComparison.Ordinal);
+
+            // The control, and it earned its place: the phrase first asserted on appears nowhere in
+            // this path, so the assertion above passed for any exception at all and would have kept
+            // passing with the reader removed again. This pins down what an unresolved reader
+            // actually says, so the assertion above is about resolution and not about luck.
+            ContentLoadException unresolved = Assert.Throws<ContentLoadException>(() => WithLoaded<object>(
+                game,
+                ["Microsoft.Xna.Framework.Content.NoSuchReader" + Xna],
+                writer => writer.Write7BitEncodedInt(1),
+                _ => { }));
+
+            Assert.Contains("Could not find ContentTypeReader", unresolved.ToString(), StringComparison.Ordinal);
+        });
+    }
+
     private const string Xna =
         ", Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553";
 

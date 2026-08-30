@@ -176,6 +176,7 @@ internal static class BuiltinReaders
             "Microsoft.Xna.Framework.Content.TextureReader" => new AbstractTextureContentReader(),
             "Microsoft.Xna.Framework.Content.EffectReader" => new EffectContentReader(),
             "Microsoft.Xna.Framework.Content.BasicEffectReader" => new BasicEffectContentReader(),
+            "Microsoft.Xna.Framework.Content.EffectMaterialReader" => new EffectMaterialContentReader(),
             _ => BuiltinGenericReaders.TryCreate(serializedName),
         };
         return reader is not null;

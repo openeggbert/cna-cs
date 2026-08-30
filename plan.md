@@ -137,10 +137,27 @@ any `Content` folder. Against the XNA 4.0 sample collection there are no missing
 left. What that does *not* say is that the bytes after each reader table are read correctly, which
 is the honest limit of a resolution survey. Remaining work:
 
-- A6a. Point the survey at more games and record the numbers. One corpus is one corpus.
-- A6b. `EffectMaterialReader` is the one built-in still unbuilt. It needs `EffectParameter.SetValue`
-  across every parameter shape plus XNA's vector-widening fallback, and no asset in the surveyed
-  corpus reaches it.
+- A6a. Done for a second corpus, and it paid for itself. `cna-samples` is 527 assets and **80
+  distinct readers** against the first corpus's much narrower spread: 0 missing built-ins, 0
+  malformed, 507 native-backed, 19 naming a game's own types. Doing this found A6b's premise to be
+  false. Still worth pointing at more games; one corpus is one corpus, and two is two.
+- A6b. **Done.** `EffectMaterialReader` is built and registered. The note here used to say "no asset
+  in the surveyed corpus reaches it" -- eleven assets in `cna-samples` name it, so the reader was
+  missing under assets that really exist. It is transcribed from the decompiled reader, including
+  the rule that a parameter the effect does not have is skipped rather than reported.
+
+  One deliberate deviation, in `ModelContentReaders.cs`: XNA sets each value directly and catches
+  `InvalidCastException` to retry through a widened `Vector4`. That control flow cannot be
+  reproduced faithfully, because a shape mismatch here raises a `CnaException` from native rather
+  than XNA's own `InvalidCastException`, and catching that broadly would swallow real failures. The
+  widening path is taken up front instead -- for these types it is not a fallback at all, since it
+  reduces to the identity when the shapes already agree, so the two routes agree wherever XNA would
+  not have thrown.
+
+  What is *not* proven is that a real material's parameters land correctly; that needs a
+  pipeline-built effect this repository cannot produce. The test proves the reader is selected and
+  runs, and it carries a control assertion, which earned its place immediately: the phrase first
+  asserted on appeared nowhere in the path, so the test had been passing for any exception at all.
 - A6c. The compressed assets are analysed but never fully read here. A loading survey mode, behind a
   graphics device, would close that gap.
 
