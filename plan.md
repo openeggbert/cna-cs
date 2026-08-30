@@ -386,8 +386,28 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
   self-test originally ran *after* the report was built, so its findings could not affect
   `ABI_STATUS`.
 
-  What remains for B2: the 24 `nint` callbacks are checked structurally at the call site but the
-  managed delegates that are actually passed are not yet compared against the C callback typedefs.
+  **The callbacks are now covered too.** The prototype probe checks the routes; for a callback the
+  managed side declares `nint` it can only prove that a pointer is passed, and what actually crosses
+  at run time is a managed function nobody had compared with the C typedef.
+  `InteropCallbacks` declares a C function with the signature derived from the *managed* member --
+  an `UnmanagedCallersOnly` method, or a function-pointer field of an interop struct -- and assigns
+  it to CNA's typedef. `CALLBACKS_CHECKED=5`, `CALLBACKS_UNRESOLVED=0`.
+
+  **Two more real defects, both found this way:**
+  `NativeEventBridge.OnNativeEventWithSender` took the sender as `nint` where CNA passes a
+  `CNA_Handle` (`uint64_t`). On a 64-bit target the two coincide, which is why nothing showed; on a
+  32-bit one the sender is four bytes short and every argument after it is read from the wrong
+  place. And `CnaContentTypeReaderCallbacks.Destroy` returned a result code where
+  `CNA_ContentTypeReaderDestroyCallback` returns `void`.
+
+  Both were confirmed to be *caught* by reintroducing them: the sender defect produces
+  `initialization of CNA_GraphicsResourceDisposingCallback ... from incompatible pointer type
+  void (*)(void*, void*)`, and the destroy defect no longer even compiles in C#, because the field
+  and the method have to agree.
+
+  The pairing of managed callback to C typedef is listed rather than derived: a function pointer is
+  handed to a route at a call site, not declared as implementing anything, so metadata cannot supply
+  it. The list is five entries and each says the call site was read.
 - B2 (was). Extend the prototype probe from 4 routes to every callback-taking route and every route whose
   managed declaration uses `in`/`out`/`ref` on a versioned descriptor -- the shapes `sweep.py`'s
   arity check cannot see.

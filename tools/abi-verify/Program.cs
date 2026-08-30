@@ -60,6 +60,9 @@ File.WriteAllText(layoutSource, InteropLayout.Generate());
 string prototypeUnit = InteropPrototypes.Generate(
     out List<string> prototypeUnmappable, out List<string> prototypeFromHeader);
 File.WriteAllText(prototypeSource, prototypeUnit);
+string callbackSource = Path.Combine(temporaryDirectoryForSource, "native_callback_probe.c");
+string callbackUnit = InteropCallbacks.Generate(out List<string> callbackUnresolved);
+File.WriteAllText(callbackSource, callbackUnit);
 
 try
 {
@@ -76,6 +79,13 @@ try
         ? ["/nologo", "/std:c11", "/W4", "/WX", "/c", $"/I{includeDirectory}", prototypeSource, $"/Fo:{objectPath}"]
         : ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", "-I", includeDirectory, prototypeSource, "-o", objectPath];
     Run(compiler, prototypeArguments, temporaryDirectory);
+
+    // The callbacks this binding provides, against the typedefs CNA declares for them.
+    string callbackObject = Path.Combine(temporaryDirectory, OperatingSystem.IsWindows() ? "native-callback.obj" : "native-callback.o");
+    List<string> callbackArguments = isMsvc
+        ? ["/nologo", "/std:c11", "/W4", "/WX", "/c", $"/I{includeDirectory}", callbackSource, $"/Fo:{callbackObject}"]
+        : ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", "-I", includeDirectory, callbackSource, "-o", callbackObject];
+    Run(compiler, callbackArguments, temporaryDirectory);
 
     string nativeOutput = Run(executable, [], temporaryDirectory);
     Dictionary<string, long> native = ParseValues(nativeOutput);
@@ -231,6 +241,19 @@ try
     Console.WriteLine($"PROTO_VERIFIED={importCount - prototypeUnmappable.Count}");
     Console.WriteLine($"PROTO_PARAM_OVERRIDES={InteropPrototypes.ParameterOverrides.Count}");
     Console.WriteLine($"PROTO_UNMAPPABLE={prototypeUnmappable.Count}");
+    Console.WriteLine($"CALLBACKS_CHECKED={InteropCallbacks.Pairings.Length - callbackUnresolved.Count}");
+    Console.WriteLine($"CALLBACKS_UNRESOLVED={callbackUnresolved.Count}");
+    if (callbackUnresolved.Count > 0)
+    {
+        Console.WriteLine($"CALLBACKS_UNRESOLVED_NAMES={string.Join(",", callbackUnresolved)}");
+        mismatches.Add(new
+        {
+            key = "callback-pairing",
+            native = (long?)null,
+            managed = (long?)null,
+            issue = $"could not find managed callback(s): {string.Join(", ", callbackUnresolved)}",
+        });
+    }
     if (prototypeUnmappable.Count > 0)
     {
         Console.WriteLine($"PROTO_UNMAPPABLE_NAMES={string.Join(",", prototypeUnmappable)}");

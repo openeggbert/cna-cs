@@ -120,7 +120,7 @@ internal sealed class NativeEventBridge : IDisposable
         try
         {
             bridge._registration = subscribe(
-                (nint)(delegate* unmanaged[Cdecl]<nint, nint, void>)&OnNativeEventWithSender,
+                (nint)(delegate* unmanaged[Cdecl]<ulong, nint, void>)&OnNativeEventWithSender,
                 GCHandle.ToIntPtr(bridge._selfHandle));
         }
         catch
@@ -132,8 +132,17 @@ internal sealed class NativeEventBridge : IDisposable
         return bridge;
     }
 
+    /// <summary>
+    /// The sender is a <c>CNA_Handle</c>, which is a <c>uint64_t</c>, not a pointer.
+    ///
+    /// It was declared <c>nint</c> until B2's generated prototype probe compared the managed
+    /// callback with the C typedef. On a 64-bit target the two coincide and nothing is observably
+    /// wrong; on a 32-bit one <c>nint</c> is four bytes against an eight-byte argument, and every
+    /// parameter after it would be read from the wrong place. The sender is unused here, which is
+    /// why nothing had surfaced it.
+    /// </summary>
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-    private static void OnNativeEventWithSender(nint sender, nint context) => Dispatch(context);
+    private static void OnNativeEventWithSender(ulong sender, nint context) => Dispatch(context);
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static void OnNativeEvent(nint context) => Dispatch(context);

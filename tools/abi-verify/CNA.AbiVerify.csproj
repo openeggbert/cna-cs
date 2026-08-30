@@ -8,7 +8,10 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/CNA.Interop/CNA.Interop.csproj" />
-    <None Include="native_prototype_probe.c" CopyToOutputDirectory="PreserveNewest" />
+
+    <!-- The callbacks this binding hands to CNA live in CNA.Framework, and their signatures are
+         part of the ABI evidence. Referenced for reflection only; nothing here calls into it. -->
+    <ProjectReference Include="../../src/CNA.Framework/CNA.Framework.csproj" />
   </ItemGroup>
 
 </Project>

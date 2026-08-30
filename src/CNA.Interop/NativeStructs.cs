@@ -520,7 +520,9 @@ internal unsafe struct CnaContentTypeReaderCallbacks
 
     public delegate* unmanaged[Cdecl]<nint, nint*, CnaResult> Create;
     public delegate* unmanaged[Cdecl]<nint, CnaHandle, nint, nint*, CnaResult> Read;
-    public delegate* unmanaged[Cdecl]<nint, CnaResult> Destroy;
+    /// <summary>C's <c>CNA_ContentTypeReaderDestroyCallback</c> returns <c>void</c>. This was
+    /// declared as returning a result code until B2 compared the two.</summary>
+    public delegate* unmanaged[Cdecl]<nint, void> Destroy;
     public nint Context;
 
     public static CnaContentTypeReaderCallbacks Versioned() => new()

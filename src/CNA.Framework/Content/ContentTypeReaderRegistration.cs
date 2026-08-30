@@ -268,9 +268,11 @@ public sealed class ContentTypeReaderRegistration : IDisposable
     /// registration is withdrawn and no load can be in flight.
     /// </summary>
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static CnaResult OnDestroy(nint readerContext)
+    private static void OnDestroy(nint readerContext)
     {
+        // C declares this callback as returning void. It returned a result code here until B2's
+        // prototype work compared the managed delegate with the C typedef: a value returned into a
+        // caller that expects none is discarded on this ABI and is still the wrong signature.
         _ = readerContext;
-        return CnaResult.Success;
     }
 }
