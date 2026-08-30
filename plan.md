@@ -125,7 +125,7 @@ cursor surface. The routes below exist upstream and are still unbound.
 | Task | Route | Completion criterion |
 | --- | --- | --- |
 | A1. `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | Measure it against the current per-glyph quad path first. Adopt only if it is not observably different in glyph placement on the authored `FontCalibri14` fixture; record the measurement either way. |
-| A2. Batched sprite submission | `cna_sprite_batch_submit_many` | A `SpriteBatch` flush issues one native call per batch rather than one per sprite, with the same draw order and the same `End` failure behaviour. |
+| A2. **Already done, under a different route.** Batched sprite submission | `cna_sprite_batch_submit_scaled_many` | The completion criterion -- one native call per batch, not one per sprite -- has been met since the buffered-flush change. The route named here originally was the wrong one for this binding: `submit_many` is destination-rectangle-based, and CNA's position+scale route is the one this facade needs, because `Draw(texture, Rectangle, ...)` is converted managed-side to `position = rect.XY`, `scale = rect.Size / source.Size`. What was genuinely missing is any check that the conversion lands where the rectangle asked; see the pixel tests below. |
 | A3. **Done.** `PresentationParameters` bounds and clone | `cna_presentation_parameters_get_bounds`, `cna_presentation_parameters_clone` | Both go through native. Native agrees with the managed reconstruction that was there (the back buffer at the origin), which is the expected outcome and not the point -- the point is that native is the authority, so a future disagreement shows up here instead of being silently overridden. The clone is asserted independent, since a route returning the same value would pass every equality check and fail the moment a game edited the copy. |
 | A4. **Done.** Preferred presentation mode | `cna_graphics_device_manager_get/set_preferred_presentation_mode_ext` | `CnaGraphicsDeviceManagerExtensions.Get/SetCnaPreferredPresentationMode`, outside the strict namespace. All five identities round-trip, not one: the enum crosses the ABI as a numeric cast, and an off-by-one there passes a single-value test. Worth having because XNA stretches the back buffer and offers no say, so a fixed-aspect XNA game letterboxes by hand -- code a port can now delete. |
 | A5. **Done.** Explicit content-lost notification | `cna_graphics_device_notify_content_lost_resources_ext` | `GraphicsDevice.NotifyContentLostResourcesForTesting`, named so it cannot be mistaken for a game route. It closes a real hole: the existing test could only show the subscription was *taken*, because these renderers never lose a device, so the handler side had never run once -- and between the managed subscription and a game's callback sit an event bridge, a sender projection and a native registration. The event now fires, delivers to the surviving handler only, and carries the render target as sender. |
@@ -160,6 +160,27 @@ is the honest limit of a resolution survey. Remaining work:
   asserted on appeared nowhere in the path, so the test had been passing for any exception at all.
 - A6c. The compressed assets are analysed but never fully read here. A loading survey mode, behind a
   graphics device, would close that gap.
+
+### A2b. Sprite drawing is now checked by reading the pixels back
+
+Every drawing test in the suite asserted that a draw did not throw. That catches a broken ABI
+transition and nothing else: a sprite drawn in the wrong place, at the wrong size, or not at all
+returns success just as happily -- and "the game renders wrongly" is the most common way a port fails
+with every gate green.
+
+`tests/CNA.Integration.Tests/SpritePixelTests.cs` draws into a `RenderTarget2D` and reads it back.
+Two things are now measured rather than assumed:
+
+- a destination rectangle covers exactly that rectangle, pixel for pixel
+- the origin is in source-texture pixels and **scales with the sprite** -- an origin of one pixel on
+  a sprite scaled eight times shifts it eight pixels. Measured: destination `(16,16,8,8)` with origin
+  `(1,1)` lights exactly `8,8..15,15`. A binding that passed the origin through unscaled would be
+  wrong by a factor of the scale, and invisible at scale 1, which is where a casual test looks.
+
+Both tests report and return early if the renderer reads back an empty target, rather than asserting
+against nothing. Neither took that path here.
+
+The obvious extension is A1: glyph placement is exactly the kind of thing this can now measure.
 
 ### A7. Dynamic skip does not work in the integration suite
 
