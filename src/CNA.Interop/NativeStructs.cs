@@ -648,3 +648,58 @@ internal struct CnaSpriteTextCommand
         StructVersion = 1,
     };
 }
+
+/// <summary>Reader ceilings for a <c>.cnb</c> document -- <c>cnb.h</c>'s <c>CNA_CnbReadLimits</c>.
+/// Caller-initialised and versioned, so it is filled by <c>cna_cnb_read_limits_init</c> rather than
+/// constructed here: the defaults are CNA's to choose, and a zeroed structure is not them.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbReadLimits
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public ulong MaxFileSize;
+    public ulong MaxChunkSize;
+    public ulong MaxTotalUncompressedSize;
+    public uint MaxChunkCount;
+    public uint MaxStringBytes;
+    public uint MaxArrayElementCount;
+    public uint MaxChunkAlignment;
+
+    /// <summary>
+    /// A zeroed value carrying the stamp this ABI requires.
+    ///
+    /// <c>cna_cnb_read_limits_init</c> fills the defaults but validates the stamp first, so the
+    /// structure is caller-initialised and must be passed by <c>ref</c>. Declaring it <c>out</c>
+    /// skips the stamp and the route answers "the read-limits structure is not a known size and
+    /// version" -- which is a contract the C prototype cannot express, since a caller-initialised
+    /// pointer and an output pointer are both <c>T*</c>.
+    /// </summary>
+    public static unsafe CnaCnbReadLimits Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbReadLimits),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>One entry of a document's table of contents -- <c>CNA_CnbChunkEntry</c>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbChunkEntry
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public ulong Offset;
+    public ulong StoredSize;
+    public ulong UncompressedSize;
+    public uint Type;
+    public uint Flags;
+    public uint Checksum;
+    public uint Compression;
+    public uint Alignment;
+    public uint Reserved;
+
+    public static unsafe CnaCnbChunkEntry Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbChunkEntry),
+        StructVersion = 1,
+    };
+}

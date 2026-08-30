@@ -54,6 +54,7 @@ static class InteropPrototypes
     /// </summary>
     public static readonly Dictionary<string, string> ParameterOverrides = new(StringComparer.Ordinal)
     {
+        ["cna_cnb_writer_add_chunk#2"] = "const uint8_t*",   // const, which C# cannot express on a pointer
         ["cna_album_copy_name#1"] = "char*",   // text buffer: C char, which C# has no type for
         ["cna_artist_copy_name#1"] = "char*",   // text buffer: C char, which C# has no type for
         ["cna_audio_category_copy_name#1"] = "char*",   // text buffer: C char, which C# has no type for

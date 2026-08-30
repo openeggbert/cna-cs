@@ -103,12 +103,11 @@ public class CnaAbiTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        // 861: five from A3/A4/A5 (presentation-parameter clone and bounds, the
-        // preferred-presentation-mode pair, the content-lost notification), then two for A1's
-        // measurement (cna_sprite_font_create and cna_sprite_batch_draw_string).
+        // 875: five from A3/A4/A5, two for A1, and fourteen for D2's first CNB slice -- the
+        // document read path plus the minimal writer a test uses to author its own fixture.
         // The literal is a tripwire, not a fact about CNA -- it exists so that adding an import is
         // a deliberate act rather than something that happens on the way to something else.
-        Assert.Equal(861, declared.Length);
+        Assert.Equal(875, declared.Length);
         Assert.Equal(declared, CnaNativeAbiPolicy.RequiredSymbols);
     }
 

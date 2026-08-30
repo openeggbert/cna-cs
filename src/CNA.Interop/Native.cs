@@ -2261,6 +2261,57 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_font_destroy(CnaHandle spriteFont);
 
+    // CNB: CNA's own binary content container. The read path first -- a document is parsed, asked
+    // what it is, and destroyed. The writer routes below exist so a test can author a fixture
+    // through CNA's own encoder instead of vendoring somebody's content.
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_read_limits_init(ref CnaCnbReadLimits limits);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_parse_file(
+        CnaStringView path, in CnaCnbReadLimits limits, out CnaHandle outDocument);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_destroy(CnaHandle document);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_get_container_major(CnaHandle document, out ushort outMajor);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_get_container_minor(CnaHandle document, out ushort outMinor);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_get_asset_type_id(CnaHandle document, out uint outAssetTypeId);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_get_asset_schema_version(
+        CnaHandle document, out uint outSchemaVersion);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_get_chunk_count(CnaHandle document, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_get_chunk(
+        CnaHandle document, ulong index, ref CnaCnbChunkEntry outEntry);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_document_copy_chunk_data(
+        CnaHandle document, ulong index, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_writer_create(
+        uint assetTypeId, uint assetSchemaVersion, out CnaHandle outWriter);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_writer_destroy(CnaHandle writer);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_writer_add_chunk(
+        CnaHandle writer, uint type, byte* data, ulong byteCount, uint flags, uint alignment);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_writer_write_to_file(CnaHandle writer, CnaStringView path);
+
     /// <summary>Builds a native SpriteFont from a glyph table -- the inverse of
     /// <c>cna_sprite_font_copy_glyphs</c>, and the only way to get a font handle for a font this
     /// binding built itself rather than loaded.</summary>

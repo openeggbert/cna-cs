@@ -531,7 +531,35 @@ strict `Microsoft.Xna.Framework` contract, the leak gate must stay at zero, and 
 records authority, source-portability value, implementation status, and namespace. Order of work:
 
 - D1. Done; see D0 above.
-- D2. `cnb.h` load path: `ContentManager` extension that loads `.cnb` alongside `.xnb`, starting
+- D2. **First vertical slice done.** `CNA.Content.Cnb.CnbDocument` opens a `.cnb`, reports its
+  container version, asset type identity and schema version, enumerates its table of contents and
+  copies a chunk's decompressed bytes. Outside `Microsoft.Xna.Framework` deliberately: XNA has one
+  content container and this is a second, so routing it through `ContentManager.Load<T>` would change
+  a contract checked member for member against XNA's metadata.
+
+  `cnb.h` is 272 routes. Fourteen are bound. Projecting the rest -- encoders, model builders, sprite
+  tooling -- would be a worse API than none; what a game needs first is to open a container, find out
+  what it holds and reach its bytes.
+
+  **Ownership**: the document handle is owned and destroyed by the facade. A `CnbChunk` is a copied
+  snapshot rather than a view into the document, and chunk data is copied into a caller array, so
+  nothing can outlive the memory it describes -- a span over native bytes would keep looking valid
+  after `Dispose`.
+
+  **Fixtures are authored, not vendored.** `CnbTestWriter` writes a container through CNA's own
+  encoder at test time. A byte array assembled here from a reading of the format would test this
+  repository's understanding against itself and would keep passing if reader and fixture were wrong
+  the same way. Three tests: the written identity round-trips, a chunk's payload round-trips byte for
+  byte (a reader returning correctly sized zeros would pass every size assertion), and a file that is
+  not a container is refused.
+
+  One binding defect found by running it: `cna_cnb_read_limits_init` takes a **caller-initialised**
+  versioned descriptor, and the binding declared it `out`, so the stamp was never written and the
+  route answered "the read-limits structure is not a known size and version". Worth noting for B2 --
+  a caller-initialised pointer and an output pointer are both `T*`, so no C prototype check can tell
+  them apart. Runtime is the only authority for that one.
+
+- D2 (was). `cnb.h` load path: `ContentManager` extension that loads `.cnb` alongside `.xnb`, starting
   with textures and models, using the same ownership model as the XNB path.
 - D3. The post-process/render-pipeline objects, as an explicitly experimental namespace.
 - D4. Everything else stays inventory-only until D1-D3 have shipped and been measured.
