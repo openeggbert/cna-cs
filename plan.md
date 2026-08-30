@@ -1,7 +1,8 @@
 # CNA.NET engineering roadmap
 
-Last measured: 2026-08-30, against CNA `next` `e178282fcd70f4cd1e9be922fde35a9a2b779cf3`
-(C ABI 0.20.0) and the `sharp-runtime` revision that generation builds on. Session history and
+Last measured: 2026-08-30, against CNA `next` `17b5a90a0878f3f44c23bc8e3197d5d30373dc72`
+(C ABI 0.20.0) and `sharp-runtimenext` `eebebd862121953538e3b84d43384d70a8a1728d`. Two renderers
+this time: OPENGLES3 and HEADLESS. Session history and
 superseded decisions live in [`NEXT.md`](NEXT.md). This file is the current, normative plan.
 
 ## Current verified state
@@ -16,22 +17,22 @@ packaging, and release engineering.
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 560 `CNA.Framework` + 208 `CNA.XnaCompat`, all passing |
-| Native integration | 125/125 passing in Debug and Release on Linux x64 against the ABI 0.20.0 CNA OPENGLES3 library |
-| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 861 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Managed tests | 610 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
+| Native integration | 146/146 passing on Linux x64 against **both** the ABI 0.20.0 CNA OPENGLES3 library and a HEADLESS build of the same revision. The second renderer is what turns nine absent capabilities from untested branches into exercised ones |
+| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 881 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
-| ABI layout evidence | Portable C-authority probe passes on Linux ELF x64: 86 native and 86 managed layout/type measurements with 0 mismatches, plus prototype compilation for reviewed callbacks/functions. That is a floor, not coverage: it measures 13 of the 80 interop structs. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
+| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **777 native and 777 managed layout/type measurements with 0 mismatches**, 881 of 881 prototypes compiled, 5 callbacks checked, 286 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
 | Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
-| Compiled-content survey | 517 assets of the XNA 4.0 sample collection: 498 load through CNA's own content loader, 18 name a type only the game's own assembly supplies, **0 need a built-in reader this binding does not have**, 0 unreadable |
+| Compiled-content survey | XNA 4.0 sample collection, `--load`: **1,988 attempted, 1,890 loaded, 0 needing a reader this binding lacks**, 38 failing, 26 refused by the native loader, 34 needing a game's own assembly. 302 models materialise with 767 of 767 mesh parts carrying an effect, 480 carrying a texture and 29 carrying a `Tag`. `cna-samples`: 555 attempted, 540 loaded, 1 failing |
 | Template | The checked-in repository project, the generated development project and the isolated package consumer all build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes against 0.20.0 |
-| Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; configured FNA runtime reports unavailable with exit 2 |
+| Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; FNA runs 600 frames over Vulkan once `FNA.Core` is built and `FNA_FRAMEWORK_PATH` points at it (see E3) |
 | Packages | None published. Shipping defaults remain `IsPackable=false`; the isolated acceptance path creates local `CNA.Interop`, `CNA.Framework`, and `CNA.XnaCompat` preview packages, including an experimental `linux-x64` native asset, and passes inspection/install/build/60/600-frame/error-diagnostic checks |
 | Tested platform | Linux x64 only in this run |
 
@@ -339,11 +340,46 @@ rather than a sample, because a forwarding call breaks on one enum value and not
 it prints which capabilities the live renderer lacks. On `OPENGLES3` that count is zero, which is why
 none of this had ever fired.
 
-**The honest cost:** a gated test on a renderer lacking the capability is now a silent pass rather
-than a red failure. That is this runner's price, and it is why the reason is printed. The better end
-state is the one the mouse-cursor test reached -- assert what must happen when the capability is
-*absent*, so both branches carry an assertion. That is per-test work, twenty-two of them, and it is
-the remaining half of this item.
+**The honest cost was a silent pass**, and the remaining half of this item was to replace it with an
+assertion about what must happen when the capability is *absent*. **Done as far as this host allows,
+and the enabling step was a second renderer rather than more test code.**
+
+A HEADLESS build of the same cnanext revision reports nine of nineteen capabilities absent, has no
+engine layer, refuses render-target readback and refuses cube-face storage. Run against it before
+any change: **139 passed, 6 failed** -- five pixel-evidence tests and one cube test failing with
+`NotSupported` as though the binding were broken, which is precisely the confusion this item exists
+to remove. After: **146/146 on HEADLESS and 146/146 on OPENGLES3**, with four branches now genuinely
+executing and asserting rather than returning:
+
+| absent | asserted refusal |
+| --- | --- |
+| `Texture3D` | constructing a `Texture3D` answers `NotSupported` |
+| cube-face storage | `TextureCube.SetData` answers `NotSupported` |
+| render-target readback | `RenderTarget2D.GetData` answers `NotSupported` |
+| the engine layer | constructing a `RenderTargetPool` answers `NotSupported`, and the version is 0 |
+
+The last is the branch D3 was designed around and could not reach: every engine-layer symbol
+resolves in every build, so a build *without* the layer is the only thing that can prove the
+availability query is load-bearing.
+
+**Two of those four have no capability identity to ask for**, which is now a blocker row.
+`CNA_GRAPHICS_CAPABILITY_*` names nineteen things and neither readback nor cube-face storage is one
+-- HEADLESS reports `ThreeD` and refuses both. They are measured once per renderer by a probe whose
+whole purpose is that one fact, and the answer selects which assertion the test makes. No test
+catches.
+
+**The thirteen `ThreeD` and four `CustomEffects` sites remain unasserted, deliberately.** No renderer
+available on this host lacks either, and the refusal a 2D-only renderer produces is *not* knowable
+from the headers: `IGraphicsRenderer::HandleUnsupported3DCall` throws a bare `std::runtime_error`,
+which the C API's exception barrier maps to `CNA_RESULT_INTERNAL`, while a renderer whose own
+`Ensure3DSupported` throws `System::NotSupportedException` maps to `NOT_SUPPORTED`. Writing the more
+plausible of those two guesses is what I would have done before reading the barrier, and it would
+have been wrong. The reason is at each call site, and the upstream classification is a blocker row.
+
+Remaining `HasCapability(...) { return; }` sites: **18** (14 `ThreeD`, 4 `CustomEffects`), all
+blocked on a renderer this host cannot supply, and **every one now states that at the call site**.
+A silent pass with a reason beside it is a recorded gap; a silent pass without one is indistinguishable
+from an oversight, and there were seventeen of those.
 
 The precondition sweep this entry also asked for is done and found nothing left. Every assertion
 about device state in the suite now establishes that state first: the render-target test unbinds
@@ -353,7 +389,7 @@ counter assertions are on freshly constructed games. `GetVertexBuffers` -- the o
 
 ### B. Deepen the ABI evidence
 
-The C-authority probe measured 13 of the 80 interop structs and compiled 4 of 861 prototypes. That
+The C-authority probe measured 13 of the 80 interop structs and compiled 4 of 881 prototypes. That
 was defensible against a one-minor step; against a twelve-minor one it is a floor, and it is now the
 weakest link in an admission that otherwise rests on the upstream baseline diff.
 
@@ -363,7 +399,7 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
   managed struct with no native counterpart is a **compile error in the generated probe**, not a
   struct nobody measured.
 
-  **14 structs measured before, 82 now; 753 values compared on each side, 0 mismatches.**
+  **14 structs measured before, 82 now; 777 values compared on each side, 0 mismatches.**
 
   Deriving the names is what makes it cover everything: `CnaFoo` is `CNA_Foo` and `StructSize` is
   `struct_size`. A list would need extending by hand for each new struct, which is exactly how the
@@ -385,7 +421,7 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
   disagreement between them raises rather than letting the second dictionary write win -- which is
   the case actually worth catching.
 - B2. **Done.** The prototype probe is generated from `CNA.Interop.Native` by reflection, so
-  **PROTO_IMPORTS = PROTO_VERIFIED = 861** and `PROTO_UNMAPPABLE = 0`. Each import becomes a
+  **PROTO_IMPORTS = PROTO_VERIFIED = 881** and `PROTO_UNMAPPABLE = 0`. Each import becomes a
   file-scope function pointer declared with the prototype derived from the *managed* declaration and
   initialised with the real C function; C's compatibility rules then make a wrong return type, arity,
   parameter type, by-ref direction or pointer depth a diagnostic, and `-Werror` makes a diagnostic a
@@ -397,11 +433,14 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
   parameter, and the three `draw_*_primitives` routes passed `int` for a `CNA_PrimitiveType`
   (`uint32_t`). The index one is the serious one: only x86-64's zero-extending 32-bit moves made it
   work. A fifth followed from it -- `CnaUserPrimitives.PrimitiveType` was `int` against a `uint32_t`
-  field, which B1's offset probe cannot see because the widths agree. **Struct field signedness is
-  still unmeasured**; extending the layout probe to check field *types* rather than only offsets is
-  the natural follow-up.
+  field, which B1's offset probe cannot see because the widths agree. **That follow-up is done**, and
+  this sentence used to say it was not. The layout probe emits, for every field of every measured
+  struct, a pointer initialised from that field's address with the type derived from the *managed*
+  declaration -- `uint32_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;`
+  -- so C's own type rules reject a difference in signedness or width that the offsets agree about.
+  Two of the twelve negative controls are exactly those two mutations, and both are rejected.
 
-  109 parameters are listed in an explicit override manifest, in four categories, none of which is an
+  110 parameters are listed in an explicit override manifest, in four categories, none of which is an
   ABI difference: `const T*` (C# cannot qualify a pointer, and `const` is not part of a calling
   convention), `char*` (C's `char` is a third type distinct from both signed and unsigned char, so no
   C# pointer is exact), `void*` against `byte*`, and 24 callbacks the managed side declares `nint`,
@@ -410,7 +449,7 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
   the one the diagnostic named. So the manifest cannot excuse a difference that was not measured, and
   any *other* change to the same parameter still fails.
 
-  Nine negative controls run as part of the gate, and all nine are rejected: wrong return type,
+  Twelve negative controls run as part of the gate, and all twelve are rejected: wrong return type,
   signedness change at the same width, wrong pointer depth, `in`->`out`, `out`->`in`, wrong versioned
   descriptor, wrong callback shape, swapped same-width parameters, absent import. A control whose
   target declaration is no longer generated reports itself stale rather than passing silently -- which
@@ -485,9 +524,25 @@ when the binding moved to 0.19.0/0.20.0. The ones that need managed work rather 
 - C1. Done: both caller-owned `GraphicsDevice` constructors now warn at the call site that creating
   a device while a game is running takes the GL context and kills that game's next present. The
   underlying fix is upstream's -- save and restore the current context around device creation.
-- C2. Re-measure the whole blocker table against a 0.20.0 build. The renderer removal has merged,
-  and several rows are backend statements rather than ABI statements, so a smaller renderer set can
-  change them in either direction.
+- C2. **Done, and it found a false row.** The table is measured against `17b5a90a0` (C ABI 0.20.0),
+  whose C API headers are byte-identical to those at `72262a33e` where the previous pass stopped, so
+  the three intervening revisions needed no remeasurement. `Verify-BlockerTable.sh`: 15 routes named,
+  15 present.
+
+  The row claiming the buffer families never got a `ContentLost` route was **wrong on both of its
+  clauses** -- `cna_vertex_buffer_subscribe_content_lost` and its index twin have existed since
+  2026-08-15, `CNA.Interop` consumes them, and `DynamicVertexBuffer.cs` says so in its own doc
+  comment. It survived because the mechanical check verifies that a *named* route exists and cannot
+  catch a row that is wrong about a route being there. The residual question -- whether the
+  subscription is delivered to -- is now measured and the row is closed.
+
+  Three rows were added, all found by running against a HEADLESS build rather than by reading:
+  render-target CPU readback and cube-face storage have **no capability identity** to ask for, and a
+  2D-only renderer's refusal arrives as `CNA_RESULT_INTERNAL` rather than `NOT_SUPPORTED` because
+  `HandleUnsupported3DCall` throws a bare `std::runtime_error`.
+
+  The non-`Color` texture row's counts rose from 20/5 to 26/7 for a good reason: models that used to
+  fail before reaching their textures now reach them.
 
 ### D. CNA API beyond XNA 4.0
 
@@ -510,7 +565,7 @@ exported by every CNA build and returns `NOT_SUPPORTED` when the layer is absent
 symbol is not evidence of a capability. Any further engine-layer binding must gate on the
 availability query rather than on the symbol existing.
 
-CNA 0.20.0 exports 4,051 routes; this binding consumes 861. The remainder is not all product
+CNA 0.20.0 exports 4,051 routes; this binding consumes 881. The remainder is not all product
 surface -- most of `vectors.h`, `matrix.h`, `math.h`, `quaternion.h`, `curve.h`, `geometry.h` and
 `color.h` is deliberately managed by design invariant 3, and much of the rest is engine-internal.
 What is genuinely a CNA-beyond-XNA product surface, by header and unbound count:
@@ -596,16 +651,35 @@ records authority, source-portability value, implementation status, and namespac
 
   | renderer | state |
   | --- | --- |
-  | OPENGLES3 | `VERIFIED_60_600` -- the template drew 600 frames |
-  | the other 38 | `NOT_BUILT` |
+  | OPENGLES3 | `VERIFIED_60_600` -- the template drew 600 frames; native integration 146/146 |
+  | HEADLESS | `VERIFIED_INTEGRATION` -- native integration 146/146, and it is what made nine absent capabilities testable |
+  | the other 37 | `NOT_BUILT` |
 
   `NOT_BUILT` rather than untested-by-omission: this cnanext configuration bakes in a single
   renderer (`CNA_GRAPHICS_RENDERER=OPENGLES3`), so each additional one needs its own out-of-tree
-  build, and the resulting library is ~180 MB apiece. Building 38 of them to run a 600-frame smoke
-  test is not a reasonable use of this machine's SSD, and most are unreachable here anyway --
+  build, and the resulting library is ~170-190 MB apiece. Building 37 of them to run a 600-frame
+  smoke test is not a reasonable use of this machine's SSD, and most are unreachable here anyway --
   fourteen DirectX variants, Metal, GDI and Glide are Windows/Apple/legacy, and Canvas, HTML_DOM and
-  PixiJS are web. A useful next step is two or three that *can* run on Linux x64 (OPENGL33,
-  HEADLESS, SOFTWARE), not all 39.
+  PixiJS are web.
+
+  **HEADLESS is built and is the most valuable second renderer, for a reason that had nothing to do
+  with frame counts.** It was made by turning `CNA_BUILD_C_API=ON` in cnanext's existing
+  `cmake-build-headless` directory, which already held 596 objects, so it cost an incremental build
+  rather than a fresh one. What it bought is a renderer that genuinely *lacks* things:
+
+  | absent on HEADLESS | present on OPENGLES3 |
+  | --- | --- |
+  | `Texture3D`, `MultiStreamVertexInput`, `AdditiveBlending`, `CompiledEffects`, `FloatRenderTargets`, `HalfFloatRenderTargets`, `HalfFloatTextureLinearFiltering`, `ComputeShaders`, `IndirectDraw` | all nineteen capabilities |
+  | the engine layer (`IsCnaEngineLayerAvailable()` false, version 0) | available, revision 2 |
+  | render-target CPU readback, cube-face storage (neither has a capability identity) | both |
+
+  That is what turned A7's remaining half from speculation into measurement -- see A7. A renderer
+  matrix measured only for frames would have recorded HEADLESS as uninteresting, because it draws
+  nothing; measured for *capability breadth* it is the most informative build on this host.
+
+  600-frame template runs on HEADLESS are not attempted: it rasterises nothing, so a frame count
+  there measures the game loop rather than the renderer, which the OPENGLES3 run already covers.
+  The next useful targets remain OPENGL33 and SOFTWARE.
 
 - E3. **Done.** The FNA configuration built cleanly and failed at startup with `Game framework
   dependency could not be loaded: FNA`, which is a confusing pair of outcomes and turned out not to
@@ -805,7 +879,7 @@ are not assumed compatible. The reviewed matrix accepts exactly 0.19.0. It previ
 0.6.0, 0.7.0 and 0.8.0; those entries were retired when this binding began importing four routes
 CNA added after 0.8.0, which no earlier library exports -- a consequence of the consumer moving,
 not a finding against those reviews. Every other version is rejected by default. The loader
-additionally requires all 861 imported symbols and executes guarded core signature/struct-shape
+additionally requires all 881 imported symbols and executes guarded core signature/struct-shape
 probes. Eleven dependency-free fixture libraries prove two positive and nine negative cases in
 fresh processes, including that a retired generation and both neighbours of the accepted one are
 refused.

@@ -28,6 +28,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
             {
+                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
+                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
+                // bare std::runtime_error, which the C API's exception barrier maps to
+                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
+                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -61,6 +66,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
             {
+                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
+                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
+                // bare std::runtime_error, which the C API's exception barrier maps to
+                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
+                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -96,6 +106,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
             {
+                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
+                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
+                // bare std::runtime_error, which the C API's exception barrier maps to
+                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
+                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -131,6 +146,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
             {
+                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
+                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
+                // bare std::runtime_error, which the C API's exception barrier maps to
+                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
+                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -176,6 +196,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
             {
+                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
+                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
+                // bare std::runtime_error, which the C API's exception barrier maps to
+                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
+                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -230,6 +255,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
             {
+                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
+                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
+                // bare std::runtime_error, which the C API's exception barrier maps to
+                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
+                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 

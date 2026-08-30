@@ -111,6 +111,8 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
             {
+                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
+                // and no renderer on this host lacks it, so the refusal has never been observed.
                 return;
             }
 
@@ -164,6 +166,8 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
             {
+                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
+                // and no renderer on this host lacks it, so the refusal has never been observed.
                 return;
             }
 
@@ -195,6 +199,8 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
             {
+                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
+                // and no renderer on this host lacks it, so the refusal has never been observed.
                 return;
             }
 
@@ -223,6 +229,8 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
             {
+                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
+                // and no renderer on this host lacks it, so the refusal has never been observed.
                 return;
             }
 
