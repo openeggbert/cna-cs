@@ -65,7 +65,8 @@ string callbackSource = Path.Combine(temporaryDirectoryForSource, "native_callba
 string callbackUnit = InteropCallbacks.Generate(out List<string> callbackUnresolved);
 File.WriteAllText(callbackSource, callbackUnit);
 string constantSource = Path.Combine(temporaryDirectoryForSource, "native_constant_probe.c");
-string constantUnit = InteropConstants.Generate(out int constantsChecked, out List<string> constantsSkipped);
+string constantUnit = InteropConstants.Generate(
+    out int constantsChecked, out List<string> constantsSkipped, out int constantsSkippedMembers);
 File.WriteAllText(constantSource, constantUnit);
 
 try
@@ -262,6 +263,7 @@ try
     Console.WriteLine($"CALLBACKS_UNRESOLVED={callbackUnresolved.Count}");
     Console.WriteLine($"CONSTANTS_CHECKED={constantsChecked}");
     Console.WriteLine($"CONSTANTS_NOT_HEADER_IDENTITIES={constantsSkipped.Count}");
+    Console.WriteLine($"CONSTANTS_NOT_HEADER_MEMBERS={constantsSkippedMembers}");
     Console.WriteLine(
         $"CONSTANTS_FRAMEWORK_WITHOUT_MACRO_GROUP={InteropConstants.FrameworkIdentitiesWithoutAMacroGroup.Length}");
     if (constantsSkipped.Count > 0)

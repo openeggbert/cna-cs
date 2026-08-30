@@ -170,7 +170,11 @@ jq -n \
   }' >"$output_root/abi-compatibility-report.json"
 
 echo "CNA_ABI_POLICY=cna-cs-native-abi/1"
-echo "CNA_ABI_REQUIRED_SYMBOLS=854"
+# Counted, not written down. The literal that used to sit here said 854 while the resolver had long
+# since grown past it, and a report that states a number it did not measure is worse than one that
+# omits it. The four names excluded from the fixture inventory above are still required by the
+# resolver -- they are handled specially by the fixture, not exempted -- so they are added back.
+echo "CNA_ABI_REQUIRED_SYMBOLS=$(( $(printf '%s\n' "$declared_symbols" | grep -c .) + 4 ))"
 echo "CNA_ABI_FIXTURES_ACCEPTED=2"
 echo "CNA_ABI_FIXTURES_REJECTED=9"
 echo "CNA_ABI_SELECTED_NATIVE=$selected_native_status"

@@ -681,6 +681,27 @@ internal struct CnaCnbReadLimits
     };
 }
 
+/// <summary>A CNB texture's shape -- <c>CNA_CnbTextureInfo</c>. Caller-initialised and versioned,
+/// like <see cref="CnaCnbReadLimits"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbTextureInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint Width;
+    public uint Height;
+    public uint Depth;
+    public uint FaceCount;
+    public uint MipCount;
+    public uint RepresentationCount;
+
+    public static unsafe CnaCnbTextureInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbTextureInfo),
+        StructVersion = 1,
+    };
+}
+
 /// <summary>One entry of a document's table of contents -- <c>CNA_CnbChunkEntry</c>.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct CnaCnbChunkEntry

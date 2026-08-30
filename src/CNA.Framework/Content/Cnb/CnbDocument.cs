@@ -165,6 +165,11 @@ public sealed class CnbDocument : IDisposable
 
     private CnaHandle Handle => new(_handle.DangerousGetHandle());
 
+    /// <summary>The document handle, for a decoder in this namespace that needs to read it.
+    /// Borrowed: the document remains its only owner, and the caller must keep this object alive
+    /// across the call.</summary>
+    internal CnaHandle NativeHandle => Handle;
+
     private delegate CnaResult UInt16Accessor(CnaHandle document, out ushort value);
 
     private delegate CnaResult UInt32Accessor(CnaHandle document, out uint value);

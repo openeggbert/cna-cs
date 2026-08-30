@@ -103,11 +103,12 @@ public class CnaAbiTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        // 881: five from A3/A4/A5, two for A1, fourteen for D2's first CNB slice, and six for D3's
-        // engine-layer render target pool.
+        // 895: five from A3/A4/A5, two for A1, fourteen for D2's first CNB slice, six for D3's
+        // engine-layer render target pool, and fourteen for D2's second -- the CNB texture decode
+        // family plus the device's surface-format support query.
         // The literal is a tripwire, not a fact about CNA -- it exists so that adding an import is
         // a deliberate act rather than something that happens on the way to something else.
-        Assert.Equal(881, declared.Length);
+        Assert.Equal(895, declared.Length);
         Assert.Equal(declared, CnaNativeAbiPolicy.RequiredSymbols);
     }
 

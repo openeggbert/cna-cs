@@ -2334,6 +2334,77 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_cnb_writer_write_to_file(CnaHandle writer, CnaStringView path);
 
+    // -- CNB textures ---------------------------------------------------------------------------
+    //
+    // The decode side of cnb.h's texture family. `CNA_CnbTextureDataHandle` is a handle rather than
+    // a struct because the canonical C++ type is a value made of nested vectors, which C cannot
+    // carry: the shape is read through get_info and each level's bytes are copied out one at a
+    // time.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_decode_texture2d(CnaHandle document, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_data_destroy(CnaHandle texture);
+
+    /// <summary>Caller-initialised and versioned, so <c>ref</c> and not <c>out</c> -- the same
+    /// contract <see cref="CnaCnbReadLimits"/> documents, and one no C prototype can express.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_data_get_info(
+        CnaHandle texture, ref CnaCnbTextureInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_data_get_level_dimensions(
+        CnaHandle texture, uint level, out uint outWidth, out uint outHeight, out uint outDepth);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_data_get_representation_count(
+        CnaHandle texture, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_data_get_representation_format(
+        CnaHandle texture, ulong representation, out CnaCnbTextureFormat outFormat);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_data_get_level_count(
+        CnaHandle texture, ulong representation, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_texture_data_copy_level(
+        CnaHandle texture, ulong representation, ulong level, byte* destination, ulong capacity, out ulong outBytes);
+
+    /// <summary>Takes a predicate CNA calls back for each representation in order. The pointer is a
+    /// plain <c>nint</c> here, as every callback in this assembly is; what actually crosses is
+    /// checked by <c>CNA.AbiVerify</c>'s callback probe rather than by this declaration.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_data_select_representation(
+        CnaHandle texture, nint supported, nint context, out byte outFound, out ulong outIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_texture_format_to_surface_format(
+        CnaCnbTextureFormat format, out uint outSurfaceFormat);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_is_block_compressed_texture_format(
+        CnaCnbTextureFormat format, out byte outBlockCompressed);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_texture_data_create_rgba8(
+        uint width, uint height, byte* rgba, ulong byteCount, out CnaHandle outTexture);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_encode_texture2d(
+        CnaHandle texture, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
+
+    /// <summary>Known and supported usage masks for one surface format. A bit absent from the known
+    /// mask means <em>unknown</em>, not unsupported -- the header says so explicitly, and collapsing
+    /// the two would turn "this renderer has not classified BC7" into "this renderer refuses
+    /// BC7".</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_get_surface_format_support_ext(
+        CnaHandle graphicsDevice, uint format, out CnaRendererFormatUsage outKnownUsages,
+        out CnaRendererFormatUsage outSupportedUsages);
+
     /// <summary>Builds a native SpriteFont from a glyph table -- the inverse of
     /// <c>cna_sprite_font_copy_glyphs</c>, and the only way to get a font handle for a font this
     /// binding built itself rather than loaded.</summary>

@@ -33,6 +33,16 @@ static class InteropConstants
         ["CnaEffectTextureType"] = "CNA_EFFECT_TEXTURE_",
     };
 
+    /// <summary>Individual enum members with no macro of their own, and why.</summary>
+    public static readonly HashSet<string> NotHeaderMembers = new(StringComparer.Ordinal)
+    {
+        // C# spells "no bits set" as a None member on a [Flags] enum; C spells it as the absence of
+        // any bit and declares no macro for it. CNA_RENDERER_FORMAT_USAGE_ALL exists and
+        // CNA_RENDERER_FORMAT_USAGE_NONE does not, which is the header being consistent rather than
+        // incomplete. Excluded by name so a *bit* that loses its macro still fails.
+        "CnaRendererFormatUsage.None",
+    };
+
     /// <summary>
     /// Managed identities with no macro of their own in the header, and why.
     ///
@@ -129,6 +139,27 @@ static class InteropConstants
         ["SurfaceFormat.Bc7SrgbExt"] = "CNA_SURFACE_FORMAT_BC7_SRGB_EXT",
         ["SurfaceFormat.Dxt5SrgbExt"] = "CNA_SURFACE_FORMAT_DXT5_SRGB_EXT",
         ["SurfaceFormat.UShortExt"] = "CNA_SURFACE_FORMAT_USHORT_EXT",
+
+        // Twelve CNB texture formats where the "a capital after a digit takes no separator" rule --
+        // right for CNA_SURFACE_FORMAT_TEXTURE1D and CNA_MATH_VECTOR2 -- is wrong: cnb.h writes a
+        // separator after the digit. Every one was produced by the compiler refusing the derived
+        // spelling, and the rule is left as it is rather than special-cased per header, because a
+        // derivation rule with a second exception clause is a rule nobody can predict.
+        ["CnaCnbTextureFormat.Rgba8Srgb"] = "CNA_CNB_TEXTURE_FORMAT_RGBA8_SRGB",
+        ["CnaCnbTextureFormat.Rg8Snorm"] = "CNA_CNB_TEXTURE_FORMAT_RG8_SNORM",
+        ["CnaCnbTextureFormat.Rgba8Snorm"] = "CNA_CNB_TEXTURE_FORMAT_RGBA8_SNORM",
+        ["CnaCnbTextureFormat.Rgb10A2"] = "CNA_CNB_TEXTURE_FORMAT_RGB10_A2",
+        ["CnaCnbTextureFormat.R32Float"] = "CNA_CNB_TEXTURE_FORMAT_R32_FLOAT",
+        ["CnaCnbTextureFormat.Rg32Float"] = "CNA_CNB_TEXTURE_FORMAT_RG32_FLOAT",
+        ["CnaCnbTextureFormat.Rgba32Float"] = "CNA_CNB_TEXTURE_FORMAT_RGBA32_FLOAT",
+        ["CnaCnbTextureFormat.R16Float"] = "CNA_CNB_TEXTURE_FORMAT_R16_FLOAT",
+        ["CnaCnbTextureFormat.Rg16Float"] = "CNA_CNB_TEXTURE_FORMAT_RG16_FLOAT",
+        ["CnaCnbTextureFormat.Rgba16Float"] = "CNA_CNB_TEXTURE_FORMAT_RGBA16_FLOAT",
+        ["CnaCnbTextureFormat.Bc3Srgb"] = "CNA_CNB_TEXTURE_FORMAT_BC3_SRGB",
+        ["CnaCnbTextureFormat.Bc7Srgb"] = "CNA_CNB_TEXTURE_FORMAT_BC7_SRGB",
+
+        // CNA writes this one without the separator the derived name inserts.
+        ["CnaRendererFormatUsage.MultiSample"] = "CNA_RENDERER_FORMAT_USAGE_MULTISAMPLE",
     };
 
     /// <summary>
@@ -202,10 +233,11 @@ static class InteropConstants
             ? macro
             : Prefix(type) + UpperSnake(member);
 
-    public static string Generate(out int checkedCount, out List<string> skipped)
+    public static string Generate(out int checkedCount, out List<string> skipped, out int skippedMembers)
     {
         checkedCount = 0;
         skipped = [];
+        skippedMembers = 0;
 
         var text = new System.Text.StringBuilder();
         text.AppendLine("// SPDX-License-Identifier: MIT");
@@ -227,6 +259,12 @@ static class InteropConstants
             text.AppendLine($"// {type.Name}");
             foreach (string member in Enum.GetNames(type))
             {
+                if (NotHeaderMembers.Contains($"{type.Name}.{member}"))
+                {
+                    skippedMembers++;
+                    continue;
+                }
+
                 object value = Enum.Parse(type, member);
                 ulong numeric = Convert.ToUInt64(Convert.ChangeType(value, type.GetEnumUnderlyingType()));
                 string macro = MacroName(type, member);

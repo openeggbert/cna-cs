@@ -69,4 +69,72 @@ internal sealed class CnbTestWriter : IDisposable
     public void Dispose() => _handle.Dispose();
 
     private CnaHandle Handle => new(_handle.DangerousGetHandle());
+
+    /// <summary>
+    /// Writes a complete single-representation RGBA8 2D texture container, through CNA's own
+    /// texture encoder rather than through this writer's chunk API.
+    ///
+    /// The encoder is a different route from <c>writer_add_chunk</c> and is the right one here for
+    /// the same reason this whole type exists: a texture container is a set of chunks with a
+    /// defined relationship, and assembling those by hand would encode this repository's reading of
+    /// the schema into the fixture. <c>cna_cnb_encode_texture2d</c> is CNA stating it.
+    ///
+    /// RGBA8 is the only format CNA's encoder writes; decoding accepts every format in
+    /// <see cref="CnbTextureFormat"/>. So a fixture cannot exercise the representation choice
+    /// across formats, and a test that needs to must say so rather than pretend otherwise.
+    /// </summary>
+    public static unsafe void WriteRgba8Texture2D(string path, int width, int height, ReadOnlySpan<byte> rgba, string contentName = "")
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        CnaHandle texture;
+        fixed (byte* pixels = rgba)
+        {
+            CnaResult created = Native.cna_cnb_texture_data_create_rgba8(
+                (uint)width, (uint)height, pixels, (ulong)rgba.Length, out texture);
+            CnaException.ThrowIfFailed(created, nameof(WriteRgba8Texture2D));
+        }
+
+        try
+        {
+            byte[]? encoded = null;
+            CnaResult encodeResult = CnaStringMarshal.WithStringView(contentName, view =>
+            {
+                // BufferTooSmall is the expected answer to a zero-capacity size query, not a
+                // failure: the route writes the required count and performs no partial write.
+                CnaResult sizeResult = Native.cna_cnb_encode_texture2d(texture, view, null, 0, out ulong required);
+                if (sizeResult.IsFailure() && sizeResult != CnaResult.BufferTooSmall)
+                {
+                    return sizeResult;
+                }
+
+                var bytes = new byte[checked((int)required)];
+                fixed (byte* destination = bytes)
+                {
+                    CnaResult result = Native.cna_cnb_encode_texture2d(
+                        texture, view, destination, (ulong)bytes.Length, out ulong written);
+                    if (!result.IsSuccess())
+                    {
+                        return result;
+                    }
+
+                    if (written != (ulong)bytes.Length)
+                    {
+                        throw new CnaException(
+                            $"The CNB texture encoder asked for {required} bytes and wrote {written}.");
+                    }
+                }
+
+                encoded = bytes;
+                return CnaResult.Success;
+            });
+
+            CnaException.ThrowIfFailed(encodeResult, nameof(WriteRgba8Texture2D));
+            File.WriteAllBytes(path, encoded!);
+        }
+        finally
+        {
+            _ = Native.cna_cnb_texture_data_destroy(texture);
+        }
+    }
 }

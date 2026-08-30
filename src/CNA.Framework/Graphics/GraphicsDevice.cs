@@ -136,6 +136,28 @@ public class GraphicsDevice : IDisposable
         CnaException.ThrowIfFailed(result, nameof(NotifyContentLostResourcesForTesting));
     }
 
+    /// <summary>
+    /// What this renderer can do with one surface format, and how much of that it has classified.
+    ///
+    /// CNA's own query, with no XNA counterpart: XNA had <c>GraphicsAdapter.CheckDeviceFormat</c>
+    /// against a fixed set of D3D9 usages, and this is a different and larger question. It is here
+    /// rather than on the strict facade for that reason.
+    ///
+    /// <b>Two masks, not one boolean.</b> A bit absent from <see cref="CnaSurfaceFormatSupport.Known"/>
+    /// means the renderer has not classified that usage, which is not the same as refusing it --
+    /// <c>graphics.h</c> says so explicitly and forbids inferring one from the other. A caller
+    /// choosing among several encodings of one asset needs that distinction: "unclassified" is a
+    /// reason to prefer another encoding, and "refused" is a reason to rule this one out.
+    /// </summary>
+    public CnaSurfaceFormatSupport GetCnaSurfaceFormatSupport(SurfaceFormat format)
+    {
+        CnaResult result = Native.cna_graphics_device_get_surface_format_support_ext(
+            ResolveNativeDeviceHandle(), (uint)format,
+            out CnaRendererFormatUsage known, out CnaRendererFormatUsage supported);
+        CnaException.ThrowIfFailed(result, nameof(GetCnaSurfaceFormatSupport));
+        return new CnaSurfaceFormatSupport((CnaSurfaceFormatUsage)known, (CnaSurfaceFormatUsage)supported);
+    }
+
     public static bool IsCnaEngineLayerAvailable()
     {
         CnaResult result = Native.cna_graphics_ext_is_available(out byte available);
