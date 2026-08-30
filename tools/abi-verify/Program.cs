@@ -56,7 +56,8 @@ string layoutSource = Path.Combine(temporaryDirectoryForSource, "native_layout_p
 string prototypeSource = Path.Combine(temporaryDirectoryForSource, "native_prototype_probe.c");
 string temporaryDirectory = Path.Combine(Path.GetTempPath(), $"cna-abi-{Guid.NewGuid():N}");
 Directory.CreateDirectory(temporaryDirectory);
-File.WriteAllText(layoutSource, InteropLayout.Generate());
+string layoutUnit = InteropLayout.Generate();
+File.WriteAllText(layoutSource, layoutUnit);
 string prototypeUnit = InteropPrototypes.Generate(
     out List<string> prototypeUnmappable, out List<string> prototypeFromHeader);
 File.WriteAllText(prototypeSource, prototypeUnit);
@@ -146,7 +147,8 @@ try
 
         foreach (PrototypeNegativeControls.Control control in PrototypeNegativeControls.All())
         {
-            if (!prototypeUnit.Contains(control.Original, StringComparison.Ordinal))
+            string unit = control.Layout ? layoutUnit : prototypeUnit;
+            if (!unit.Contains(control.Original, StringComparison.Ordinal))
             {
                 // The declaration this control corrupts is no longer generated, so the control is
                 // testing nothing. Reported rather than skipped: a silently inert control is worse
@@ -159,7 +161,7 @@ try
             string mutatedPath = Path.Combine(temporaryDirectory, $"mutation-{control.Name}.c");
             File.WriteAllText(
                 mutatedPath,
-                prototypeUnit.Replace(control.Original, control.Mutated, StringComparison.Ordinal));
+                unit.Replace(control.Original, control.Mutated, StringComparison.Ordinal));
 
             string mutantObject = Path.Combine(temporaryDirectory, $"mutation-{control.Name}.o");
             List<string> mutationArguments = isMsvc
@@ -653,6 +655,68 @@ static class InteropLayout
         text.AppendLine("#define PRINT_ALIGN(type) printf(\"alignof.\" #type \"=%zu\\n\", _Alignof(type))");
         text.AppendLine("#define PRINT_OFFSET(type, field) printf(\"offsetof.\" #type \".\" #field \"=%zu\\n\", offsetof(type, field))");
         text.AppendLine();
+        var fieldChecked = new HashSet<string>(StringComparer.Ordinal);
+
+        // Field *types*, not only their offsets.
+        //
+        // The offsets agree whenever the widths do, so a field declared int against a uint32_t is
+        // invisible to everything above -- and CnaUserPrimitives.PrimitiveType was exactly that
+        // until B2's prototype work found it from the other side. Taking the address of each field
+        // and assigning it to a pointer to the managed-derived type makes the difference a
+        // diagnostic: &s.primitive_type is an int32_t* and will not initialise a uint32_t*.
+        //
+        // Padding runs are skipped: C declares them as arrays, so their address is a pointer to
+        // array rather than to element, and padding is the one thing whose type carries no meaning.
+        foreach (Type type in InteropLayout.Structs())
+        {
+            if (InteropLayout.IsScalarTypedef(type))
+            {
+                continue;
+            }
+
+            string native = InteropLayout.NativeName(type);
+            if (!fieldChecked.Add(native))
+            {
+                continue;
+            }
+
+            text.AppendLine($"static {native} s_{native};");
+            foreach (FieldInfo field in InteropLayout.Fields(type))
+            {
+                if (InteropLayout.IsPadding(field.Name) || InteropLayout.Skip(type, field))
+                {
+                    continue;
+                }
+
+                string fieldName = InteropLayout.FieldName(type, field);
+                if (InteropLayout.PaddingLikeFieldNames.Contains(fieldName))
+                {
+                    continue;
+                }
+
+                string? spelled = InteropLayout.FieldTypeOverrides.TryGetValue(
+                    $"{native}.{fieldName}", out string? overridden)
+                    ? overridden
+                    : InteropPrototypes.CType(field.FieldType);
+                if (spelled is null)
+                {
+                    continue;
+                }
+
+                if (spelled.Length == 0)
+                {
+                    continue;
+                }
+
+                string declaration = spelled.Contains("(*)", StringComparison.Ordinal)
+                    ? spelled.Replace("(*)", $"(**const pf_{native}_{fieldName})", StringComparison.Ordinal)
+                    : $"{spelled}* const pf_{native}_{fieldName}";
+                text.AppendLine($"{declaration} = &s_{native}.{fieldName};");
+            }
+
+            text.AppendLine();
+        }
+
         text.AppendLine("int main(void)");
         text.AppendLine("{");
         text.AppendLine("    printf(\"abi.version=%u\\n\", CNA_ABI_VERSION);");
@@ -755,6 +819,42 @@ static class InteropLayout
     /// struct's total size still has to agree. So the run is measured at its first element, against
     /// the array's own name.
     /// </summary>
+    /// <summary>
+    /// Field types C# cannot spell, keyed <c>CNA_Struct.field</c>. An empty value means the field is
+    /// measured for offset only.
+    ///
+    /// The reasons are the same three as the prototype manifest's, in a struct instead of a
+    /// parameter list: <c>const</c> that C# cannot put on a pointer, C's <c>char</c>, and a C array
+    /// member, whose address is a pointer-to-array and which this binding models as a struct. None
+    /// is an ABI difference; the offsets and the total size still have to agree, and they do.
+    /// </summary>
+    public static readonly Dictionary<string, string> FieldTypeOverrides = new(StringComparer.Ordinal)
+    {
+        ["CNA_GameCallbacks.draw"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameCallbacks.exiting"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameCallbacks.load_content"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameCallbacks.unload_content"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameCallbacks.update"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameComponentCallbacks.draw"] = "void (*)(const CNA_GameTime*, void*)",
+        ["CNA_GameComponentCallbacks.update"] = "void (*)(const CNA_GameTime*, void*)",
+        ["CNA_GameCreateInfo.callbacks"] = "const CNA_GameCallbacks*",
+        ["CNA_GameFrameHooks.begin_draw"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_Bool*, CNA_CallbackError*)",
+        ["CNA_GameFrameHooks.begin_run"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameFrameHooks.end_draw"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameFrameHooks.end_run"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_GameFrameHooks.initialize"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
+        ["CNA_SpriteFontCreateInfo.glyphs"] = "const CNA_SpriteFontGlyph*",
+        ["CNA_StringView.data"] = "const char*",
+        ["CNA_UserIndices.index_data"] = "const void*",
+        ["CNA_UserPrimitives.vertex_data"] = "const void*",
+        ["CNA_VisualizationData.frequencies"] = "",   // a C array member: its address is a pointer-to-array, so offset only
+        ["CNA_VisualizationData.samples"] = "",   // a C array member: its address is a pointer-to-array, so offset only
+    };
+
+    /// <summary>Field names that name a C array of padding rather than a typed member.</summary>
+    public static readonly HashSet<string> PaddingLikeFieldNames =
+        new(StringComparer.Ordinal) { "reserved", "reserved0", "reserved1", "pressed_key_words" };
+
     public static bool IsPadding(string managed) =>
         managed.StartsWith('_') &&
         System.Text.RegularExpressions.Regex.IsMatch(managed, "^_[Rr]eserved[0-9]*$");

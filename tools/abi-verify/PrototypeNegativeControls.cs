@@ -16,7 +16,8 @@
 /// </summary>
 static class PrototypeNegativeControls
 {
-    internal sealed record Control(string Name, string Original, string Mutated, string Why);
+    /// <summary>A control, and which generated unit it corrupts.</summary>
+    internal sealed record Control(string Name, string Original, string Mutated, string Why, bool Layout = false);
 
     /// <summary>
     /// One real generated declaration, and the corruption each control applies to it.
@@ -66,6 +67,18 @@ static class PrototypeNegativeControls
             "uint32_t (*const p_cna_texture2d_create)(CNA_Handle, const CNA_Texture2DCreateInfo*, CNA_Handle*) = cna_texture2d_create;",
             "uint32_t (*const p_cna_texture2d_create)(const CNA_Texture2DCreateInfo*, CNA_Handle, CNA_Handle*) = cna_texture2d_create;",
             "two pointer-width parameters in the wrong order must not pass"),
+
+        new("field-signedness",
+            "uint32_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
+            "int32_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
+            "a struct field's signedness must be checked; the offsets agree either way",
+            Layout: true),
+
+        new("field-wrong-width",
+            "uint32_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
+            "uint64_t* const pf_CNA_SpriteScaledCommand_effects = &s_CNA_SpriteScaledCommand.effects;",
+            "a struct field's width must be checked",
+            Layout: true),
 
         new("absent-import",
             "uint32_t (*const p_cna_game_run)(CNA_Handle) = cna_game_run;",

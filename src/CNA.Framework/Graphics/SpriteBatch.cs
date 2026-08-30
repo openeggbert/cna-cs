@@ -303,7 +303,7 @@ public class SpriteBatch : IDisposable
             rotation,
             origin.ToNative(),
             scale.ToNative(),
-            (int)effects,
+            (uint)effects,
             layerDepth));
     }
 
@@ -549,7 +549,7 @@ public class SpriteBatch : IDisposable
                 text.Rotation,
                 (text.Origin - glyphs[i].Anchor).ToNative(),
                 text.Scale.ToNative(),
-                (int)text.Effects,
+                (uint)text.Effects,
                 text.LayerDepth);
         }
 

@@ -324,7 +324,10 @@ internal readonly struct CnaSpriteDrawCommand
     public readonly float Rotation;
     public readonly CnaVector2 Origin;
     public readonly CnaVector2 Scale;
-    public readonly int Effects;
+    /// <summary>C calls this <c>CNA_SpriteEffects</c>, a <c>uint32_t</c>. It was <c>int</c> until
+    /// the layout probe began comparing field types as well as offsets; the widths agree, so the
+    /// offsets never disagreed.</summary>
+    public readonly uint Effects;
     public readonly float LayerDepth;
 
     public unsafe CnaSpriteDrawCommand(
@@ -335,7 +338,7 @@ internal readonly struct CnaSpriteDrawCommand
         float rotation,
         CnaVector2 origin,
         CnaVector2 scale,
-        int effects,
+        uint effects,
         float layerDepth)
     {
         StructSize = (uint)sizeof(CnaSpriteDrawCommand);
