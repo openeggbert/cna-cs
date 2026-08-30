@@ -20,13 +20,38 @@ using Microsoft.Xna.Framework.Media;
 /// </summary>
 internal sealed class SongContentReader : ContentTypeReader<Song>
 {
+    /// <summary>
+    /// Whether this asset writes its scalar fields as dispatched objects or as raw values.
+    ///
+    /// <b>Two wire forms exist and both are real.</b> XNA's own <c>SongReader</c> reads the media
+    /// path with <c>ReadString</c> and the duration with <c>ReadObject&lt;int&gt;</c>, so an
+    /// XNA-pipeline asset carries <c>Int32Reader</c> in its table alongside <c>SongReader</c>. CNA's
+    /// runtime reader instead reads both fields raw, and content authored for it carries a
+    /// one-entry table. Four assets in the XNA 4.0 sample collection are the second kind, and this
+    /// reader -- correct for XNA -- read the duration's first byte as a type-reader index and
+    /// failed them.
+    ///
+    /// <b>The rule is upstream's, not invented here.</b> CNA's <c>VideoReader</c> makes exactly this
+    /// choice with <c>ReaderCount(input) &gt; 1</c>: a table holding only the asset's own reader
+    /// cannot describe a dispatched field, because there is no reader to dispatch to. Applying it to
+    /// <c>Song</c> keeps every XNA-written asset on XNA's path and adds the one CNA writes.
+    ///
+    /// Note that CNA's own <c>SongReader</c> reads only the raw form, so it cannot read an
+    /// XNA-written Song; this reader now reads both.
+    /// </summary>
+    internal static bool UsesReaderReferences(ContentReader input) => input.TypeReaderCount > 1;
+
+    /// <summary>One <c>int</c> field in whichever form this asset uses.</summary>
+    internal static int ReadFieldInt32(ContentReader input) =>
+        UsesReaderReferences(input) ? input.ReadObject<int>() : input.ReadInt32();
+
     protected internal override Song Read(ContentReader input, Song existingInstance)
     {
         ArgumentNullException.ThrowIfNull(input);
 
         string reference = input.ReadString();
         string path = ContentReferencePaths.Resolve(input, reference);
-        int durationMilliseconds = input.ReadObject<int>();
+        int durationMilliseconds = ReadFieldInt32(input);
 
         return new Song(new CNA.Media.Song(path, input.AssetName, durationMilliseconds));
     }
@@ -40,13 +65,14 @@ internal sealed class VideoContentReader : ContentTypeReader<Video>
     {
         ArgumentNullException.ThrowIfNull(input);
 
-        string reference = input.ReadObject<string>();
+        bool dispatched = SongContentReader.UsesReaderReferences(input);
+        string reference = dispatched ? input.ReadObject<string>() : input.ReadString();
         string path = ContentReferencePaths.Resolve(input, reference);
-        int durationMilliseconds = input.ReadObject<int>();
-        int width = input.ReadObject<int>();
-        int height = input.ReadObject<int>();
-        float framesPerSecond = input.ReadObject<float>();
-        var soundtrackType = (VideoSoundtrackType)input.ReadObject<int>();
+        int durationMilliseconds = SongContentReader.ReadFieldInt32(input);
+        int width = SongContentReader.ReadFieldInt32(input);
+        int height = SongContentReader.ReadFieldInt32(input);
+        float framesPerSecond = dispatched ? input.ReadObject<float>() : input.ReadSingle();
+        var soundtrackType = (VideoSoundtrackType)SongContentReader.ReadFieldInt32(input);
 
         return new Video(
             GraphicsContentHelper.GraphicsDeviceFromContentReader(input),
@@ -69,6 +95,20 @@ internal sealed class VideoContentReader : ContentTypeReader<Video>
 /// </summary>
 internal static class ContentReferencePaths
 {
+    /// <summary>
+    /// The file a media asset's embedded reference names, as a path this host can open.
+    ///
+    /// XNA's <c>GetAbsolutePathToReference</c> resolves the reference against the referring asset,
+    /// combines it with the content root and the title location, and cleans the result. The first
+    /// two steps are asset-name semantics and live in <see cref="CNA.Content.XnaContentPath"/>; the
+    /// last is where a name becomes a path, and is the same boundary the XNB loader crosses.
+    ///
+    /// <b>This used to split on separators and rejoin.</b> That dropped the empty leading segment a
+    /// POSIX absolute root produces, so a content root of <c>/rv/tmp/x</c> resolved to
+    /// <c>rv/tmp/x</c> and the media file was reported missing -- with the cause hidden behind
+    /// XNA's normalised "The XNB file is invalid". It was the third copy of that same
+    /// split-and-rejoin in this repository; the other two are gone, and so is this one.
+    /// </summary>
     internal static string Resolve(ContentReader input, string reference)
     {
         if (string.IsNullOrEmpty(reference))
@@ -77,37 +117,11 @@ internal static class ContentReferencePaths
                 $"Content asset '{input.AssetName}' references a media file by an empty path.");
         }
 
-        int separator = input.AssetName.LastIndexOfAny(['\\', '/', Path.DirectorySeparatorChar]);
-        string assetDirectory = separator < 0 ? string.Empty : input.AssetName[..separator];
+        string assetName = CNA.Content.XnaContentPath.Resolve(input.AssetName, reference)
+            ?? throw new ContentLoadException(
+                $"Content asset '{input.AssetName}' references a media file by an empty path.");
 
-        string relative = assetDirectory.Length == 0
-            ? reference
-            : Path.Combine(assetDirectory, reference);
-
-        string root = input.ContentManager.RootDirectory;
-        return Normalize(root.Length == 0 ? relative : Path.Combine(root, relative));
-    }
-
-    private static string Normalize(string path)
-    {
-        string[] segments = path.Replace('\\', '/').Split('/');
-        var clean = new List<string>(segments.Length);
-        foreach (string segment in segments)
-        {
-            if (segment.Length == 0 || segment == ".")
-            {
-                continue;
-            }
-
-            if (segment == ".." && clean.Count > 0 && clean[^1] != "..")
-            {
-                clean.RemoveAt(clean.Count - 1);
-                continue;
-            }
-
-            clean.Add(segment);
-        }
-
-        return string.Join(Path.DirectorySeparatorChar, clean);
+        return CNA.Content.XnaContentPath.ToFilePath(
+            input.ContentManager.RootDirectory, assetName, extension: string.Empty);
     }
 }

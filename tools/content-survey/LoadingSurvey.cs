@@ -112,7 +112,11 @@ internal sealed class LoadingSurvey : Game
                 }
                 else
                 {
-                    RuntimeFailures[relative] = $"{actual.GetType().Name}: {actual.Message}";
+                    // The inner chain, not just the outer message. XNA's contract normalises a
+                    // whole family of failures to "The XNB file is invalid", which names the file
+                    // and nothing about what went wrong -- and the survey exists to say what went
+                    // wrong.
+                    RuntimeFailures[relative] = DescribeFailure(actual);
                 }
             }
         }
@@ -135,6 +139,29 @@ internal sealed class LoadingSurvey : Game
 
     /// <summary>A property or two that only a materialised object can answer, so the report shows
     /// the asset was really built and not merely returned.</summary>
+    /// <summary>
+    /// The exception and everything under it.
+    ///
+    /// XNA's contract normalises a whole family of failures to "The XNB file is invalid", which
+    /// names the file and nothing about what went wrong -- and saying what went wrong is what this
+    /// survey is for. The chain is what carries that.
+    /// </summary>
+    private static string DescribeFailure(Exception failure)
+    {
+        var text = new System.Text.StringBuilder();
+        for (Exception? current = failure; current is not null; current = current.InnerException)
+        {
+            if (text.Length > 0)
+            {
+                text.Append(" <- ");
+            }
+
+            text.Append(current.GetType().Name).Append(": ").Append(current.Message.Replace('\n', ' '));
+        }
+
+        return text.ToString();
+    }
+
     private static string Describe(object? loaded) => loaded switch
     {
         Texture2D texture => $"Texture2D {texture.Width}x{texture.Height} {texture.Format}",

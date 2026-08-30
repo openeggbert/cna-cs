@@ -93,4 +93,36 @@ public sealed class XnaContentPathTests
         Assert.False(Path.IsPathRooted(resolved));
         Assert.DoesNotContain(Directory.GetCurrentDirectory(), resolved, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The boundary where a name becomes a path, including the case that was broken.
+    ///
+    /// A POSIX-absolute content root must survive. The implementation this replaced split the
+    /// combined path on separators and rejoined the non-empty segments, which silently deleted the
+    /// leading empty segment an absolute path begins with -- so a root of <c>/rv/tmp/x</c> resolved
+    /// to <c>rv/tmp/x</c>, the media file was reported missing, and the cause was hidden behind
+    /// XNA's normalised "The XNB file is invalid".
+    /// </summary>
+    [Theory]
+    [InlineData("/content", "Textures\\rock", ".xnb", "/content/Textures/rock.xnb")]
+    [InlineData("/content", "Textures/rock", ".xnb", "/content/Textures/rock.xnb")]
+    [InlineData("/content", "rock", "", "/content/rock")]
+    [InlineData("Content", "Textures\\rock", ".xnb", "Content/Textures/rock.xnb")]
+    [InlineData("", "Textures\\rock", ".xnb", "Textures/rock.xnb")]
+    public void ToFilePath_TranslatesSeparatorsAndKeepsAnAbsoluteRoot(
+        string root, string assetName, string extension, string expected) =>
+        Assert.Equal(expected, XnaContentPath.ToFilePath(root, assetName, extension));
+
+    /// <summary>The name keeps XNA's spelling; only the lookup changes. A resolver that rewrote the
+    /// name would change the content manager's cache key, so the same asset could be loaded twice
+    /// under two spellings.</summary>
+    [Fact]
+    public void ToFilePath_DoesNotRewriteTheAssetName()
+    {
+        const string AssetName = "Models\\Textures\\hull";
+        string path = XnaContentPath.ToFilePath("/content", AssetName, ".xnb");
+
+        Assert.Equal("/content/Models/Textures/hull.xnb", path);
+        Assert.Equal("Models\\Textures\\hull", AssetName);
+    }
 }

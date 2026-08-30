@@ -226,6 +226,15 @@ public sealed class ContentReader : BinaryReader
 
     internal int Read7BitEncodedInt32() => Read7BitEncodedInt();
 
+    /// <summary>
+    /// How many readers this asset's own table declares.
+    ///
+    /// Exists for the media readers, which have to tell two wire forms apart -- see
+    /// <c>SongContentReader</c>. It is the asset's own count, not a capability of this reader, so it
+    /// is exposed rather than inferred from what has been read so far.
+    /// </summary>
+    internal int TypeReaderCount => _typeReaders.Length;
+
     private T InnerReadObject<T>(T existingInstance, bool hasExistingInstance)
     {
         int typeReaderIndex = Read7BitEncodedInt32();

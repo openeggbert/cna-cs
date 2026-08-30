@@ -17,16 +17,16 @@ packaging, and release engineering.
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 610 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
-| Native integration | 146/146 passing on Linux x64 against **both** the ABI 0.20.0 CNA OPENGLES3 library and a HEADLESS build of the same revision. The second renderer is what turns nine absent capabilities from untested branches into exercised ones |
-| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 881 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Managed tests | 614 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
+| Native integration | 157/157 passing on Linux x64 against **both** the ABI 0.20.0 CNA OPENGLES3 library and a HEADLESS build of the same revision. The second renderer is what turns nine absent capabilities from untested branches into exercised ones |
+| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 910 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
-| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **777 native and 777 managed layout/type measurements with 0 mismatches**, 881 of 881 prototypes compiled, 5 callbacks checked, 286 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
+| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **808 native and 808 managed layout/type measurements with 0 mismatches**, 910 of 910 prototypes compiled, 5 callbacks checked, 327 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
 | Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
@@ -399,7 +399,7 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
   managed struct with no native counterpart is a **compile error in the generated probe**, not a
   struct nobody measured.
 
-  **14 structs measured before, 82 now; 777 values compared on each side, 0 mismatches.**
+  **14 structs measured before, 84 now; 808 values compared on each side, 0 mismatches.**
 
   Deriving the names is what makes it cover everything: `CnaFoo` is `CNA_Foo` and `StructSize` is
   `struct_size`. A list would need extending by hand for each new struct, which is exactly how the
@@ -565,15 +565,15 @@ exported by every CNA build and returns `NOT_SUPPORTED` when the layer is absent
 symbol is not evidence of a capability. Any further engine-layer binding must gate on the
 availability query rather than on the symbol existing.
 
-CNA 0.20.0 exports 4,051 routes; this binding consumes 881. The remainder is not all product
+CNA 0.20.0 exports 4,051 routes; this binding consumes 910. The remainder is not all product
 surface -- most of `vectors.h`, `matrix.h`, `math.h`, `quaternion.h`, `curve.h`, `geometry.h` and
 `color.h` is deliberately managed by design invariant 3, and much of the rest is engine-internal.
 What is genuinely a CNA-beyond-XNA product surface, by header and unbound count:
 
 | Header | Unbound | What it is | Placement |
 | --- | --- | --- | --- |
-| `engine_layer.h` | 812 | CNAEXT: storage buffers, compute shaders, GPU timers, render-target pools, shader-effect caches, full-screen/post-process passes, PBR material binding, clustered lighting, shadows, SSAO/SSR/bloom/tonemap, particles, decals, LOD | `CNA.Framework.Extensions` + `CNA.XnaCompat.Extensions` |
-| `cnb.h` | 272 | CNA's own binary content format: encode/decode for textures, models, video, documents, plus the tooling front ends | `CNA.Content.Cnb` |
+| `engine_layer.h` | 836 | CNAEXT: storage buffers, compute shaders, GPU timers, render-target pools, shader-effect caches, full-screen/post-process passes, PBR material binding, clustered lighting, shadows, SSAO/SSR/bloom/tonemap, particles, decals, LOD | `CNA.Framework.Extensions` + `CNA.XnaCompat.Extensions` |
+| `cnb.h` | 244 | CNA's own binary content format: encode/decode for textures, models, video, documents, plus the tooling front ends | `CNA.Content.Cnb` |
 | `gamer_services.h` | 204 | Gamers, identities, achievements, leaderboards, avatars, guide | separate future profile; inventory-only today |
 | `models.h` | 161 | Model/mesh/bone/morph-target surface beyond the XNA subset already bound | `CNA.Framework.Extensions` |
 | `sensors.h` | 109 | Accelerometer/compass/inclinometer/motion | separate future profile |
@@ -624,6 +624,30 @@ records authority, source-portability value, implementation status, and namespac
   `engine_layer.h` is 857 routes. Six are bound. The namespace is `CNA.Graphics.Experimental`, in
   CNA's own vocabulary rather than `Microsoft.Xna.Framework` -- XNA has no such concept, and a game
   allocating render targets by hand is what XNA offers.
+
+  **Second slice done: the post-process chain**, which is the object the pool exists to serve, so the
+  two meet at `BorrowTargetPool` rather than sitting beside each other. Fifteen more routes, 21 of
+  857 bound. `PostProcessChain`, `PostProcessPass` and `PostProcessFrame`.
+
+  Three ownerships meet in one type and each is asserted: `Add` borrows, `AddOwned` transfers, and
+  the target pool is a counted borrow the chain refuses to be destroyed underneath.
+
+  **`AddOwned` is where a test that could not fail was found and fixed.** CNA consumes the pass handle
+  whether or not the call succeeds, so ownership is surrendered before the result is checked -- and
+  the first version stopped there. The negative control showed the test passed either way: disposing
+  a still-owning wrapper releases a consumed handle, native answers a failure result, and
+  `NativeResourceHandle` discards it. A surrendered pass now goes *inert* instead, because
+  `SafeHandle`'s detach leaves the value readable and the wrapper stayed usable and wrong. With that,
+  removing the surrender fails the test.
+
+  **The pixel test had the same problem.** A blit is the identity and an empty chain also copies its
+  source, so deleting the pass left every pixel assertion green. What distinguishes them is the pool:
+  a two-pass chain ping-pongs and takes exactly one intermediate target; zero- and one-pass chains
+  take none. That count is what the test asserts now.
+
+  Two assumptions were measured wrong and recorded as measured: an empty chain refuses a null source
+  with `InvalidArgument` rather than leaving the destination alone, and a one-pass chain allocates no
+  pooled target.
 
   **Ownership is the interesting part and it is tested, not documented.** The pool is owned; an
   acquired target is a *borrowed view* released with `cna_render_target_destroy`, which does not
