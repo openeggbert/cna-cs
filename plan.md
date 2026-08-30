@@ -20,7 +20,7 @@ packaging, and release engineering.
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 620 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
+| Managed tests | 621 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
 | Native integration | 159/159 passing in Debug and Release on Linux x64 against **both** the ABI 0.20.0 CNA OPENGLES3 library and a HEADLESS build of the same revision. The second renderer is what turns nine absent capabilities from untested branches into exercised ones |
 | Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 910 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
@@ -31,7 +31,7 @@ packaging, and release engineering.
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
 | ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **808 native and 808 managed layout/type measurements with 0 mismatches**, 910 of 910 prototypes compiled, 5 callbacks checked, 327 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
-| CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
+| CNA public-type leakage | 0 findings in public/protected strict-profile signatures. For `CNA.Framework`'s own surface the invariant turns out to be **compiler-enforced** -- every `CNA.Interop` type is `internal`, and the one exported type is a static class, so neither can appear in a signature at all. What is guarded instead is that precondition |
 | Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
 | Compiled-content survey | XNA 4.0 sample collection, `--load`: **1,988 attempted, 1,890 loaded, 0 needing a reader this binding lacks**, 38 failing, 26 refused by the native loader, 34 needing a game's own assembly. 302 models materialise with 767 of 767 mesh parts carrying an effect, 480 carrying a texture and 29 carrying a `Tag`. `cna-samples`: 555 attempted, 540 loaded, 1 failing |
 | Template | The checked-in repository project, the generated development project and the isolated package consumer all build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes against 0.20.0 on **both** OPENGLES3 and HEADLESS |
