@@ -319,9 +319,33 @@ The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 85
 was defensible against a one-minor step; against a twelve-minor one it is a floor, and it is now the
 weakest link in an admission that otherwise rests on the upstream baseline diff.
 
-- B1. Extend `tools/abi-verify/native_layout_probe.c` to every struct `CNA.Interop` declares, and
-  `BuildManagedValues()` to match. A managed struct with no measured native counterpart must fail
-  rather than be skipped.
+- B1. **Done.** The layout probe is no longer hand-written: `CNA.AbiVerify` generates the C from the
+  structs `CNA.Interop` declares, and builds the managed side from the same enumeration. The two
+  cannot drift, because they come from one source, and B1's own criterion is now automatic -- a
+  managed struct with no native counterpart is a **compile error in the generated probe**, not a
+  struct nobody measured.
+
+  **14 structs measured before, 82 now; 753 values compared on each side, 0 mismatches.**
+
+  Deriving the names is what makes it cover everything: `CnaFoo` is `CNA_Foo` and `StructSize` is
+  `struct_size`. A list would need extending by hand for each new struct, which is exactly how the
+  old probe came to measure fourteen. Two rules had to be sharpened by the compiler rejecting them:
+  the separator also belongs before the last capital of a run (`HasYButton` is `has_y_button`, not
+  `has_ybutton`), and padding that C writes as one array is a run of separate bytes here, measured at
+  its first byte.
+
+  What derivation cannot bridge is listed explicitly, and every entry is a place where the two sides
+  genuinely chose different words -- CNA says `pressed_buttons` where the managed struct says
+  `Buttons`, `scroll_wheel` where it says `ScrollWheelValue`, `format` where it says `ColorFormat`.
+  An override is a statement that someone read the header, and a wrong one fails to compile rather
+  than silently measuring the wrong field. Four managed-only types are excluded with reasons
+  (`CnaFloatBuffer256` and `CnaNativeAbiProfile` are not ABI types; `CnaReservedBytes3`/`7` are how
+  this binding spells inline padding), and `CnaHandle` is measured for size and alignment only,
+  because `CNA_Handle` is a `uint64_t` typedef and `offsetof` on a typedef does not compile.
+
+  `CnaRect` and `CnaRectangle` are two managed spellings of one C type. Both are measured, and a
+  disagreement between them raises rather than letting the second dictionary write win -- which is
+  the case actually worth catching.
 - B2. Extend the prototype probe from 4 routes to every callback-taking route and every route whose
   managed declaration uses `in`/`out`/`ref` on a versioned descriptor -- the shapes `sweep.py`'s
   arity check cannot see.

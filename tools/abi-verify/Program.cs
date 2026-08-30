@@ -42,10 +42,18 @@ if (!File.Exists(Path.Combine(includeDirectory, "CNA", "C", "cna.h")))
 
 compiler = ResolveCompiler(compiler);
 string sourceDirectory = AppContext.BaseDirectory;
-string layoutSource = FindSource("native_layout_probe.c");
+string temporaryDirectoryForSource = Path.Combine(Path.GetTempPath(), $"cna-abi-src-{Guid.NewGuid():N}");
+Directory.CreateDirectory(temporaryDirectoryForSource);
+// Generated from the managed structs rather than hand-written, which is what makes B1's
+// completion criterion automatic: every struct CNA.Interop declares emits both a managed value and
+// a C line, so a managed struct with no native counterpart is a *compile error* in the generated
+// probe rather than a struct quietly nobody measured. The hand-written probe measured fourteen of
+// the eighty-two.
+string layoutSource = Path.Combine(temporaryDirectoryForSource, "native_layout_probe.c");
 string prototypeSource = FindSource("native_prototype_probe.c");
 string temporaryDirectory = Path.Combine(Path.GetTempPath(), $"cna-abi-{Guid.NewGuid():N}");
 Directory.CreateDirectory(temporaryDirectory);
+File.WriteAllText(layoutSource, InteropLayout.Generate());
 
 try
 {
@@ -290,52 +298,77 @@ static Dictionary<string, long> BuildManagedValues()
         ["alignof.CNA_Result"] = AlignmentOf<CnaResult>(),
         ["sizeof.CNA_Bool"] = Unsafe.SizeOf<byte>(),
         ["alignof.CNA_Bool"] = AlignmentOf<byte>(),
-        ["sizeof.CNA_Handle"] = Unsafe.SizeOf<CnaHandle>(),
-        ["alignof.CNA_Handle"] = AlignmentOf<CnaHandle>(),
         ["sizeof.CNA_GraphicsDeviceEvent"] = Unsafe.SizeOf<CnaGraphicsDeviceEvent>(),
         ["sizeof.CNA_GraphicsProfile"] = Unsafe.SizeOf<CnaGraphicsProfile>(),
     };
 
-    AddStruct<CnaStringView>(values, "CNA_StringView", ("data", nameof(CnaStringView.Data)), ("byte_length", nameof(CnaStringView.ByteLength)));
-    AddStruct<CnaSoundEffectCreateInfo>(values, "CNA_SoundEffectCreateInfo",
-        ("struct_size", nameof(CnaSoundEffectCreateInfo.StructSize)), ("struct_version", nameof(CnaSoundEffectCreateInfo.StructVersion)),
-        ("sample_rate", nameof(CnaSoundEffectCreateInfo.SampleRate)), ("channels", nameof(CnaSoundEffectCreateInfo.Channels)),
-        ("reserved", nameof(CnaSoundEffectCreateInfo.Reserved)));
-    AddStruct<CnaSoundEffectInstanceInfo>(values, "CNA_SoundEffectInstanceInfo",
-        ("struct_size", nameof(CnaSoundEffectInstanceInfo.StructSize)), ("struct_version", nameof(CnaSoundEffectInstanceInfo.StructVersion)),
-        ("state", nameof(CnaSoundEffectInstanceInfo.State)), ("is_looped", nameof(CnaSoundEffectInstanceInfo.IsLooped)),
-        ("reserved0", nameof(CnaSoundEffectInstanceInfo.Reserved0)), ("volume", nameof(CnaSoundEffectInstanceInfo.Volume)),
-        ("pitch", nameof(CnaSoundEffectInstanceInfo.Pitch)), ("pan", nameof(CnaSoundEffectInstanceInfo.Pan)),
-        ("reserved1", nameof(CnaSoundEffectInstanceInfo.Reserved1)));
-    AddStruct<CnaAudioListener>(values, "CNA_AudioListener",
-        ("struct_size", nameof(CnaAudioListener.StructSize)), ("struct_version", nameof(CnaAudioListener.StructVersion)),
-        ("forward", nameof(CnaAudioListener.Forward)), ("position", nameof(CnaAudioListener.Position)),
-        ("up", nameof(CnaAudioListener.Up)), ("velocity", nameof(CnaAudioListener.Velocity)));
-    AddStruct<CnaAudioEmitter>(values, "CNA_AudioEmitter",
-        ("struct_size", nameof(CnaAudioEmitter.StructSize)), ("struct_version", nameof(CnaAudioEmitter.StructVersion)),
-        ("doppler_scale", nameof(CnaAudioEmitter.DopplerScale)), ("forward", nameof(CnaAudioEmitter.Forward)),
-        ("position", nameof(CnaAudioEmitter.Position)), ("up", nameof(CnaAudioEmitter.Up)),
-        ("velocity", nameof(CnaAudioEmitter.Velocity)));
-    AddStruct<CnaCueInfo>(values, "CNA_CueInfo",
-        ("struct_size", nameof(CnaCueInfo.StructSize)), ("struct_version", nameof(CnaCueInfo.StructVersion)),
-        ("is_created", nameof(CnaCueInfo.IsCreated)), ("is_disposed", nameof(CnaCueInfo.IsDisposed)),
-        ("is_paused", nameof(CnaCueInfo.IsPaused)), ("is_playing", nameof(CnaCueInfo.IsPlaying)),
-        ("is_prepared", nameof(CnaCueInfo.IsPrepared)), ("is_preparing", nameof(CnaCueInfo.IsPreparing)),
-        ("is_stopped", nameof(CnaCueInfo.IsStopped)), ("is_stopping", nameof(CnaCueInfo.IsStopping)));
-    AddStruct<CnaVisualizationData>(values, "CNA_VisualizationData",
-        ("struct_size", nameof(CnaVisualizationData.StructSize)), ("struct_version", nameof(CnaVisualizationData.StructVersion)),
-        ("frequencies", nameof(CnaVisualizationData.Frequencies)), ("samples", nameof(CnaVisualizationData.Samples)));
-    AddStruct<CnaManagedGameCallbacks>(values, "CNA_GameCallbacks",
-        ("struct_size", nameof(CnaManagedGameCallbacks.StructSize)), ("struct_version", nameof(CnaManagedGameCallbacks.StructVersion)),
-        ("load_content", nameof(CnaManagedGameCallbacks.LoadContent)), ("update", nameof(CnaManagedGameCallbacks.Update)),
-        ("draw", nameof(CnaManagedGameCallbacks.Draw)), ("unload_content", nameof(CnaManagedGameCallbacks.UnloadContent)),
-        ("exiting", nameof(CnaManagedGameCallbacks.Exiting)), ("context", nameof(CnaManagedGameCallbacks.Context)));
-    AddStruct<CnaGameCreateInfo>(values, "CNA_GameCreateInfo",
-        ("struct_size", nameof(CnaGameCreateInfo.StructSize)), ("struct_version", nameof(CnaGameCreateInfo.StructVersion)),
-        ("is_fixed_time_step", nameof(CnaGameCreateInfo.IsFixedTimeStep)), ("reserved", nameof(CnaGameCreateInfo.Reserved)),
-        ("target_elapsed_time_ticks", nameof(CnaGameCreateInfo.TargetElapsedTimeTicks)), ("window_title", nameof(CnaGameCreateInfo.WindowTitle)),
-        ("callbacks", nameof(CnaGameCreateInfo.Callbacks)));
+    foreach (Type type in InteropLayout.Structs())
+    {
+        string native = InteropLayout.NativeName(type);
+        Record(values, $"sizeof.{native}", Marshal.SizeOf(type), type);
+        Record(values, $"alignof.{native}", AlignmentOfType(type), type);
+
+        if (InteropLayout.IsScalarTypedef(type))
+        {
+            continue;
+        }
+
+        bool paddingRunMeasured = false;
+        foreach (FieldInfo field in InteropLayout.Fields(type))
+        {
+            if (InteropLayout.IsPadding(field.Name))
+            {
+                if (paddingRunMeasured)
+                {
+                    continue;
+                }
+
+                paddingRunMeasured = true;
+                Record(values, $"offsetof.{native}.reserved", Marshal.OffsetOf(type, field.Name).ToInt64(), type);
+                continue;
+            }
+
+            if (InteropLayout.Skip(type, field))
+            {
+                continue;
+            }
+
+            Record(
+                values,
+                $"offsetof.{native}.{InteropLayout.FieldName(type, field)}",
+                Marshal.OffsetOf(type, field.Name).ToInt64(),
+                type);
+        }
+    }
+
     return values;
+}
+
+/// <summary>
+/// Records a measurement, refusing to let two managed spellings of one C type disagree.
+///
+/// <c>CnaRect</c> and <c>CnaRectangle</c> are both <c>CNA_Rectangle</c>. Letting the second
+/// assignment win would hide exactly the case worth catching -- two managed views of one native
+/// type that have drifted apart -- behind a dictionary write.
+/// </summary>
+static void Record(Dictionary<string, long> values, string key, long value, Type type)
+{
+    if (values.TryGetValue(key, out long existing) && existing != value)
+    {
+        throw new InvalidDataException(
+            $"Two managed types disagree about {key}: {existing} was already measured, and " +
+            $"{type.Name} measures {value}.");
+    }
+
+    values[key] = value;
+}
+
+/// <summary>The same measurement <see cref="AlignmentOf{T}"/> makes, for a type only known at run
+/// time: a byte followed by the type, so the padding the compiler inserts is the alignment.</summary>
+static int AlignmentOfType(Type type)
+{
+    Type probe = typeof(AlignmentProbe<>).MakeGenericType(type);
+    return checked((int)Marshal.OffsetOf(probe, "Value").ToInt64());
 }
 
 static void AddStruct<T>(Dictionary<string, long> values, string nativeName, params (string Native, string Managed)[] fields)
@@ -405,3 +438,280 @@ struct AlignmentProbe<T> where T : unmanaged
     public byte Prefix;
     public T Value;
 }
+
+/// <summary>
+/// Every struct CNA.Interop declares, and how its name and fields map onto CNA's C names.
+///
+/// The mapping is derived, not listed: <c>CnaFoo</c> is <c>CNA_Foo</c> and <c>StructSize</c> is
+/// <c>struct_size</c>. Derivation is what makes this cover all of them -- a list would have to be
+/// extended by hand for every new struct, which is exactly how the hand-written probe ended up
+/// measuring fourteen of eighty-two.
+///
+/// <see cref="Overrides"/> carries the names that do not follow the rule, and
+/// <see cref="NotPartOfTheAbi"/> the managed-only helpers that have no C counterpart at all. Both
+/// are small, explicit and have to be justified, which is the point: an unexplained gap is a
+/// finding, not a silence.
+/// </summary>
+static class InteropLayout
+{
+    private static readonly Dictionary<string, string> Overrides = new(StringComparer.Ordinal)
+    {
+        ["CnaManagedGameCallbacks"] = "CNA_GameCallbacks",
+
+        // Two managed spellings of one C type. Both are measured, and a disagreement between them
+        // is raised rather than silently overwritten -- see the duplicate check in
+        // BuildManagedValues.
+        ["CnaRect"] = "CNA_Rectangle",
+
+        // The buffered sprite path submits through cna_sprite_batch_submit_scaled_many, whose
+        // element type C calls CNA_SpriteScaledCommand.
+        ["CnaSpriteDrawCommand"] = "CNA_SpriteScaledCommand",
+    };
+
+    /// <summary>
+    /// Types whose C counterpart is a scalar typedef rather than a struct, so there are no member
+    /// offsets to take. <c>CNA_Handle</c> is a <c>uint64_t</c>; the managed side wraps it in a
+    /// one-field struct, and <c>offsetof</c> on a typedef does not compile.
+    /// </summary>
+    private static readonly HashSet<string> ScalarTypedefs = new(StringComparer.Ordinal)
+    {
+        "CnaHandle",
+    };
+
+    public static bool IsScalarTypedef(Type type) => ScalarTypedefs.Contains(type.Name);
+
+    private static readonly HashSet<string> NotPartOfTheAbi = new(StringComparer.Ordinal)
+    {
+        // A generic helper this verifier uses to measure alignment; it is not an ABI type.
+        "AlignmentProbe`1",
+
+        // Managed-only. CnaFloatBuffer256 is a fixed-size scratch buffer this binding uses to hand
+        // effect parameter data across; CnaNativeAbiProfile is the admission policy's own record.
+        // Neither is declared in any CNA header, so neither has a layout to agree with.
+        "CnaFloatBuffer256",
+        "CnaNativeAbiProfile",
+
+        // How this binding spells a run of padding bytes inside another struct. C writes the run
+        // inline as uint8_t reserved[N], so there is no separate type to measure -- the containing
+        // struct's own offsets and size are what has to agree, and they are measured.
+        "CnaReservedBytes3",
+        "CnaReservedBytes7",
+    };
+
+    public static IEnumerable<Type> Structs() =>
+        typeof(CnaHandle).Assembly
+            .GetTypes()
+            .Where(type => type.IsValueType && !type.IsEnum && !type.IsGenericType)
+            .Where(type => type.Name.StartsWith("Cna", StringComparison.Ordinal))
+            .Where(type => !NotPartOfTheAbi.Contains(type.Name))
+            .OrderBy(type => type.Name, StringComparer.Ordinal);
+
+    public static string NativeName(Type type) =>
+        Overrides.TryGetValue(type.Name, out string? mapped)
+            ? mapped
+            : "CNA_" + type.Name["Cna".Length..];
+
+    public static IEnumerable<FieldInfo> Fields(Type type) =>
+        type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Where(field => !field.IsStatic);
+
+    /// <summary>PascalCase to snake_case: a separator before any capital that follows a lowercase
+    /// letter or a digit, so <c>TargetElapsedTimeTicks</c> becomes <c>target_elapsed_time_ticks</c>
+    /// and <c>Reserved0</c> stays <c>reserved0</c>.</summary>
+    public static string Generate()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine("// SPDX-License-Identifier: MIT");
+        text.AppendLine("// Generated by CNA.AbiVerify from the structs CNA.Interop declares. Do not edit.");
+        text.AppendLine();
+        text.AppendLine("#include <stddef.h>");
+        text.AppendLine("#include <stdint.h>");
+        text.AppendLine("#include <stdio.h>");
+        text.AppendLine();
+        text.AppendLine("#include \"CNA/C/cna.h\"");
+        text.AppendLine();
+        text.AppendLine("#define PRINT_SIZE(type) printf(\"sizeof.\" #type \"=%zu\\n\", sizeof(type))");
+        text.AppendLine("#define PRINT_ALIGN(type) printf(\"alignof.\" #type \"=%zu\\n\", _Alignof(type))");
+        text.AppendLine("#define PRINT_OFFSET(type, field) printf(\"offsetof.\" #type \".\" #field \"=%zu\\n\", offsetof(type, field))");
+        text.AppendLine();
+        text.AppendLine("int main(void)");
+        text.AppendLine("{");
+        text.AppendLine("    printf(\"abi.version=%u\\n\", CNA_ABI_VERSION);");
+        text.AppendLine("    PRINT_SIZE(void*);");
+        text.AppendLine("    PRINT_ALIGN(void*);");
+        text.AppendLine("    PRINT_SIZE(CNA_Result);");
+        text.AppendLine("    PRINT_ALIGN(CNA_Result);");
+        text.AppendLine("    PRINT_SIZE(CNA_Bool);");
+        text.AppendLine("    PRINT_ALIGN(CNA_Bool);");
+        text.AppendLine("    PRINT_SIZE(CNA_GraphicsDeviceEvent);");
+        text.AppendLine("    PRINT_SIZE(CNA_GraphicsProfile);");
+
+        var emitted = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Type type in InteropLayout.Structs())
+        {
+            string native = InteropLayout.NativeName(type);
+
+            // One C type, however many managed spellings it has. The managed side measures each
+            // spelling and refuses to let them disagree, so emitting the C type twice would only
+            // duplicate identical lines.
+            if (!emitted.Add(native))
+            {
+                continue;
+            }
+
+            text.AppendLine();
+            text.AppendLine($"    PRINT_SIZE({native});");
+            text.AppendLine($"    PRINT_ALIGN({native});");
+            if (InteropLayout.IsScalarTypedef(type))
+            {
+                continue;
+            }
+
+            bool paddingRunEmitted = false;
+            foreach (FieldInfo field in InteropLayout.Fields(type))
+            {
+                if (InteropLayout.IsPadding(field.Name))
+                {
+                    if (paddingRunEmitted)
+                    {
+                        continue;
+                    }
+
+                    paddingRunEmitted = true;
+                    text.AppendLine($"    PRINT_OFFSET({native}, reserved);");
+                    continue;
+                }
+
+                if (InteropLayout.Skip(type, field))
+                {
+                    continue;
+                }
+
+                text.AppendLine($"    PRINT_OFFSET({native}, {InteropLayout.FieldName(type, field)});");
+            }
+        }
+
+        text.AppendLine();
+        text.AppendLine("    return 0;");
+        text.AppendLine("}");
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// PascalCase to snake_case.
+    ///
+    /// A separator goes before a capital that follows a lowercase letter or a digit, and also before
+    /// the last capital of a run when a lowercase follows it -- so <c>HasYButton</c> is
+    /// <c>has_y_button</c> rather than <c>has_ybutton</c>, which is what the simpler rule produced
+    /// and what the C compiler rejected.
+    /// </summary>
+    public static string NativeField(string managed)
+    {
+        var text = new System.Text.StringBuilder(managed.Length + 8);
+        for (int i = 0; i < managed.Length; i++)
+        {
+            char c = managed[i];
+            bool afterLowerOrDigit = i > 0 && (char.IsLower(managed[i - 1]) || char.IsDigit(managed[i - 1]));
+            bool endOfCapitalRun = i > 0 && char.IsUpper(managed[i - 1]) &&
+                                   i + 1 < managed.Length && char.IsLower(managed[i + 1]);
+
+            if (char.IsUpper(c) && (afterLowerOrDigit || endOfCapitalRun))
+            {
+                text.Append('_');
+            }
+
+            text.Append(char.ToLowerInvariant(c));
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Whether a field is explicit padding, spelled here as a run of separate bytes.
+    ///
+    /// C declares padding as one array -- <c>uint8_t reserved[5]</c> -- and C# cannot express that
+    /// in a struct without <c>fixed</c> and <c>unsafe</c>, so the managed side spells it
+    /// <c>Reserved0</c>..<c>Reserved4</c>. That is a representation difference, not an ABI one: the
+    /// first byte of the run sits at the array's offset and the rest follow by construction, and the
+    /// struct's total size still has to agree. So the run is measured at its first element, against
+    /// the array's own name.
+    /// </summary>
+    public static bool IsPadding(string managed) =>
+        managed.StartsWith('_') &&
+        System.Text.RegularExpressions.Regex.IsMatch(managed, "^_[Rr]eserved[0-9]*$");
+
+    /// <summary>
+    /// Managed field names that do not follow the case rule, keyed by <c>Struct.Field</c>.
+    ///
+    /// Every entry is a place where the two sides genuinely chose different words -- CNA says
+    /// <c>pressed_buttons</c> and the managed struct says <c>Buttons</c>, CNA says
+    /// <c>scroll_wheel</c> and the managed struct says <c>ScrollWheelValue</c>. Derivation cannot
+    /// bridge that and should not try: an override is a statement that someone checked the header,
+    /// and a wrong one fails to compile rather than silently measuring the wrong field.
+    /// </summary>
+    private static readonly Dictionary<string, string> FieldOverrides = new(StringComparer.Ordinal)
+    {
+        ["CnaGamePadCapabilities.GamePadType"] = "gamepad_type",
+        ["CnaGamePadCapabilities.HasDPadUpButton"] = "has_dpad_up_button",
+        ["CnaGamePadCapabilities.HasDPadDownButton"] = "has_dpad_down_button",
+        ["CnaGamePadCapabilities.HasDPadLeftButton"] = "has_dpad_left_button",
+        ["CnaGamePadCapabilities.HasDPadRightButton"] = "has_dpad_right_button",
+        ["CnaGamePadState.Buttons"] = "pressed_buttons",
+        ["CnaGestureSample.FingerId"] = "finger_id_ext",
+        ["CnaGestureSample.FingerId2"] = "finger_id2_ext",
+        ["CnaMouseState.Buttons"] = "pressed_buttons",
+        ["CnaMouseState.ScrollWheelValue"] = "scroll_wheel",
+        ["CnaMouseState.HorizontalScrollWheelValue"] = "horizontal_scroll_wheel",
+        ["CnaRenderTargetInfo.ContentLost"] = "is_content_lost",
+        ["CnaVertexBufferInfo.ContentLost"] = "is_content_lost",
+
+        // The keyboard's pressed-key set is four 64-bit words here and one array in C.
+        ["CnaKeyboardState.Bits0"] = "pressed_key_words",
+
+        // C spells these two "format" and "depth_format"; the managed structs are more explicit.
+        ["CnaRenderTarget2DCreateInfo.ColorFormat"] = "format",
+        ["CnaRenderTarget2DCreateInfo.DepthStencilFormat"] = "depth_format",
+        ["CnaRenderTargetInfo.ColorFormat"] = "format",
+        ["CnaRenderTargetInfo.DepthStencilFormat"] = "depth_format",
+
+        // Padding that is one array in C and separate bytes here. Measured at the first byte, which
+        // is the array's own offset; the rest follow by construction and the total size still has
+        // to agree.
+        ["CnaBackBufferReadback.Reserved0"] = "reserved",
+        ["CnaGraphicsFormatSelection.Reserved0"] = "reserved",
+        ["CnaSpriteFontCreateInfo.Reserved0"] = "reserved",
+        ["CnaRasterizerState.ReservedTail"] = "reserved",
+        ["CnaRenderTargetInfo.ReservedTail"] = "reserved",
+
+        // Two separate padding members in C, named for their position rather than numbered here.
+        ["CnaRenderTarget2DCreateInfo.Reserved"] = "reserved0",
+        ["CnaRenderTarget2DCreateInfo.Reserved2"] = "reserved1",
+    };
+
+    private static readonly HashSet<string> SkippedFields = new(StringComparer.Ordinal)
+    {
+        // Measured at Bits0, which is the array's own offset; the rest follow by construction.
+        "CnaKeyboardState.Bits1",
+        "CnaKeyboardState.Bits2",
+        "CnaKeyboardState.Bits3",
+
+        // The tail of a padding run measured at its first byte, for the same reason.
+        "CnaBackBufferReadback.Reserved1",
+        "CnaBackBufferReadback.Reserved2",
+        "CnaGraphicsFormatSelection.Reserved1",
+        "CnaGraphicsFormatSelection.Reserved2",
+        "CnaSpriteFontCreateInfo.Reserved1",
+        "CnaSpriteFontCreateInfo.Reserved2",
+        "CnaSpriteFontCreateInfo.Reserved3",
+        "CnaSpriteFontCreateInfo.Reserved4",
+    };
+
+    public static bool Skip(Type type, FieldInfo field) =>
+        SkippedFields.Contains($"{type.Name}.{field.Name}");
+
+    public static string FieldName(Type type, FieldInfo field) =>
+        FieldOverrides.TryGetValue($"{type.Name}.{field.Name}", out string? mapped)
+            ? mapped
+            : NativeField(field.Name);
+}
+
