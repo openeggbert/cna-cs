@@ -7,3 +7,10 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("CNA.XnaCompat")]
 [assembly: InternalsVisibleTo("CNA.Framework.Tests")]
 [assembly: InternalsVisibleTo("CNA.OwnershipStress")]
+
+// The integration suite needs internals for measurements that only a real device can make -- A1's
+// native-vs-managed glyph comparison is the first. Safe here in a way it is not for CNA.XnaCompat:
+// every member the integration tests override on a CNA.Framework type is plain `protected`, so the
+// grant cannot change which modifier an override has to use. The `protected internal` members in
+// this assembly are on DrawableGameComponent, which that suite does not subclass.
+[assembly: InternalsVisibleTo("CNA.Integration.Tests")]

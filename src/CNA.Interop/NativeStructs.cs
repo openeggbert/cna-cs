@@ -583,3 +583,63 @@ internal struct CnaGraphicsDeviceInformation
     public uint GraphicsProfile;
     public CnaPresentationParameters PresentationParameters;
 }
+
+/// <summary>
+/// Creation parameters for a native SpriteFont -- <c>sprite_font.h</c>'s
+/// <c>CNA_SpriteFontCreateInfo</c>.
+///
+/// The glyph array is caller-owned and copied during creation, so the pointer needs to stay valid
+/// only for the duration of the call.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct CnaSpriteFontCreateInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaHandle Texture;
+    public CnaSpriteFontGlyph* Glyphs;
+    public ulong GlyphCount;
+    public int LineSpacing;
+    public float Spacing;
+    public ushort DefaultCharacter;
+    public byte HasDefaultCharacter;
+    public byte Reserved0;
+    public byte Reserved1;
+    public byte Reserved2;
+    public byte Reserved3;
+    public byte Reserved4;
+
+    public static unsafe CnaSpriteFontCreateInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaSpriteFontCreateInfo),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>
+/// One string to draw through a SpriteBatch -- <c>graphics.h</c>'s <c>CNA_SpriteTextCommand</c>.
+///
+/// The whole point of the route is that the string crosses once instead of once per glyph, so the
+/// text is a <see cref="CnaStringView"/> pointing at caller-owned UTF-8 copied during the call.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaSpriteTextCommand
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaHandle SpriteFont;
+    public CnaStringView Text;
+    public CnaVector2 Position;
+    public CnaColor Color;
+    public float Rotation;
+    public CnaVector2 Origin;
+    public CnaVector2 Scale;
+    public uint Effects;
+    public float LayerDepth;
+
+    public static unsafe CnaSpriteTextCommand Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaSpriteTextCommand),
+        StructVersion = 1,
+    };
+}

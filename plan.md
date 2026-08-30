@@ -124,7 +124,7 @@ cursor surface. The routes below exist upstream and are still unbound.
 
 | Task | Route | Completion criterion |
 | --- | --- | --- |
-| A1. `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | **Unblocked, not yet adopted.** See A1b: the recorded reason for not doing this was false. |
+| A1. `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | **Measured: identical. Not yet adopted** -- what remains is a lifetime decision, not a rendering one. See A1b/A1c. |
 | A2. **Already done, under a different route.** Batched sprite submission | `cna_sprite_batch_submit_scaled_many` | The completion criterion -- one native call per batch, not one per sprite -- has been met since the buffered-flush change. The route named here originally was the wrong one for this binding: `submit_many` is destination-rectangle-based, and CNA's position+scale route is the one this facade needs, because `Draw(texture, Rectangle, ...)` is converted managed-side to `position = rect.XY`, `scale = rect.Size / source.Size`. What was genuinely missing is any check that the conversion lands where the rectangle asked; see the pixel tests below. |
 | A3. **Done.** `PresentationParameters` bounds and clone | `cna_presentation_parameters_get_bounds`, `cna_presentation_parameters_clone` | Both go through native. Native agrees with the managed reconstruction that was there (the back buffer at the origin), which is the expected outcome and not the point -- the point is that native is the authority, so a future disagreement shows up here instead of being silently overridden. The clone is asserted independent, since a route returning the same value would pass every equality check and fail the moment a game edited the copy. |
 | A4. **Done.** Preferred presentation mode | `cna_graphics_device_manager_get/set_preferred_presentation_mode_ext` | `CnaGraphicsDeviceManagerExtensions.Get/SetCnaPreferredPresentationMode`, outside the strict namespace. All five identities round-trip, not one: the enum crosses the ABI as a numeric cast, and an off-by-one there passes a single-value test. Worth having because XNA stretches the back buffer and offers no say, so a fixed-aspect XNA game letterboxes by hand -- code a port can now delete. |
@@ -188,6 +188,33 @@ Adopting A1 therefore means:
 Adopt only if glyph placement is not observably different, and record the measurement either way.
 The win if it holds is one native call per string instead of one per glyph, which is worth having in
 a text-heavy game and is worth nothing if the glyphs move.
+
+### A1c. The measurement: native `draw_string` places glyphs identically
+
+`NativeDrawStringMeasurementTests` renders the same string through both routes into a
+`RenderTarget2D` and compares the result pixel for pixel. **0 of 1024 pixels differ.**
+
+The font is synthetic on purpose -- one texel per glyph, distinct colours, scale 4 -- so each glyph
+is a solid 4x4 block and any disagreement in placement, ordering or tint appears as a block in the
+wrong place rather than as a few arguable edge texels. The reference render is asserted to contain
+the red `A` block at 8,8 and the green `B` block immediately after it *before* the comparison runs,
+because two blank targets agree perfectly. That guard is not hypothetical: the first version of this
+test checked for emptiness by looking for a zero alpha, and a target cleared to opaque black has
+alpha 255, so it would have compared two blank images and passed. Third time in this session that a
+check of mine could not fail; the guard is now written as a positive assertion about what must be
+drawn rather than a negative one about what must not.
+
+So placement is not the obstacle. What remains before adopting:
+
+- `SpriteFont` must own a native handle. `CreateNativeFontHandle` builds one from the managed glyph
+  table and the caller destroys it; adoption means retaining it, which gives this type a native
+  lifetime it does not have today, and XNA's `SpriteFont` is not `IDisposable`.
+- Ordering. Every `Draw` buffers and submits at `End`, while `draw_string` submits during the call,
+  so `DrawStringThroughNativeFont` flushes the buffer first to keep the comparison honest. Flushing
+  once per string gives back most of what batching bought, so adoption needs the text command to
+  join the buffer rather than bypass it.
+
+Neither is hard; both are design, and the measurement the plan asked for is now on the record.
 
 ### A2b. Sprite drawing is now checked by reading the pixels back
 

@@ -2261,6 +2261,19 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_sprite_font_destroy(CnaHandle spriteFont);
 
+    /// <summary>Builds a native SpriteFont from a glyph table -- the inverse of
+    /// <c>cna_sprite_font_copy_glyphs</c>, and the only way to get a font handle for a font this
+    /// binding built itself rather than loaded.</summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_sprite_font_create(
+        in CnaSpriteFontCreateInfo createInfo, out CnaHandle outSpriteFont);
+
+    /// <summary>Draws one string through an active batch interval, in one transition rather than
+    /// one per glyph. Requires an owned SpriteFont handle belonging to the batch's game.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_sprite_batch_draw_string(
+        CnaHandle spriteBatch, in CnaSpriteTextCommand command);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_manager_apply_changes(CnaHandle manager);
 

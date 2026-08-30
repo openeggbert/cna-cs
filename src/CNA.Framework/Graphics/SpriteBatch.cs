@@ -369,6 +369,57 @@ public class SpriteBatch : IDisposable
         }
     }
 
+    /// <summary>
+    /// Draws one string through <c>cna_sprite_batch_draw_string</c> using a native SpriteFont
+    /// handle, instead of one buffered quad per glyph.
+    ///
+    /// For plan.md A1's measurement, which is why it is internal and why it takes a raw handle: the
+    /// question is whether native places glyphs where <see cref="DrawString(SpriteFont,string,Vector2,Color)"/>
+    /// does, and answering it must not require first committing this type to owning a native font.
+    ///
+    /// <b>Buffered work is flushed first.</b> Every <c>Draw</c> here queues a command and submits at
+    /// <see cref="End"/>, while this route submits during the call. Without the flush a string drawn
+    /// between two sprites would arrive before both of them, so the ordering would silently differ
+    /// from the managed path -- which would make a comparison of the two meaningless. Adoption would
+    /// have to solve that properly rather than by flushing, since flushing per string gives back
+    /// most of what batching bought.
+    /// </summary>
+    internal void DrawStringThroughNativeFont(
+        nint nativeFontHandleValue,
+        string text,
+        Vector2 position,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        Vector2 scale,
+        SpriteEffects effects,
+        float layerDepth)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        EnsureHasBegun(nameof(DrawStringThroughNativeFont));
+
+        FlushCommandBuffer();
+
+        CnaResult result = CnaStringMarshal.WithStringView(text, view =>
+        {
+            CnaSpriteTextCommand command = CnaSpriteTextCommand.Versioned();
+            command.SpriteFont = new CnaHandle(nativeFontHandleValue);
+            command.Text = view;
+            command.Position = position.ToNative();
+            command.Color = color.ToNative();
+            command.Rotation = rotation;
+            command.Origin = origin.ToNative();
+            command.Scale = scale.ToNative();
+            command.Effects = (uint)effects;
+            command.LayerDepth = layerDepth;
+
+            return Native.cna_sprite_batch_draw_string(new CnaHandle(NativeHandleValue), in command);
+        });
+
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(DrawStringThroughNativeFont));
+    }
+
     /// <summary>XNA leaves the batch begun when setup or flushing throws; only a successful End
     /// closes the pair. This matters for the observable state after an invalid sort mode or a
     /// rendering failure.</summary>

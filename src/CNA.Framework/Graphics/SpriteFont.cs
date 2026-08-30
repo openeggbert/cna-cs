@@ -1,3 +1,4 @@
+using CNA.Interop;
 namespace CNA.Graphics;
 
 /// <summary>
@@ -107,6 +108,52 @@ public class SpriteFont
     }
 
     internal void AppendGlyphPlacements(string text, List<GlyphPlacement> placements) => Walk(text, placements);
+
+    /// <summary>
+    /// Builds a native SpriteFont from this font's own glyph table, and hands back its handle.
+    ///
+    /// For plan.md A1, which asks whether <c>cna_sprite_batch_draw_string</c> places glyphs the same
+    /// way the per-glyph quad path does. Answering that needs a native font to draw with, and the
+    /// load path destroys the one it briefly creates.
+    ///
+    /// The caller owns the handle and must destroy it. Deliberately not stored on this instance:
+    /// retaining one is the *adoption* step, and it changes this type's lifetime -- which is a
+    /// decision the measurement is supposed to inform, not one to take before it.
+    /// </summary>
+    internal unsafe nint CreateNativeFontHandle()
+    {
+        var glyphs = new CnaSpriteFontGlyph[_characters.Length];
+        for (int i = 0; i < glyphs.Length; i++)
+        {
+            glyphs[i] = CnaSpriteFontGlyph.Versioned();
+            glyphs[i].GlyphBounds = new CnaRectangle(
+                _glyphBounds[i].X, _glyphBounds[i].Y, _glyphBounds[i].Width, _glyphBounds[i].Height);
+            glyphs[i].Cropping = new CnaRectangle(
+                _cropping[i].X, _cropping[i].Y, _cropping[i].Width, _cropping[i].Height);
+            glyphs[i].Character = _characters[i];
+            glyphs[i].Kerning = _kerning[i].ToNative();
+        }
+
+        fixed (CnaSpriteFontGlyph* first = glyphs)
+        {
+            CnaSpriteFontCreateInfo createInfo = CnaSpriteFontCreateInfo.Versioned();
+            createInfo.Texture = new CnaHandle(Texture.NativeHandleValue);
+            createInfo.Glyphs = first;
+            createInfo.GlyphCount = (ulong)glyphs.Length;
+            createInfo.LineSpacing = LineSpacing;
+            createInfo.Spacing = Spacing;
+            createInfo.DefaultCharacter = DefaultCharacter ?? '\0';
+            createInfo.HasDefaultCharacter = (byte)(DefaultCharacter.HasValue ? 1 : 0);
+
+            CnaResult result = Native.cna_sprite_font_create(in createInfo, out CnaHandle font);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(CreateNativeFontHandle));
+            return font.AsNint;
+        }
+    }
+
+    internal static void DestroyNativeFontHandle(nint handleValue) =>
+        Native.cna_sprite_font_destroy(new CnaHandle(handleValue));
 
     private int ResolveIndex(char c)
     {
