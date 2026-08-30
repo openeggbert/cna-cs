@@ -488,7 +488,7 @@ public class GraphicsDevice : IDisposable
         int instanceCount)
     {
         CnaResult result = Native.cna_graphics_device_draw_instanced_primitives(
-            ResolveNativeDeviceHandle(), (int)primitiveType, baseVertex, minVertexIndex,
+            ResolveNativeDeviceHandle(), (uint)primitiveType, baseVertex, minVertexIndex,
             numVertices, startIndex, primitiveCount, instanceCount);
         CnaException.ThrowIfFailed(result, nameof(DrawInstancedPrimitives));
     }
@@ -881,7 +881,7 @@ public class GraphicsDevice : IDisposable
         {
             var primitives = new CnaUserPrimitives
             {
-                PrimitiveType = (int)primitiveType,
+                PrimitiveType = (uint)primitiveType,
                 VertexSource = (CnaUserVertexSource)vertexSource,
                 VertexData = vertexData,
                 VertexDeclaration = declaration,
@@ -941,7 +941,7 @@ public class GraphicsDevice : IDisposable
         {
             var primitives = new CnaUserPrimitives
             {
-                PrimitiveType = (int)primitiveType,
+                PrimitiveType = (uint)primitiveType,
                 VertexSource = (CnaUserVertexSource)vertexSource,
                 VertexData = vertexData,
                 VertexDeclaration = declaration,
@@ -1270,7 +1270,7 @@ public class GraphicsDevice : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
 
         CnaResult result = Native.cna_graphics_device_draw_primitives(
-            ResolveNativeDeviceHandle(), (int)primitiveType, startVertex, primitiveCount);
+            ResolveNativeDeviceHandle(), (uint)primitiveType, startVertex, primitiveCount);
         CnaException.ThrowIfFailed(result, nameof(DrawPrimitives));
     }
 
@@ -1289,7 +1289,7 @@ public class GraphicsDevice : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(primitiveCount);
 
         CnaResult result = Native.cna_graphics_device_draw_indexed_primitives(
-            ResolveNativeDeviceHandle(), (int)primitiveType, baseVertex, minVertexIndex, numVertices, startIndex, primitiveCount);
+            ResolveNativeDeviceHandle(), (uint)primitiveType, baseVertex, minVertexIndex, numVertices, startIndex, primitiveCount);
         CnaException.ThrowIfFailed(result, nameof(DrawIndexedPrimitives));
     }
 

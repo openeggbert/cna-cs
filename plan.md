@@ -18,7 +18,7 @@ packaging, and release engineering.
 | Debug and Release solution build | 0 warnings, 0 errors |
 | Managed tests | 560 `CNA.Framework` + 208 `CNA.XnaCompat`, all passing |
 | Native integration | 125/125 passing in Debug and Release on Linux x64 against the ABI 0.20.0 CNA OPENGLES3 library |
-| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 854 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 861 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
@@ -315,7 +315,7 @@ counter assertions are on freshly constructed games. `GetVertexBuffers` -- the o
 
 ### B. Deepen the ABI evidence
 
-The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 854 prototypes. That
+The C-authority probe measured 13 of the 80 interop structs and compiled 4 of 861 prototypes. That
 was defensible against a one-minor step; against a twelve-minor one it is a floor, and it is now the
 weakest link in an admission that otherwise rests on the upstream baseline diff.
 
@@ -346,7 +346,49 @@ weakest link in an admission that otherwise rests on the upstream baseline diff.
   `CnaRect` and `CnaRectangle` are two managed spellings of one C type. Both are measured, and a
   disagreement between them raises rather than letting the second dictionary write win -- which is
   the case actually worth catching.
-- B2. Extend the prototype probe from 4 routes to every callback-taking route and every route whose
+- B2. **Done.** The prototype probe is generated from `CNA.Interop.Native` by reflection, so
+  **PROTO_IMPORTS = PROTO_VERIFIED = 861** and `PROTO_UNMAPPABLE = 0`. Each import becomes a
+  file-scope function pointer declared with the prototype derived from the *managed* declaration and
+  initialised with the real C function; C's compatibility rules then make a wrong return type, arity,
+  parameter type, by-ref direction or pointer depth a diagnostic, and `-Werror` makes a diagnostic a
+  failed gate. The C compiler is the authority on what the header means -- nothing here reimplements
+  C's type rules.
+
+  **It found four real defects on the first run**, all now fixed:
+  `cna_game_components_insert` was declared with a signed 32-bit index against a `uint64_t`
+  parameter, and the three `draw_*_primitives` routes passed `int` for a `CNA_PrimitiveType`
+  (`uint32_t`). The index one is the serious one: only x86-64's zero-extending 32-bit moves made it
+  work. A fifth followed from it -- `CnaUserPrimitives.PrimitiveType` was `int` against a `uint32_t`
+  field, which B1's offset probe cannot see because the widths agree. **Struct field signedness is
+  still unmeasured**; extending the layout probe to check field *types* rather than only offsets is
+  the natural follow-up.
+
+  109 parameters are listed in an explicit override manifest, in four categories, none of which is an
+  ABI difference: `const T*` (C# cannot qualify a pointer, and `const` is not part of a calling
+  convention), `char*` (C's `char` is a third type distinct from both signed and unsigned char, so no
+  C# pointer is exact), `void*` against `byte*`, and 24 callbacks the managed side declares `nint`,
+  which carries no signature at all. **Every entry was produced by the compiler, not by hand** -- the
+  generator emitted the managed-derived prototype, the compiler rejected it, and the recorded type is
+  the one the diagnostic named. So the manifest cannot excuse a difference that was not measured, and
+  any *other* change to the same parameter still fails.
+
+  Nine negative controls run as part of the gate, and all nine are rejected: wrong return type,
+  signedness change at the same width, wrong pointer depth, `in`->`out`, `out`->`in`, wrong versioned
+  descriptor, wrong callback shape, swapped same-width parameters, absent import. A control whose
+  target declaration is no longer generated reports itself stale rather than passing silently -- which
+  it did, for all nine, the first time they were written from memory instead of from the generated
+  text. The gate was also proven to *fail*: making one mutation identical to its original produces
+  `ABI_STATUS=failed`.
+
+  Two tool defects were fixed on the way. `Run` read one pipe to the end and then the other, which
+  deadlocks the moment a child fills the pipe nobody is draining -- a C compiler with a hundred
+  diagnostics does exactly that, and the first full run hung silently until it was killed. And the
+  self-test originally ran *after* the report was built, so its findings could not affect
+  `ABI_STATUS`.
+
+  What remains for B2: the 24 `nint` callbacks are checked structurally at the call site but the
+  managed delegates that are actually passed are not yet compared against the C callback typedefs.
+- B2 (was). Extend the prototype probe from 4 routes to every callback-taking route and every route whose
   managed declaration uses `in`/`out`/`ref` on a versioned descriptor -- the shapes `sweep.py`'s
   arity check cannot see.
 - B3. Emit every consumed enum-like constant from the C probe and compare it against the managed
@@ -387,7 +429,7 @@ exported by every CNA build and returns `NOT_SUPPORTED` when the layer is absent
 symbol is not evidence of a capability. Any further engine-layer binding must gate on the
 availability query rather than on the symbol existing.
 
-CNA 0.20.0 exports 4,051 routes; this binding consumes 854. The remainder is not all product
+CNA 0.20.0 exports 4,051 routes; this binding consumes 861. The remainder is not all product
 surface -- most of `vectors.h`, `matrix.h`, `math.h`, `quaternion.h`, `curve.h`, `geometry.h` and
 `color.h` is deliberately managed by design invariant 3, and much of the rest is engine-internal.
 What is genuinely a CNA-beyond-XNA product surface, by header and unbound count:
@@ -603,7 +645,7 @@ are not assumed compatible. The reviewed matrix accepts exactly 0.19.0. It previ
 0.6.0, 0.7.0 and 0.8.0; those entries were retired when this binding began importing four routes
 CNA added after 0.8.0, which no earlier library exports -- a consequence of the consumer moving,
 not a finding against those reviews. Every other version is rejected by default. The loader
-additionally requires all 854 imported symbols and executes guarded core signature/struct-shape
+additionally requires all 861 imported symbols and executes guarded core signature/struct-shape
 probes. Eleven dependency-free fixture libraries prove two positive and nine negative cases in
 fresh processes, including that a retired generation and both neighbours of the accepted one are
 refused.

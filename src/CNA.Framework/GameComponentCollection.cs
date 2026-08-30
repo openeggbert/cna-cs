@@ -101,7 +101,11 @@ public class GameComponentCollection : ICollection<GameComponent>
 
         _known[item.NativeHandle.Value] = item;
 
-        CnaResult result = Native.cna_game_components_insert(GameHandle, index, item.NativeHandle);
+        // The C index is a uint64_t. This passed a signed 32-bit value until B2's generated
+        // prototype probe compared the two: the argument register's upper half was never written,
+        // which happens to work on x86-64 because a 32-bit move zero-extends, and is not something
+        // to rely on. The negative case is refused above, so the widening is total.
+        CnaResult result = Native.cna_game_components_insert(GameHandle, (ulong)index, item.NativeHandle);
         if (result.IsFailure())
         {
             _known.Remove(item.NativeHandle.Value);

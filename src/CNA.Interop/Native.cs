@@ -197,7 +197,7 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_draw_primitives(
         CnaHandle device,
-        int primitiveType,
+        uint primitiveType,
         int startVertex,
         int primitiveCount);
 
@@ -210,7 +210,7 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_draw_indexed_primitives(
         CnaHandle device,
-        int primitiveType,
+        uint primitiveType,
         int baseVertex,
         int minVertexIndex,
         int numVertices,
@@ -1055,7 +1055,7 @@ internal static partial class Native
     internal static partial CnaResult cna_game_components_add(CnaHandle game, CnaHandle component);
 
     [LibraryImport(LibraryName)]
-    internal static partial CnaResult cna_game_components_insert(CnaHandle game, int index, CnaHandle component);
+    internal static partial CnaResult cna_game_components_insert(CnaHandle game, ulong index, CnaHandle component);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_game_components_remove(CnaHandle game, CnaHandle component, out byte outRemoved);
@@ -2559,7 +2559,7 @@ internal static partial class Native
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_draw_instanced_primitives(
-        CnaHandle device, int primitiveType, int baseVertex, int minVertexIndex, int numVertices,
+        CnaHandle device, uint primitiveType, int baseVertex, int minVertexIndex, int numVertices,
         int startIndex, int primitiveCount, int instanceCount);
 
     /// <summary>Subscribes to one <c>CNA_GRAPHICS_DEVICE_EVENT_*</c>. Released with

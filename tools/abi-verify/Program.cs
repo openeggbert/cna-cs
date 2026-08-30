@@ -40,6 +40,7 @@ if (!File.Exists(Path.Combine(includeDirectory, "CNA", "C", "cna.h")))
     return 2;
 }
 
+bool selfTest = Environment.GetEnvironmentVariable("CNA_ABI_SELF_TEST") == "1";
 compiler = ResolveCompiler(compiler);
 string sourceDirectory = AppContext.BaseDirectory;
 string temporaryDirectoryForSource = Path.Combine(Path.GetTempPath(), $"cna-abi-src-{Guid.NewGuid():N}");
@@ -50,10 +51,15 @@ Directory.CreateDirectory(temporaryDirectoryForSource);
 // probe rather than a struct quietly nobody measured. The hand-written probe measured fourteen of
 // the eighty-two.
 string layoutSource = Path.Combine(temporaryDirectoryForSource, "native_layout_probe.c");
-string prototypeSource = FindSource("native_prototype_probe.c");
+// Generated from CNA.Interop.Native for the same reason the layout probe is: a hand-written probe
+// measures whatever someone added, and this one had four routes out of 861.
+string prototypeSource = Path.Combine(temporaryDirectoryForSource, "native_prototype_probe.c");
 string temporaryDirectory = Path.Combine(Path.GetTempPath(), $"cna-abi-{Guid.NewGuid():N}");
 Directory.CreateDirectory(temporaryDirectory);
 File.WriteAllText(layoutSource, InteropLayout.Generate());
+string prototypeUnit = InteropPrototypes.Generate(
+    out List<string> prototypeUnmappable, out List<string> prototypeFromHeader);
+File.WriteAllText(prototypeSource, prototypeUnit);
 
 try
 {
@@ -122,6 +128,62 @@ try
     }
 
     string compilerVersion = GetCompilerVersion(compiler, isMsvc);
+    if (selfTest)
+    {
+        int rejected = 0;
+        int holes = 0;
+        int stale = 0;
+
+        foreach (PrototypeNegativeControls.Control control in PrototypeNegativeControls.All())
+        {
+            if (!prototypeUnit.Contains(control.Original, StringComparison.Ordinal))
+            {
+                // The declaration this control corrupts is no longer generated, so the control is
+                // testing nothing. Reported rather than skipped: a silently inert control is worse
+                // than none, because it still counts as coverage.
+                stale++;
+                Console.WriteLine($"PROTO_CONTROL_STALE={control.Name}");
+                continue;
+            }
+
+            string mutatedPath = Path.Combine(temporaryDirectory, $"mutation-{control.Name}.c");
+            File.WriteAllText(
+                mutatedPath,
+                prototypeUnit.Replace(control.Original, control.Mutated, StringComparison.Ordinal));
+
+            string mutantObject = Path.Combine(temporaryDirectory, $"mutation-{control.Name}.o");
+            List<string> mutationArguments = isMsvc
+                ? ["/nologo", "/std:c11", "/W4", "/WX", "/c", $"/I{includeDirectory}", mutatedPath, $"/Fo:{mutantObject}"]
+                : ["-std=c11", "-Wall", "-Wextra", "-Werror", "-c", "-I", includeDirectory, mutatedPath, "-o", mutantObject];
+
+            if (TryRun(compiler, mutationArguments, temporaryDirectory))
+            {
+                holes++;
+                Console.WriteLine($"PROTO_CONTROL_NOT_REJECTED={control.Name} ({control.Why})");
+            }
+            else
+            {
+                rejected++;
+            }
+        }
+
+        Console.WriteLine($"PROTO_CONTROLS={PrototypeNegativeControls.All().Count}");
+        Console.WriteLine($"PROTO_CONTROLS_REJECTED={rejected}");
+        Console.WriteLine($"PROTO_CONTROLS_STALE={stale}");
+        Console.WriteLine($"PROTO_CONTROLS_NOT_REJECTED={holes}");
+
+        if (holes > 0 || stale > 0)
+        {
+            mismatches.Add(new
+            {
+                key = "prototype-self-test",
+                native = (long?)null,
+                managed = (long?)null,
+                issue = $"{holes} negative control(s) compiled and {stale} were stale",
+            });
+        }
+    }
+
     var report = new
     {
         schemaVersion = 1,
@@ -162,6 +224,18 @@ try
     Console.WriteLine($"ABI_POLICY={CnaNativeAbiPolicy.PolicyVersion}");
     Console.WriteLine($"ABI_NATIVE_VALUES={native.Count}");
     Console.WriteLine($"ABI_MANAGED_VALUES={managed.Count}");
+    // B2: every import CNA.Interop declares now carries signature evidence. The counts are printed
+    // rather than merely asserted so that a shrinking number is visible in a log.
+    int importCount = InteropPrototypes.Imports().Count();
+    Console.WriteLine($"PROTO_IMPORTS={importCount}");
+    Console.WriteLine($"PROTO_VERIFIED={importCount - prototypeUnmappable.Count}");
+    Console.WriteLine($"PROTO_PARAM_OVERRIDES={InteropPrototypes.ParameterOverrides.Count}");
+    Console.WriteLine($"PROTO_UNMAPPABLE={prototypeUnmappable.Count}");
+    if (prototypeUnmappable.Count > 0)
+    {
+        Console.WriteLine($"PROTO_UNMAPPABLE_NAMES={string.Join(",", prototypeUnmappable)}");
+    }
+
     Console.WriteLine($"ABI_MISMATCHES={mismatches.Count}");
     Console.WriteLine($"ABI_STATUS={report.status}");
     return mismatches.Count == 0 ? 0 : 1;
@@ -233,6 +307,21 @@ static string FindSource(string name)
     throw new FileNotFoundException($"ABI probe source was not copied or found: {name}");
 }
 
+/// <summary>Runs a command and reports whether it succeeded, for the negative controls, where a
+/// failure is the expected and required outcome.</summary>
+static bool TryRun(string executable, IReadOnlyList<string> arguments, string workingDirectory)
+{
+    try
+    {
+        Run(executable, arguments, workingDirectory);
+        return true;
+    }
+    catch (InvalidOperationException)
+    {
+        return false;
+    }
+}
+
 static string Run(string executable, IReadOnlyList<string> arguments, string workingDirectory)
 {
     ProcessStartInfo start = new(executable)
@@ -248,8 +337,15 @@ static string Run(string executable, IReadOnlyList<string> arguments, string wor
     }
 
     using Process process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {executable}.");
-    string standardOutput = process.StandardOutput.ReadToEnd();
-    string standardError = process.StandardError.ReadToEnd();
+
+    // Both pipes are drained concurrently. Reading one to the end and then the other deadlocks the
+    // moment the child fills the pipe it is not being read from -- which a C compiler does as soon
+    // as it has a hundred diagnostics to report, and did: the first full prototype run produced no
+    // output at all and hung until it was killed.
+    Task<string> standardOutputTask = process.StandardOutput.ReadToEndAsync();
+    Task<string> standardErrorTask = process.StandardError.ReadToEndAsync();
+    string standardOutput = standardOutputTask.GetAwaiter().GetResult();
+    string standardError = standardErrorTask.GetAwaiter().GetResult();
     process.WaitForExit();
     if (process.ExitCode != 0)
     {

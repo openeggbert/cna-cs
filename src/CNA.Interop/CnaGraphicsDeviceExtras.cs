@@ -52,7 +52,9 @@ internal unsafe struct CnaUserPrimitives
 {
     public uint StructSize;
     public uint StructVersion;
-    public int PrimitiveType;
+    /// <summary>C calls this <c>CNA_PrimitiveType</c>, a <c>uint32_t</c>. It was declared
+    /// <c>int</c> until B2; the widths agree, so the layout probe could not see it.</summary>
+    public uint PrimitiveType;
     public CnaUserVertexSource VertexSource;
     public void* VertexData;
     public CnaHandle VertexDeclaration;
