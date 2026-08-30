@@ -182,11 +182,22 @@ sink-monitor capture (which says what actually reached the speakers):
 
 So the binding is not silent and the reported fault is not reproducible from here. It is also
 intermittent for the reporter -- sound worked once and then stopped again -- which is the shape of an
-environment or a device-state problem rather than a code path. `build-probe/audio-capture.sh` exists
+environment or a device-state problem rather than a code path. `scripts/Capture-GameAudio.sh` exists
 to settle it from the reporter's own machine while the silence is happening: it captures the mixer
 output, the sink monitor, and the audio server's view of the stream, which are three things a
 listener cannot tell apart. Nothing further should be changed in the audio binding without that
 capture, because every hypothesis cheap enough to test blind has now been tested and rejected.
+
+The last gap in the measurement is now closed too: the game was driven past its menu and into a
+real level with `xdotool`, and sound played throughout, peak 29290 at the speaker sink. Every
+earlier measurement had it sitting in the menu, which was the one difference from the reporter's
+"I played the game" that could still have mattered.
+
+The first capture the reporter ran did fail, and the failure was in the script rather than the game:
+it did not pass `CNA_NATIVE_LIBRARY` through, so the game died in its constructor, and the script
+then reported "never opened the device" -- which reads like a finding. It now supplies the library,
+prints which one it used, and distinguishes a game that is running and silent from one that is not
+running.
 
 One real defect did come out of the session, fixed below.
 
