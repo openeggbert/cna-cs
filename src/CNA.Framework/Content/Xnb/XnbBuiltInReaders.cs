@@ -2,16 +2,32 @@ namespace CNA.Content.Xnb;
 
 using CNA.Graphics;
 
-/// <summary>One built-in content type reader: how to read it, and whether its target is a value type.</summary>
+/// <summary>One built-in content type reader: how to read it, and what it targets.</summary>
 /// <remarks>
-/// <paramref name="TargetIsValueType"/> is not bookkeeping. It decides how a *collection* reads its
+/// <para>
+/// <see cref="TargetIsValueType"/> is not bookkeeping. It decides how a *collection* reads its
 /// elements: XNA's <c>ReadObject&lt;T&gt;(typeReader)</c> reads a value type inline with the reader
 /// it already has, and a reference type through the polymorphic route with its own type-index
 /// prefix. Get it wrong in either direction and every byte after the first element is misread.
+/// </para>
+/// <para>
+/// It is *derived* from <paramref name="TargetType"/> rather than declared alongside it. It used to
+/// be a separate boolean passed at each entry, which is a fact about the type restated by hand at
+/// every call site -- exactly the shape that drifts. There is now one source.
+/// </para>
+/// <para>
+/// <paramref name="TargetType"/> also lets a collection reader build the collection XNA would have
+/// built. A <c>Dictionary&lt;string, object&gt;</c> read as <c>Dictionary&lt;object, object&gt;</c>
+/// materialises without error and then fails the cast the game writes -- a load that succeeds into
+/// an object the game cannot use is worse than one that fails.
+/// </para>
 /// </remarks>
 internal readonly record struct XnbBuiltInReader(
     Func<XnbContentReader, object?> Read,
-    bool TargetIsValueType);
+    Type TargetType)
+{
+    internal bool TargetIsValueType => TargetType.IsValueType;
+}
 
 /// <summary>
 /// XNA's built-in content type readers, by the name the <c>.xnb</c> type-reader table spells and by
@@ -36,41 +52,54 @@ internal static class XnbBuiltInReaders
     private static readonly (string Reader, string Target, XnbBuiltInReader Entry)[] Entries =
     [
         // -- primitives -------------------------------------------------------------------------
-        Value("ByteReader", "System.Byte", r => r.ReadByteValue()),
-        Value("SByteReader", "System.SByte", r => r.ReadSByteValue()),
-        Value("Int16Reader", "System.Int16", r => r.ReadInt16Value()),
-        Value("UInt16Reader", "System.UInt16", r => r.ReadUInt16Value()),
-        Value("Int32Reader", "System.Int32", r => r.ReadInt32()),
-        Value("UInt32Reader", "System.UInt32", r => r.ReadUInt32()),
-        Value("Int64Reader", "System.Int64", r => r.ReadInt64Value()),
-        Value("UInt64Reader", "System.UInt64", r => r.ReadUInt64Value()),
-        Value("SingleReader", "System.Single", r => r.ReadSingle()),
-        Value("DoubleReader", "System.Double", r => r.ReadDoubleValue()),
-        Value("BooleanReader", "System.Boolean", r => r.ReadBoolean()),
-        Value("CharReader", "System.Char", r => r.ReadChar()),
-        Value("DecimalReader", "System.Decimal", r => r.ReadDecimalValue()),
-        Value("DateTimeReader", "System.DateTime", r => r.ReadDateTimeValue()),
-        Value("TimeSpanReader", "System.TimeSpan", r => r.ReadTimeSpanValue()),
+        Entry<byte>("ByteReader", "System.Byte", r => r.ReadByteValue()),
+        Entry<sbyte>("SByteReader", "System.SByte", r => r.ReadSByteValue()),
+        Entry<short>("Int16Reader", "System.Int16", r => r.ReadInt16Value()),
+        Entry<ushort>("UInt16Reader", "System.UInt16", r => r.ReadUInt16Value()),
+        Entry<int>("Int32Reader", "System.Int32", r => r.ReadInt32()),
+        Entry<uint>("UInt32Reader", "System.UInt32", r => r.ReadUInt32()),
+        Entry<long>("Int64Reader", "System.Int64", r => r.ReadInt64Value()),
+        Entry<ulong>("UInt64Reader", "System.UInt64", r => r.ReadUInt64Value()),
+        Entry<float>("SingleReader", "System.Single", r => r.ReadSingle()),
+        Entry<double>("DoubleReader", "System.Double", r => r.ReadDoubleValue()),
+        Entry<bool>("BooleanReader", "System.Boolean", r => r.ReadBoolean()),
+        Entry<char>("CharReader", "System.Char", r => r.ReadChar()),
+        Entry<decimal>("DecimalReader", "System.Decimal", r => r.ReadDecimalValue()),
+        Entry<DateTime>("DateTimeReader", "System.DateTime", r => r.ReadDateTimeValue()),
+        Entry<TimeSpan>("TimeSpanReader", "System.TimeSpan", r => r.ReadTimeSpanValue()),
 
-        // The one built-in whose target is a reference type, which is why the flag exists.
-        Reference("StringReader", "System.String", r => r.ReadString()),
+        // The two built-ins whose target is a reference type, which is why the flag exists.
+        Entry<string>("StringReader", "System.String", r => r.ReadString()),
+
+        // System.Object never reads anything. XNA's own ObjectReader.Read throws
+        // NotSupportedException, and that is not a gap: an object-typed slot is always polymorphic,
+        // so this entry exists purely to answer "is the target a value type" with "no" and send the
+        // read down the type-index route. Registering it is what makes Dictionary<string, object>
+        // -- the shape XNA's own EffectMaterial parameters use -- resolvable at all.
+        //
+        // Reaching Read means a file named ObjectReader where a concrete reader belongs, so it
+        // reports that rather than returning null and letting the caller misread what follows.
+        Entry<object>("ObjectReader", "System.Object",
+            static _ => throw new ContentLoadException(
+                "Corrupt .xnb file: ObjectReader was reached directly. It only ever selects another " +
+                "reader, so a file that reads through it names no concrete type for the value.")),
 
         // -- math -------------------------------------------------------------------------------
-        Value("Vector2Reader", "Microsoft.Xna.Framework.Vector2", r => r.ReadVector2Value()),
-        Value("Vector3Reader", "Microsoft.Xna.Framework.Vector3", r => r.ReadVector3()),
-        Value("Vector4Reader", "Microsoft.Xna.Framework.Vector4", r => r.ReadVector4Value()),
-        Value("QuaternionReader", "Microsoft.Xna.Framework.Quaternion", r => r.ReadQuaternionValue()),
-        Value("MatrixReader", "Microsoft.Xna.Framework.Matrix", r => r.ReadMatrix()),
-        Value("ColorReader", "Microsoft.Xna.Framework.Color", r => r.ReadColorValue()),
-        Value("PointReader", "Microsoft.Xna.Framework.Point", r => r.ReadPointValue()),
-        Value("RectangleReader", "Microsoft.Xna.Framework.Rectangle", r => r.ReadRectangle()),
-        Value("PlaneReader", "Microsoft.Xna.Framework.Plane", r => r.ReadPlaneValue()),
-        Value("RayReader", "Microsoft.Xna.Framework.Ray", r => r.ReadRayValue()),
-        Value("BoundingBoxReader", "Microsoft.Xna.Framework.BoundingBox", r => r.ReadBoundingBoxValue()),
-        Value("BoundingSphereReader", "Microsoft.Xna.Framework.BoundingSphere", r => r.ReadBoundingSphere()),
-        Reference("BoundingFrustumReader", "Microsoft.Xna.Framework.BoundingFrustum",
+        Entry<Vector2>("Vector2Reader", "Microsoft.Xna.Framework.Vector2", r => r.ReadVector2Value()),
+        Entry<Vector3>("Vector3Reader", "Microsoft.Xna.Framework.Vector3", r => r.ReadVector3()),
+        Entry<Vector4>("Vector4Reader", "Microsoft.Xna.Framework.Vector4", r => r.ReadVector4Value()),
+        Entry<Quaternion>("QuaternionReader", "Microsoft.Xna.Framework.Quaternion", r => r.ReadQuaternionValue()),
+        Entry<Matrix>("MatrixReader", "Microsoft.Xna.Framework.Matrix", r => r.ReadMatrix()),
+        Entry<Color>("ColorReader", "Microsoft.Xna.Framework.Color", r => r.ReadColorValue()),
+        Entry<Point>("PointReader", "Microsoft.Xna.Framework.Point", r => r.ReadPointValue()),
+        Entry<Rectangle>("RectangleReader", "Microsoft.Xna.Framework.Rectangle", r => r.ReadRectangle()),
+        Entry<Plane>("PlaneReader", "Microsoft.Xna.Framework.Plane", r => r.ReadPlaneValue()),
+        Entry<Ray>("RayReader", "Microsoft.Xna.Framework.Ray", r => r.ReadRayValue()),
+        Entry<BoundingBox>("BoundingBoxReader", "Microsoft.Xna.Framework.BoundingBox", r => r.ReadBoundingBoxValue()),
+        Entry<BoundingSphere>("BoundingSphereReader", "Microsoft.Xna.Framework.BoundingSphere", r => r.ReadBoundingSphere()),
+        Entry<BoundingFrustum>("BoundingFrustumReader", "Microsoft.Xna.Framework.BoundingFrustum",
             r => new BoundingFrustum(r.ReadMatrix())),
-        Reference("CurveReader", "Microsoft.Xna.Framework.Curve", r => r.ReadCurveValue()),
+        Entry<Curve>("CurveReader", "Microsoft.Xna.Framework.Curve", r => r.ReadCurveValue()),
     ];
 
     /// <summary>Reader name -> how to read it.</summary>
@@ -83,13 +112,13 @@ internal static class XnbBuiltInReaders
     /// for why the order of these declarations matters.</summary>
     internal static IReadOnlyDictionary<string, XnbBuiltInReader> ByTargetType { get; } = BuildByTarget();
 
-    private static (string, string, XnbBuiltInReader) Value(
+    /// <summary>One entry. <paramref name="target"/> is the name the file spells and
+    /// <typeparamref name="T"/> is the CLR type it means; keeping both, rather than deriving the
+    /// name from the type, is what lets an entry name a type this assembly spells differently from
+    /// the way the .xnb file does.</summary>
+    private static (string, string, XnbBuiltInReader) Entry<T>(
         string reader, string target, Func<XnbContentReader, object?> read) =>
-        (Prefix + reader, target, new XnbBuiltInReader(read, TargetIsValueType: true));
-
-    private static (string, string, XnbBuiltInReader) Reference(
-        string reader, string target, Func<XnbContentReader, object?> read) =>
-        (Prefix + reader, target, new XnbBuiltInReader(read, TargetIsValueType: false));
+        (Prefix + reader, target, new XnbBuiltInReader(read, typeof(T)));
 
     private static Dictionary<string, XnbBuiltInReader> Build()
     {

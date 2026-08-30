@@ -23,9 +23,9 @@ internal static class XnbBasicEffectReader
     internal static object Read(XnbContentReader reader)
     {
         // Real XNA's own ReadExternalReference<T>(): a plain length-prefixed string, not the
-        // dispatch protocol -- empty means "no texture reference," not a corrupt file.
-        string rawTextureReference = reader.ReadString();
-        string? textureReference = rawTextureReference.Length == 0 ? null : rawTextureReference;
+        // dispatch protocol -- empty means "no texture reference," not a corrupt file. Resolved to
+        // an asset name here rather than left raw, so the builder can load it.
+        string? textureReference = reader.ReadExternalReference();
 
         Vector3 diffuseColor = reader.ReadVector3();
         Vector3 emissiveColor = reader.ReadVector3();

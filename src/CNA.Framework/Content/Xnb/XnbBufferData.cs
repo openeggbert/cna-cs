@@ -64,17 +64,13 @@ internal sealed class XnbIndexBufferData
 }
 
 /// <summary>The fully-parsed, native-ABI-free result of reading a real <c>.xnb</c>
-/// <c>BasicEffectReader</c> object graph. Deliberately minimal, matching this feature's own scope
-/// decision (see <c>XnbBasicEffectReader</c>'s own doc comment): every field <c>BasicEffectReader</c>
-/// actually serializes is read (so the stream position stays correct for whatever follows), but
-/// <see cref="TextureReference"/> is recorded exactly as read (the raw relative-path string, or
-/// <see langword="null"/> for "no texture") rather than resolved or loaded -- real XNA's own
-/// <c>ReadExternalReference&lt;Texture2D&gt;()</c> would path-validate it and recursively call
-/// <c>ContentManager.Load&lt;Texture2D&gt;()</c>, which is itself native-ABI-blocked in this
-/// project (see <c>ContentManager.LoadNativeTexture2DHandle</c>) -- actually resolving/loading this
-/// reference is deferred along with the rest of this project's native-ABI-blocked content loading,
-/// not something worth half-implementing (path validation with no corresponding load) here.</summary>
-internal sealed class XnbBasicEffectData
+/// <c>BasicEffectReader</c> object graph. <see cref="TextureReference"/> is the **resolved asset
+/// name** of the effect's texture, or <see langword="null"/> when the file named none; the texture
+/// itself is loaded by the model builder, which is where a <c>ContentManager</c> and a graphics
+/// device both exist. This used to hold the raw relative string and go no further, so every
+/// textured model in the corpus built a <c>BasicEffect</c> with no texture and
+/// <c>TextureEnabled</c> false -- it loaded, and drew untextured.</summary>
+internal sealed class XnbBasicEffectData : XnbEffectData
 {
     internal XnbBasicEffectData(
         string? textureReference,

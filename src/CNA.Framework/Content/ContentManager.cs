@@ -291,44 +291,33 @@ public class ContentManager : IDisposable
     {
         ArgumentNullException.ThrowIfNull(assetName);
 
-        string path = ResolveXnbAssetPath(assetName);
-        using FileStream stream = File.OpenRead(path);
-        using var reader = new BinaryReader(stream);
-
-        XnbHeader header = XnbHeader.Read(reader, stream.Length);
-
-        XnbContentReader contentReader;
-        if (header.Compression == XnbCompression.Lzx)
-        {
-            // A code-review finding caught a real gap here: header.TotalLength is only checked
-            // against the actual stream length (in XnbHeader.Read), never against
-            // XnbHeader.LzxPayloadOffset -- a file whose header claims exactly 10-13 bytes total
-            // (too short to hold the 4-byte decompressed-size field that must follow for an
-            // Lzx-flagged file) would previously reach reader.ReadInt32() below with fewer than 4
-            // bytes left in the stream, throwing an unhandled System.IO.EndOfStreamException
-            // instead of this project's own ContentLoadException contract for corrupt content.
-            // Checked here, before that read, rather than after it (where a compressedSize < 0
-            // check would be unreachable dead code: reaching it at all already implies
-            // TotalLength >= LzxPayloadOffset, since ReadInt32() would have thrown otherwise).
-            if (header.TotalLength < XnbHeader.LzxPayloadOffset)
-            {
-                throw new ContentLoadException(
-                    $"'{assetName}' is not a valid LZX-compressed .xnb file (its declared total length is too short to hold a compressed payload).");
-            }
-
-            int decompressedSize = reader.ReadInt32();
-            int compressedSize = header.TotalLength - XnbHeader.LzxPayloadOffset;
-            byte[] compressed = reader.ReadBytes(compressedSize);
-            byte[] decompressed = XnbLzxDecompression.Decompress(compressed, decompressedSize, assetName);
-            contentReader = XnbContentReader.Create(new BinaryReader(new MemoryStream(decompressed)));
-        }
-        else
-        {
-            contentReader = XnbContentReader.Create(reader);
-        }
-
-        return contentReader.ReadRootObjectAndResolveSharedResources();
+        return XnbContainer.Read(
+            ResolveXnbAssetPath(assetName),
+            assetName,
+            static reader => reader.ReadRootObjectAndResolveSharedResources());
     }
+
+    /// <summary>
+    /// Loads an external reference whose type the referring file does not state, which is what
+    /// XNA's <c>ReadExternalReference&lt;object&gt;</c> did through <c>Load&lt;object&gt;</c>.
+    ///
+    /// The referenced file names its own root reader, so the type is read rather than guessed --
+    /// see <see cref="XnbContainer.RootReaderName"/>. Only the texture kinds are dispatched,
+    /// because the one place this is reached from is an <c>EffectMaterial</c> parameter, and XNA's
+    /// own parameter chain assigns a loaded reference only when it is a <c>Texture</c> and
+    /// otherwise ignores it. Anything else therefore reports itself rather than being silently
+    /// dropped, since a material naming a non-texture parameter reference is content this reader has
+    /// not seen and should not pretend to understand.
+    /// </summary>
+    internal Texture LoadReferencedTexture(string assetName) =>
+        XnbContainer.RootReaderName(RootDirectory, assetName) switch
+        {
+            "Microsoft.Xna.Framework.Content.Texture2DReader" => Load<Texture2D>(assetName),
+            "Microsoft.Xna.Framework.Content.TextureCubeReader" => Load<TextureCube>(assetName),
+            var other => throw new ContentLoadException(
+                $"External reference '{assetName}' is a {other ?? "null object"}, which this project's " +
+                ".xnb reader cannot load as a texture."),
+        };
 
     /// <summary>Builds the final, real, native-backed <see cref="Model"/> -- see this type's own doc
     /// comment for why only this assembly step (not the parsing <see cref="LoadXnbModelData"/>/
@@ -366,12 +355,12 @@ public class ContentManager : IDisposable
                 $"Cannot load Model '{assetName}': no GraphicsDevice is available yet (ContentManager.GraphicsDevice is null).");
         }
 
-        if (File.Exists(Path.Combine(RootDirectory, assetName + ".xnb")))
+        if (File.Exists(XnaContentPath.ToFilePath(RootDirectory, assetName, ".xnb")))
         {
-            return XnbModelBuilder.Build(GraphicsDevice, LoadXnbModelData(assetName));
+            return XnbModelBuilder.Build(GraphicsDevice, LoadXnbModelData(assetName), this);
         }
 
-        if (File.Exists(Path.Combine(RootDirectory, assetName + ".cnj")))
+        if (File.Exists(XnaContentPath.ToFilePath(RootDirectory, assetName, ".cnj")))
         {
             return CnjModelBuilder.Build(GraphicsDevice, LoadCnjModelData(assetName));
         }
@@ -389,7 +378,7 @@ public class ContentManager : IDisposable
     {
         ArgumentNullException.ThrowIfNull(assetName);
 
-        string path = Path.Combine(RootDirectory, assetName + ".cnj");
+        string path = XnaContentPath.ToFilePath(RootDirectory, assetName, ".cnj");
         if (!File.Exists(path))
         {
             throw new ContentLoadException($"Content file '{path}' was not found.");
@@ -401,7 +390,7 @@ public class ContentManager : IDisposable
 
     private string ResolveXnbAssetPath(string assetName)
     {
-        string path = Path.Combine(RootDirectory, assetName + ".xnb");
+        string path = XnaContentPath.ToFilePath(RootDirectory, assetName, ".xnb");
         if (!File.Exists(path))
         {
             throw new ContentLoadException($"Content file '{path}' was not found.");

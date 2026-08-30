@@ -14,11 +14,11 @@ namespace CNA.Content.Xnb;
 ///    bone's *children* loop below is what actually establishes the hierarchy, so recording the
 ///    parent redundantly here would just be setting it twice from two different encodings), then a
 ///    child count and that many child bone references.
-/// 3. Meshes: name, parent bone reference, bounding sphere, a rejected <c>Tag</c>, then that many
-///    mesh parts (vertex offset/count, start index, primitive count, a rejected <c>Tag</c>, then
+/// 3. Meshes: name, parent bone reference, bounding sphere, the mesh's <c>Tag</c>, then that many
+///    mesh parts (vertex offset/count, start index, primitive count, the part's <c>Tag</c>, then
 ///    three shared-resource references in a fixed order -- VertexBuffer, IndexBuffer, Effect).
 /// 4. One more bone reference, for the model's own root bone.
-/// 5. A rejected <c>Tag</c> for the model itself.
+/// 5. The model's own <c>Tag</c>.
 ///
 /// Deliberately returns <see cref="XnbModelData"/>, not a real <see cref="Graphics.Model"/> --
 /// see that type's own doc comment for why (shared resources referenced here, like this mesh
@@ -78,7 +78,7 @@ internal static class XnbModelReader
             string? meshName = reader.ReadObjectOrNull<string>();
             int parentBoneIndex = reader.ReadBoneReference(bones.Count);
             BoundingSphere boundingSphere = reader.ReadBoundingSphere();
-            reader.RejectNonNullTag($"Mesh '{meshName}'");
+            object? meshTag = reader.ReadTag();
 
             int partCount = reader.ReadInt32();
             if (partCount is < 0 or > MaxPlausibleCount)
@@ -93,7 +93,7 @@ internal static class XnbModelReader
                 int numVertices = reader.ReadInt32();
                 int startIndex = reader.ReadInt32();
                 int primitiveCount = reader.ReadInt32();
-                reader.RejectNonNullTag($"Mesh '{meshName}' part {p}");
+                object? partTag = reader.ReadTag();
 
                 var part = new XnbMeshPartData
                 {
@@ -101,6 +101,7 @@ internal static class XnbModelReader
                     NumVertices = numVertices,
                     StartIndex = startIndex,
                     PrimitiveCount = primitiveCount,
+                    Tag = partTag,
                 };
 
                 // Fixed order, matching real XNA's own ModelReader exactly. A code-review finding:
@@ -111,17 +112,17 @@ internal static class XnbModelReader
                 // produces.
                 reader.ReadSharedResource(o => part.VertexBuffer = XnbContentReader.RequireType<XnbVertexBufferData>(o, "a mesh part's VertexBuffer"));
                 reader.ReadSharedResource(o => part.IndexBuffer = XnbContentReader.RequireType<XnbIndexBufferData>(o, "a mesh part's IndexBuffer"));
-                reader.ReadSharedResource(o => part.Effect = XnbContentReader.RequireType<XnbBasicEffectData>(o, "a mesh part's Effect"));
+                reader.ReadSharedResource(o => part.Effect = XnbContentReader.RequireType<XnbEffectData>(o, "a mesh part's Effect"));
 
                 parts.Add(part);
             }
 
-            meshes.Add(new XnbMeshData(meshName, parentBoneIndex, boundingSphere, parts));
+            meshes.Add(new XnbMeshData(meshName, parentBoneIndex, boundingSphere, parts, meshTag));
         }
 
         int rootBoneIndex = reader.ReadBoneReference(bones.Count);
-        reader.RejectNonNullTag("Model");
+        object? modelTag = reader.ReadTag();
 
-        return new XnbModelData(bones, meshes, rootBoneIndex);
+        return new XnbModelData(bones, meshes, rootBoneIndex, modelTag);
     }
 }

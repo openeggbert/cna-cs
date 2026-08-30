@@ -7,7 +7,7 @@ namespace CNA.Content.Xnb;
 /// this was built from):
 ///
 /// 1. Right after the header (<see cref="XnbHeader"/>), a **type-reader table**: a count, then
-///    that many (name, version) pairs -- <see cref="Create"/> reads this once, up front.
+///    that many (name, version) pairs -- <see cref="Create(BinaryReader, string)"/> reads this once, up front.
 /// 2. A **shared-resource count**, immediately after the table.
 /// 3. The **root object**, read via the dispatch protocol every object in this file uses: a 7-bit
 ///    type-reader index (0 = null; otherwise a 1-based index into the table from step 1) followed
@@ -37,6 +37,13 @@ internal sealed class XnbContentReader
         ["Microsoft.Xna.Framework.Content.VertexBufferReader"] = XnbVertexBufferReader.Read,
         ["Microsoft.Xna.Framework.Content.IndexBufferReader"] = XnbIndexBufferReader.Read,
         ["Microsoft.Xna.Framework.Content.BasicEffectReader"] = XnbBasicEffectReader.Read,
+        ["Microsoft.Xna.Framework.Content.EffectMaterialReader"] = XnbEffectReaders.ReadEffectMaterial,
+        // Reads a reference and stops there -- see XnbExternalReference for why it is not resolved
+        // into an object here.
+        ["Microsoft.Xna.Framework.Content.ExternalReferenceReader"] =
+            r => r.ReadExternalReference() is { } assetName ? new XnbExternalReference(assetName) : null,
+        ["Microsoft.Xna.Framework.Content.EnvironmentMapEffectReader"] = XnbEffectReaders.ReadEnvironmentMapEffect,
+        ["Microsoft.Xna.Framework.Content.DualTextureEffectReader"] = XnbEffectReaders.ReadDualTextureEffect,
         ["Microsoft.Xna.Framework.Content.Texture2DReader"] = XnbTexture2DReader.Read,
         ["Microsoft.Xna.Framework.Content.SpriteFontReader"] = XnbSpriteFontReader.Read,
 
@@ -61,11 +68,13 @@ internal sealed class XnbContentReader
     private readonly BinaryReader _reader;
     private readonly List<string> _typeReaderNames;
     private readonly List<List<Action<object>>> _sharedResourceFixups;
+    private readonly string _assetName;
 
-    private XnbContentReader(BinaryReader reader, List<string> typeReaderNames, int sharedResourceCount)
+    private XnbContentReader(BinaryReader reader, List<string> typeReaderNames, int sharedResourceCount, string assetName)
     {
         _reader = reader;
         _typeReaderNames = typeReaderNames;
+        _assetName = assetName;
         _sharedResourceFixups = new List<List<Action<object>>>(sharedResourceCount);
         for (int i = 0; i < sharedResourceCount; i++)
         {
@@ -73,11 +82,22 @@ internal sealed class XnbContentReader
         }
     }
 
+    /// <summary>The asset being read, which is what an external reference resolves relative to --
+    /// see <see cref="ReadExternalReference"/>.</summary>
+    internal string AssetName => _assetName;
+
     /// <summary>Reads the type-reader table and shared-resource count -- call once, immediately
     /// after <see cref="XnbHeader.Read"/>, before reading the root object.</summary>
-    internal static XnbContentReader Create(BinaryReader reader)
+    internal static XnbContentReader Create(BinaryReader reader) => Create(reader, string.Empty);
+
+    /// <summary>The same, for an asset whose readers may name external references.
+    /// <paramref name="assetName"/> is the content asset name -- not a file-system path -- because
+    /// that is what a reference resolves against and what the resolved reference is looked up
+    /// as.</summary>
+    internal static XnbContentReader Create(BinaryReader reader, string assetName)
     {
         ArgumentNullException.ThrowIfNull(reader);
+        ArgumentNullException.ThrowIfNull(assetName);
 
         int typeReaderCount = reader.Read7BitEncodedInt();
         if (typeReaderCount is < 0 or > 4096)
@@ -104,7 +124,7 @@ internal sealed class XnbContentReader
             throw new ContentLoadException($"Corrupt .xnb file: negative shared resource count {sharedResourceCount}.");
         }
 
-        return new XnbContentReader(reader, typeReaderNames, sharedResourceCount);
+        return new XnbContentReader(reader, typeReaderNames, sharedResourceCount, assetName);
     }
 
     /// <summary>Reads the root object, then every shared-resource object in file order, then runs
@@ -129,6 +149,27 @@ internal sealed class XnbContentReader
         }
 
         return root;
+    }
+
+    /// <summary>
+    /// Reads only the root object's type-reader index and answers that reader's name, without
+    /// reading the object. Leaves the stream positioned after the index, so this reader is spent
+    /// afterwards -- the caller is asking what the asset is, not for its contents.
+    /// </summary>
+    internal string? PeekRootReaderName()
+    {
+        int index = _reader.Read7BitEncodedInt();
+        if (index == 0)
+        {
+            return null;
+        }
+
+        if (index < 1 || index > _typeReaderNames.Count)
+        {
+            throw new ContentLoadException($"Corrupt .xnb file: type reader index {index} out of range.");
+        }
+
+        return _typeReaderNames[index - 1];
     }
 
     /// <summary>Reads one object via the dispatch protocol described in this type's own doc
@@ -159,7 +200,11 @@ internal sealed class XnbContentReader
     {
         if (Readers.TryGetValue(name, out Func<XnbContentReader, object?>? composite))
         {
-            return new XnbBuiltInReader(composite, TargetIsValueType: false);
+            // typeof(object): the composite readers above all produce reference-typed results,
+            // and none of them is ever reached as a *collection element* -- an .xnb file names a
+            // model or a font as a root object, not as a list entry -- so the target type is only
+            // ever consulted for "is this a value type", which object answers correctly.
+            return new XnbBuiltInReader(composite, typeof(object));
         }
 
         if (XnbBuiltInReaders.ByReaderName.TryGetValue(name, out XnbBuiltInReader builtIn))
@@ -354,6 +399,30 @@ internal sealed class XnbContentReader
     internal string ReadString() => _reader.ReadString();
 
     /// <summary>
+    /// Reads an external reference and answers the **asset name** it denotes, or
+    /// <see langword="null"/> when the reference is empty.
+    ///
+    /// XNA's own <c>ReadExternalReference&lt;T&gt;</c> goes one step further and calls
+    /// <c>ContentManager.Load&lt;T&gt;</c> right here, recursively, with the outer file still open.
+    /// This reader stops at the name, deliberately, for a structural reason rather than a
+    /// preference: everything in this namespace parses into native-free data that both
+    /// <c>CNA.Content.Xnb.XnbModelBuilder</c> and <c>CNA.XnaCompat</c>'s own builder then assemble
+    /// into their own separately-typed object graphs. A resolved <c>Texture2D</c> would be one of
+    /// those two type families, so resolving here would force the parse layer to pick one and make
+    /// it unusable by the other. The builders resolve instead, each through its own
+    /// <c>ContentManager</c>, which is also where the graphics device already is.
+    ///
+    /// Two consequences worth stating rather than discovering. The referenced asset is loaded after
+    /// this file is closed instead of during it, so a reference cycle costs a second open rather
+    /// than deadlocking on a stream. And the object identity is unchanged, because the manager
+    /// caches by asset name and both orders ask it for the same name.
+    ///
+    /// The reference itself is a plain length-prefixed string, not a dispatched object -- it does
+    /// not consume a type-reader index.
+    /// </summary>
+    internal string? ReadExternalReference() => XnaContentPath.Resolve(_assetName, _reader.ReadString());
+
+    /// <summary>
     /// Reads one <c>char</c> the way the format writes it: UTF-8 encoded and therefore *variable
     /// width*, one to three bytes, not a fixed 16-bit code unit.
     ///
@@ -523,19 +592,20 @@ internal sealed class XnbContentReader
         return (int)(raw - 1);
     }
 
-    /// <summary>Reads and rejects an object's <c>Tag</c> -- matching real XNA's own <c>ModelReader</c>
-    /// exactly: <c>Tag</c> is read via the ordinary object-graph dispatch protocol purely to keep
-    /// the stream position correct for whatever follows, but real content pipeline output never
-    /// actually sets a non-null <c>Tag</c> on <see cref="Graphics.Model"/>/<see cref="Graphics.ModelMesh"/>/
-    /// <see cref="Graphics.ModelMeshPart"/> -- a non-null value here means either a <c>Tag</c> this
-    /// reader doesn't know how to represent, or a genuinely corrupt file, so it's rejected with a
-    /// clear exception (a real, documented scope line, not a silently-dropped value).</summary>
-    internal void RejectNonNullTag(string context)
-    {
-        object? tag = ReadObject();
-        if (tag is not null)
-        {
-            throw new ContentLoadException($"{context}: this .xnb file sets a non-null Tag, which this project's .xnb reader does not support.");
-        }
-    }
+    /// <summary>
+    /// Reads an object's <c>Tag</c>, which XNA stores.
+    ///
+    /// This used to reject a non-null value, on the stated grounds that "real content pipeline
+    /// output never actually sets a non-null Tag". That is false, and measurably so: 28 assets in
+    /// the XNA 4.0 sample collection carry one, always a <c>Dictionary&lt;string, object&gt;</c>
+    /// -- the pipeline's own channel for per-model data such as skinning bone-index tables, and the
+    /// reason <c>Model.Tag</c>, <c>ModelMesh.Tag</c> and <c>ModelMeshPart.Tag</c> are public
+    /// properties in XNA at all. Refusing it failed every one of those models.
+    ///
+    /// XNA reads it as <c>ReadObject&lt;object&gt;</c>, so it is the ordinary polymorphic route and
+    /// whatever the file names has to be readable on its own terms. An unreadable tag still fails
+    /// the load, by the reader's name, which is the honest outcome: a model whose tag was silently
+    /// dropped would draw correctly and then fail wherever the game reached for it.
+    /// </summary>
+    internal object? ReadTag() => ReadObject();
 }

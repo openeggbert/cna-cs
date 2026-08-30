@@ -229,10 +229,76 @@ public class XnbModelReaderTests
         Assert.Throws<ContentLoadException>(() => XnbModelReader.Read(reader));
     }
 
+    /// <summary>
+    /// A model's <c>Tag</c> is stored, and so are its meshes' and mesh parts'.
+    ///
+    /// This reader used to refuse any non-null tag, on the premise that "real content pipeline
+    /// output never actually sets one". 28 assets in the XNA 4.0 sample collection do, always a
+    /// <c>Dictionary&lt;string, object&gt;</c>, and every one of them failed to load. The three
+    /// slots carry different values here, because a reader that stored one tag in all three, or
+    /// read them in the wrong order, would pass a test that used the same value everywhere.
+    /// </summary>
+    [Fact]
+    public void Tags_AreStoredForTheModelItsMeshAndItsMeshPart()
+    {
+        XnbContentReader reader = CreateReader(
+            typeReaderNames:
+            [
+                "Microsoft.Xna.Framework.Content.StringReader",
+                "Microsoft.Xna.Framework.Content.DictionaryReader`2[[System.String][System.Object]]",
+                "Microsoft.Xna.Framework.Content.Int32Reader",
+            ],
+            sharedResourceCount: 0,
+            writeRoot: w =>
+            {
+                w.Write(1u);                                // one bone
+                w.Write7BitEncodedInt(1); w.Write("Root");  // its name
+                for (int i = 0; i < 16; i++) { w.Write(i == 0 || i == 5 || i == 10 || i == 15 ? 1f : 0f); }
+                w.Write((byte)0);                           // the bone's parent: none
+                w.Write(0u);                                // no children
+
+                w.Write(1);                                 // one mesh
+                w.Write7BitEncodedInt(1); w.Write("Mesh");
+                w.Write((byte)1);                           // parent bone reference (1-based)
+                w.Write(0f); w.Write(0f); w.Write(0f); w.Write(1f);  // bounding sphere
+
+                // The mesh's tag: a dictionary with one entry.
+                w.Write7BitEncodedInt(2);
+                w.Write(1);
+                w.Write7BitEncodedInt(1); w.Write("meshKey");
+                w.Write7BitEncodedInt(3); w.Write(7);
+
+                w.Write(1);                                 // one mesh part
+                w.Write(0); w.Write(3); w.Write(0); w.Write(1);
+                w.Write7BitEncodedInt(1); w.Write("partTag"); // the part's tag: a plain string
+                w.Write7BitEncodedInt(0);                   // VertexBuffer: no shared resource
+                w.Write7BitEncodedInt(0);                   // IndexBuffer
+                w.Write7BitEncodedInt(0);                   // Effect
+
+                w.Write((byte)1);                           // root bone reference
+
+                // The model's own tag: a different dictionary.
+                w.Write7BitEncodedInt(2);
+                w.Write(1);
+                w.Write7BitEncodedInt(1); w.Write("modelKey");
+                w.Write7BitEncodedInt(3); w.Write(42);
+            });
+
+        var model = Assert.IsType<XnbModelData>(XnbModelReader.Read(reader));
+
+        var modelTag = Assert.IsType<Dictionary<string, object>>(model.Tag);
+        Assert.Equal(42, modelTag["modelKey"]);
+
+        var meshTag = Assert.IsType<Dictionary<string, object>>(model.Meshes[0].Tag);
+        Assert.Equal(7, meshTag["meshKey"]);
+
+        Assert.Equal("partTag", model.Meshes[0].Parts[0].Tag);
+    }
+
     /// <summary>Builds a minimal, hand-crafted <c>.xnb</c> payload (type-reader table + a
     /// zero-version entry per name + shared resource count + root object bytes), starting a
     /// <see cref="BinaryReader"/> positioned right after the (never-written) 10-byte header --
-    /// <see cref="XnbContentReader.Create"/> doesn't touch header bytes at all, so this is
+    /// <see cref="XnbContentReader.Create(BinaryReader, string)"/> doesn't touch header bytes at all, so this is
     /// sufficient without also constructing a real <see cref="XnbHeader"/>.</summary>
     private static XnbContentReader CreateReader(string[] typeReaderNames, int sharedResourceCount, Action<BinaryWriter> writeRoot)
     {

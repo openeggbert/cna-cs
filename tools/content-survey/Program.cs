@@ -192,6 +192,14 @@ if (load)
 
     if (verbose)
     {
+        // What each asset actually materialised into, not just that it did. A model's line carries
+        // its part/effect/texture counts, which is the difference between "the file parsed" and
+        // "the object can draw".
+        foreach ((string relative, string detail) in survey.Loaded.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        {
+            Console.WriteLine($"  LOADED {relative}: {detail}");
+        }
+
         foreach ((string relative, string detail) in survey.RuntimeFailures)
         {
             Console.WriteLine($"  RUNTIME_FAILURE {relative}: {detail}");

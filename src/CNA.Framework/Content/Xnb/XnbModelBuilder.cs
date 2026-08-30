@@ -29,10 +29,11 @@ namespace CNA.Content.Xnb;
 /// </summary>
 internal static class XnbModelBuilder
 {
-    internal static Model Build(GraphicsDevice graphicsDevice, XnbModelData data)
+    internal static Model Build(GraphicsDevice graphicsDevice, XnbModelData data, ContentManager contentManager)
     {
         ArgumentNullException.ThrowIfNull(graphicsDevice);
         ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(contentManager);
 
         var bones = new List<ModelBone>(data.Bones.Count);
         foreach (XnbBoneData boneData in data.Bones)
@@ -59,10 +60,17 @@ internal static class XnbModelBuilder
                 VertexBuffer? vertexBuffer = partData.VertexBuffer is null ? null : BuildVertexBuffer(graphicsDevice, partData.VertexBuffer);
                 IndexBuffer? indexBuffer = partData.IndexBuffer is null ? null : BuildIndexBuffer(graphicsDevice, partData.IndexBuffer);
 
-                parts.Add(new ModelMeshPart(vertexBuffer, indexBuffer, partData.NumVertices, partData.PrimitiveCount, partData.StartIndex, partData.VertexOffset));
+                parts.Add(new ModelMeshPart(vertexBuffer, indexBuffer, partData.NumVertices, partData.PrimitiveCount, partData.StartIndex, partData.VertexOffset)
+                {
+                    Tag = partData.Tag,
+                });
             }
 
-            var mesh = new ModelMesh(graphicsDevice, meshData.Name, parts) { BoundingSphere = meshData.BoundingSphere };
+            var mesh = new ModelMesh(graphicsDevice, meshData.Name, parts)
+            {
+                BoundingSphere = meshData.BoundingSphere,
+                Tag = meshData.Tag,
+            };
             meshes.Add(mesh);
 
             // Effect assignment has to happen *after* the ModelMesh constructor above (which sets
@@ -74,10 +82,10 @@ internal static class XnbModelBuilder
             // -- the model loaded without error but rendered nothing.
             for (int i = 0; i < meshData.Parts.Count; i++)
             {
-                XnbBasicEffectData? effectData = meshData.Parts[i].Effect;
+                XnbEffectData? effectData = meshData.Parts[i].Effect;
                 if (effectData is not null)
                 {
-                    parts[i].Effect = BuildBasicEffect(graphicsDevice, effectData);
+                    parts[i].Effect = BuildEffect(graphicsDevice, contentManager, effectData);
                     parts[i].MarkResourcesOwned();
                 }
             }
@@ -90,7 +98,7 @@ internal static class XnbModelBuilder
         }
 
         int rootBoneIndex = data.RootBoneIndex >= 0 ? data.RootBoneIndex : 0;
-        return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex);
+        return new Model(graphicsDevice, bones, meshes, meshParentBones, rootBoneIndex) { Tag = data.Tag };
     }
 
     private static VertexBuffer BuildVertexBuffer(GraphicsDevice graphicsDevice, XnbVertexBufferData data)
@@ -109,12 +117,207 @@ internal static class XnbModelBuilder
         return buffer;
     }
 
-    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, XnbBasicEffectData data)
+    /// <summary>
+    /// Builds the real effect a mesh part's parsed effect data describes, resolving its external
+    /// references through <paramref name="contentManager"/>.
+    ///
+    /// Resolution happens here rather than in the reader because this is where a
+    /// <see cref="ContentManager"/> and a <see cref="GraphicsDevice"/> both exist -- see
+    /// <see cref="XnbContentReader.ReadExternalReference"/>. Nothing is caught: a model naming a
+    /// texture that is not there is a broken model, and loading it with a null texture would draw
+    /// wrongly instead of reporting the missing file.
+    /// </summary>
+    private static Effect BuildEffect(GraphicsDevice graphicsDevice, ContentManager contentManager, XnbEffectData data) =>
+        data switch
+        {
+            XnbBasicEffectData basic => BuildBasicEffect(graphicsDevice, contentManager, basic),
+            XnbEffectMaterialData material => BuildEffectMaterial(contentManager, material),
+            XnbEnvironmentMapEffectData environmentMap => BuildEnvironmentMapEffect(graphicsDevice, contentManager, environmentMap),
+            XnbDualTextureEffectData dualTexture => BuildDualTextureEffect(graphicsDevice, contentManager, dualTexture),
+            _ => throw new ContentLoadException($"Unsupported model effect data {data.GetType().Name}."),
+        };
+
+    private static BasicEffect BuildBasicEffect(GraphicsDevice graphicsDevice, ContentManager contentManager, XnbBasicEffectData data)
     {
         var effect = new BasicEffect(graphicsDevice);
         ApplyBasicEffectData(effect, data);
+
+        if (data.TextureReference is { } reference)
+        {
+            // TextureEnabled follows from having a texture, which is what XNA's own
+            // BasicEffectReader does (it assigns Texture, and BasicEffect.Texture's setter is what
+            // the effect consults). Setting it true with no texture, or leaving it false with one,
+            // are both visible on screen.
+            effect.Texture = contentManager.Load<Texture2D>(reference);
+            effect.TextureEnabled = true;
+        }
+
         return effect;
     }
+
+    /// <summary>
+    /// XNA's <c>EffectMaterialReader</c>: clone the referenced effect, then apply the recorded
+    /// parameters. The clone is what makes two materials over one effect independent.
+    /// </summary>
+    private static EffectMaterial BuildEffectMaterial(ContentManager contentManager, XnbEffectMaterialData data)
+    {
+        if (data.EffectReference is not { } reference)
+        {
+            throw new ContentLoadException(
+                "This .xnb file's EffectMaterial names no effect to clone, which XNA's own reader has no defined behaviour for.");
+        }
+
+        var material = new EffectMaterial(contentManager.Load<Effect>(reference));
+        ApplyEffectParameters(material, data.Parameters, contentManager.LoadReferencedTexture);
+        return material;
+    }
+
+    private static EnvironmentMapEffect BuildEnvironmentMapEffect(
+        GraphicsDevice graphicsDevice, ContentManager contentManager, XnbEnvironmentMapEffectData data)
+    {
+        var effect = new EnvironmentMapEffect(graphicsDevice)
+        {
+            EnvironmentMapAmount = data.EnvironmentMapAmount,
+            EnvironmentMapSpecular = data.EnvironmentMapSpecular,
+            FresnelFactor = data.FresnelFactor,
+            DiffuseColor = data.DiffuseColor,
+            EmissiveColor = data.EmissiveColor,
+            Alpha = data.Alpha,
+        };
+
+        if (data.TextureReference is { } texture)
+        {
+            effect.Texture = contentManager.Load<Texture2D>(texture);
+        }
+
+        if (data.EnvironmentMapReference is { } environmentMap)
+        {
+            effect.EnvironmentMap = contentManager.Load<TextureCube>(environmentMap);
+        }
+
+        return effect;
+    }
+
+    private static DualTextureEffect BuildDualTextureEffect(
+        GraphicsDevice graphicsDevice, ContentManager contentManager, XnbDualTextureEffectData data)
+    {
+        var effect = new DualTextureEffect(graphicsDevice)
+        {
+            DiffuseColor = data.DiffuseColor,
+            Alpha = data.Alpha,
+            VertexColorEnabled = data.VertexColorEnabled,
+        };
+
+        if (data.TextureReference is { } texture)
+        {
+            effect.Texture = contentManager.Load<Texture2D>(texture);
+        }
+
+        if (data.Texture2Reference is { } texture2)
+        {
+            effect.Texture2 = contentManager.Load<Texture2D>(texture2);
+        }
+
+        return effect;
+    }
+
+    /// <summary>
+    /// XNA's <c>EffectMaterialReader.TryToSetParameter</c>, over this assembly's own
+    /// <see cref="EffectParameter"/>. <c>CNA.XnaCompat</c>'s model builder calls this too, on the
+    /// framework effect its compat effect wraps -- there is one native effect underneath either
+    /// spelling, so the parameter values only have to be applied once and in one place.
+    ///
+    /// <b>A parameter the effect does not have is skipped, not an error.</b> That is XNA's rule and
+    /// it is load-bearing: the pipeline records what the material declared, and the effect it clones
+    /// is free to have dropped a parameter since.
+    ///
+    /// <b>The widening path is taken up front</b> rather than as a fallback. XNA sets the value
+    /// directly and catches <see cref="InvalidCastException"/> to retry through a widened
+    /// <see cref="Vector4"/>; that control flow cannot be reproduced, because a shape mismatch here
+    /// raises a <c>CnaException</c> from native rather than XNA's own exception, and catching that
+    /// broadly would swallow real failures. For these types the widening is the identity when the
+    /// shapes already agree -- a <see cref="Vector3"/> into a three-column parameter widens to
+    /// <c>Vector4(v, 1)</c> and narrows back to exactly <c>v</c> -- so the two routes agree wherever
+    /// XNA would not have thrown.
+    /// </summary>
+    internal static void ApplyEffectParameters(
+        Effect effect,
+        IReadOnlyDictionary<string, object?> parameters,
+        Func<string, Texture> resolveTexture)
+    {
+        ArgumentNullException.ThrowIfNull(resolveTexture);
+
+        foreach ((string name, object? value) in parameters)
+        {
+            if (value is null || effect.Parameters[name] is not { } parameter)
+            {
+                continue;
+            }
+
+            if (IsAVectorOrASingle(parameter) && AsVector4(value) is { } widened)
+            {
+                switch (parameter.ColumnCount)
+                {
+                    case 1: parameter.SetValue(widened.X); break;
+                    case 2: parameter.SetValue(new Vector2(widened.X, widened.Y)); break;
+                    case 3: parameter.SetValue(new Vector3(widened.X, widened.Y, widened.Z)); break;
+                    default: parameter.SetValue(widened); break;
+                }
+
+                continue;
+            }
+
+            switch (value)
+            {
+                case int[] values: parameter.SetValue(values); break;
+                case bool[] values: parameter.SetValue(values); break;
+                case float[] values: parameter.SetValue(values); break;
+                case Vector2[] values: parameter.SetValue(values); break;
+                case Vector3[] values: parameter.SetValue(values); break;
+                case Vector4[] values: parameter.SetValue(values); break;
+                case Matrix[] values: parameter.SetValue(values); break;
+                case int scalar: parameter.SetValue(scalar); break;
+                case bool scalar: parameter.SetValue(scalar); break;
+                case float scalar: parameter.SetValue(scalar); break;
+                case Vector2 vector: parameter.SetValue(vector); break;
+                case Vector3 vector: parameter.SetValue(vector); break;
+                case Vector4 vector: parameter.SetValue(vector); break;
+                case Matrix matrix: parameter.SetValue(matrix); break;
+                case Texture texture: parameter.SetValue(texture); break;
+
+                // A texture parameter arrives as the ExternalReference the pipeline wrote, which
+                // this layer resolved to an asset name and left unloaded. XNA had already loaded it
+                // by this point, so its own chain sees a Texture here; the load happens here
+                // instead, which is the same place every other reference in this file resolves.
+                case XnbExternalReference reference: parameter.SetValue(resolveTexture(reference.AssetName)); break;
+                case string text: parameter.SetValue(text); break;
+
+                // XNA's chain ends without an else, so an unrecognised type is left alone rather
+                // than reported. A material carrying one is not a broken material.
+                default: break;
+            }
+        }
+    }
+
+    /// <summary>XNA's <c>IsAVectorOrASingle</c>: a non-array vector of two to four columns, or a
+    /// non-array scalar.</summary>
+    private static bool IsAVectorOrASingle(EffectParameter parameter) =>
+        parameter.Elements.Count == 0 &&
+        parameter.RowCount == 1 &&
+        ((parameter.ParameterClass == EffectParameterClass.Vector &&
+          parameter.ColumnCount is >= 2 and <= 4) ||
+         (parameter.ParameterClass == EffectParameterClass.Scalar &&
+          parameter.ColumnCount == 1));
+
+    private static Vector4? AsVector4(object value) => value switch
+    {
+        // Spelled out rather than new Vector4(vector, 0f, 1f): CNA.Vector4 has no
+        // (Vector2, float, float) constructor, though Microsoft.Xna.Framework.Vector4 does.
+        Vector2 vector => new Vector4(vector.X, vector.Y, 0f, 1f),
+        Vector3 vector => new Vector4(vector, 1f),
+        Vector4 vector => vector,
+        _ => null,
+    };
 
     /// <summary>Applies every field <see cref="XnbBasicEffectData"/> actually carries -- everything
     /// except <see cref="XnbBasicEffectData.TextureReference"/>, which stays unresolved (see that

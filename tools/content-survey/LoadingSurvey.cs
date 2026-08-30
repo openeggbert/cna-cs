@@ -142,11 +142,47 @@ internal sealed class LoadingSurvey : Game
         Texture3D volume => $"Texture3D {volume.Width}x{volume.Height}x{volume.Depth}",
         SpriteFont font => $"SpriteFont lineSpacing={font.LineSpacing} glyphs={font.Characters.Count}",
         SoundEffect sound => $"SoundEffect {sound.Duration}",
-        Model model => $"Model meshes={model.Meshes.Count} bones={model.Bones.Count}",
+        Model model => DescribeModel(model),
         Effect effect => $"Effect techniques={effect.Techniques.Count}",
         Song song => $"Song {song.Duration}",
         Video video => $"Video {video.Width}x{video.Height}",
         null => "null",
         _ => loaded.GetType().Name,
+    };
+
+    /// <summary>
+    /// A model, described by what it can actually draw with.
+    ///
+    /// Mesh and bone counts alone made "loaded" mean less than it looks: a model whose parts all
+    /// carry a null effect loads, reports plausible counts, and draws nothing, because
+    /// <c>ModelMesh.Draw</c> skips a part with no effect. The effect and texture counts are the
+    /// difference between "the file parsed" and "the object is usable", which is the question this
+    /// survey is asked.
+    /// </summary>
+    private static string DescribeModel(Model model)
+    {
+        ModelMeshPart[] parts = [.. model.Meshes.SelectMany(mesh => mesh.MeshParts)];
+        int withEffect = parts.Count(part => part.Effect is not null);
+        int withTexture = parts.Count(part => TextureOf(part.Effect) is not null);
+        var effectKinds = parts
+            .Select(part => part.Effect?.GetType().Name)
+            .Where(name => name is not null)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal);
+
+        return $"Model meshes={model.Meshes.Count} bones={model.Bones.Count} parts={parts.Length} " +
+               $"withEffect={withEffect} withTexture={withTexture} effects=[{string.Join(",", effectKinds)}] " +
+               $"tag={model.Tag?.GetType().Name ?? "none"}";
+    }
+
+    /// <summary>The texture a stock effect carries, across the three stock types that have one.
+    /// <c>EffectMaterial</c> is deliberately absent: its textures live in parameters whose names the
+    /// pipeline chose, so there is no property to read.</summary>
+    private static Texture? TextureOf(Effect? effect) => effect switch
+    {
+        BasicEffect basic => basic.Texture,
+        EnvironmentMapEffect environmentMap => environmentMap.Texture,
+        DualTextureEffect dualTexture => dualTexture.Texture,
+        _ => null,
     };
 }

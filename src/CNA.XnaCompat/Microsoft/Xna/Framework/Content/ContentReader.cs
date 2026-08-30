@@ -81,48 +81,17 @@ public sealed class ContentReader : BinaryReader
     /// <summary>
     /// Reads a relative external asset reference. An empty reference represents the default value,
     /// as it does in XNA content files.
+    ///
+    /// The combine-and-clean rule lives in <see cref="CNA.Content.XnaContentPath"/> rather than
+    /// here, so this path and <c>CNA.Framework</c>'s own XNB reader resolve a reference to the same
+    /// asset name. The approximation this replaced split on separators and dropped empty segments,
+    /// which answers <c>a\b</c> for XNA's <c>a\\b</c>, and used <see cref="Path.Combine(string, string)"/>,
+    /// whose rooted-path rule differs between Windows and this host.
     /// </summary>
     public T ReadExternalReference<T>()
     {
-        string reference = ReadString();
-        if (string.IsNullOrEmpty(reference))
-        {
-            return default!;
-        }
-
-        int separator = _assetName.LastIndexOfAny(new[] { '\\', '/', Path.DirectorySeparatorChar });
-        string directory = separator < 0 ? string.Empty : _assetName.Substring(0, separator);
-        string resolved = directory.Length == 0
-            ? reference
-            : Path.Combine(directory, reference);
-        return _contentManager.Load<T>(CleanExternalReferencePath(resolved));
-    }
-
-    /// <summary>XNA calls <c>TitleContainer.GetCleanPath</c> here: separators become Windows
-    /// backslashes and embedded <c>.</c>/<c>..</c> segments collapse before ContentManager sees
-    /// the asset name. Do not use Path.GetFullPath, which would introduce the Linux working
-    /// directory and host-specific separators into an XNA content identity.</summary>
-    private static string CleanExternalReferencePath(string path)
-    {
-        string[] segments = path.Replace('/', '\\').Split('\\');
-        var clean = new List<string>(segments.Length);
-        foreach (string segment in segments)
-        {
-            if (segment.Length == 0 || segment == ".")
-            {
-                continue;
-            }
-
-            if (segment == ".." && clean.Count > 0 && clean[^1] != "..")
-            {
-                clean.RemoveAt(clean.Count - 1);
-                continue;
-            }
-
-            clean.Add(segment);
-        }
-
-        return string.Join("\\", clean);
+        string? resolved = CNA.Content.XnaContentPath.Resolve(_assetName, ReadString());
+        return resolved is null ? default! : _contentManager.Load<T>(resolved);
     }
 
     /// <summary>Reads an object selected by the next type-reader table index.</summary>

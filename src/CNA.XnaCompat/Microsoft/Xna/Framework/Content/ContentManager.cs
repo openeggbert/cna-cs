@@ -157,13 +157,29 @@ public class ContentManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Opens an asset's <c>.xnb</c>, matching XNA's own <c>OpenStream</c> including the branch it
+    /// takes for an absolute <see cref="RootDirectory"/>.
+    ///
+    /// That branch is not an edge case and used to be missing. XNA supports a root outside the
+    /// title -- <c>RootDirectory</c>'s setter detects it and <c>OpenStream</c> then opens a plain
+    /// <see cref="FileStream"/> instead of going through <see cref="TitleContainer"/>, whose whole
+    /// job is to refuse paths that leave the title. Routing every open through
+    /// <c>TitleContainer</c> made an absolute root fail with "takes a path relative to the title",
+    /// which is correct advice for <c>TitleContainer</c> and wrong for <c>ContentManager</c>. It was
+    /// previously recorded as a defect in the content survey, which happens to be the caller that
+    /// uses an absolute root; the survey was right and this was wrong.
+    /// </summary>
     protected virtual Stream OpenStream(string assetName)
     {
         ArgumentNullException.ThrowIfNull(assetName);
 
         try
         {
-            return TitleContainer.OpenStream(Path.Combine(RootDirectory, assetName) + ".xnb");
+            string path = CNA.Content.XnaContentPath.ToFilePath(RootDirectory, assetName, ".xnb");
+            return CNA.TitleContainer.IsPathAbsolute(RootDirectory)
+                ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+                : TitleContainer.OpenStream(path);
         }
         catch (Exception exception) when (
             exception is FileNotFoundException or DirectoryNotFoundException or IOException or UnauthorizedAccessException)
@@ -329,12 +345,12 @@ public class ContentManager : IDisposable
     {
         Graphics.GraphicsDevice graphicsDevice = RequireGraphicsDevice<Graphics.Model>(backend, assetName);
 
-        if (File.Exists(Path.Combine(RootDirectory, assetName + ".xnb")))
+        if (File.Exists(CNA.Content.XnaContentPath.ToFilePath(RootDirectory, assetName, ".xnb")))
         {
-            return Graphics.XnbCompatModelBuilder.Build(graphicsDevice, backend.LoadXnbModelData(assetName));
+            return Graphics.XnbCompatModelBuilder.Build(graphicsDevice, backend.LoadXnbModelData(assetName), this);
         }
 
-        if (File.Exists(Path.Combine(RootDirectory, assetName + ".cnj")))
+        if (File.Exists(CNA.Content.XnaContentPath.ToFilePath(RootDirectory, assetName, ".cnj")))
         {
             return Graphics.CnjCompatModelBuilder.Build(graphicsDevice, backend.LoadCnjModelData(assetName));
         }

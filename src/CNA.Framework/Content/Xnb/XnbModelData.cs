@@ -15,12 +15,21 @@ namespace CNA.Content.Xnb;
 /// </summary>
 internal sealed class XnbModelData
 {
-    internal XnbModelData(IReadOnlyList<XnbBoneData> bones, IReadOnlyList<XnbMeshData> meshes, int rootBoneIndex)
+    internal XnbModelData(
+        IReadOnlyList<XnbBoneData> bones,
+        IReadOnlyList<XnbMeshData> meshes,
+        int rootBoneIndex,
+        object? tag)
     {
         Bones = bones;
         Meshes = meshes;
         RootBoneIndex = rootBoneIndex;
+        Tag = tag;
     }
+
+    /// <summary>Whatever the file's <c>Tag</c> slot held -- see
+    /// <see cref="XnbContentReader.ReadTag"/> for why this is carried rather than refused.</summary>
+    internal object? Tag { get; }
 
     internal IReadOnlyList<XnbBoneData> Bones { get; }
 
@@ -61,13 +70,21 @@ internal sealed class XnbBoneData
 /// <summary>One mesh read by <c>ModelReader</c>.</summary>
 internal sealed class XnbMeshData
 {
-    internal XnbMeshData(string? name, int parentBoneIndex, BoundingSphere boundingSphere, IReadOnlyList<XnbMeshPartData> parts)
+    internal XnbMeshData(
+        string? name,
+        int parentBoneIndex,
+        BoundingSphere boundingSphere,
+        IReadOnlyList<XnbMeshPartData> parts,
+        object? tag)
     {
         Name = name;
         ParentBoneIndex = parentBoneIndex;
         BoundingSphere = boundingSphere;
         Parts = parts;
+        Tag = tag;
     }
+
+    internal object? Tag { get; }
 
     internal string? Name { get; }
 
@@ -100,9 +117,14 @@ internal sealed class XnbMeshPartData
 
     internal required int PrimitiveCount { get; init; }
 
+    internal object? Tag { get; init; }
+
     internal XnbVertexBufferData? VertexBuffer { get; set; }
 
     internal XnbIndexBufferData? IndexBuffer { get; set; }
 
-    internal XnbBasicEffectData? Effect { get; set; }
+    /// <summary>Any of the four stock effect shapes -- see <see cref="XnbEffectData"/>. It used to
+    /// be <c>XnbBasicEffectData</c> alone, which made a model whose part named any other stock
+    /// effect fail at the shared-resource type check.</summary>
+    internal XnbEffectData? Effect { get; set; }
 }
