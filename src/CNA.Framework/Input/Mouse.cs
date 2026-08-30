@@ -41,6 +41,24 @@ public static class Mouse
         }
     }
 
+    /// <summary>
+    /// Sets the cursor image.
+    ///
+    /// Not XNA: XNA's <c>Mouse</c> says nothing about the cursor's appearance. MonoGame added
+    /// <c>Mouse.SetCursor</c> and games ported from it call it, so CNA's cursor surface is offered
+    /// here on the CNA layer and re-exported from <c>CNA.XnaCompat.Extensions</c> -- never from the
+    /// strict facade, where a member XNA does not have is a contract violation.
+    /// </summary>
+    public static void SetCursor(MouseCursor cursor)
+    {
+        ArgumentNullException.ThrowIfNull(cursor);
+
+        CnaResult result = Native.cna_mouse_set_cursor_ext(
+            CnaAmbientGame.Current, new CnaHandle(cursor.NativeHandleValue));
+        GC.KeepAlive(cursor);
+        CnaException.ThrowIfFailed(result, nameof(SetCursor));
+    }
+
     public static MouseState GetState()
     {
         var state = new CnaMouseState();

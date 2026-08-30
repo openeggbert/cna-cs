@@ -16,9 +16,9 @@ packaging, and release engineering.
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 560 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
-| Native integration | 122/122 passing in Debug and Release on Linux x64 against the ABI 0.20.0 CNA OPENGLES3 library |
-| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 850 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Managed tests | 560 `CNA.Framework` + 208 `CNA.XnaCompat`, all passing |
+| Native integration | 125/125 passing in Debug and Release on Linux x64 against the ABI 0.20.0 CNA OPENGLES3 library |
+| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 854 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
@@ -26,8 +26,10 @@ packaging, and release engineering.
 | Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
 | ABI layout evidence | Portable C-authority probe passes on Linux ELF x64: 86 native and 86 managed layout/type measurements with 0 mismatches, plus prototype compilation for reviewed callbacks/functions. That is a floor, not coverage: it measures 13 of the 80 interop structs. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
-| XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist |
+| XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
+| Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
+| Compiled-content survey | 517 assets of the XNA 4.0 sample collection: 498 load through CNA's own content loader, 18 name a type only the game's own assembly supplies, **0 need a built-in reader this binding does not have**, 0 unreadable |
 | Template | The checked-in repository project, the generated development project and the isolated package consumer all build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes against 0.20.0 |
 | Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; configured FNA runtime reports unavailable with exit 2 |
 | Packages | None published. Shipping defaults remain `IsPackable=false`; the isolated acceptance path creates local `CNA.Interop`, `CNA.Framework`, and `CNA.XnaCompat` preview packages, including an experimental `linux-x64` native asset, and passes inspection/install/build/60/600-frame/error-diagnostic checks |
@@ -115,10 +117,10 @@ measured as failing; nothing is aspirational.
 
 ### A. Consume the rest of what CNA already provides
 
-Six capabilities were wired when the binding moved to 0.19.0/0.20.0: multi-listener `Apply3D`, raw
-optioned vertex uploads, render-target `ContentLost`, the caller-owned `GraphicsDevice`
-constructor, compressed atlas loading, and the engine-layer availability pair with the five
-graphics capabilities that came with it. The routes below exist upstream and are still unbound.
+Wired since the move to 0.19.0/0.20.0: multi-listener `Apply3D`, raw optioned vertex uploads,
+render-target `ContentLost`, the caller-owned `GraphicsDevice` constructor, compressed atlas
+loading, the engine-layer availability pair with its five graphics capabilities, and the mouse
+cursor surface. The routes below exist upstream and are still unbound.
 
 | Task | Route | Completion criterion |
 | --- | --- | --- |
@@ -128,22 +130,42 @@ graphics capabilities that came with it. The routes below exist upstream and are
 | A4. Preferred presentation mode | `cna_graphics_device_manager_get/set_preferred_presentation_mode_ext` | Exposed in `CNA.XnaCompat.Extensions`, not in the strict namespace. |
 | A5. Explicit content-lost notification | `cna_graphics_device_notify_content_lost_resources_ext` | Only as a test hook, to drive the render-target `ContentLost` subscription deterministically on a renderer that cannot lose a device. Never called from an ordinary game path. |
 
-### A0. Admit CNA ABI 0.20.0 — done
+### A6. Content, now measured rather than guessed
 
-Upstream reached 0.20.0 during this work, when the renderer removal merged into `next`, and the
-0.19.0 header tree the gates were pinned to went stale mid-session -- which is how the bump was
-noticed, because `tools/abi-verify` failed against the live worktree exactly as designed.
+`tools/content-survey` answers "how much of a real game's compiled content can this read" against
+any `Content` folder. Against the XNA 4.0 sample collection there are no missing built-in readers
+left. What that does *not* say is that the bytes after each reader table are read correctly, which
+is the honest limit of a resolution survey. Remaining work:
 
-The review is complete and recorded in
-[`docs/native-abi-compatibility.md`](docs/native-abi-compatibility.md#what-the-0200-admission-measured):
-0 exports removed or added, 0 consumed prototypes changed, 0 struct/scalar/string changes, and 12
-integer-constant differences that are all renderer identities this binding does not consume. The
-full native gate set was re-run against a 0.20.0 build of `libcna_c_api.so`. 0.19.0 was retired the
-way 0.6/0.7/0.8 were, and a fixture proves it is refused.
+- A6a. Point the survey at more games and record the numbers. One corpus is one corpus.
+- A6b. `EffectMaterialReader` is the one built-in still unbuilt. It needs `EffectParameter.SetValue`
+  across every parameter shape plus XNA's vector-widening fallback, and no asset in the surveyed
+  corpus reaches it.
+- A6c. The compressed assets are analysed but never fully read here. A loading survey mode, behind a
+  graphics device, would close that gap.
+
+### A7. Dynamic skip does not work in the integration suite
+
+`Xunit.Sdk.SkipException.ForSkip(...)` is used in three integration tests to mean "this renderer
+cannot do the thing". Under `dotnet test` with `xunit.runner.visualstudio` 2.8.2 the runner does not
+honour it: the skip arrives as a failure whose message is the marker
+`$XunitDynamicSkip$...`. None of the three has fired yet, so nothing has gone red, but each is a
+test that will report a defect the first time it meets a renderer it was written to tolerate.
+
+Bumping the runner to 3.1.5 was tried and rejected: it did not honour the skip either, and it broke
+an unrelated test. The mouse-cursor test therefore asserts both outcomes instead of skipping one,
+which works on any runner. Either convert the remaining three the same way, or find a runner that
+honours dynamic skip and prove it by making one fire.
+
+Related, and found the same way: `GraphicsDevice_GetVertexBuffers_ReportsWhatWasBound` asserted that
+no vertex buffer was bound when it started. Every test in that assembly shares one device, so that
+precondition held only by accident of test order and adding a test to the class broke it. Worth a
+sweep for the same shape elsewhere -- an assertion about state a test did not establish is an
+assertion about what ran before it.
 
 ### B. Deepen the ABI evidence
 
-The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 850 prototypes. That
+The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 854 prototypes. That
 was defensible against a one-minor step; against a twelve-minor one it is a floor, and it is now the
 weakest link in an admission that otherwise rests on the upstream baseline diff.
 
@@ -172,7 +194,7 @@ when the binding moved to 0.19.0/0.20.0. The ones that need managed work rather 
 
 ### D. CNA API beyond XNA 4.0
 
-**D0 is done.** The engine layer's availability and revision are bound
+**D0 and the cursor surface are done.** The engine layer's availability and revision are bound
 (`cna_graphics_ext_is_available`, `cna_engine_layer_get_version`) and exposed as
 `CnaGraphicsDeviceExtensions.IsCnaEngineLayerAvailable()` / `CnaEngineLayerVersion()`, and the five
 graphics capabilities CNA 0.8 added -- float and half-float render targets, half-float linear
@@ -180,12 +202,18 @@ filtering, compute shaders, indirect draw -- are reachable from managed code for
 `CnaGraphicsCapability` had stopped at 13 through three ABI admissions. On the measured OPENGLES3
 build the engine layer reports available, revision 2, with all five capabilities true.
 
-That ordering matters for everything else in this section: the whole engine-layer surface is
+`CnaMouse`/`CnaMouseCursor` are the second piece, and they arrived from the opposite direction:
+the real-game compile probe found that a MonoGame-derived game's one unresolvable call was
+`Mouse.SetCursor`, CNA has the whole cursor surface behind it, and the strict facade cannot carry
+a member XNA lacks. That is the shape every future item here should take -- a measured need, a
+route that exists, and a home outside the strict contract.
+
+The ordering rule matters for everything else in this section: the whole engine-layer surface is
 exported by every CNA build and returns `NOT_SUPPORTED` when the layer is absent, so a resolved
 symbol is not evidence of a capability. Any further engine-layer binding must gate on the
 availability query rather than on the symbol existing.
 
-CNA 0.20.0 exports 4,051 routes; this binding consumes 850. The remainder is not all product
+CNA 0.20.0 exports 4,051 routes; this binding consumes 854. The remainder is not all product
 surface -- most of `vectors.h`, `matrix.h`, `math.h`, `quaternion.h`, `curve.h`, `geometry.h` and
 `color.h` is deliberately managed by design invariant 3, and much of the rest is engine-internal.
 What is genuinely a CNA-beyond-XNA product surface, by header and unbound count:
@@ -401,7 +429,7 @@ are not assumed compatible. The reviewed matrix accepts exactly 0.19.0. It previ
 0.6.0, 0.7.0 and 0.8.0; those entries were retired when this binding began importing four routes
 CNA added after 0.8.0, which no earlier library exports -- a consequence of the consumer moving,
 not a finding against those reviews. Every other version is rejected by default. The loader
-additionally requires all 850 imported symbols and executes guarded core signature/struct-shape
+additionally requires all 854 imported symbols and executes guarded core signature/struct-shape
 probes. Eleven dependency-free fixture libraries prove two positive and nine negative cases in
 fresh processes, including that a retired generation and both neighbours of the accepted one are
 refused.

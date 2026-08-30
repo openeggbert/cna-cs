@@ -163,14 +163,14 @@ jq -n \
     policyVersion: "cna-cs-native-abi/1",
     status: "passed",
     consumerAbi: "0.20.0",
-    requiredSymbolCount: 850,
+    requiredSymbolCount: 854,
     accepted: ["exact-0.20.0", "exact-0.20.0-extra-symbol"],
     rejected: ["retired-0.8.0", "retired-0.19.0", "unreviewed-0.21.0", "missing-required-symbol", "changed-required-signature", "incompatible-major-1.0.0", "structurally-incompatible-0.20.0", "malformed-metadata-0.0.0", "unreadable-metadata"],
     selectedNative: $selectedNative
   }' >"$output_root/abi-compatibility-report.json"
 
 echo "CNA_ABI_POLICY=cna-cs-native-abi/1"
-echo "CNA_ABI_REQUIRED_SYMBOLS=850"
+echo "CNA_ABI_REQUIRED_SYMBOLS=854"
 echo "CNA_ABI_FIXTURES_ACCEPTED=2"
 echo "CNA_ABI_FIXTURES_REJECTED=9"
 echo "CNA_ABI_SELECTED_NATIVE=$selected_native_status"

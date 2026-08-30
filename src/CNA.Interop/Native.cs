@@ -2468,6 +2468,27 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_engine_layer_get_version(out int outVersion);
 
+    // -- Mouse cursors (input_cursor.h) ---------------------------------------------------------
+    //
+    // Not XNA 4.0: XNA's Mouse has GetState, SetPosition and WindowHandle, and nothing about the
+    // cursor image. MonoGame added Mouse.SetCursor(MouseCursor), and a game ported from MonoGame
+    // calls it -- so this is bound for CNA.XnaCompat.Extensions rather than for the strict facade,
+    // where an extra member is a gate failure.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mouse_cursor_get_stock_ext(
+        CnaHandle game, uint stock, out CnaHandle outCursor);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mouse_cursor_create_from_texture2d(
+        CnaHandle game, CnaHandle texture, int originX, int originY, out CnaHandle outCursor);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mouse_cursor_destroy(CnaHandle cursor);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_mouse_set_cursor_ext(CnaHandle game, CnaHandle cursor);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_present(CnaHandle device);
 

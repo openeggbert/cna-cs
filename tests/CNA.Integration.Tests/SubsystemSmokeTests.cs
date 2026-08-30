@@ -66,6 +66,68 @@ public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fix
     }
 
     /// <summary>
+    /// The mouse cursor surface, which XNA has no API for and a MonoGame-derived game calls anyway.
+    ///
+    /// Compiling an 18,391-line Windows Phone XNA game ported to MonoGame against the strict facade
+    /// leaves exactly one unresolved call: <c>Mouse.SetCursor(MouseCursor.Arrow)</c>. It cannot go
+    /// on the facade's <c>Mouse</c> -- an extra member fails the metadata gate -- so it lives in the
+    /// CNA extensions, and this is the runtime half of that answer.
+    ///
+    /// A stock cursor is the system's: disposing it must leave the system's alone, which is why the
+    /// same identity is fetched twice and both are disposed.
+    ///
+    /// Whether the platform can set a system cursor is the environment's answer, not this binding's:
+    /// the <c>offscreen</c> SDL video driver refuses with "CreateSystemCursor is not currently
+    /// supported", and an X11 one does it. Both outcomes are asserted rather than one being skipped,
+    /// because dynamic skip does not survive this runner -- <c>xunit.runner.visualstudio</c> 2.8.2
+    /// reports a <c>SkipException</c> as a failure, and bumping it to the v3 runner broke an
+    /// unrelated test. So the refusal is checked for what it is: a platform error, not an argument
+    /// or state error, and never a silent success.
+    /// </summary>
+    [NativeFact]
+    public void MouseCursor_SetsAStockCursorAndLeavesTheSystemsAlone()
+    {
+        fixture.InsideAFrame(_ =>
+        {
+            Assert.Throws<ArgumentNullException>(() => Mouse.SetCursor(null!));
+
+            // Creating the cursor object succeeds even where the driver has no system cursors; it is
+            // setting one that the offscreen driver refuses. So the probe is the set, not the
+            // create.
+            bool canSet;
+            using (MouseCursor probe = MouseCursor.FromStock(MouseCursorStock.Arrow))
+            {
+                try
+                {
+                    Mouse.SetCursor(probe);
+                    canSet = true;
+                }
+                catch (CnaException exception)
+                {
+                    output.WriteLine($"this driver cannot set a system cursor: {exception.Message}");
+                    Assert.Contains("Platform", exception.Message, StringComparison.Ordinal);
+                    canSet = false;
+                }
+            }
+
+            if (!canSet)
+            {
+                return;
+            }
+
+            // The probe was disposed; the system's arrow must still be usable, because a stock
+            // cursor is the system's and disposing one names nothing to destroy.
+            using MouseCursor again = MouseCursor.FromStock(MouseCursorStock.Arrow);
+            Mouse.SetCursor(again);
+
+            using MouseCursor hand = MouseCursor.FromStock(MouseCursorStock.Hand);
+            Mouse.SetCursor(hand);
+
+            output.WriteLine("stock cursors set and released");
+        });
+    }
+
+    /// <summary>
     /// The CNAEXT engine layer's availability query, and the five graphics capabilities that had
     /// been unreachable from managed code since CNA 0.8 added them.
     ///

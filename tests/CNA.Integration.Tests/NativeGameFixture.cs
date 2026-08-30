@@ -75,6 +75,15 @@ public sealed class NativeGameFixture : IDisposable
 
         if (_game.Failure is { } failure)
         {
+            // A skip is a decision, not a failure, and a test body is where the decision is usually
+            // made -- "this renderer has no system cursors", "this one has no Texture3D". Wrapping
+            // it in a XunitException reported the environment's answer as a defect, which is the
+            // opposite of what a skip is for.
+            if (failure is Xunit.Sdk.SkipException)
+            {
+                throw failure;
+            }
+
             throw new Xunit.Sdk.XunitException($"The body threw inside the frame: {failure}");
         }
 

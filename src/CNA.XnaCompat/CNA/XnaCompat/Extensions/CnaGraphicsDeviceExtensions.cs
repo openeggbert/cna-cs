@@ -72,3 +72,70 @@ public static class CnaGraphicsDeviceExtensions
     public static int CnaEngineLayerVersion() =>
         CNA.Graphics.GraphicsDevice.CnaEngineLayerVersion();
 }
+
+/// <summary>
+/// The mouse cursor image, which XNA has no API for at all.
+///
+/// XNA's <c>Mouse</c> is <c>GetState</c>, <c>SetPosition</c> and <c>WindowHandle</c> -- a
+/// Windows Phone-era framework had no reason for more. MonoGame added
+/// <c>Mouse.SetCursor(MouseCursor)</c>, and a game ported from MonoGame calls it: compiling one
+/// against this facade, that call is the *only* thing in eighteen thousand lines that does not
+/// resolve. It cannot go on <c>Microsoft.Xna.Framework.Input.Mouse</c>, because the strict facade
+/// is checked member for member against XNA's metadata and an extra member fails that gate. So it
+/// lives here, and the port is one line: <c>Mouse.SetCursor(MouseCursor.Arrow)</c> becomes
+/// <c>CnaMouse.SetCursor(CnaMouseCursor.FromStock(CnaMouseCursorStock.Arrow))</c>.
+/// </summary>
+public static class CnaMouse
+{
+    /// <summary>Sets the cursor image for the running game.</summary>
+    public static void SetCursor(CnaMouseCursor cursor)
+    {
+        ArgumentNullException.ThrowIfNull(cursor);
+        CNA.Input.Mouse.SetCursor(cursor.Framework);
+    }
+}
+
+/// <summary>Which of the system's own cursors to use. See <see cref="CnaMouse"/>.</summary>
+public enum CnaMouseCursorStock : uint
+{
+    Arrow = 0,
+    Crosshair = 1,
+    Hand = 2,
+    IBeam = 3,
+    No = 4,
+    SizeAll = 5,
+    SizeNesw = 6,
+    SizeNs = 7,
+    SizeNwse = 8,
+    SizeWe = 9,
+    Wait = 10,
+    WaitArrow = 11,
+}
+
+/// <summary>
+/// A cursor image. See <see cref="CnaMouse"/>.
+///
+/// A stock cursor is the system's and disposing it leaves the system's alone; a texture cursor is
+/// this object's and is destroyed with it. The texture's pixels are copied, so the texture may be
+/// disposed straight after.
+/// </summary>
+public sealed class CnaMouseCursor : IDisposable
+{
+    private CnaMouseCursor(CNA.Input.MouseCursor framework) => Framework = framework;
+
+    internal CNA.Input.MouseCursor Framework { get; }
+
+    /// <summary>One of the system's own cursors.</summary>
+    public static CnaMouseCursor FromStock(CnaMouseCursorStock stock) =>
+        new(CNA.Input.MouseCursor.FromStock((CNA.Input.MouseCursorStock)(uint)stock));
+
+    /// <summary>A cursor drawn from a texture, with a hot spot inside it.</summary>
+    public static CnaMouseCursor FromTexture(Texture2D texture, int originX, int originY)
+    {
+        ArgumentNullException.ThrowIfNull(texture);
+        return new CnaMouseCursor(
+            CNA.Input.MouseCursor.FromTextureHandle(texture.NativeHandleValue, originX, originY));
+    }
+
+    public void Dispose() => Framework.Dispose();
+}

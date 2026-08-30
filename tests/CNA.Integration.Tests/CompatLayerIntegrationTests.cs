@@ -114,6 +114,12 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
 
         if (game.Failure is { } failure)
         {
+            // See NativeGameFixture.InsideAFrame: a skip decided inside the body is a skip.
+            if (failure is Xunit.Sdk.SkipException)
+            {
+                throw failure;
+            }
+
             throw new Xunit.Sdk.XunitException($"The body threw inside the compat frame: {failure}");
         }
 

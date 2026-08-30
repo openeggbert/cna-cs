@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>CnaCs.GameCompileProbe</RootNamespace>
+
+    <!--
+      A real, unmodified XNA-API game compiled against this facade.
+
+      tests/CNA.XnaCompat.CompileProbe is a corpus this repository wrote, so it can only contain
+      assignments someone thought to write down. This compiles source nobody here chose, which is
+      the only way to find out what a game actually uses. It found exactly one thing: MonoGame's
+      Mouse.SetCursor, which XNA does not have.
+
+      Nothing is vendored. Point CNA_GAME_SOURCE_ROOT (or -p:CnaGameSourceRoot=) at a checkout, and
+      the probe compiles every .cs below it. With no root configured it compiles nothing and
+      succeeds, so the solution builds for everyone else. An absent optional input must be visibly
+      absent rather than silently green, which is why the target below says which it was.
+    -->
+    <CnaGameSourceRoot Condition="'$(CnaGameSourceRoot)' == '' and '$(CNA_GAME_SOURCE_ROOT)' != ''">$(CNA_GAME_SOURCE_ROOT)</CnaGameSourceRoot>
+
+    <!--
+      A game's own source is not this repository's to lint. Warnings there say nothing about
+      whether the facade is compatible, which is the only question this project asks.
+    -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- CS2008 is "no source files": the expected state when no game root is configured. -->
+    <NoWarn>$(NoWarn);CS2008;CS0618;CS0612;CS1591;CS0649;CS0414;CS0169;CS0162;CS0219</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+
+    <!--
+      A game tree usually has its own AssemblyInfo.cs, and the SDK generates one too, so the pair
+      collide on every assembly attribute. The game's is the one that matters here: it is part of
+      the source under test.
+    -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(CnaGameSourceRoot)' != ''">
+    <Compile Include="$(CnaGameSourceRoot)/**/*.cs"
+             Exclude="$(CnaGameSourceRoot)/**/bin/**;$(CnaGameSourceRoot)/**/obj/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CNA.XnaCompat\CNA.XnaCompat.csproj" />
+  </ItemGroup>
+
+  <Target Name="ReportGameCompileProbeConfiguration" BeforeTargets="CoreCompile">
+    <Message Importance="high" Condition="'$(CnaGameSourceRoot)' == ''"
+             Text="GAME_COMPILE_PROBE=not-configured (set CNA_GAME_SOURCE_ROOT to a game's source tree)" />
+    <Message Importance="high" Condition="'$(CnaGameSourceRoot)' != ''"
+             Text="GAME_COMPILE_PROBE=configured root=$(CnaGameSourceRoot)" />
+  </Target>
+
+</Project>

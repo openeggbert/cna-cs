@@ -118,6 +118,14 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         fixture.InsideAFrameWithDevice(device =>
         {
             CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+
+            // Unbind first, and assert that the unbind worked, rather than asserting the device
+            // arrived unbound. Every test in this assembly shares one game and one device, and
+            // anything that has drawn a Model in an earlier test left a stream bound -- so the
+            // original "nothing is bound yet" precondition held by accident of test order, and
+            // adding a test to this class was enough to break it. What the assertion is for is
+            // whether SetVertexBuffer(null) clears the record, and that survives the change.
+            device.SetVertexBuffer(null);
             Assert.Empty(device.GetVertexBuffers());
 
             using var buffer = new VertexBuffer(

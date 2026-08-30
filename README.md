@@ -28,13 +28,21 @@ Binary compatibility with Microsoft's strong-named assemblies is not the primary
 As of 2026-08-30, against CNA `next` `e178282fc` (C ABI 0.20.0), OPENGLES3, Linux x64:
 
 - Debug and Release solution builds: 0 warnings, 0 errors;
-- managed tests: 560/560 framework and 199/199 XNA-compat passing;
-- native integration tests: 122/122 passing in Debug and Release;
+- managed tests: 560/560 framework and 208/208 XNA-compat passing;
+- native integration tests: 125/125 passing in Debug and Release;
 - strict metadata profile: 257 reference types versus 257 target types, 0 differences, 0
   allowlisted;
 - standalone public/protected CNA-type leak gate: 0 findings;
 - compile-time hierarchy corpus: passes unchanged on XNA, CNA, FNA, and MonoGame; records one Kni
   hierarchy difference (`VertexDeclaration` is not a `GraphicsResource` there);
+- real-game compile probe: an unmodified 18,391-line Windows Phone XNA game ported to MonoGame
+  compiles against the facade with exactly one unresolved call, `Mouse.SetCursor`, which is
+  MonoGame's addition rather than XNA 4.0 and is now offered as `CnaMouse.SetCursor` in
+  `CNA.XnaCompat.Extensions`. See [`tests/CNA.XnaCompat.GameCompileProbe`](tests/CNA.XnaCompat.GameCompileProbe);
+- compiled-content survey: of 517 assets in the XNA 4.0 sample collection, 498 load through CNA's
+  own content loader, 18 name a type only the game's own assembly supplies, none needs a built-in
+  content reader this binding lacks, and none is unreadable. See
+  [`tools/content-survey`](tools/content-survey);
 - deterministic behavior corpora: one manifest defines 470 observations: 83 Math, 23 Input, 153
   Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5
   DeviceLifecycle. CNA executes all 470 on Linux: 199 pure, 166 device, and 105 runtime. FNA
@@ -54,7 +62,7 @@ As of 2026-08-30, against CNA `next` `e178282fc` (C ABI 0.20.0), OPENGLES3, Linu
   0.8.0 → 0.19.0 as purely additive, and 0.19.0 → 0.20.0 as twelve renderer-identity constant
   differences and nothing else -- none of which this binding consumes, because it reads the
   renderer's name rather than its identity;
-- native loading follows the reviewed `cna-cs-native-abi/1` matrix, resolves all 850 imports, and
+- native loading follows the reviewed `cna-cs-native-abi/1` matrix, resolves all 854 imports, and
   passes 11 isolated compatibility fixtures (2 accepted, 9 rejected). The matrix accepts exactly
   0.20.0: 0.6.0/0.7.0/0.8.0 were retired when this binding began importing routes CNA added after
   them, 0.19.0 when 0.20.0 superseded it, and fixtures prove both kinds of retired generation are
@@ -96,7 +104,7 @@ CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
 The loader also accepts `CNA_NATIVE_DIR`. Explicit configuration is fail-fast and takes precedence
 over package-native lookup. Admission follows
 [`cna-cs-native-abi/1`](docs/native-abi-compatibility.md), not a same-major range: the version must
-have a reviewed matrix entry, all 850 imports must exist, and signature/shape canaries must pass.
+have a reviewed matrix entry, all 854 imports must exist, and signature/shape canaries must pass.
 The one accepted entry today is C ABI 0.20.0.
 Wrong ABI, missing symbols, conflicts, wrong architecture/load failure, and missing-library cases
 report the attempted configuration, consumer/detected ABI where available, RID, and remediation;
@@ -125,11 +133,13 @@ src/CNA.XnaCompat/                Microsoft.Xna.Framework facade
 tests/CNA.Framework.Tests/        managed CNA behavior tests
 tests/CNA.XnaCompat.Tests/        managed strict-facade behavior tests
 tests/CNA.XnaCompat.CompileProbe/ source-assignability corpus
+tests/CNA.XnaCompat.GameCompileProbe/ a real game's source, compiled against the facade
 tests/CNA.Integration.Tests/      real native ABI/runtime tests
 tools/api-compat/                 signature-aware XNA metadata verifier
 tools/abi-verify/                 portable C-authority ABI/layout/prototype verifier
 tools/native-abi-probe/           isolated managed native-loader admission probe
 tools/behavior-corpus/            authoritative corpus manifest/count/snapshot tooling
+tools/content-survey/             how much of a game's compiled content this binding can read
 tools/coverage/                   portable header/symbol discovery tools
 tools/profile-inventory/          separate future-XNA-profile inventory generator
 samples/HelloGame/                small managed sample

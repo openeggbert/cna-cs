@@ -57,3 +57,6 @@ artifacts/
 assets_tmp/
 __pycache__/
 *.py[cod]
+
+# Shared throwaway probe/experiment output (never a build this repository ships)
+build-probe/
