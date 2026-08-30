@@ -34,38 +34,60 @@ internal static class TextureDataType
     public const uint UShort = 17;
 
     /// <summary>
-    /// The tag for <typeparamref name="T"/>.
+    /// The tag that names <paramref name="format"/> itself, with its size in bytes.
+    ///
+    /// This is the untagged fallback's whole trick: transferring a surface through its own format's
+    /// tag converts nothing, so the bytes that cross the boundary are the surface's bytes, which is
+    /// what XNA copies for any element type.
+    ///
+    /// A compressed format has no per-pixel tag and reports <see cref="Byte"/> with a unit of one,
+    /// which is the shape the native side special-cases: for a byte-tagged transfer of a compressed
+    /// texture it counts whole 4x4 blocks rather than pixels. Reading DXT blocks as bytes is what
+    /// XNA does too.
     /// </summary>
-    /// <exception cref="NotSupportedException">For a type the ABI has no overload for. Named
-    /// explicitly rather than falling back to <see cref="Byte"/>: a raw-byte read of a
-    /// <c>Vector4</c> array would succeed, return the right number of bytes, and be wrong.</exception>
-    public static uint Of<T>()
-        where T : unmanaged
+    /// <exception cref="NotSupportedException">For a surface format with no transfer tag, so there
+    /// is nothing to fall back to.</exception>
+    public static (uint Tag, int UnitBytes) ForSurfaceFormat(SurfaceFormat format)
     {
-        if (typeof(T) == typeof(Color)) return Color;
-        if (typeof(T) == typeof(byte)) return Byte;
-        if (typeof(T) == typeof(float)) return Single;
-        if (typeof(T) == typeof(ushort)) return UShort;
-        if (typeof(T) == typeof(Vector2)) return Vector2Type;
-        if (typeof(T) == typeof(Vector4)) return Vector4Type;
-        if (typeof(T) == typeof(Bgr565)) return Bgr565;
-        if (typeof(T) == typeof(Bgra5551)) return Bgra5551;
-        if (typeof(T) == typeof(Bgra4444)) return Bgra4444;
-        if (typeof(T) == typeof(NormalizedByte2)) return NormalizedByte2;
-        if (typeof(T) == typeof(NormalizedByte4)) return NormalizedByte4;
-        if (typeof(T) == typeof(Rgba1010102)) return Rgba1010102;
-        if (typeof(T) == typeof(Rg32)) return Rg32;
-        if (typeof(T) == typeof(Rgba64)) return Rgba64;
-        if (typeof(T) == typeof(Alpha8)) return Alpha8;
-        if (typeof(T) == typeof(HalfSingle)) return HalfSingle;
-        if (typeof(T) == typeof(HalfVector2)) return HalfVector2;
-        if (typeof(T) == typeof(HalfVector4)) return HalfVector4;
+        uint tag = format switch
+        {
+            SurfaceFormat.Color or SurfaceFormat.ColorBgraExt or SurfaceFormat.ColorSrgbExt => Color,
+            SurfaceFormat.Bgr565 => Bgr565,
+            SurfaceFormat.Bgra5551 => Bgra5551,
+            SurfaceFormat.Bgra4444 => Bgra4444,
+            SurfaceFormat.NormalizedByte2 => NormalizedByte2,
+            SurfaceFormat.NormalizedByte4 => NormalizedByte4,
+            SurfaceFormat.Rgba1010102 => Rgba1010102,
+            SurfaceFormat.Rg32 => Rg32,
+            SurfaceFormat.Rgba64 => Rgba64,
+            SurfaceFormat.Alpha8 => Alpha8,
+            SurfaceFormat.Single => Single,
+            SurfaceFormat.Vector2 => Vector2Type,
+            SurfaceFormat.Vector4 => Vector4Type,
+            SurfaceFormat.HalfSingle => HalfSingle,
+            SurfaceFormat.HalfVector2 => HalfVector2,
+            SurfaceFormat.HalfVector4 or SurfaceFormat.HdrBlendable => HalfVector4,
+            SurfaceFormat.ByteExt => Byte,
+            SurfaceFormat.UShortExt => UShort,
 
-        throw new NotSupportedException(
-            $"{typeof(T)} is not one of the element types CNA_TextureDataType names, so no native " +
-            "transfer overload matches it. Supported: Color, byte, float, ushort, Vector2, Vector4, " +
-            "and the packed-vector formats (Bgr565, Bgra5551, Bgra4444, NormalizedByte2, " +
-            "NormalizedByte4, Rgba1010102, Rg32, Rgba64, Alpha8, HalfSingle, HalfVector2, " +
-            "HalfVector4).");
+            // Compressed formats have no per-texel tag. The byte tag is the route, and the block
+            // arithmetic behind it is the native side's, not this binding's.
+            SurfaceFormat.Dxt1 or SurfaceFormat.Dxt3 or SurfaceFormat.Dxt5
+                or SurfaceFormat.Dxt5SrgbExt or SurfaceFormat.Bc7Ext or SurfaceFormat.Bc7SrgbExt => Byte,
+
+            _ => throw new NotSupportedException(
+                $"Surface format {format} has no CNA_TextureDataType tag, so there is no transfer " +
+                "route for it."),
+        };
+
+        // A compressed format's "unit" is a whole block, and the byte-tagged compressed route
+        // counts bytes rather than blocks, so the caller's window is already in the right units.
+        int unitBytes = tag == Byte && format is SurfaceFormat.Dxt1 or SurfaceFormat.Dxt3
+            or SurfaceFormat.Dxt5 or SurfaceFormat.Dxt5SrgbExt or SurfaceFormat.Bc7Ext
+            or SurfaceFormat.Bc7SrgbExt
+            ? 1
+            : TextureTransferPlan.UnitBytes(format);
+
+        return (tag, unitBytes);
     }
 }

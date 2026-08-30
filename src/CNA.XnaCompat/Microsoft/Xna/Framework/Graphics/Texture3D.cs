@@ -75,14 +75,10 @@ public class Texture3D : Texture
         where T : struct
     {
         ValidateTransfer(level, left, top, right, bottom, front, back, data, startIndex, elementCount);
-        if (typeof(T) == typeof(Color))
-        {
-            FrameworkTexture3D.SetData(
-                level, left, top, right, bottom, front, back,
-                ConvertColors(data), startIndex, elementCount);
-            return;
-        }
 
+        // One route for every element type, including Color. The Color branch that used to sit
+        // here allocated a converted copy of the caller's array to say the same four bytes per
+        // texel that the raw route already carries.
         FrameworkTexture3D.SetDataBytes(
             level, left, top, right, bottom, front, back,
             data, startIndex, elementCount);
@@ -106,40 +102,10 @@ public class Texture3D : Texture
         where T : struct
     {
         ValidateTransfer(level, left, top, right, bottom, front, back, data, startIndex, elementCount);
-        RequireColorElement<T>();
-
-        CNA.Color[] values = FrameworkTexture3D.GetData(
-            level, left, top, right, bottom, front, back);
-        if (values.Length > elementCount)
-        {
-            throw new ArgumentException("The destination window is too small for the requested volume.", nameof(elementCount));
-        }
-
-        for (int i = 0; i < values.Length; i++)
-        {
-            data[startIndex + i] = (T)(object)values[i].ToCompat();
-        }
-    }
-
-    private static CNA.Color[] ConvertColors<T>(T[] source) where T : struct
-    {
-        RequireColorElement<T>();
-        var result = new CNA.Color[source.Length];
-        for (int i = 0; i < result.Length; i++)
-        {
-            result[i] = ((Color)(object)source[i]).ToFramework();
-        }
-
-        return result;
-    }
-
-    private static void RequireColorElement<T>() where T : struct
-    {
-        if (typeof(T) != typeof(Color))
-        {
-            throw new NotSupportedException(
-                $"CNA's current Texture3D C ABI has no raw readback route; {typeof(T)} cannot yet be used with GetData<T>.");
-        }
+        CNA.Graphics.Texture3D.GetBoxDataInto(
+            NativeHandleValue, level, left, top, right, bottom, front, back,
+            data, startIndex, elementCount);
+        GC.KeepAlive(this);
     }
 
     private static CNA.Graphics.Texture3D CreateFrameworkTexture(

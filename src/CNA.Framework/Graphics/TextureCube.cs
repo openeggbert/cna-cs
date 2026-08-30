@@ -139,6 +139,91 @@ public class TextureCube : Texture
         }
     }
 
+    /// <summary>
+    /// XNA's generic face transfer, writing into the caller's array without an intermediate copy.
+    ///
+    /// The ABI's cube routes take a <c>CNA_Color*</c> and nothing else, so the transfer is RGBA8
+    /// four bytes wide per texel and a non-Color surface is converted on the native side -- that is
+    /// the route's own semantics and is unchanged. What is new is the element type: this layer and
+    /// the strict facade both refused anything but <see cref="Color"/>, and XNA's transfer is an
+    /// untyped byte copy, so <c>GetData&lt;uint&gt;</c> and <c>&lt;byte&gt;</c> are ordinary in
+    /// ported code. Any element type whose size divides four now works; see
+    /// <see cref="TextureTransferPlan"/>.
+    ///
+    /// <c>internal static</c> over a plain handle for the reason
+    /// <c>RenderTarget2D.GetRenderTargetProperties</c> records: the strict facade's
+    /// <c>TextureCube</c> derives from its own <c>Texture</c>, inherits nothing here, and cannot
+    /// name a <c>CNA.Interop</c> type.
+    /// </summary>
+    internal static unsafe void SetFaceDataFrom<T>(
+        nint handleValue, CubeMapFace face, int level, Rectangle? rectangle,
+        T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        TextureTransferPlan plan = ValidateFaceWindow(data, startIndex, elementCount);
+        CnaTextureCubeTransfer transfer = BuildTransfer(face, level, rectangle);
+        transfer.StartIndex = plan.StartIndex;
+        transfer.ElementCount = plan.ElementCount;
+
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            CnaResult result = Native.cna_texturecube_set_data(
+                new CnaHandle(handleValue), in transfer,
+                (CnaColor*)pinned.AddrOfPinnedObject(), plan.Capacity);
+            CnaException.ThrowIfFailed(result, nameof(SetData));
+        }
+        finally
+        {
+            pinned.Free();
+        }
+    }
+
+    /// <summary>See <see cref="SetFaceDataFrom{T}"/>.</summary>
+    internal static unsafe void GetFaceDataInto<T>(
+        nint handleValue, CubeMapFace face, int level, Rectangle? rectangle,
+        T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        TextureTransferPlan plan = ValidateFaceWindow(data, startIndex, elementCount);
+        CnaTextureCubeTransfer transfer = BuildTransfer(face, level, rectangle);
+        transfer.StartIndex = plan.StartIndex;
+        transfer.ElementCount = plan.ElementCount;
+
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            CnaResult result = Native.cna_texturecube_get_data(
+                new CnaHandle(handleValue), in transfer,
+                (CnaColor*)pinned.AddrOfPinnedObject(), plan.Capacity, out _);
+            CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
+        finally
+        {
+            pinned.Free();
+        }
+    }
+
+    private static TextureTransferPlan ValidateFaceWindow<T>(T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException(
+                $"Texture element type {typeof(T)} contains managed references.", nameof(data));
+        }
+
+        return TextureTransferPlan.Rgba8(
+            System.Runtime.CompilerServices.Unsafe.SizeOf<T>(), startIndex, elementCount, data.Length);
+    }
+
     private static CnaTextureCubeTransfer BuildTransfer(CubeMapFace face, int level, Rectangle? rectangle) => new()
     {
         Face = (uint)face,

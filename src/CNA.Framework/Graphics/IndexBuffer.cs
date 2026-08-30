@@ -129,12 +129,6 @@ public class IndexBuffer : IDisposable
             throw new ArgumentException($"Index element type {typeof(T)} contains managed references.", nameof(data));
         }
 
-        if (offsetInBytes != 0 && options != 0)
-        {
-            throw new NotSupportedException(
-                "cna_index_buffer_set_data_at currently rejects Discard and NoOverwrite even for a dynamic buffer.");
-        }
-
         int sourceElementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
         int nativeElementSize = IndexElementSize == CNA.Graphics.IndexElementSize.SixteenBits ? 2 : 4;
         long byteCount = (long)sourceElementSize * elementCount;
@@ -151,10 +145,23 @@ public class IndexBuffer : IDisposable
         }
 
         ulong nativeElementCount = (ulong)(byteCount / nativeElementSize);
+
+        // A windowed upload carries no streaming hint, because upstream refuses one: "a windowed
+        // upload preserves the rest of the buffer, so it accepts no SetDataOptions other than
+        // None". XNA does accept both there, and refusing the call outright -- which is what this
+        // did -- breaks the commonest use of the overload there is, a sprite or geometry batcher
+        // rewriting one slice per frame with NoOverwrite.
+        //
+        // Dropping the hint on that route changes cost, not result. NoOverwrite promises only that
+        // the caller will not touch what the GPU is still reading, so ignoring it may stall and
+        // cannot corrupt. Discard says the rest of the buffer may become undefined, and this route
+        // preserves it instead -- a stronger guarantee than the caller asked for. The vertex family
+        // documents the same trade in its own header.
+        uint windowedOptions = offsetInBytes == 0 ? options : 0;
         var transfer = new CnaIndexBufferTransfer
         {
             IndexElementSize = (uint)IndexElementSize,
-            Options = options,
+            Options = windowedOptions,
             StartIndex = 0,
             ElementCount = nativeElementCount,
         };
@@ -235,36 +242,64 @@ public class IndexBuffer : IDisposable
                 "The CNA IndexBuffer ABI can transfer only complete native 16-bit or 32-bit indices.");
         }
 
-        if (offsetInBytes != 0)
-        {
-            throw new NotSupportedException(
-                $"{nameof(IndexBuffer)}.{nameof(GetData)} with a nonzero {nameof(offsetInBytes)} is not supported by " +
-                "cna_index_buffer_get_data, which always starts at native index zero.");
-        }
-
         ulong nativeElementCount = (ulong)(byteCount / nativeElementSize);
+        ulong nativeSkip = (ulong)(offsetInBytes / nativeElementSize);
         var transfer = new CnaIndexBufferTransfer
         {
             IndexElementSize = (uint)IndexElementSize,
             Options = 0,
             StartIndex = 0,
-            ElementCount = nativeElementCount,
+            ElementCount = nativeElementCount + nativeSkip,
         };
 
-        System.Runtime.InteropServices.GCHandle pinned =
-            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
-        try
+        if (nativeSkip == 0)
+        {
+            System.Runtime.InteropServices.GCHandle pinned =
+                System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try
+            {
+                CnaResult result = Native.cna_index_buffer_get_data(
+                    new CnaHandle(NativeHandleValue), in transfer,
+                    (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * destinationElementSize),
+                    nativeElementCount, out _);
+                GC.KeepAlive(this);
+                CnaException.ThrowIfFailed(result, nameof(GetData));
+            }
+            finally
+            {
+                pinned.Free();
+            }
+
+            return;
+        }
+
+        // A nonzero offsetInBytes used to throw: cna_index_buffer_get_data always starts at native
+        // index zero, so there is no route that begins partway in. Reading the prefix as well and
+        // keeping the tail costs one temporary buffer and gets the caller the bytes XNA gives them.
+        // The read stays atomic -- the destination is written only after the native call returns.
+        var staging = new byte[(long)(nativeElementCount + nativeSkip) * nativeElementSize];
+        fixed (byte* stagingPtr = staging)
         {
             CnaResult result = Native.cna_index_buffer_get_data(
-                new CnaHandle(NativeHandleValue), in transfer,
-                (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * destinationElementSize),
-                nativeElementCount, out _);
+                new CnaHandle(NativeHandleValue), in transfer, stagingPtr,
+                nativeElementCount + nativeSkip, out _);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(GetData));
-        }
-        finally
-        {
-            pinned.Free();
+
+            System.Runtime.InteropServices.GCHandle pinned =
+                System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try
+            {
+                Buffer.MemoryCopy(
+                    stagingPtr + offsetInBytes,
+                    (byte*)pinned.AddrOfPinnedObject() + ((long)startIndex * destinationElementSize),
+                    byteCount,
+                    byteCount);
+            }
+            finally
+            {
+                pinned.Free();
+            }
         }
     }
 

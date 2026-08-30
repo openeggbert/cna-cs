@@ -79,7 +79,7 @@ public class Texture2D : Texture
         ValidateTransfer(level, rect, data, startIndex, elementCount);
         CNA.Graphics.Texture2D.SetDataFrom(
             NativeHandleValue,
-            CompatTextureDataType.Of<T>(),
+            (CNA.Graphics.SurfaceFormat)(int)Format,
             level,
             rect.ToFramework(),
             data,
@@ -122,8 +122,7 @@ public class Texture2D : Texture
         CNA.Rectangle? converted = rect is { } r ? new CNA.Rectangle(r.X, r.Y, r.Width, r.Height) : null;
 
         CNA.Graphics.Texture2D.GetDataInto(
-            NativeHandleValue, (CNA.Graphics.SurfaceFormat)(int)Format,
-            CompatTextureDataType.Of<T>(), level, converted,
+            NativeHandleValue, (CNA.Graphics.SurfaceFormat)(int)Format, level, converted,
             data, startIndex, elementCount);
         GC.KeepAlive(this);
     }

@@ -516,6 +516,10 @@ public class GraphicsDevice : IDisposable
     /// nevertheless essential: existing XNA callers bind to these signatures, not CNA's former
     /// Color-only convenience members.
     /// </summary>
+    /// <summary>
+    /// Matches real XNA's generic back-buffer readback. It used to accept only
+    /// <see cref="Color"/>; see <c>CNA.Graphics.GraphicsDevice.GetBackBufferData</c>.
+    /// </summary>
     public void GetBackBufferData<T>(T[] data)
         where T : struct =>
         GetBackBufferData(null, data, 0, data?.Length ?? 0);
@@ -532,21 +536,12 @@ public class GraphicsDevice : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
 
-        if (typeof(T) != typeof(Color))
-        {
-            throw new NotSupportedException(
-                "CNA currently exposes back-buffer readback as Microsoft.Xna.Framework.Color values.");
-        }
-
-        Color[] colors = (Color[])(object)data;
-        var converted = new CNA.Color[colors.Length];
-        _framework.GetBackBufferData(
-            rect.ToFramework(), converted, startIndex, elementCount);
-
-        for (int i = startIndex; i < startIndex + elementCount; i++)
-        {
-            colors[i] = converted[i].ToCompat();
-        }
+        // No element-type restriction and no per-pixel conversion loop. The readback is RGBA8, and
+        // this namespace's Color has the same four-byte layout as the CNA one, so the bytes native
+        // writes are already the right bytes -- for Color and for every other element type whose
+        // size divides four. Converting element by element also meant allocating a second array the
+        // size of the back buffer on every call.
+        _framework.GetBackBufferData(rect.ToFramework(), data, startIndex, elementCount);
     }
 
     /// <summary>Re-typed: <c>GraphicsDeviceStatus</c> is a separate enum per namespace.</summary>

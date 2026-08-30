@@ -96,21 +96,59 @@ public class GraphicsIntegrationTests(ITestOutputHelper output, NativeGameFixtur
         });
     }
 
-    /// <summary>An element type the ABI has no overload for must be refused by name, not silently
-    /// read as raw bytes -- a byte-wise read of the wrong type succeeds, returns the right byte
-    /// count, and is wrong.</summary>
+    /// <summary>
+    /// An element type the ABI's tag list does not name reads the surface's bytes, and one whose
+    /// size the format cannot divide is still refused.
+    ///
+    /// This test used to assert the first half was impossible. It was not: XNA's transfer is an
+    /// untyped byte copy that uses <c>T</c> only for a size check, so <c>GetData&lt;uint&gt;</c> on
+    /// a Color texture is an ordinary idiom in ported games, and refusing it was a real
+    /// incompatibility. The refusal it was protecting against -- reading the wrong width and
+    /// corrupting silently -- is what the size rule covers, and that rule is CNA's own:
+    /// <c>cna_texture_validate_get_data_format</c> requires the format's unit to be a whole
+    /// multiple of the element size, which is what XNA calls "an invalid size for this resource".
+    ///
+    /// <c>long</c> is the interesting negative: eight bytes against a four-byte texel. It is
+    /// exactly the case the old refusal named, and it still fails.
+    /// </summary>
     [NativeFact]
-    public void Texture2D_GetData_RefusesAnUnmappedElementType()
+    public void Texture2D_GetData_ReadsAnUnmappedElementTypeAsSurfaceBytes()
     {
         fixture.InsideAFrameWithDevice(device =>
         {
             using var texture = new Texture2D(device, 2, 2);
-            texture.SetData(new Color[4]);
+            Color[] written = [Color.Red, Color.Lime, Color.Blue, Color.White];
+            texture.SetData(written);
 
-            var thrown = Assert.Throws<NotSupportedException>(() => texture.GetData(new long[4]));
+            var packed = new uint[4];
+            texture.GetData(packed);
+            output.WriteLine("packed: " + string.Join(", ", packed.Select(static p => p.ToString("X8"))));
 
+            // The same bytes the Color read returns, which is what XNA copies.
+            var asColor = new Color[4];
+            texture.GetData(asColor);
+            uint[] fromColor = asColor
+                .Select(static c => (uint)(c.R | (c.G << 8) | (c.B << 16) | (c.A << 24)))
+                .ToArray();
+            Assert.Equal(fromColor, packed);
+
+            // Four bytes per texel read one byte at a time: same bytes, four times as many.
+            var bytes = new byte[16];
+            texture.GetData(bytes);
+            Assert.Equal(BitConverter.GetBytes(packed[0]), bytes.Take(4).ToArray());
+
+            // And the round trip through the unmapped type.
+            using var copy = new Texture2D(device, 2, 2);
+            copy.SetData(packed);
+            var readBack = new Color[4];
+            copy.GetData(readBack);
+            Assert.Equal(written, readBack);
+
+            Exception thrown = Assert.ThrowsAny<Exception>(() => texture.GetData(new long[2]));
             output.WriteLine(thrown.Message);
-            Assert.Contains("CNA_TextureDataType", thrown.Message, StringComparison.Ordinal);
+            Assert.True(
+                thrown is CnaException or ArgumentException,
+                $"an eight-byte element against a four-byte texel threw {thrown.GetType().Name}");
         });
     }
 

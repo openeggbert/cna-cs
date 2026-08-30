@@ -167,6 +167,66 @@ public class Texture3D : Texture
         }
     }
 
+    /// <summary>
+    /// XNA's generic box readback, writing into the caller's array without an intermediate copy.
+    ///
+    /// <c>cna_texture3d_get_data</c> takes a <c>CNA_Color*</c>, so the readback is RGBA8 four bytes
+    /// wide per texel and a non-Color surface is converted on the native side -- the route's own
+    /// semantics, unchanged. What is new is the element type: this refused anything but
+    /// <see cref="Color"/>, and XNA's transfer is an untyped byte copy. The upload side already had
+    /// a raw-bytes route (<c>cna_texture3d_set_data_bytes</c>); readback had none, so a volume a
+    /// game could write it could not read back.
+    ///
+    /// <c>internal static</c> over a plain handle so the strict facade, which derives from its own
+    /// <c>Texture</c> and cannot name a <c>CNA.Interop</c> type, can call it.
+    /// </summary>
+    internal static unsafe void GetBoxDataInto<T>(
+        nint handleValue, int level, int left, int top, int right, int bottom, int front, int back,
+        T[] data, int startIndex, int elementCount)
+        where T : struct
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
+        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
+
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException(
+                $"Texture element type {typeof(T)} contains managed references.", nameof(data));
+        }
+
+        TextureTransferPlan plan = TextureTransferPlan.Rgba8(
+            System.Runtime.CompilerServices.Unsafe.SizeOf<T>(), startIndex, elementCount, data.Length);
+
+        var transfer = new CnaTexture3DTransfer
+        {
+            Level = level,
+            Left = left,
+            Top = top,
+            Right = right,
+            Bottom = bottom,
+            Front = front,
+            Back = back,
+            StartIndex = plan.StartIndex,
+            ElementCount = plan.ElementCount,
+        };
+
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            CnaResult result = Native.cna_texture3d_get_data(
+                new CnaHandle(handleValue), in transfer,
+                (CnaColor*)pinned.AddrOfPinnedObject(), plan.Capacity, out _);
+            CnaException.ThrowIfFailed(result, nameof(GetData));
+        }
+        finally
+        {
+            pinned.Free();
+        }
+    }
+
     /// <summary>Reads the whole volume at mip level zero.</summary>
     public Color[] GetData() => GetData(0, 0, 0, 0, Width, Height, Depth);
 

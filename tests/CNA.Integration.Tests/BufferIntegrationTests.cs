@@ -136,6 +136,65 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
         });
     }
 
+    /// <summary>
+    /// XNA's strided update: <c>sizeof(T)</c> bytes at each <c>vertexStride</c>, with the bytes in
+    /// between preserved. Rewriting one field of every vertex -- positions of an instance stream,
+    /// colours of a particle batch -- is what the overload is for, and this used to throw.
+    ///
+    /// The assertion that matters is the untouched half. Writing the new positions is easy to get
+    /// right by accident; leaving each vertex's colour alone is not, and an implementation that
+    /// wrote whole strides would pass a positions-only check while flattening every colour.
+    /// </summary>
+    [Native3DFact]
+    public void VertexBuffer_SetData_WithAPartialStride_PreservesTheGaps()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            // Distinct colours, built byte-wise. `Vertex(float)` cannot be used here: its
+            // `new Color((int)x, 0, 0, 255)` binds to the float overload, so every vertex it makes
+            // has the same colour and the untouched-gap assertion below would hold vacuously.
+            VertexPositionColor[] original =
+            [
+                new(new Vector3(1f, 1f, 1f), new Color((byte)11, (byte)12, (byte)13, (byte)14)),
+                new(new Vector3(2f, 2f, 2f), new Color((byte)21, (byte)22, (byte)23, (byte)24)),
+                new(new Vector3(3f, 3f, 3f), new Color((byte)31, (byte)32, (byte)33, (byte)34)),
+                new(new Vector3(4f, 4f, 4f), new Color((byte)41, (byte)42, (byte)43, (byte)44)),
+            ];
+            int stride = VertexPositionColor.VertexDeclaration.VertexStride;
+
+            using var buffer = new VertexBuffer(
+                device, VertexPositionColor.VertexDeclaration, original.Length, BufferUsage.None);
+            buffer.SetData(original);
+
+            // Only the position of each vertex, at the declaration's stride.
+            Vector3[] positions = [new(9f, 9f, 9f), new(8f, 8f, 8f), new(7f, 7f, 7f), new(6f, 6f, 6f)];
+            buffer.SetData(0, positions, 0, positions.Length, stride);
+
+            var read = new VertexPositionColor[original.Length];
+            buffer.GetData(read);
+            output.WriteLine($"positions {string.Join(", ", read.Select(static v => v.Position.X))}");
+            output.WriteLine($"colours   {string.Join(", ", read.Select(static v => v.Color.R))}");
+
+            for (int i = 0; i < original.Length; i++)
+            {
+                Assert.Equal(positions[i], read[i].Position);
+                Assert.Equal(original[i].Color, read[i].Color);
+            }
+
+            // The gather half, reading the same field back out.
+            var gathered = new Vector3[original.Length];
+            buffer.GetData(0, gathered, 0, gathered.Length, stride);
+            Assert.Equal(positions, gathered);
+
+            // And a field that is not at offset zero: the colour, four bytes at the end of each
+            // vertex. A gather that ignored offsetInBytes would return positions here.
+            var colours = new Color[original.Length];
+            buffer.GetData(stride - 4, colours, 0, colours.Length, stride);
+            Assert.Equal(original.Select(static v => v.Color).ToArray(), colours);
+        });
+    }
+
     [Native3DFact]
     public void IndexBuffer_SetData_WithNonzeroOffset_RewritesOnlyThatWindow()
     {

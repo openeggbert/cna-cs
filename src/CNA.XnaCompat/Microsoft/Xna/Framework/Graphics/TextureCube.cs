@@ -70,10 +70,15 @@ public class TextureCube : Texture
         where T : struct
     {
         ValidateTransfer(cubeMapFace, level, rect, data, startIndex, elementCount);
-        FrameworkTextureCube.SetData(
-            (CNA.Graphics.CubeMapFace)(int)cubeMapFace, level,
+        CNA.Graphics.TextureCube.SetFaceDataFrom(
+            NativeHandleValue,
+            (CNA.Graphics.CubeMapFace)(int)cubeMapFace,
+            level,
             rect.ToFramework(),
-            ConvertColors(data), startIndex, elementCount);
+            data,
+            startIndex,
+            elementCount);
+        GC.KeepAlive(this);
     }
 
     public void GetData<T>(CubeMapFace cubeMapFace, T[] data) where T : struct
@@ -99,41 +104,15 @@ public class TextureCube : Texture
         where T : struct
     {
         ValidateTransfer(cubeMapFace, level, rect, data, startIndex, elementCount);
-        RequireColorElement<T>();
-
-        CNA.Color[] values = FrameworkTextureCube.GetData(
-            (CNA.Graphics.CubeMapFace)(int)cubeMapFace, level,
-            rect.ToFramework());
-        if (values.Length > elementCount)
-        {
-            throw new ArgumentException("The destination window is too small for the requested face.", nameof(elementCount));
-        }
-
-        for (int i = 0; i < values.Length; i++)
-        {
-            data[startIndex + i] = (T)(object)values[i].ToCompat();
-        }
-    }
-
-    private static CNA.Color[] ConvertColors<T>(T[] source) where T : struct
-    {
-        RequireColorElement<T>();
-        var result = new CNA.Color[source.Length];
-        for (int i = 0; i < result.Length; i++)
-        {
-            result[i] = ((Color)(object)source[i]).ToFramework();
-        }
-
-        return result;
-    }
-
-    private static void RequireColorElement<T>() where T : struct
-    {
-        if (typeof(T) != typeof(Color))
-        {
-            throw new NotSupportedException(
-                $"CNA's current TextureCube C ABI transfers Color elements only; {typeof(T)} requires an upstream typed/raw route.");
-        }
+        CNA.Graphics.TextureCube.GetFaceDataInto(
+            NativeHandleValue,
+            (CNA.Graphics.CubeMapFace)(int)cubeMapFace,
+            level,
+            rect.ToFramework(),
+            data,
+            startIndex,
+            elementCount);
+        GC.KeepAlive(this);
     }
 
     internal static void ValidateSize(int size)

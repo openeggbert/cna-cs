@@ -537,34 +537,65 @@ public class GraphicsDevice : IDisposable
     /// <summary>
     /// Copies the back buffer's pixels. Matches real XNA's <c>GetBackBufferData</c>.
     ///
-    /// Constrained to <see cref="Color"/> rather than an open <c>T</c>: the ABI reads into a
-    /// <c>CNA_Color*</c>, so any other element type would be a reinterpretation this binding cannot
-    /// verify. XNA's own signature is generic, which is why the constraint is stated here rather
-    /// than silently accepted.
+    /// The ABI reads into a <c>CNA_Color*</c>, so the readback is RGBA8 and four bytes wide per
+    /// pixel. That does not make the element type <see cref="Color"/>: XNA's signature is generic
+    /// and its transfer is an untyped byte copy, so <c>GetBackBufferData&lt;uint&gt;</c> and
+    /// <c>&lt;byte&gt;</c> are ordinary, and this used to refuse both. Any element type whose size
+    /// divides four now reads the same four bytes per pixel; see <see cref="TextureTransferPlan"/>.
     /// </summary>
-    public unsafe void GetBackBufferData(Color[] data) => GetBackBufferData(null, data, 0, data?.Length ?? 0);
+    /// <remarks>
+    /// The constraint is <c>struct</c> rather than <c>unmanaged</c> because the strict facade's
+    /// signature must match XNA's exactly, and <c>unmanaged</c> emits a modreq XNA's metadata does
+    /// not have -- the api-compat gate reports it as a generic-constraint mismatch. The element
+    /// type is therefore checked at run time and the array is pinned through a handle, which is the
+    /// same shape the texture transfer helpers already use.
+    /// </remarks>
+    public void GetBackBufferData<T>(T[] data) where T : struct
+        => GetBackBufferData(null, data, 0, data?.Length ?? 0);
 
-    /// <summary>See <see cref="GetBackBufferData(Color[])"/>.</summary>
-    public unsafe void GetBackBufferData(Rectangle? rect, Color[] data, int startIndex, int elementCount)
+    /// <summary>See <see cref="GetBackBufferData{T}(T[])"/>.</summary>
+    public void GetBackBufferData<T>(T[] data, int startIndex, int elementCount)
+        where T : struct
+        => GetBackBufferData(null, data, startIndex, elementCount);
+
+    /// <summary>See <see cref="GetBackBufferData{T}(T[])"/>.</summary>
+    public unsafe void GetBackBufferData<T>(Rectangle? rect, T[] data, int startIndex, int elementCount)
+        where T : struct
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
         ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
 
+        if (System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            throw new ArgumentException(
+                $"Back-buffer element type {typeof(T)} contains managed references.", nameof(data));
+        }
+
+        TextureTransferPlan plan = TextureTransferPlan.Rgba8(
+            System.Runtime.CompilerServices.Unsafe.SizeOf<T>(), startIndex, elementCount, data.Length);
+
         var readback = new CnaBackBufferReadback
         {
             HasSourceRectangle = rect is null ? (byte)0 : (byte)1,
             SourceRectangle = rect is { } r ? new CnaRect(r.X, r.Y, r.Width, r.Height) : default,
-            StartIndex = (ulong)startIndex,
-            ElementCount = (ulong)elementCount,
+            StartIndex = plan.StartIndex,
+            ElementCount = plan.ElementCount,
         };
 
-        fixed (Color* destination = data)
+        System.Runtime.InteropServices.GCHandle pinned =
+            System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
         {
             CnaResult result = Native.cna_graphics_device_get_backbuffer_data_window(
-                ResolveNativeDeviceHandle(), in readback, (CnaColor*)destination, (ulong)data.Length);
+                ResolveNativeDeviceHandle(), in readback,
+                (CnaColor*)pinned.AddrOfPinnedObject(), plan.Capacity);
             CnaException.ThrowIfFailed(result, nameof(GetBackBufferData));
+        }
+        finally
+        {
+            pinned.Free();
         }
     }
 

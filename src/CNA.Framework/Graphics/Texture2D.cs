@@ -198,13 +198,15 @@ public class Texture2D : Texture
     /// header, a hundred lines from the read it was guarding. Twelfth false "the C API cannot do
     /// this" claim in this repository; see <c>plan.md</c>'s Corrections table.
     ///
-    /// The safety it was reaching for is now real, in two parts:
-    /// <see cref="TextureDataType.Of{T}"/> refuses an element type the ABI has no overload for,
-    /// by name, and the native validation confirms the size divides this texture's surface-format
-    /// unit. Both run before a single byte is read.
+    /// The safety it was reaching for is real: <c>cna_texture_validate_get_data_format</c> confirms
+    /// the element size divides this texture's surface-format unit before a single byte is read,
+    /// which is the same rule XNA states as "the type used for the destination element is an
+    /// invalid size for this resource".
+    ///
+    /// An element type the ABI's tag list does not name -- <c>uint</c>, a game's own packed struct
+    /// -- is no longer refused. It reads the surface's bytes through the texture's own format tag;
+    /// see <see cref="TextureTransferPlan"/> for why that is what XNA copies.
     /// </summary>
-    /// <exception cref="NotSupportedException">If <typeparamref name="T"/> is not one of the
-    /// element types <c>CNA_TextureDataType</c> names.</exception>
     /// <exception cref="CnaException">If the element size is incompatible with this texture's
     /// format, or the region is out of range. The read is atomic -- a failure leaves
     /// <paramref name="data"/> untouched.</exception>
@@ -227,14 +229,14 @@ public class Texture2D : Texture
     /// <c>GetData</c> existed on this layer for some time and was simply absent from the one a
     /// ported game uses.
     /// </summary>
+    /// <summary>
+    /// The transfer runs through the texture's own surface-format tag, so the native side converts
+    /// nothing and the bytes that cross are the surface's bytes. <c>T</c> contributes only its
+    /// size. See <see cref="TextureTransferPlan"/> for why that, rather than a tag chosen from
+    /// <c>T</c>, is what XNA does.
+    /// </summary>
     internal static unsafe void GetDataInto<T>(
         nint handleValue, SurfaceFormat format, int level, Rectangle? rect,
-        T[] data, int startIndex, int elementCount)
-        where T : unmanaged =>
-        GetDataInto(handleValue, format, TextureDataType.Of<T>(), level, rect, data, startIndex, elementCount);
-
-    internal static unsafe void GetDataInto<T>(
-        nint handleValue, SurfaceFormat format, uint dataType, int level, Rectangle? rect,
         T[] data, int startIndex, int elementCount)
         where T : struct
     {
@@ -248,14 +250,17 @@ public class Texture2D : Texture
             throw new ArgumentException($"Texture element type {typeof(T)} contains managed references.", nameof(data));
         }
 
-        CnaResult validation = Native.cna_texture_validate_get_data_format(
-            (uint)format, System.Runtime.CompilerServices.Unsafe.SizeOf<T>());
+        int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+        CnaResult validation = Native.cna_texture_validate_get_data_format((uint)format, elementSize);
         CnaException.ThrowIfFailed(validation, nameof(GetData));
+
+        TextureTransferPlan plan = TextureTransferPlan.Create(
+            format, elementSize, startIndex, elementCount, data.Length);
 
         CnaTexture2DTransfer transfer = CnaTexture2DTransfer.Versioned();
         transfer.Level = level;
-        transfer.StartIndex = (ulong)startIndex;
-        transfer.ElementCount = (ulong)elementCount;
+        transfer.StartIndex = plan.StartIndex;
+        transfer.ElementCount = plan.ElementCount;
 
         if (rect is { } region)
         {
@@ -268,8 +273,8 @@ public class Texture2D : Texture
         try
         {
             CnaResult result = Native.cna_texture2d_get_data(
-                new CnaHandle(handleValue), dataType, &transfer,
-                (void*)pinned.AddrOfPinnedObject(), (ulong)data.Length, out _);
+                new CnaHandle(handleValue), plan.DataType, &transfer,
+                (void*)pinned.AddrOfPinnedObject(), plan.Capacity, out _);
             CnaException.ThrowIfFailed(result, nameof(GetData));
         }
         finally
@@ -278,8 +283,10 @@ public class Texture2D : Texture
         }
     }
 
+    /// <summary>See <see cref="GetDataInto{T}(nint, SurfaceFormat, int, Rectangle?, T[], int,
+    /// int)"/>.</summary>
     internal static unsafe void SetDataFrom<T>(
-        nint handleValue, uint dataType, int level, Rectangle? rect,
+        nint handleValue, SurfaceFormat format, int level, Rectangle? rect,
         T[] data, int startIndex, int elementCount)
         where T : struct
     {
@@ -293,10 +300,17 @@ public class Texture2D : Texture
             throw new ArgumentException($"Texture element type {typeof(T)} contains managed references.", nameof(data));
         }
 
+        int elementSize = System.Runtime.CompilerServices.Unsafe.SizeOf<T>();
+        CnaResult validation = Native.cna_texture_validate_get_data_format((uint)format, elementSize);
+        CnaException.ThrowIfFailed(validation, nameof(SetData));
+
+        TextureTransferPlan plan = TextureTransferPlan.Create(
+            format, elementSize, startIndex, elementCount, data.Length);
+
         var transfer = CnaTexture2DTransfer.Versioned();
         transfer.Level = level;
-        transfer.StartIndex = (ulong)startIndex;
-        transfer.ElementCount = (ulong)elementCount;
+        transfer.StartIndex = plan.StartIndex;
+        transfer.ElementCount = plan.ElementCount;
         if (rect is { } region)
         {
             transfer.HasRectangle = 1;
@@ -308,8 +322,8 @@ public class Texture2D : Texture
         try
         {
             CnaResult result = Native.cna_texture2d_set_data(
-                new CnaHandle(handleValue), dataType, &transfer,
-                (void*)pinned.AddrOfPinnedObject(), (ulong)data.Length);
+                new CnaHandle(handleValue), plan.DataType, &transfer,
+                (void*)pinned.AddrOfPinnedObject(), plan.Capacity);
             CnaException.ThrowIfFailed(result, nameof(SetData));
         }
         finally
@@ -322,36 +336,8 @@ public class Texture2D : Texture
     public unsafe void GetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
         where T : unmanaged
     {
-        ArgumentNullException.ThrowIfNull(data);
-        ArgumentOutOfRangeException.ThrowIfNegative(startIndex);
-        ArgumentOutOfRangeException.ThrowIfNegative(elementCount);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(elementCount, data.Length - startIndex);
-
-        uint dataType = TextureDataType.Of<T>();
-
-        // Before the read, not after: the whole point of the check is that reading the wrong width
-        // corrupts silently rather than failing.
-        CnaResult validation = Native.cna_texture_validate_get_data_format((uint)Format, sizeof(T));
-        CnaException.ThrowIfFailed(validation, nameof(GetData));
-
-        CnaTexture2DTransfer transfer = CnaTexture2DTransfer.Versioned();
-        transfer.Level = level;
-        transfer.StartIndex = (ulong)startIndex;
-        transfer.ElementCount = (ulong)elementCount;
-
-        if (rect is { } region)
-        {
-            transfer.HasRectangle = 1;
-            transfer.Rectangle = new CnaRectangle(region.X, region.Y, region.Width, region.Height);
-        }
-
-        fixed (T* destination = data)
-        {
-            CnaResult result = Native.cna_texture2d_get_data(
-                new CnaHandle(NativeHandleValue), dataType, &transfer, destination, (ulong)data.Length, out _);
-            GC.KeepAlive(this);
-            CnaException.ThrowIfFailed(result, nameof(GetData));
-        }
+        GetDataInto(NativeHandleValue, Format, level, rect, data, startIndex, elementCount);
+        GC.KeepAlive(this);
     }
 
     /// <summary>
@@ -456,9 +442,8 @@ public class Texture2D : Texture
         stream.Write(encoded, 0, (int)written);
     }
 
-    /// <summary>Convenience overload matching real XNA's common <c>SetData&lt;Color&gt;</c> usage
-    /// (the general <c>SetData&lt;T&gt;</c> generic itself isn't implemented -- no caller in this
-    /// project needs any other <c>T</c>). Goes straight through
+    /// <summary>Convenience overload matching real XNA's common <c>SetData&lt;Color&gt;</c> usage.
+    /// Goes straight through
     /// <c>cna_texture2d_set_data_rgba8</c>'s own <c>const CNA_Color*</c> pixel-array shape rather
     /// than routing through <see cref="SetData(byte[])"/>, since a <see cref="Color"/> array is
     /// already exactly that layout.</summary>
@@ -466,6 +451,30 @@ public class Texture2D : Texture
     {
         ArgumentNullException.ThrowIfNull(data);
         SetDataRgba8(NativeHandleValue, PackColors(data));
+        GC.KeepAlive(this);
+    }
+
+    /// <summary>
+    /// Matches real XNA's general <c>SetData&lt;T&gt;</c>, which this layer did not have: it
+    /// offered only the <c>byte[]</c> and <c>Color[]</c> convenience overloads, on the recorded
+    /// grounds that "no caller in this project needs any other <c>T</c>". A ported game does, and
+    /// the compat facade had to carry the generic alone.
+    /// </summary>
+    public void SetData<T>(T[] data) where T : unmanaged
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        SetData(0, null, data, 0, data.Length);
+    }
+
+    /// <summary>See <see cref="SetData{T}(T[])"/>.</summary>
+    public void SetData<T>(T[] data, int startIndex, int elementCount) where T : unmanaged =>
+        SetData(0, null, data, startIndex, elementCount);
+
+    /// <summary>See <see cref="SetData{T}(T[])"/>.</summary>
+    public void SetData<T>(int level, Rectangle? rect, T[] data, int startIndex, int elementCount)
+        where T : unmanaged
+    {
+        SetDataFrom(NativeHandleValue, Format, level, rect, data, startIndex, elementCount);
         GC.KeepAlive(this);
     }
 

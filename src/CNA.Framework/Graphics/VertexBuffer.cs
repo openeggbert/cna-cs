@@ -12,24 +12,18 @@ namespace CNA.Graphics;
 /// is convenience sugar over the former via <see cref="VertexDeclaration.FromType"/>'s reflection,
 /// not a second native call.
 ///
-/// <see cref="GetData{T}(T[])"/> works for the vertex types the ABI's typed readback names, and
-/// throws for the rest. There is genuinely no raw-bytes vertex readback route -- only
-/// <c>cna_vertex_buffer_get_data</c> over the seven built-in <c>CNA_VertexType</c> layouts, four of
-/// which are real XNA types. It used to throw for every element type, and a header audit found the
-/// typed route unbound; the "no readback at all" half of the old note was correct only about raw
-/// bytes.
+/// Transfers reach the ABI through three routes and this type picks between them: the typed route
+/// for a built-in <c>CNA_VertexType</c> laid out contiguously from vertex zero, the raw route for
+/// anything with an offset or a custom stride, and a read-modify-write for XNA's strided
+/// scatter/gather, which the ABI has no descriptor for.
 ///
-/// <see cref="SetData{T}(int,T[],int,int,int)"/> uses the raw-upload family. A nonzero
-/// <c>offsetInBytes</c> goes through <c>cna_vertex_buffer_set_data_raw_at</c>, which indexes the
-/// buffer the way XNA's <c>offsetInBytes</c> does; the note that once stood here saying a nonzero
-/// offset throws described a route that had already been added. Since CNA 0.19.0 the same is true
-/// of <c>SetDataOptions</c>: <c>cna_vertex_buffer_set_data_raw_with_options</c> and its windowed
-/// twin carry <c>Discard</c>/<c>NoOverwrite</c> on the raw route too, so only genuinely
-/// unrepresentable scatter/gather transfers still refuse.
-///
-/// Readback keeps the asymmetry the header describes: native readback begins at vertex zero and
-/// <c>start_index</c> selects the *caller's* array window, so a nonzero <c>offsetInBytes</c> throws
-/// there.
+/// Each of those replaced a refusal, and each refusal had described the ABI rather than the caller:
+/// "no raw-bytes vertex readback" (the route had been added), "a nonzero offsetInBytes throws" (so
+/// had that one), "SetDataOptions only on the typed upload" (CNA 0.19.0 carries it on the raw
+/// upload too, with a documented cost-only deviation on a windowed <c>NoOverwrite</c>), and
+/// "cannot represent that scatter update" -- which is true of the ABI and not of the operation:
+/// reading the affected window, patching it and writing it back preserves the gaps exactly as XNA
+/// does. See <c>ScatterIntoBuffer</c> for what that costs.
 /// </summary>
 public class VertexBuffer : IDisposable
 {
@@ -196,27 +190,103 @@ public class VertexBuffer : IDisposable
             }
 
             nativeStride = vertexStride;
-            if (elementSize != nativeStride)
+            bool contiguousDeclarationWindow = elementSize == nativeStride
+                && nativeStride == VertexDeclaration.VertexStride
+                && offsetInBytes % nativeStride == 0;
+            if (contiguousDeclarationWindow)
             {
-                throw new NotSupportedException(
-                    "XNA copies only sizeof(T) bytes at each vertexStride and preserves the gaps. " +
-                    "The CNA raw VertexBuffer ABI writes complete strides and cannot represent that scatter update.");
+                nativeVertexCount = (ulong)elementCount;
+                UploadRaw(
+                    offsetInBytes, bytePtr, (ulong)((long)elementCount * elementSize),
+                    nativeVertexCount, nativeStride, options);
+                return;
             }
 
-            if (nativeStride != VertexDeclaration.VertexStride || offsetInBytes % nativeStride != 0)
-            {
-                throw new NotSupportedException(
-                    "The CNA raw VertexBuffer ABI requires a declaration-sized, vertex-aligned window.");
-            }
-
-            nativeVertexCount = (ulong)elementCount;
-            UploadRaw(
-                offsetInBytes, bytePtr, (ulong)((long)elementCount * elementSize),
-                nativeVertexCount, nativeStride, options);
+            ScatterIntoBuffer(bytePtr, elementSize, elementCount, offsetInBytes, vertexStride, options);
         }
         finally
         {
             pinned.Free();
+        }
+    }
+
+    /// <summary>
+    /// XNA's strided update, where <c>vertexStride</c> is the spacing between
+    /// <c>sizeof(T)</c>-byte writes and the bytes between them are preserved.
+    ///
+    /// The ABI has no scatter descriptor: its raw upload writes whole vertices. This refused the
+    /// call outright, which rules out every partial-field update a game does -- rewriting only the
+    /// positions of an instance stream, only the colours of a particle batch -- and those are
+    /// ordinary.
+    ///
+    /// So the update is composed instead: read the declaration-aligned window that the writes fall
+    /// inside, patch the caller's bytes into it at their strides, and write the whole window back.
+    /// The gaps are preserved because they are read and written unchanged, which is the guarantee
+    /// XNA gives. What this costs is a read, and the read is the honest part of the trade: a
+    /// buffer the renderer will not read back cannot use this path, and says so through the native
+    /// failure rather than through a guess here.
+    /// </summary>
+    private unsafe void ScatterIntoBuffer(
+        byte* source, int elementSize, int elementCount, int offsetInBytes, int vertexStride, uint options)
+    {
+        int declarationStride = VertexDeclaration.VertexStride;
+        long firstByte = offsetInBytes;
+        long lastByteExclusive = (long)offsetInBytes + ((long)(elementCount - 1) * vertexStride) + elementSize;
+        long windowStart = firstByte - (firstByte % declarationStride);
+        long windowEnd = ((lastByteExclusive + declarationStride - 1) / declarationStride) * declarationStride;
+        long windowBytes = windowEnd - windowStart;
+        ulong windowVertices = (ulong)(windowBytes / declarationStride);
+
+        var staging = new byte[windowBytes];
+        fixed (byte* stagingPtr = staging)
+        {
+            CnaResult read = Native.cna_vertex_buffer_get_data_raw(
+                new CnaHandle(NativeHandleValue), (ulong)windowStart, stagingPtr,
+                (ulong)windowBytes, windowVertices, (uint)declarationStride);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(read, nameof(SetData));
+
+            for (int i = 0; i < elementCount; i++)
+            {
+                long into = ((long)offsetInBytes + ((long)i * vertexStride)) - windowStart;
+                Buffer.MemoryCopy(source + ((long)i * elementSize), stagingPtr + into, elementSize, elementSize);
+            }
+
+            UploadRaw((int)windowStart, stagingPtr, (ulong)windowBytes, windowVertices, declarationStride, options);
+        }
+    }
+
+    /// <summary>
+    /// The readback half of <see cref="ScatterIntoBuffer"/>: <c>sizeof(T)</c> bytes at each stride,
+    /// skipping the gaps. Composed the same way, by reading the aligned window whole and extracting
+    /// from it.
+    /// </summary>
+    private unsafe void GatherFromBuffer(
+        byte* destination, int elementSize, int elementCount, int offsetInBytes, int vertexStride)
+    {
+        int declarationStride = VertexDeclaration.VertexStride;
+        long firstByte = offsetInBytes;
+        long lastByteExclusive = (long)offsetInBytes + ((long)(elementCount - 1) * vertexStride) + elementSize;
+        long windowStart = firstByte - (firstByte % declarationStride);
+        long windowEnd = ((lastByteExclusive + declarationStride - 1) / declarationStride) * declarationStride;
+        long windowBytes = windowEnd - windowStart;
+        ulong windowVertices = (ulong)(windowBytes / declarationStride);
+
+        var staging = new byte[windowBytes];
+        fixed (byte* stagingPtr = staging)
+        {
+            CnaResult read = Native.cna_vertex_buffer_get_data_raw(
+                new CnaHandle(NativeHandleValue), (ulong)windowStart, stagingPtr,
+                (ulong)windowBytes, windowVertices, (uint)declarationStride);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(read, nameof(GetData));
+
+            // Only after the native call succeeded, so a failure leaves the caller's array alone.
+            for (int i = 0; i < elementCount; i++)
+            {
+                long from = ((long)offsetInBytes + ((long)i * vertexStride)) - windowStart;
+                Buffer.MemoryCopy(stagingPtr + from, destination + ((long)i * elementSize), elementSize, elementSize);
+            }
         }
     }
 
@@ -342,9 +412,21 @@ public class VertexBuffer : IDisposable
             {
                 if (elementSize != vertexStride)
                 {
-                    throw new NotSupportedException(
-                        "XNA reads sizeof(T) bytes at each vertexStride and skips the gaps. " +
-                        "The CNA raw VertexBuffer ABI reads complete strides and cannot represent that scatter readback.");
+                    System.Runtime.InteropServices.GCHandle gathering =
+                        System.Runtime.InteropServices.GCHandle.Alloc(
+                            data, System.Runtime.InteropServices.GCHandleType.Pinned);
+                    try
+                    {
+                        GatherFromBuffer(
+                            (byte*)gathering.AddrOfPinnedObject() + ((long)startIndex * elementSize),
+                            elementSize, elementCount, offsetInBytes, vertexStride);
+                    }
+                    finally
+                    {
+                        gathering.Free();
+                    }
+
+                    return;
                 }
 
                 nativeStride = vertexStride;

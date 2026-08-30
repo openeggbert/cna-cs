@@ -545,13 +545,19 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
             indexBuffer.SetData(indices, 0, indices.Length, SetDataOptions.None);
             indexBuffer.SetData(indices, 0, indices.Length, SetDataOptions.Discard);
             indexBuffer.SetData(indices, 0, indices.Length, SetDataOptions.NoOverwrite);
-            Assert.Throws<NotSupportedException>(() =>
-                indexBuffer.SetData(2, new ushort[] { 7 }, 0, 1, SetDataOptions.NoOverwrite));
-            indexBuffer.SetData(2, new ushort[] { 7 }, 0, 1, SetDataOptions.None);
+
+            // A windowed optioned upload. This used to throw, which broke the commonest use of the
+            // overload -- a batcher rewriting one slice per frame with NoOverwrite.
+            indexBuffer.SetData(2, new ushort[] { 7 }, 0, 1, SetDataOptions.NoOverwrite);
 
             var indexReadback = new ushort[3];
             indexBuffer.GetData(indexReadback);
-            Assert.Equal((ushort)7, indexReadback[1]);
+            Assert.Equal([(ushort)0, (ushort)7, (ushort)2], indexReadback);
+
+            // And reading back from a nonzero offset, which had no route at all.
+            var tail = new ushort[2];
+            indexBuffer.GetData(2, tail, 0, 2);
+            Assert.Equal([(ushort)7, (ushort)2], tail);
         });
     }
 
