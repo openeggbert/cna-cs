@@ -11,6 +11,112 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## Content external references, a second renderer, and two more vertical slices (2026-08-31)
+
+`NEXT.md` had not been written since 2026-08-23 while `plan.md` absorbed four sessions of results.
+That is the wrong split -- `plan.md` is what to build next, this file is what happened -- so this
+entry covers the run that noticed.
+
+### The one idea that produced most of the session
+
+**Fixing a bug is not the end of it; re-running the corpus is.** Four of this session's defects were
+found only because an earlier fix let execution reach them:
+
+1. External-reference resolution let models load, which
+2. exposed that resolved asset names are spelled with backslashes and the file lookup did not
+   translate them, which
+3. exposed that `ContentManager.OpenStream` refused an absolute `RootDirectory` that XNA supports,
+   which
+4. exposed that four `Song` assets use a wire form this reader did not know, which
+5. exposed that the media-path resolver dropped a POSIX-absolute root's leading separator.
+
+Each was invisible behind the previous one. The plan had recorded (3) as "a survey-harness bug
+rather than a binding one"; it was a binding bug, and the survey was right.
+
+### What changed
+
+**Content (Priority 1).** `CNA.Framework`'s XNB path resolves external references, and
+`EffectMaterialReader`, `EnvironmentMapEffectReader` and `DualTextureEffectReader` are transcribed
+from the decompiled XNA readers. Measured on a fixed 2,047-asset snapshot of the XNA 4.0 sample
+collection: **loaded 1,797 -> 1,890, runtime failures 111 -> 38, missing readers 85 -> 0.** 302
+models materialise with 767 of 767 mesh parts carrying an effect and 480 carrying a texture.
+
+Three defects the corpus found that reading would not have:
+
+- `SplitTypeArguments` could not parse any two-argument generic reader. Normalisation strips
+  assembly qualification and eats the comma between arguments with it, so a real file spells
+  `DictionaryReader\`2[[System.String][System.Object]]` with **no comma**, and splitting on commas
+  yielded one argument that the arity guard rejected. Every `Dictionary` asset failed while the
+  hand-written comma spelling in the tests resolved -- a test that could only pass.
+- The reader refused any non-null `Tag`, on the recorded premise that "real content pipeline output
+  never actually sets one". 28 assets do, always a `Dictionary<string, object>`, and XNA's own
+  `Model.Read` stores it.
+- Collections were built as `Dictionary<object, object>`. That materialises without error and fails
+  the cast the game writes, turning a loader failure into a game crash. Reader entries carry a CLR
+  target type now, so `Dictionary<string, object>` is what it says.
+
+Asset identity is now XNA's exactly: `TitleContainer.GetCleanPath` and
+`ContentReader.GetPathToReference` are transcribed rather than approximated, in one shared
+primitive. Two XNA behaviours that look like bugs are transcribed rather than tidied and are pinned
+by tests -- a repeated separator survives, and a trailing `..` cancelling a nested segment leaves the
+separator behind.
+
+**A second renderer (Priority 7), which is what unblocked Priority 2.** A7's remaining half was
+"assert what must happen when the capability is absent", and it could not be done honestly against
+OPENGLES3, which reports every capability. A HEADLESS build of the same revision -- made by turning
+`CNA_BUILD_C_API=ON` in cnanext's existing `cmake-build-headless`, so an incremental build rather
+than a fresh one -- reports nine of nineteen capabilities absent, has no engine layer, and refuses
+render-target readback and cube-face storage.
+
+Run against it before any change: **139 passed, 6 failed**, the six failing with `NotSupported` as
+though the binding were broken. That is exactly the confusion A7 exists to remove. Four absent
+branches now execute and assert.
+
+**Two of those have no capability identity to ask for.** `CNA_GRAPHICS_CAPABILITY_*` names nineteen
+things and neither readback nor cube-face storage is one; HEADLESS reports `ThreeD` and refuses
+both. They are measured once per renderer by a probe whose whole purpose is that one fact.
+
+**The thirteen `ThreeD` and four `CustomEffects` sites are still unasserted, deliberately.** The
+refusal a 2D-only renderer produces is not knowable from the headers:
+`IGraphicsRenderer::HandleUnsupported3DCall` throws a bare `std::runtime_error`, which the C API's
+exception barrier maps to `CNA_RESULT_INTERNAL`, while a renderer whose own `Ensure3DSupported`
+throws `System::NotSupportedException` maps to `NOT_SUPPORTED`. I would have written the second of
+those from intuition and been wrong. Every such site now says so at the call site.
+
+**Two vertical slices (Priorities 5 and 6).** `.cnb` textures load as real `Texture2D`s, and the
+engine-layer post-process chain is bound -- the object the render-target pool from the first D3 slice
+exists to serve, so the two meet at `BorrowTargetPool`. CNA.Interop went 881 -> 910 imports.
+
+Both slices produced a test that could not fail, and both were found by planting the defect rather
+than by review:
+
+- `AddOwned` transfers a pass handle CNA consumes whether or not the call succeeds. Disposing a
+  still-owning wrapper releases a consumed handle, native answers a failure result, and
+  `NativeResourceHandle` discards it -- so "dispose it and see" catches nothing. A surrendered pass
+  goes inert now, which is a real safety fix as well as a testable one.
+- A blit pass is the identity, and an *empty* chain also copies its source, so deleting the pass left
+  every pixel assertion passing. What distinguishes them is the pool: a two-pass chain ping-pongs and
+  takes exactly one intermediate target.
+
+### Documentation premises found false
+
+- plan.md said 861 imports; a previous handoff said 881; the gate said 881. The plan was stale, and
+  the number now comes from `Verify-Abi.sh` rather than prose.
+- B2's "struct field signedness is still unmeasured" had been false since the layout probe began
+  emitting a typed pointer per field. Two of the twelve negative controls are that exact mutation.
+- The blocker table's buffer-`ContentLost` row was wrong on both of its clauses. The routes have
+  existed since 2026-08-15 and `CNA.Interop` consumes them. It survived because the mechanical check
+  verifies that a *named* route exists and cannot catch a row that is wrong about a route being
+  there. What was genuinely unproven -- delivery -- is now measured.
+- `Verify-NativeAbiCompatibility.sh` printed a hardcoded `CNA_ABI_REQUIRED_SYMBOLS=854`.
+
+### Blocked, and why
+
+VULKAN was attempted for a third renderer and is blocked by cnanext's own `PlatformRatchet` audit
+failing on an untracked file another session created mid-session. The audit runs from the root
+`CMakeLists.txt`, so every fresh cnanext configure is blocked while it stands -- SOFTWARE and
+OPENGL33 included. cnanext is read-only here and was not worked around.
+
 ## CNA native ABI policy formalized and fixture-gated (2026-08-23)
 
 This run was deliberately limited to the CNA native boundary. It did not expand the completed XNA

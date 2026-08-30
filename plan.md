@@ -1,8 +1,11 @@
 # CNA.NET engineering roadmap
 
-Last measured: 2026-08-30, against CNA `next` `17b5a90a0878f3f44c23bc8e3197d5d30373dc72`
+Last measured: 2026-08-31, against CNA `next` `71576a7b933c702e1d1384a9720b0237644c2130`
 (C ABI 0.20.0) and `sharp-runtimenext` `eebebd862121953538e3b84d43384d70a8a1728d`. Two renderers
-this time: OPENGLES3 and HEADLESS. Session history and
+this time: OPENGLES3 and HEADLESS. The C API headers are byte-identical to those at `72262a33e`,
+where the previous measurement stopped, so the six revisions between them changed nothing this
+binding consumes -- checked with `git diff` over `modules/c-api/include`, not assumed from the
+unchanged version macro. Session history and
 superseded decisions live in [`NEXT.md`](NEXT.md). This file is the current, normative plan.
 
 ## Current verified state
@@ -17,8 +20,8 @@ packaging, and release engineering.
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 614 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
-| Native integration | 157/157 passing on Linux x64 against **both** the ABI 0.20.0 CNA OPENGLES3 library and a HEADLESS build of the same revision. The second renderer is what turns nine absent capabilities from untested branches into exercised ones |
+| Managed tests | 620 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
+| Native integration | 159/159 passing in Debug and Release on Linux x64 against **both** the ABI 0.20.0 CNA OPENGLES3 library and a HEADLESS build of the same revision. The second renderer is what turns nine absent capabilities from untested branches into exercised ones |
 | Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 910 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
@@ -31,7 +34,7 @@ packaging, and release engineering.
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
 | Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
 | Compiled-content survey | XNA 4.0 sample collection, `--load`: **1,988 attempted, 1,890 loaded, 0 needing a reader this binding lacks**, 38 failing, 26 refused by the native loader, 34 needing a game's own assembly. 302 models materialise with 767 of 767 mesh parts carrying an effect, 480 carrying a texture and 29 carrying a `Tag`. `cna-samples`: 555 attempted, 540 loaded, 1 failing |
-| Template | The checked-in repository project, the generated development project and the isolated package consumer all build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes against 0.20.0 |
+| Template | The checked-in repository project, the generated development project and the isolated package consumer all build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes against 0.20.0 on **both** OPENGLES3 and HEADLESS |
 | Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; FNA runs 600 frames over Vulkan once `FNA.Core` is built and `FNA_FRAMEWORK_PATH` points at it (see E3) |
 | Packages | None published. Shipping defaults remain `IsPackable=false`; the isolated acceptance path creates local `CNA.Interop`, `CNA.Framework`, and `CNA.XnaCompat` preview packages, including an experimental `linux-x64` native asset, and passes inspection/install/build/60/600-frame/error-diagnostic checks |
 | Tested platform | Linux x64 only in this run |
@@ -675,9 +678,10 @@ records authority, source-portability value, implementation status, and namespac
 
   | renderer | state |
   | --- | --- |
-  | OPENGLES3 | `VERIFIED_60_600` -- the template drew 600 frames; native integration 146/146 |
-  | HEADLESS | `VERIFIED_INTEGRATION` -- native integration 146/146, and it is what made nine absent capabilities testable |
-  | the other 37 | `NOT_BUILT` |
+  | OPENGLES3 | `VERIFIED_60_600` -- the template drew 600 frames; native integration 159/159 in Debug and Release |
+  | HEADLESS | `VERIFIED_60_600` -- 600 frames and native integration 159/159, and it is what made nine absent capabilities testable |
+  | VULKAN | `UPSTREAM_BLOCKED` -- see below |
+  | the other 36 | `NOT_BUILT` |
 
   `NOT_BUILT` rather than untested-by-omission: this cnanext configuration bakes in a single
   renderer (`CNA_GRAPHICS_RENDERER=OPENGLES3`), so each additional one needs its own out-of-tree
@@ -701,9 +705,19 @@ records authority, source-portability value, implementation status, and namespac
   matrix measured only for frames would have recorded HEADLESS as uninteresting, because it draws
   nothing; measured for *capability breadth* it is the most informative build on this host.
 
-  600-frame template runs on HEADLESS are not attempted: it rasterises nothing, so a frame count
-  there measures the game loop rather than the renderer, which the OPENGLES3 run already covers.
-  The next useful targets remain OPENGL33 and SOFTWARE.
+  HEADLESS does complete 600 template frames, and reports `3D pipeline: yes` while rasterising
+  nothing -- which is worth stating rather than assuming either way: the frame count there measures
+  the game loop and the binding's call sequence, not the picture, and that is still a different
+  thing from OPENGLES3 passing.
+
+  **VULKAN was attempted and is blocked upstream, not by this binding.** Its build directory already
+  holds 1,723 objects and needed only `CNA_BUILD_C_API=ON`, but configuring now fails cnanext's own
+  `PlatformRatchet` audit: `modules/c-api/tests/pure_c/GameSecondaryGraphicsDeviceContextSmoke.c` is
+  an untracked file another session created mid-session and has an unclassified SDL reference. The
+  same configure succeeded for HEADLESS an hour earlier, so this is that session's work in progress
+  rather than a property of the tree, and the audit runs from the root `CMakeLists.txt` -- so *every*
+  fresh cnanext configure is blocked while it stands, SOFTWARE and OPENGL33 included. Not worked
+  around: cnanext is read-only here.
 
 - E3. **Done.** The FNA configuration built cleanly and failed at startup with `Game framework
   dependency could not be loaded: FNA`, which is a confusing pair of outcomes and turned out not to
