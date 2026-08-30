@@ -124,7 +124,7 @@ cursor surface. The routes below exist upstream and are still unbound.
 
 | Task | Route | Completion criterion |
 | --- | --- | --- |
-| A1. `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | **Measured: identical. Not yet adopted** -- what remains is a lifetime decision, not a rendering one. See A1b/A1c. |
+| A1. **Done.** `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | Adopted. Identical glyph placement (0 of 1024 pixels differ) and about 40% less time per text-heavy frame. Falls back to glyph quads if a renderer refuses the route. See A1c for the measurement and for the reason the recorded rationale was backwards. |
 | A2. **Already done, under a different route.** Batched sprite submission | `cna_sprite_batch_submit_scaled_many` | The completion criterion -- one native call per batch, not one per sprite -- has been met since the buffered-flush change. The route named here originally was the wrong one for this binding: `submit_many` is destination-rectangle-based, and CNA's position+scale route is the one this facade needs, because `Draw(texture, Rectangle, ...)` is converted managed-side to `position = rect.XY`, `scale = rect.Size / source.Size`. What was genuinely missing is any check that the conversion lands where the rectangle asked; see the pixel tests below. |
 | A3. **Done.** `PresentationParameters` bounds and clone | `cna_presentation_parameters_get_bounds`, `cna_presentation_parameters_clone` | Both go through native. Native agrees with the managed reconstruction that was there (the back buffer at the origin), which is the expected outcome and not the point -- the point is that native is the authority, so a future disagreement shows up here instead of being silently overridden. The clone is asserted independent, since a route returning the same value would pass every equality check and fail the moment a game edited the copy. |
 | A4. **Done.** Preferred presentation mode | `cna_graphics_device_manager_get/set_preferred_presentation_mode_ext` | `CnaGraphicsDeviceManagerExtensions.Get/SetCnaPreferredPresentationMode`, outside the strict namespace. All five identities round-trip, not one: the enum crosses the ABI as a numeric cast, and an off-by-one there passes a single-value test. Worth having because XNA stretches the back buffer and offers no say, so a fixed-aspect XNA game letterboxes by hand -- code a port can now delete. |
@@ -204,17 +204,41 @@ alpha 255, so it would have compared two blank images and passed. Third time in 
 check of mine could not fail; the guard is now written as a positive assertion about what must be
 drawn rather than a negative one about what must not.
 
-So placement is not the obstacle. What remains before adopting:
+**The recorded rationale was backwards.** This plan said the win was "one native call per string
+instead of one per glyph". `DrawEx` settles it: every `Draw`, and every glyph of every `DrawString`,
+appends to `_commandBuffer`, and the whole batch leaves through a single
+`cna_sprite_batch_submit_scaled_many` at `End`. The old cost was one transition *per batch* whatever
+the glyph count, so the native route makes strictly **more** ABI crossings, not fewer.
 
-- `SpriteFont` must own a native handle. `CreateNativeFontHandle` builds one from the managed glyph
-  table and the caller destroys it; adoption means retaining it, which gives this type a native
-  lifetime it does not have today, and XNA's `SpriteFont` is not `IDisposable`.
-- Ordering. Every `Draw` buffers and submits at `End`, while `draw_string` submits during the call,
-  so `DrawStringThroughNativeFont` flushes the buffer first to keep the comparison honest. Flushing
-  once per string gives back most of what batching bought, so adoption needs the text command to
-  join the buffer rather than bypass it.
+It is still worth adopting, for the opposite reason. Measured on a text-heavy frame -- 64 strings of
+24 glyphs, 60 frames -- the buffered per-glyph path costs about 2.1 ms/frame with one native call,
+and the native route about 1.25 ms/frame with sixty-four: **ratio 0.60**, stable across Debug and
+Release and across repeat runs. Computing and buffering a quad per glyph costs more than the extra
+crossings. That is a fourth premise in this plan found wrong by checking rather than reasoning -- and
+this one was written in this plan a few hours earlier.
 
-Neither is hard; both are design, and the measurement the plan asked for is now on the record.
+Adopted as follows:
+
+- `SpriteFont` creates its native counterpart lazily and keeps it in a `NativeResourceHandle`. Lazy
+  because the public constructor is XNA's and is pure managed code today, as is `MeasureString`;
+  creating a font eagerly would make constructing one require a live game. Rebuilt from the glyph
+  table rather than retained from the load path, because `ContentManager` destroys the font it loads
+  as soon as it has copied the table out, deliberately and unconditionally, and rebuilding is
+  lossless -- `copy_glyphs` is documented as the exact inverse of `create`.
+- `FlushCommandBuffer` replays sprites and strings **interleaved**, one `submit_scaled_many` per
+  contiguous sprite run with the strings between them. Submitting all sprites then all strings is one
+  call fewer and draws a HUD underneath the scene it labels; `SpriteTextOrderingTests` asserts both
+  directions, because a batch that always drew text last would pass a one-directional test.
+- A renderer that refuses the route falls back to glyph quads, expanded in that string's place so
+  ordering still holds. Every renderer could draw text before this change and a refusal must cost
+  speed rather than the string. `ForceGlyphQuadTextForTesting` exists because on a renderer that
+  accepts the route the fallback would otherwise never run -- the same hole
+  `NotifyContentLostResourcesForTesting` closes for `ContentLost` -- and the fallback is asserted to
+  draw pixel-for-pixel what the native route draws.
+
+Adoption also made the original A1 comparison vacuous, since `DrawString` had become the native
+route and both arms were then measuring the same code. Both the placement and cost tests now force
+the glyph-quad route on the reference arm.
 
 ### A2b. Sprite drawing is now checked by reading the pixels back
 

@@ -48,9 +48,17 @@ public class NativeDrawStringMeasurementTests(ITestOutputHelper output, NativeGa
                 kerning: [new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f)],
                 defaultCharacter: ' ');
 
-            Color[] managed = RenderWith(device, batch => batch.DrawString(
-                font, "AB", new Vector2(8f, 8f), new Color(255, 255, 255, 255),
-                0f, Vector2.Zero, new Vector2(Scale, Scale), SpriteEffects.None, 0f));
+            Color[] managed = RenderWith(device, batch =>
+            {
+                // Force the per-glyph route. Since adoption, DrawString *is* the native route, so
+                // without this both arms would draw the same way and the comparison would report
+                // perfect agreement while measuring nothing -- the same vacuity this test was
+                // already rewritten once to avoid.
+                batch.ForceGlyphQuadTextForTesting();
+                batch.DrawString(
+                    font, "AB", new Vector2(8f, 8f), new Color(255, 255, 255, 255),
+                    0f, Vector2.Zero, new Vector2(Scale, Scale), SpriteEffects.None, 0f);
+            });
 
             // Before comparing anything, prove the reference render is real. Comparing two blank
             // targets agrees perfectly and means nothing, and the first version of this test could
@@ -59,35 +67,17 @@ public class NativeDrawStringMeasurementTests(ITestOutputHelper output, NativeGa
             // per-glyph path is supposed to produce, so the comparison below cannot be vacuous.
             AssertGlyphsLandedWhereExpected(managed);
 
-            nint nativeFont;
-            try
+            if (font.NativeFontHandleValue == 0)
             {
-                nativeFont = font.CreateNativeFontHandle();
-            }
-            catch (CnaException ex)
-            {
-                // A renderer or build without the native SpriteFont resource answers here. That is a
-                // measurement result -- "not available" -- not a defect in this binding.
-                output.WriteLine($"A1 MEASUREMENT: no native font could be built: {ex.Message}");
+                // A build without the native SpriteFont resource answers here. That is a measurement
+                // result -- "not available" -- not a defect in this binding.
+                output.WriteLine("A1 MEASUREMENT: no native font could be built on this renderer.");
                 return;
             }
 
-            Color[] native;
-            try
-            {
-                native = RenderWith(device, batch => batch.DrawStringThroughNativeFont(
-                    nativeFont, "AB", new Vector2(8f, 8f), new Color(255, 255, 255, 255),
-                    0f, Vector2.Zero, new Vector2(Scale, Scale), SpriteEffects.None, 0f));
-            }
-            catch (CnaException ex)
-            {
-                output.WriteLine($"A1 MEASUREMENT: the renderer refused the native text route: {ex.Message}");
-                return;
-            }
-            finally
-            {
-                SpriteFont.DestroyNativeFontHandle(nativeFont);
-            }
+            Color[] native = RenderWith(device, batch => batch.DrawString(
+                font, "AB", new Vector2(8f, 8f), new Color(255, 255, 255, 255),
+                0f, Vector2.Zero, new Vector2(Scale, Scale), SpriteEffects.None, 0f));
 
             int differing = 0;
             for (int i = 0; i < managed.Length; i++)
@@ -105,6 +95,116 @@ public class NativeDrawStringMeasurementTests(ITestOutputHelper output, NativeGa
             Assert.Equal(0, differing);
         });
     }
+
+    /// <summary>
+    /// What adopting the native route would actually cost, measured rather than assumed.
+    ///
+    /// plan.md recorded the win as "one native call per string instead of one per glyph". That is
+    /// wrong, and reading <c>DrawEx</c> settles it: every <c>Draw</c> and every glyph of every
+    /// <c>DrawString</c> appends to <c>_commandBuffer</c>, and the whole batch leaves through a
+    /// single <c>cna_sprite_batch_submit_scaled_many</c> at <c>End</c>. Today's cost is one native
+    /// transition per *batch*, whatever the glyph count. The native text route costs one per
+    /// *string*, so adopting it trades fewer managed glyph placements for more ABI crossings.
+    ///
+    /// Which of those wins is not something to reason about, so this measures it on a text-heavy
+    /// frame. The comparison is fair for text-only work: <c>FlushCommandBuffer</c> returns
+    /// immediately on an empty buffer, so the native path here really does make one call per string
+    /// and no more, which is the best an adopted version could do.
+    ///
+    /// This reports and does not assert a threshold. A timing assertion on shared CI hardware fails
+    /// for reasons that have nothing to do with the code, and the decision this informs is a design
+    /// decision made once, not a regression to guard every run.
+    /// </summary>
+    [NativeFact]
+    public void NativeDrawString_CostComparedToTheBufferedPath()
+    {
+        const int StringsPerFrame = 64;
+        const int Frames = 60;
+
+        fixture.InsideAFrame(game =>
+        {
+            GraphicsDevice device = game.GraphicsDevice;
+
+            using var atlas = new Texture2D(device, 3, 1);
+            atlas.SetData([
+                new Color(0, 0, 0, 255), new Color(255, 0, 0, 255), new Color(0, 255, 0, 255),
+            ]);
+
+            SpriteFont font = BuildFont(atlas);
+            string text = string.Concat(Enumerable.Repeat("AB", 12));   // 24 glyphs
+
+            using var target = new RenderTarget2D(device, Size, Size);
+
+            double managed = TimeFrames(device, target, Frames, batch =>
+            {
+                batch.ForceGlyphQuadTextForTesting();
+                for (int i = 0; i < StringsPerFrame; i++)
+                {
+                    batch.DrawString(font, text, new Vector2(0f, i % Size), new Color(255, 255, 255, 255));
+                }
+            });
+
+            double native = TimeFrames(device, target, Frames, batch =>
+            {
+                for (int i = 0; i < StringsPerFrame; i++)
+                {
+                    batch.DrawString(font, text, new Vector2(0f, i % Size), new Color(255, 255, 255, 255));
+                }
+            });
+
+            output.WriteLine(
+                $"A1 COST: {StringsPerFrame} strings x 24 glyphs, {Frames} frames. " +
+                $"buffered per-glyph {managed:F2} ms/frame (1 native call per frame); " +
+                $"native draw_string {native:F2} ms/frame ({StringsPerFrame} native calls per frame); " +
+                $"ratio {(managed <= 0 ? 0 : native / managed):F2}x");
+        });
+    }
+
+    private static double TimeFrames(
+        GraphicsDevice device, RenderTarget2D target, int frames, Action<SpriteBatch> draw)
+    {
+        using var batch = new SpriteBatch(device);
+
+        // One untimed frame so shader/pipeline setup and any first-call allocation are not counted
+        // as the cost of the route under test.
+        RunFrame(device, target, batch, draw);
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < frames; i++)
+        {
+            RunFrame(device, target, batch, draw);
+        }
+
+        clock.Stop();
+        return clock.Elapsed.TotalMilliseconds / frames;
+    }
+
+    private static void RunFrame(
+        GraphicsDevice device, RenderTarget2D target, SpriteBatch batch, Action<SpriteBatch> draw)
+    {
+        device.SetRenderTarget(target);
+        try
+        {
+            device.Clear(new Color(0, 0, 0, 255));
+            batch.Begin();
+            draw(batch);
+            batch.End();
+        }
+        finally
+        {
+            device.SetRenderTarget(null);
+        }
+    }
+
+    private static SpriteFont BuildFont(Texture2D atlas) => new(
+        atlas,
+        glyphBounds: [new Rectangle(0, 0, 1, 1), new Rectangle(1, 0, 1, 1), new Rectangle(2, 0, 1, 1)],
+        cropping: [new Rectangle(0, 0, 1, 1), new Rectangle(0, 0, 1, 1), new Rectangle(0, 0, 1, 1)],
+        characters: [' ', 'A', 'B'],
+        lineSpacing: 2,
+        spacing: 0f,
+        kerning: [new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f), new Vector3(0f, 1f, 0f)],
+        defaultCharacter: ' ');
 
     private static Color[] RenderWith(GraphicsDevice device, Action<SpriteBatch> draw)
     {

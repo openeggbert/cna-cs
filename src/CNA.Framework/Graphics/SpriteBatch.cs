@@ -49,6 +49,38 @@ public class SpriteBatch : IDisposable
     /// draws of one texture) collapses to a single entry.
     /// </summary>
     private readonly HashSet<Texture> _referencedTextures = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Strings queued for the native text route, each remembering how many sprites preceded it.
+    ///
+    /// That count is the whole point. Sprites and strings must reach the renderer in the order the
+    /// game issued them, and they leave through two different native routes, so the flush replays
+    /// them interleaved: the sprites before a string, then the string, then the next run. Submitting
+    /// all sprites and then all strings would be one call fewer and would draw a HUD underneath the
+    /// scene it labels.
+    /// </summary>
+    private readonly List<PendingText> _pendingText = [];
+
+    /// <summary>Fonts referenced this batch, kept alive for the same reason
+    /// <see cref="_referencedTextures"/> keeps textures alive: native holds the handle until
+    /// <c>End</c> and a collected font would destroy it early.</summary>
+    private readonly HashSet<SpriteFont> _referencedFonts = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>Set when a renderer refuses the native text route, after which this batch draws
+    /// every string the per-glyph way. One refusal is enough: the answer is a property of the
+    /// renderer, not of the string.</summary>
+    private bool _nativeTextRefused;
+
+    /// <summary>
+    /// Makes this batch draw text the per-glyph way, as a renderer that refuses the native route
+    /// would.
+    ///
+    /// That fallback is the branch that keeps adopting the native route safe, and on a renderer
+    /// which accepts the route it never runs -- so without this it would ship untested, which is
+    /// the same hole <c>NotifyContentLostResourcesForTesting</c> exists to close for
+    /// <c>ContentLost</c>. There is no game reason to call it.
+    /// </summary>
+    internal void ForceGlyphQuadTextForTesting() => _nativeTextRefused = true;
     private bool _hasBegun;
 
     public SpriteBatch(GraphicsDevice graphicsDevice)
@@ -184,7 +216,9 @@ public class SpriteBatch : IDisposable
     private void BeginSucceeded()
     {
         _commandBuffer.Clear();
+        _pendingText.Clear();
         _referencedTextures.Clear();
+        _referencedFonts.Clear();
         _hasBegun = true;
     }
 
@@ -349,6 +383,21 @@ public class SpriteBatch : IDisposable
     {
         ArgumentNullException.ThrowIfNull(spriteFont);
         ArgumentNullException.ThrowIfNull(text);
+        EnsureHasBegun(nameof(DrawString));
+
+        // The native text route when the font can supply a handle and this renderer has not already
+        // refused it. Measured on the authored fixture: identical glyph placement, 0 of 1024 pixels
+        // different, and about 40% less time per text-heavy frame -- not because it makes fewer ABI
+        // crossings (it makes one per string where the buffer made one per batch) but because it
+        // does not compute and buffer a quad per glyph. See plan.md A1c.
+        if (!_nativeTextRefused && spriteFont.NativeFontHandleValue is var fontHandle and not 0)
+        {
+            _referencedFonts.Add(spriteFont);
+            _pendingText.Add(new PendingText(
+                _commandBuffer.Count, spriteFont, fontHandle, text,
+                position, color, rotation, origin, scale, effects, layerDepth));
+            return;
+        }
 
         _glyphPlacementBuffer.Clear();
         spriteFont.AppendGlyphPlacements(text, _glyphPlacementBuffer);
@@ -369,57 +418,6 @@ public class SpriteBatch : IDisposable
         }
     }
 
-    /// <summary>
-    /// Draws one string through <c>cna_sprite_batch_draw_string</c> using a native SpriteFont
-    /// handle, instead of one buffered quad per glyph.
-    ///
-    /// For plan.md A1's measurement, which is why it is internal and why it takes a raw handle: the
-    /// question is whether native places glyphs where <see cref="DrawString(SpriteFont,string,Vector2,Color)"/>
-    /// does, and answering it must not require first committing this type to owning a native font.
-    ///
-    /// <b>Buffered work is flushed first.</b> Every <c>Draw</c> here queues a command and submits at
-    /// <see cref="End"/>, while this route submits during the call. Without the flush a string drawn
-    /// between two sprites would arrive before both of them, so the ordering would silently differ
-    /// from the managed path -- which would make a comparison of the two meaningless. Adoption would
-    /// have to solve that properly rather than by flushing, since flushing per string gives back
-    /// most of what batching bought.
-    /// </summary>
-    internal void DrawStringThroughNativeFont(
-        nint nativeFontHandleValue,
-        string text,
-        Vector2 position,
-        Color color,
-        float rotation,
-        Vector2 origin,
-        Vector2 scale,
-        SpriteEffects effects,
-        float layerDepth)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        EnsureHasBegun(nameof(DrawStringThroughNativeFont));
-
-        FlushCommandBuffer();
-
-        CnaResult result = CnaStringMarshal.WithStringView(text, view =>
-        {
-            CnaSpriteTextCommand command = CnaSpriteTextCommand.Versioned();
-            command.SpriteFont = new CnaHandle(nativeFontHandleValue);
-            command.Text = view;
-            command.Position = position.ToNative();
-            command.Color = color.ToNative();
-            command.Rotation = rotation;
-            command.Origin = origin.ToNative();
-            command.Scale = scale.ToNative();
-            command.Effects = (uint)effects;
-            command.LayerDepth = layerDepth;
-
-            return Native.cna_sprite_batch_draw_string(new CnaHandle(NativeHandleValue), in command);
-        });
-
-        GC.KeepAlive(this);
-        CnaException.ThrowIfFailed(result, nameof(DrawStringThroughNativeFont));
-    }
-
     /// <summary>XNA leaves the batch begun when setup or flushing throws; only a successful End
     /// closes the pair. This matters for the observable state after an invalid sort mode or a
     /// rendering failure.</summary>
@@ -436,28 +434,149 @@ public class SpriteBatch : IDisposable
         _hasBegun = false;
     }
 
-    /// <summary>The one native call the whole buffered batch flushes through -- a no-op if
-    /// nothing was drawn this <c>Begin</c>/<c>End</c> pair, matching real XNA's own "an empty
-    /// batch does nothing" behavior rather than issuing a zero-command native call for no
-    /// reason.</summary>
-    private unsafe void FlushCommandBuffer()
+    /// <summary>
+    /// Replays the batch in issue order -- a no-op when nothing was drawn, matching real XNA's "an
+    /// empty batch does nothing" rather than issuing a zero-command native call.
+    ///
+    /// Sprites leave through one <c>cna_sprite_batch_submit_scaled_many</c> per contiguous run and
+    /// strings through <c>cna_sprite_batch_draw_string</c> between them, because the two routes are
+    /// separate and the renderer must still see them in the order the game issued them. With no
+    /// strings this is exactly the single call it always was.
+    /// </summary>
+    private void FlushCommandBuffer()
     {
-        if (_commandBuffer.Count == 0)
+        if (_commandBuffer.Count == 0 && _pendingText.Count == 0)
         {
             return;
         }
 
-        fixed (CnaSpriteDrawCommand* commands = CollectionsMarshal.AsSpan(_commandBuffer))
+        int submitted = 0;
+        foreach (PendingText text in _pendingText)
+        {
+            SubmitSprites(submitted, text.SpriteCountBefore - submitted);
+            submitted = text.SpriteCountBefore;
+            SubmitText(text);
+        }
+
+        SubmitSprites(submitted, _commandBuffer.Count - submitted);
+
+        _commandBuffer.Clear();
+        _pendingText.Clear();
+        _referencedTextures.Clear();
+        _referencedFonts.Clear();
+    }
+
+    private unsafe void SubmitSprites(int start, int count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        fixed (CnaSpriteDrawCommand* commands = CollectionsMarshal.AsSpan(_commandBuffer).Slice(start, count))
         {
             CnaResult result = Native.cna_sprite_batch_submit_scaled_many(
-                new CnaHandle(NativeHandleValue), commands, (ulong)_commandBuffer.Count);
+                new CnaHandle(NativeHandleValue), commands, (ulong)count);
             GC.KeepAlive(this);
             CnaException.ThrowIfFailed(result, nameof(End));
         }
-
-        _commandBuffer.Clear();
-        _referencedTextures.Clear();
     }
+
+    /// <summary>
+    /// One queued string through the native text route, falling back to glyph quads if the renderer
+    /// refuses it.
+    ///
+    /// The fallback is what makes adopting this safe. Not every renderer has to implement the text
+    /// route, and before this change every renderer could draw text, so a refusal must cost speed
+    /// rather than the string. The glyphs are expanded and submitted immediately, in this string's
+    /// place, so the order the game issued is still the order the renderer sees.
+    /// </summary>
+    private void SubmitText(PendingText text)
+    {
+        if (!_nativeTextRefused)
+        {
+            CnaResult result = CnaStringMarshal.WithStringView(text.Text, view =>
+            {
+                CnaSpriteTextCommand command = CnaSpriteTextCommand.Versioned();
+                command.SpriteFont = new CnaHandle(text.FontHandleValue);
+                command.Text = view;
+                command.Position = text.Position.ToNative();
+                command.Color = text.Color.ToNative();
+                command.Rotation = text.Rotation;
+                command.Origin = text.Origin.ToNative();
+                command.Scale = text.Scale.ToNative();
+                command.Effects = (uint)text.Effects;
+                command.LayerDepth = text.LayerDepth;
+
+                return Native.cna_sprite_batch_draw_string(new CnaHandle(NativeHandleValue), in command);
+            });
+
+            GC.KeepAlive(this);
+
+            if (result == CnaResult.Success)
+            {
+                return;
+            }
+
+            if (result != CnaResult.NotSupported)
+            {
+                CnaException.ThrowIfFailed(result, nameof(DrawString));
+            }
+
+            _nativeTextRefused = true;
+        }
+
+        SubmitTextAsGlyphQuads(text);
+    }
+
+    private unsafe void SubmitTextAsGlyphQuads(PendingText text)
+    {
+        var glyphs = new List<SpriteFont.GlyphPlacement>();
+        text.Font.AppendGlyphPlacements(text.Text, glyphs);
+        if (glyphs.Count == 0)
+        {
+            return;
+        }
+
+        var commands = new CnaSpriteDrawCommand[glyphs.Count];
+        for (int i = 0; i < glyphs.Count; i++)
+        {
+            commands[i] = new CnaSpriteDrawCommand(
+                new CnaHandle(text.Font.Texture.NativeHandleValue),
+                text.Position.ToNative(),
+                glyphs[i].SourceRectangle.ToNative(),
+                text.Color.ToNative(),
+                text.Rotation,
+                (text.Origin - glyphs[i].Anchor).ToNative(),
+                text.Scale.ToNative(),
+                (int)text.Effects,
+                text.LayerDepth);
+        }
+
+        fixed (CnaSpriteDrawCommand* first = commands)
+        {
+            CnaResult result = Native.cna_sprite_batch_submit_scaled_many(
+                new CnaHandle(NativeHandleValue), first, (ulong)commands.Length);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(DrawString));
+        }
+    }
+
+    /// <summary>A string waiting for <see cref="FlushCommandBuffer"/>, and where in the sprite
+    /// stream it belongs. The text is held as a managed string rather than a marshalled view
+    /// because the native view is only valid for the duration of one call.</summary>
+    private readonly record struct PendingText(
+        int SpriteCountBefore,
+        SpriteFont Font,
+        nint FontHandleValue,
+        string Text,
+        Vector2 Position,
+        Color Color,
+        float Rotation,
+        Vector2 Origin,
+        Vector2 Scale,
+        SpriteEffects Effects,
+        float LayerDepth);
 
     private void EnsureHasBegun(string caller)
     {

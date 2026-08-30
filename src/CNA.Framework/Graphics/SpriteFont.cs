@@ -40,6 +40,8 @@ public class SpriteFont
     private readonly Rectangle[] _cropping;
     private readonly Vector3[] _kerning;
     private readonly Dictionary<char, int> _characterIndex;
+    private NativeResourceHandle? _nativeFont;
+    private bool _nativeFontUnavailable;
 
     public SpriteFont(
         Texture texture,
@@ -110,15 +112,61 @@ public class SpriteFont
     internal void AppendGlyphPlacements(string text, List<GlyphPlacement> placements) => Walk(text, placements);
 
     /// <summary>
+    /// This font's native counterpart, created on first use and kept for the font's lifetime, or
+    /// zero when this build cannot make one.
+    ///
+    /// <b>Lazy, not eager.</b> The public constructor is XNA's -- third-party font-building tools
+    /// use it -- and it is pure managed code today, as is <see cref="MeasureString(string)"/>.
+    /// Creating a native font in the constructor would make constructing a font require a live
+    /// game, which would be a real behaviour change for measuring code that never draws.
+    ///
+    /// <b>Rebuilt rather than retained from the load path.</b> <c>ContentManager</c> destroys the
+    /// font it loads as soon as it has copied the glyph table out, deliberately and unconditionally,
+    /// so the atlas can never be held hostage by a failure on the way out. Keeping that handle alive
+    /// instead would mean unpicking that ordering for every load; rebuilding here is lossless,
+    /// because <c>cna_sprite_font_copy_glyphs</c> is documented as the exact inverse of
+    /// <c>cna_sprite_font_create</c>, and it makes the loaded and hand-built cases identical.
+    /// </summary>
+    internal nint NativeFontHandleValue
+    {
+        get
+        {
+            if (_nativeFont is not null)
+            {
+                return _nativeFont.DangerousGetHandle();
+            }
+
+            if (_nativeFontUnavailable)
+            {
+                return 0;
+            }
+
+            try
+            {
+                nint created = CreateNativeFontHandle();
+                _nativeFont = new NativeResourceHandle(created, DestroyNative);
+                return created;
+            }
+            catch (CnaException)
+            {
+                // A build without the native SpriteFont resource answers here. Drawing falls back to
+                // the per-glyph path, which needs nothing native beyond the atlas, so this is a
+                // slower font rather than an unusable one -- and asking again every frame would make
+                // it a slower font that also allocates an exception every frame.
+                _nativeFontUnavailable = true;
+                return 0;
+            }
+        }
+    }
+
+    private static bool DestroyNative(nint handleValue) =>
+        Native.cna_sprite_font_destroy(new CnaHandle(handleValue)).IsSuccess();
+
+    /// <summary>
     /// Builds a native SpriteFont from this font's own glyph table, and hands back its handle.
     ///
-    /// For plan.md A1, which asks whether <c>cna_sprite_batch_draw_string</c> places glyphs the same
-    /// way the per-glyph quad path does. Answering that needs a native font to draw with, and the
-    /// load path destroys the one it briefly creates.
-    ///
-    /// The caller owns the handle and must destroy it. Deliberately not stored on this instance:
-    /// retaining one is the *adoption* step, and it changes this type's lifetime -- which is a
-    /// decision the measurement is supposed to inform, not one to take before it.
+    /// <see cref="NativeFontHandleValue"/> owns what this returns and is the route drawing uses;
+    /// this is separated out only so the creation and the ownership read as two things.
     /// </summary>
     internal unsafe nint CreateNativeFontHandle()
     {
@@ -152,8 +200,6 @@ public class SpriteFont
         }
     }
 
-    internal static void DestroyNativeFontHandle(nint handleValue) =>
-        Native.cna_sprite_font_destroy(new CnaHandle(handleValue));
 
     private int ResolveIndex(char c)
     {
