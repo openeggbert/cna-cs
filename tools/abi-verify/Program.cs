@@ -833,6 +833,11 @@ static class InteropLayout
         ["CNA_GameComponentCallbacks.draw"] = "void (*)(const CNA_GameTime*, void*)",
         ["CNA_GameComponentCallbacks.update"] = "void (*)(const CNA_GameTime*, void*)",
         ["CNA_GameCreateInfo.callbacks"] = "const CNA_GameCallbacks*",
+        // A borrowed pointer to a type this binding deliberately does not declare: upstream records
+        // that CNA_RenderPipelineSettingsEXT's C form is still a subset of its canonical type, so
+        // the field is carried as a null pointer and never dereferenced. The spelling is the one the
+        // compiler named when nint produced `void**`.
+        ["CNA_PostProcessContext.settings"] = "const struct CNA_RenderPipelineSettingsEXT*",
         ["CNA_GameFrameHooks.begin_draw"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_Bool*, CNA_CallbackError*)",
         ["CNA_GameFrameHooks.begin_run"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",
         ["CNA_GameFrameHooks.end_draw"] = "CNA_Result (*)(CNA_Handle,  const CNA_GameTime*, void*, CNA_CallbackError*)",

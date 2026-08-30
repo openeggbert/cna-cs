@@ -2286,6 +2286,66 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_render_target_pool_get_estimated_bytes(CnaHandle pool, out ulong outBytes);
 
+    // -- Engine-layer post-process passes and chains --------------------------------------------
+
+    /// <summary>Caller-initialised and versioned; <c>ref</c> and not <c>out</c>. The header is
+    /// explicit that a zero-filled context is not a defaulted one, because a later revision may add
+    /// a field whose zero means something.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_context_init(ref CnaPostProcessContext outContext);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_blit_pass_create(CnaHandle graphicsDevice, out CnaHandle outPass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_pass_apply(
+        CnaHandle pass, in CnaPostProcessContext context);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_post_process_pass_copy_name(
+        CnaHandle pass, byte* destination, ulong capacity, out ulong outBytes);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_pass_is_supported(
+        CnaHandle pass, CnaHandle graphicsDevice, out byte outSupported);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_pass_destroy(CnaHandle pass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_create(
+        CnaHandle graphicsDevice, out CnaHandle outChain);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_destroy(CnaHandle chain);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_add_pass(CnaHandle chain, CnaHandle pass);
+
+    /// <summary>Takes ownership. The pass handle is invalid on return <em>whether or not the call
+    /// succeeded</em>, which is why the managed wrapper detaches before checking the result.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_add_owned_pass(CnaHandle chain, CnaHandle pass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_clear(CnaHandle chain);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_get_pass_count(CnaHandle chain, out int outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_apply(
+        CnaHandle chain, in CnaPostProcessContext context);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_reset_targets(CnaHandle chain);
+
+    /// <summary>A counted borrow: destroying the chain is refused while the returned pool handle is
+    /// outstanding, and the borrow is released with <c>cna_render_target_pool_destroy</c>.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_post_process_chain_get_target_pool(
+        CnaHandle chain, out CnaHandle outPool);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_cnb_read_limits_init(ref CnaCnbReadLimits limits);
 

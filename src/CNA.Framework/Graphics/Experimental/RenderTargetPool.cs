@@ -68,6 +68,26 @@ public sealed class RenderTargetPool : IDisposable
     }
 
     /// <summary>
+    /// Wraps a pool handle whose real owner is something else -- <see cref="PostProcessChain"/>'s
+    /// own pool, handed out as a counted borrow.
+    ///
+    /// The release call is identical to an owned pool's, because that is how CNA models it: the
+    /// same <c>pool_destroy</c> route destroys an owned pool and decrements a borrow. Only the
+    /// meaning differs, so this is a separate factory with its own doc rather than a flag, and a
+    /// caller cannot reach it without going through the chain that owns the pool.
+    /// </summary>
+    internal static RenderTargetPool CreateBorrowed(GraphicsDevice graphicsDevice, nint poolHandleValue) =>
+        new(graphicsDevice, poolHandleValue);
+
+    private RenderTargetPool(GraphicsDevice graphicsDevice, nint poolHandleValue)
+    {
+        _graphicsDevice = graphicsDevice;
+        _handle = new NativeResourceHandle(
+            poolHandleValue,
+            h => Native.cna_render_target_pool_destroy(new CnaHandle(h)).IsSuccess());
+    }
+
+    /// <summary>
     /// Borrows a target of this shape.
     ///
     /// <paramref name="slot"/> distinguishes two targets of identical shape that a pass needs at the

@@ -681,6 +681,57 @@ internal struct CnaCnbReadLimits
     };
 }
 
+/// <summary>
+/// One frame's inputs to a post-process pass -- <c>engine_layer.h</c>'s
+/// <c>CNA_PostProcessContext</c>. Caller-initialised and versioned, like
+/// <see cref="CnaCnbReadLimits"/>: <c>cna_post_process_context_init</c> fills the defaults and a
+/// zero-filled structure is explicitly not them.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaPostProcessContext
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaHandle Source;
+    public CnaHandle SourceDepth;
+    public CnaHandle SourceNormals;
+    public CnaHandle SourceVelocity;
+    public CnaHandle Destination;
+    public int Width;
+    public int Height;
+    public float ElapsedSeconds;
+    public float NearPlane;
+    public float FarPlane;
+    public byte HasPreviousFrame;
+
+    /// <summary>C's <c>uint8_t reserved[3]</c>, as one inline buffer rather than three fields: the
+    /// layout probe measures a padding run at its first byte, and three separate fields would ask
+    /// the C compiler for members the struct does not have.</summary>
+    public CnaReservedBytes3 Reserved;
+
+    public CnaMatrix Projection;
+    public CnaMatrix InverseProjection;
+    public CnaMatrix InverseView;
+    public CnaMatrix PreviousViewProjection;
+
+    /// <summary>
+    /// The pipeline settings a pass reads. Always zero here, and that is the documented meaning of
+    /// "this pass uses its own defaults" rather than a gap.
+    ///
+    /// The field is carried rather than omitted so the structure's size matches version 2, but the
+    /// type behind the pointer is one upstream says is still a subset of its canonical form --
+    /// carrying that subset would silently apply engine defaults for every field it omits. A null
+    /// pointer says "no settings", which is exact.
+    /// </summary>
+    public nint Settings;
+
+    public static unsafe CnaPostProcessContext Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaPostProcessContext),
+        StructVersion = 2,
+    };
+}
+
 /// <summary>A CNB texture's shape -- <c>CNA_CnbTextureInfo</c>. Caller-initialised and versioned,
 /// like <see cref="CnaCnbReadLimits"/>.</summary>
 [StructLayout(LayoutKind.Sequential)]
