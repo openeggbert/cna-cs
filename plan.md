@@ -589,8 +589,37 @@ records authority, source-portability value, implementation status, and namespac
 ### E. Template
 
 - E1. The checked-in project builds again and `verify-template.sh` now checks it; keep that check.
-- E2. 600-frame runs on every additional claimed renderer, once the renderer set settles.
-- E3. Diagnose the configured FNA assembly/runtime load failure and complete an FNA frame run.
+- E2. **Premise confirmed, and partly actionable.** The renderer removal has merged: sokol,
+  diligent, llgl, igl, wicked, magnum, skia, blend2d, nanovg, openvg and tinygl are absent from the
+  live `CNA_GRAPHICS_RENDERER_*` enum -- checked, not assumed, and the identity numbering has gaps at
+  10, 19 and 20 where they were. cnanext offers 39 renderer CMake options.
+
+  | renderer | state |
+  | --- | --- |
+  | OPENGLES3 | `VERIFIED_60_600` -- the template drew 600 frames |
+  | the other 38 | `NOT_BUILT` |
+
+  `NOT_BUILT` rather than untested-by-omission: this cnanext configuration bakes in a single
+  renderer (`CNA_GRAPHICS_RENDERER=OPENGLES3`), so each additional one needs its own out-of-tree
+  build, and the resulting library is ~180 MB apiece. Building 38 of them to run a 600-frame smoke
+  test is not a reasonable use of this machine's SSD, and most are unreachable here anyway --
+  fourteen DirectX variants, Metal, GDI and Glide are Windows/Apple/legacy, and Canvas, HTML_DOM and
+  PixiJS are web. A useful next step is two or three that *can* run on Linux x64 (OPENGL33,
+  HEADLESS, SOFTWARE), not all 39.
+
+- E3. **Done.** The FNA configuration built cleanly and failed at startup with `Game framework
+  dependency could not be loaded: FNA`, which is a confusing pair of outcomes and turned out not to
+  be a CNA.NET defect at all. FNA's repository ships four project files and only `FNA.Core.csproj`
+  produces an assembly a `net8.0` host can load; the only FNA build on this machine was the .NET
+  Framework one, which a `net8.0` reference accepts at compile time and cannot load at run time.
+
+  With `FNA.Core` built and `FNA_FRAMEWORK_PATH` pointed at its output, the template runs **600
+  frames on FNA over Vulkan (AMD Radeon 780M)** and 600 on CNA over OPENGLES3, from the same game
+  source. FNA's native `libFNA3D` and SDL2 were already present; both are FNA's dependencies rather
+  than the template's. The requirement is now in the template README so the next person does not
+  repeat the diagnosis.
+
+- E3 (was). Diagnose the configured FNA assembly/runtime load failure and complete an FNA frame run.
 - E4. Expand the passing MonoGame and Kni runs beyond this one Linux/x64 environment.
 
 ### F. Still blocked on things this repository cannot supply
