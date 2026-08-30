@@ -192,7 +192,7 @@ if CNA_NATIVE_LIBRARY="$work_root/wrong-abi.so" CNA_NATIVE_DIR=/deliberately/ign
   exit 1
 fi
 grep -Fq 'implements C ABI 1.0.0' "$logs_root/wrong-abi.log"
-grep -Fq 'consumer ABI 0.6.0' "$logs_root/wrong-abi.log"
+grep -Fq 'consumer ABI 0.20.0' "$logs_root/wrong-abi.log"
 grep -Fq 'explicit CNA_NATIVE_LIBRARY' "$logs_root/wrong-abi.log"
 
 if CNA_NATIVE_LIBRARY="$abi_compatibility_root/fixtures/missing-required-symbol.so" \

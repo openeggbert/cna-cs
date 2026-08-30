@@ -30,6 +30,14 @@
     <None Include="..\CNA.Framework.Tests\assets\xnb\BlenderDefaultCube.xnb"
           Link="assets\xnb\BlenderDefaultCube.xnb"
           CopyToOutputDirectory="PreserveNewest" />
+    <!--
+      A real XNA-content-pipeline SpriteFont, LZX-compressed with a DXT3 atlas. The managed XNB and
+      LZX tests have parsed it since it arrived; nothing had ever pushed its atlas at a renderer,
+      because the selected backend rejected compressed uploads.
+    -->
+    <None Include="..\CNA.Framework.Tests\assets\xnb\lzx\FontCalibri14.xnb"
+          Link="assets\xnb\lzx\FontCalibri14.xnb"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

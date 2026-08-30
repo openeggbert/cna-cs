@@ -1,0 +1,23 @@
+# Reviewed upstream ABI differences, accepted by tools/coverage/baselinediff.py.
+#
+# An entry here is a difference someone looked at and decided this consumer does not care about.
+# It is not a way to quieten the tool: every entry must match an actual difference, and one that
+# stops matching fails the gate as stale rather than being ignored.
+#
+# 2026-08-30, ABI 0.19.0 -> 0.20.0: upstream removed eleven renderers. All twelve differences are
+# renderer identities. CNA.NET reads the renderer's *name* through
+# cna_graphics_device_copy_renderer_name and binds no CNA_GRAPHICS_RENDERER_* identity or sentinel,
+# which is exactly why a removal of this size is a clean diff over the consumed surface. Keep it
+# that way: binding the identity enum would make every future renderer change a compatibility event.
+integer constants: CNA_GRAPHICS_RENDERER_BLEND2D was removed
+integer constants: CNA_GRAPHICS_RENDERER_DILIGENT was removed
+integer constants: CNA_GRAPHICS_RENDERER_IGL was removed
+integer constants: CNA_GRAPHICS_RENDERER_LLGL was removed
+integer constants: CNA_GRAPHICS_RENDERER_MAGNUM was removed
+integer constants: CNA_GRAPHICS_RENDERER_NANOVG was removed
+integer constants: CNA_GRAPHICS_RENDERER_OPENVG was removed
+integer constants: CNA_GRAPHICS_RENDERER_SKIA was removed
+integer constants: CNA_GRAPHICS_RENDERER_SOKOL was removed
+integer constants: CNA_GRAPHICS_RENDERER_TINYGL was removed
+integer constants: CNA_GRAPHICS_RENDERER_WICKED was removed
+integer constants: CNA_GRAPHICS_RENDERER_MAXIMUM changed 50 -> 49

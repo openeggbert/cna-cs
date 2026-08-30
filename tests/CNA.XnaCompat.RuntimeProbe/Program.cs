@@ -512,8 +512,69 @@ internal static class Program
             }
 
             Add("devicelifecycle.reset.events", $"{resetting}/{reset}/{lost}/{sender}/{string.Join(",", order)}");
-            Add("devicelifecycle.cross_device", "not-run(CNA-ABI-has-one-game-owned-device)");
+            CaptureCrossDevice(device);
             Add("devicelifecycle.device_lost", "not-run(no-deterministic-loss-route)");
+        }
+
+        /// <summary>
+        /// Two live devices, and a resource from one used on the other.
+        ///
+        /// This recorded <c>not-run(CNA-ABI-has-one-game-owned-device)</c> until CNA 0.19.0 added
+        /// <c>cna_graphics_device_create</c>. It is still not-run by default, for a different and
+        /// newly measured reason: <c>cna_graphics_device_create</c> makes its own GL context current
+        /// and does not restore the game's, so on the OPENGLES3 backend the game's next frame dies
+        /// in <c>SwapBuffers</c> with "the specified window has not been made current". Measured
+        /// with creation alone, before any use and without destroying the second device, so it is
+        /// creation rather than teardown. Upstream's own owned-device smoke test never has a Game
+        /// in the process, so nothing there covers the mixture the header describes.
+        ///
+        /// Set <c>CNA_RUNTIME_PROBE_CROSS_DEVICE=1</c> to run it anyway. It is gated rather than
+        /// deleted because the gate is how the blocker gets re-measured when the backend changes,
+        /// and gated rather than ungated because one destroyed frame invalidates every observation
+        /// after it. Both keys are emitted either way, so the corpus count does not depend on the
+        /// gate.
+        /// </summary>
+        private void CaptureCrossDevice(GraphicsDevice gameDevice)
+        {
+            if (Environment.GetEnvironmentVariable("CNA_RUNTIME_PROBE_CROSS_DEVICE") != "1")
+            {
+                Add("devicelifecycle.cross_device.create", "not-run(destroys-the-game-gl-context)");
+                Add("devicelifecycle.cross_device", "not-run(destroys-the-game-gl-context)");
+                return;
+            }
+
+            GraphicsDevice? second = null;
+            try
+            {
+                second = new GraphicsDevice(
+                    GraphicsAdapter.DefaultAdapter,
+                    gameDevice.GraphicsProfile,
+                    gameDevice.PresentationParameters);
+            }
+            catch (Exception exception)
+            {
+                Add("devicelifecycle.cross_device.create", exception.GetType().Name);
+                Add("devicelifecycle.cross_device", $"not-run(second-device-create:{exception.GetType().Name})");
+                return;
+            }
+
+            try
+            {
+                Add("devicelifecycle.cross_device.create", "ok");
+
+                using var ownedByFirst = new Texture2D(gameDevice, 1, 1);
+                ownedByFirst.SetData(new[] { Color.White });
+
+                Observe("devicelifecycle.cross_device", () =>
+                {
+                    second.Textures[0] = ownedByFirst;
+                    second.Textures[0] = null;
+                });
+            }
+            finally
+            {
+                second.Dispose();
+            }
         }
 
         private void Observe(string name, Action action) => Add(name, CaptureOutcome(action));

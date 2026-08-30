@@ -10,6 +10,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\CNA.Framework.Tests\assets\xnb\lzx\FontCalibri14.xnb"
+          Link="assets\xnb\FontCalibri14.xnb"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\CNA.Framework.Tests\assets\xnb\BlenderDefaultCube.xnb"
           Link="assets\xnb\BlenderDefaultCube.xnb"
           CopyToOutputDirectory="PreserveNewest" />

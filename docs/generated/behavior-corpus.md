@@ -15,8 +15,8 @@
 | Media | 20 |
 | Video | 17 |
 | Storage | 20 |
-| DeviceLifecycle | 4 |
-| **Total** | **469** |
+| DeviceLifecycle | 5 |
+| **Total** | **470** |
 
 ## Probes
 
@@ -24,7 +24,7 @@
 | --- | --- | ---: | --- | --- |
 | pure | `tests/CNA.XnaCompat.CompileProbe/CNA.XnaCompat.CompileProbe.csproj` | 199 | `xna-math-input-audio-content.txt` | tiny synthetic in-memory XNB, LZX, stream, and temporary-file fixtures only |
 | device | `tests/CNA.XnaCompat.GraphicsProbe/CNA.XnaCompat.GraphicsProbe.csproj` | 166 | `xna-graphics-resource.txt` | no external assets; generated textures, buffers, states, and effects only |
-| runtime | `tests/CNA.XnaCompat.RuntimeProbe/CNA.XnaCompat.RuntimeProbe.csproj` | 104 | `xna-audio-xact-media-video-storage-lifecycle.txt` | generated PCM, malformed XACT settings, isolated storage, and no authored bank/video assets |
+| runtime | `tests/CNA.XnaCompat.RuntimeProbe/CNA.XnaCompat.RuntimeProbe.csproj` | 105 | `xna-audio-xact-media-video-storage-lifecycle.txt` | generated PCM, malformed XACT settings, isolated storage, and no authored bank/video assets |
 
 ## Comparator status
 

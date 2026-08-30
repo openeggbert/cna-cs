@@ -11,16 +11,24 @@ namespace CNA.Interop;
 internal static class CnaNativeAbiPolicy
 {
     internal const string PolicyVersion = "cna-cs-native-abi/1";
-    internal const uint ConsumerVersion = (0u << 16) | (6u << 8) | 0u;
+    internal const uint ConsumerVersion = (0u << 16) | (20u << 8) | 0u;
 
+    /// <summary>
+    /// The reviewed matrix. It is a point list, never a range: CNA documents that an experimental
+    /// 0.x minor may be incompatible, so being newer than an accepted entry proves nothing.
+    ///
+    /// It held 0.6.0, 0.7.0 and 0.8.0 until this binding began consuming routes CNA added after
+    /// them -- the render-target ContentLost subscription, the two optioned raw vertex uploads, the
+    /// caller-owned device pair and the engine-layer availability pair. A library from one of those
+    /// generations does not export those names, so admitting it would only move the failure from
+    /// load time to first use. 0.19.0 followed them out when 0.20.0 removed eleven renderer
+    /// identities: nothing this consumer touches changed, but a point matrix that kept every
+    /// generation it had ever accepted would stop being a review and start being a range. See
+    /// docs/native-abi-compatibility.md for the retired matrix and the evidence behind each entry.
+    /// </summary>
     private static readonly CnaNativeAbiProfile[] Profiles =
     [
         new(ConsumerVersion, "exact", "the ABI generation this CNA.NET consumer was compiled against"),
-        new((0u << 16) | (7u << 8) | 0u, "additive",
-            "CNA 0.7.0 adds six unrelated PBR/morph-target exports and preserves the 0.6.0 surface"),
-        new((0u << 16) | (8u << 8) | 0u, "reviewed-consumer-subset",
-            "CNA 0.8.0 changes only two existing MAXIMUM constants that CNA.NET does not consume; " +
-            "all consumed constants, exports, prototypes, structs, callbacks, and contracts remain unchanged"),
     ];
 
     private static readonly Lazy<string[]> RequiredSymbolNames = new(BuildRequiredSymbolNames);

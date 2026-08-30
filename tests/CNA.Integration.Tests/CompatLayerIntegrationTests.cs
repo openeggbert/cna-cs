@@ -230,11 +230,20 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         });
     }
 
-    /// <summary>The listener-array overload must be one native request. Current CNA explicitly
-    /// rejects true multi-listener mixing, so this proves the managed layer reports that limitation
-    /// instead of applying two single-listener updates and silently retaining only the last one.</summary>
+    /// <summary>
+    /// The listener-array overload must be one native request, and it must succeed.
+    ///
+    /// CNA carried the whole array across the ABI from 0.6.0, but the implementation behind it
+    /// refused every count other than one until CABI-6, so this test used to assert
+    /// <c>NotSupportedException</c>. The only admitted runtime now accepts any count of one or more
+    /// and applies the dominant listener, which is what XNA does; asserting the refusal would now
+    /// be asserting a limitation that no admitted library has. What the managed layer must still
+    /// never do is loop over the array applying one listener at a time, which would silently retain
+    /// only the last -- that is why this goes through the atomic route and then checks the instance
+    /// is still usable through the canonical one.
+    /// </summary>
     [global::CNA.Integration.Tests.NativeFact]
-    public void CompatSoundEffectInstance_MultipleListenersFailDeterministically()
+    public void CompatSoundEffectInstance_AppliesAMultipleListenerArrayAtomically()
     {
         InsideACompatFrame(_ =>
         {
@@ -242,10 +251,14 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
             using var effect = new XnaAudio.SoundEffect(pcm, 44100, XnaAudio.AudioChannels.Mono);
             using XnaAudio.SoundEffectInstance instance = effect.CreateInstance();
 
-            Assert.Throws<NotSupportedException>(() =>
-                instance.Apply3D(
-                    [new XnaAudio.AudioListener(), new XnaAudio.AudioListener()],
-                    new XnaAudio.AudioEmitter()));
+            XnaAudio.AudioListener[] listeners = [new XnaAudio.AudioListener(), new XnaAudio.AudioListener()];
+            listeners[1].Position = new Vector3(10f, 0f, 0f);
+
+            instance.Apply3D(listeners, new XnaAudio.AudioEmitter());
+
+            // Applying again with a single listener must remain legal afterwards: the array route
+            // must not have left the instance in a state the canonical route cannot use.
+            instance.Apply3D(listeners[0], new XnaAudio.AudioEmitter());
         });
     }
 
@@ -467,8 +480,23 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         });
     }
 
+    /// <summary>
+    /// Where <c>SetDataOptions</c> reaches the ABI, and where it deliberately cannot.
+    ///
+    /// The vertex half used to assert <c>NotSupportedException</c> for a windowed optioned upload,
+    /// because the option reached the ABI only through the built-in typed route. CNA 0.19.0 added
+    /// <c>cna_vertex_buffer_set_data_raw_with_options</c> and its windowed twin, so the option is
+    /// now forwarded and the bytes are asserted where XNA puts them.
+    ///
+    /// The index half still refuses, and that is upstream's stated position rather than a gap in
+    /// the ABI shape: <c>cna_index_buffer_set_data_at</c> carries an options field and rejects
+    /// anything but <c>None</c>, because "a windowed upload preserves the rest of the buffer, so it
+    /// accepts no SetDataOptions other than None". XNA does accept them there, so this stays
+    /// recorded as a behavioural difference in docs/native-behavior-blockers.md; what this test
+    /// pins is that the difference surfaces as a refusal rather than a dropped hint.
+    /// </summary>
     [global::CNA.Integration.Tests.NativeFact]
-    public void CompatDynamicBuffers_ForwardSetDataOptionsOrRejectMissingRawRoute()
+    public void CompatDynamicBuffers_ForwardSetDataOptionsWhereTheAbiCarriesThem()
     {
         InsideACompatFrame(game =>
         {
@@ -497,13 +525,16 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
             vertexBuffer.GetData(vertexReadback);
             Assert.Equal(vertices[1].Position, vertexReadback[1].Position);
 
-            Assert.Throws<NotSupportedException>(() => vertexBuffer.SetData(
-                VertexPositionColor.VertexDeclaration.VertexStride,
-                vertices,
-                0,
-                1,
-                VertexPositionColor.VertexDeclaration.VertexStride,
-                SetDataOptions.NoOverwrite));
+            // The windowed optioned upload. Asserting the neighbours is the part that matters: a
+            // route that confused the buffer offset with the caller-array offset would still write
+            // plausible data and still round-trip the vertex it was asked about.
+            int stride = VertexPositionColor.VertexDeclaration.VertexStride;
+            var replacement = new VertexPositionColor(Vector3.UnitZ, Color.White);
+            vertexBuffer.SetData(stride, new[] { replacement }, 0, 1, stride, SetDataOptions.NoOverwrite);
+            vertexBuffer.GetData(vertexReadback);
+            Assert.Equal(vertices[0].Position, vertexReadback[0].Position);
+            Assert.Equal(replacement.Position, vertexReadback[1].Position);
+            Assert.Equal(vertices[2].Position, vertexReadback[2].Position);
 
             using var indexBuffer = new DynamicIndexBuffer(
                 game.GraphicsDevice,

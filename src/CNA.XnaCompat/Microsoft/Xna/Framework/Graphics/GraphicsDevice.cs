@@ -26,21 +26,28 @@ public class GraphicsDevice : IDisposable
     }
 
     /// <summary>
-    /// XNA's public device constructor. CNA's backend creates devices as part of a live game, so
-    /// an adapter obtained from a device is adopted rather than creating a second unmanaged device
-    /// for the same native game.
+    /// XNA's public device constructor, which creates a device rather than borrowing one.
+    ///
+    /// It used to adopt the running game's device and overwrite its presentation parameters, on the
+    /// grounds that "CNA's backend creates devices as part of a live game" -- and refused outright
+    /// when the adapter came from the ambient static enumeration rather than from a device. CNA
+    /// 0.19.0 added <c>cna_graphics_device_create</c>, so both the adoption and the refusal are
+    /// gone: this constructs an independent, caller-owned device that <see cref="Dispose()"/>
+    /// destroys.
+    ///
+    /// <b>Do not call this while a game is running.</b> On the OPENGLES3 backend the native create
+    /// takes the GL context and does not give it back, so the running game dies on its next
+    /// present. See <c>CNA.Graphics.GraphicsDevice</c>'s constructor for the measurement.
     /// </summary>
     public GraphicsDevice(
         GraphicsAdapter adapter,
         GraphicsProfile graphicsProfile,
         PresentationParameters presentationParameters)
-        : this((adapter ?? throw new ArgumentNullException(nameof(adapter))).Framework.OwningGraphicsDevice
-            ?? throw new NotSupportedException(
-                "CNA can construct a GraphicsDevice only from an adapter associated with a live game."))
+        : this(new CNA.Graphics.GraphicsDevice(
+            (adapter ?? throw new ArgumentNullException(nameof(adapter))).Framework,
+            (CNA.Graphics.GraphicsProfile)(int)graphicsProfile,
+            (presentationParameters ?? throw new ArgumentNullException(nameof(presentationParameters))).Framework))
     {
-        ArgumentNullException.ThrowIfNull(presentationParameters);
-        _ = graphicsProfile;
-        _framework.PresentationParameters = presentationParameters.Framework;
     }
 
     private GraphicsDevice(CNA.Graphics.GraphicsDevice framework)

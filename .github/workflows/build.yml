@@ -12,7 +12,13 @@ permissions:
 env:
   DOTNET_NOLOGO: "1"
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-  CNA_UPSTREAM_COMMIT: 1bb2145d99ed572dd4eb15009c34e2e5f410fcf0
+  # The CNA generation this binding is written against: ABI 0.20.0 on the `next` branch.
+  # Pin it. `next` moves, and a header tree ahead of the reviewed matrix fails the ABI gates
+  # by design -- which is the gates working, and not something to fix by tracking the branch.
+  CNA_UPSTREAM_COMMIT: e178282fcd70f4cd1e9be922fde35a9a2b779cf3
+  # The generation the reviewed matrix accepted immediately before this one. The upstream diff gate
+  # measures forward from here, which is what the ABI policy asks for.
+  CNA_PREVIOUS_ACCEPTED_COMMIT: 48c8dd382bd78c5f922272f9a631902f6c9172b4
   CNA_PACKAGE_VERSION: 0.1.0-ci.${{ github.run_number }}
 
 jobs:
@@ -159,6 +165,27 @@ jobs:
           name: abi-${{ matrix.report }}
           path: artifacts/abi/${{ matrix.report }}.json
 
+  upstream-abi-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: openeggbert/cna
+          path: cna-upstream
+          fetch-depth: 0
+      - name: Require a purely additive upstream diff over the consumed surface
+        run: >-
+          python3 tools/coverage/baselinediff.py
+          --from "cna-upstream@${CNA_PREVIOUS_ACCEPTED_COMMIT}"
+          --to "cna-upstream@${CNA_UPSTREAM_COMMIT}"
+          --allowlist eng/cna-upstream-abi-allowlist.txt
+          --json artifacts/abi/upstream-baseline-diff.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-abi-diff
+          path: artifacts/abi/upstream-baseline-diff.json
+
   native-abi-policy:
     runs-on: ubuntu-latest
     steps:
@@ -294,7 +321,7 @@ jobs:
         run: |
           dotnet run --project tests/CNA.OwnershipStress/CNA.OwnershipStress.csproj -c Debug --no-build -- 100
           dotnet run --project tests/CNA.OwnershipStress/CNA.OwnershipStress.csproj -c Release --no-build -- 100
-      - name: Full 469-observation CNA corpus
+      - name: Full 470-observation CNA corpus
         env:
           CNA_NATIVE_LIBRARY: ${{ runner.temp }}/libcna_c_api.so
           SDL_AUDIODRIVER: dummy

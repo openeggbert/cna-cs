@@ -49,6 +49,9 @@ runtimes/**/native/*.dylib
 .DS_Store
 Thumbs.db
 
+# Verification reports written by the ABI/package/corpus harnesses
+artifacts/
+
 # Stray tool/session output not produced by this project
 .output.txt
 assets_tmp/

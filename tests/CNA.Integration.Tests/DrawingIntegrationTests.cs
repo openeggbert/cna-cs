@@ -8,11 +8,14 @@ namespace CNA.Integration.Tests;
 /// The two things a game actually draws with: text through a <see cref="SpriteFont"/>, and geometry
 /// through a <see cref="Model"/>.
 ///
-/// Both are built by hand here rather than loaded, because neither asset can be produced in this
-/// repository -- a compiled <c>.xnb</c> font needs the XNA content pipeline, and a model needs a
-/// mesh. That is a real limit on what this proves and it is worth being exact about: the *load*
+/// Most of them are built by hand here rather than loaded, because the assets cannot be produced in
+/// this repository -- a compiled <c>.xnb</c> font needs the XNA content pipeline, and a model needs
+/// a mesh. That is a real limit on what those prove and it is worth being exact about: the *load*
 /// paths are not exercised, the *draw* paths are. Hand-building is enough for the second, since the
 /// glyph table and the buffers cross the same ABI either way.
+///
+/// The exception is <see cref="SpriteFont_LoadsAnAuthoredCompressedAtlasThroughContent"/>, which
+/// loads the one authored content-pipeline font this repository does have.
 /// </summary>
 [Collection(NativeGameCollection.Name)]
 public class DrawingIntegrationTests(ITestOutputHelper output, NativeGameFixture fixture)
@@ -162,6 +165,47 @@ public class DrawingIntegrationTests(ITestOutputHelper output, NativeGameFixture
             output.WriteLine($"root translation {absolute[0].Translation}, child {absolute[1].Translation}");
 
             Assert.Equal(1f, absolute[0].Translation.X, 1e-4f);
+        });
+    }
+
+    /// <summary>
+    /// A real content-pipeline <c>SpriteFont</c>, loaded end to end: LZX-decompressed XNB, DXT3
+    /// atlas, glyph table, measured and drawn.
+    ///
+    /// This is the first test in the repository to push an authored compressed atlas at a renderer.
+    /// The managed XNB and LZX tests have parsed this exact file for a long time, but the selected
+    /// backend rejected compressed uploads, so the fixture was recorded as a backend limitation and
+    /// excluded from the native stress cycle. The renderer now reports Dxt1/Dxt3/Dxt5 support and
+    /// this loads.
+    ///
+    /// It is worth having as a whole-pipeline test rather than only as a format check: a font is
+    /// the one common asset that exercises content loading, a compressed texture upload, the glyph
+    /// table and SpriteBatch text drawing in a single call graph.
+    /// </summary>
+    [NativeFact]
+    public void SpriteFont_LoadsAnAuthoredCompressedAtlasThroughContent()
+    {
+        fixture.InsideAFrame(game =>
+        {
+            game.Content.RootDirectory = Path.Combine(AppContext.BaseDirectory, "assets", "xnb", "lzx");
+
+            SpriteFont font = game.Content.Load<SpriteFont>("FontCalibri14");
+
+            output.WriteLine(
+                $"{font.Characters.Count} glyph(s), line spacing {font.LineSpacing}, " +
+                $"atlas format {font.Texture.Format}");
+
+            Assert.NotEmpty(font.Characters);
+            Assert.True(font.LineSpacing > 0);
+
+            Vector2 measured = font.MeasureString("Hello");
+            Assert.True(measured.X > 0f && measured.Y > 0f, $"measured {measured}");
+
+            using var batch = new SpriteBatch(game.GraphicsDevice);
+            game.GraphicsDevice.Clear(Color.Black);
+            batch.Begin();
+            batch.DrawString(font, "Hello", Vector2.Zero, Color.White);
+            batch.End();
         });
     }
 }

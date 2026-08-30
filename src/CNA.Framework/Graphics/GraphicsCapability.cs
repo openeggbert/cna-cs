@@ -51,4 +51,29 @@ public enum GraphicsCapability : uint
     /// compiled asset. The header recommends asking this in advance rather than branching on a
     /// file name, since only the compiled shape depends on it.</summary>
     CompiledEffects = 13,
+
+    // The five below were added by CNA 0.8, which moved CNA_GRAPHICS_CAPABILITY_MAXIMUM from 13 to
+    // 18. That constant move is the reason 0.8 was not a generally additive ABI generation, and
+    // this enum stopped at 13 through three ABI admissions afterwards -- a query route was bound,
+    // and five of the things it can answer were unreachable from managed code. None of them has an
+    // XNA counterpart; they are here for the same reason the rest of the enum is, which is that a
+    // renderer either has them or does not and a game should be able to ask before it depends on
+    // one.
+
+    /// <summary>32-bit-per-channel float render targets.</summary>
+    FloatRenderTargets = 14,
+
+    /// <summary>16-bit-per-channel half-float render targets.</summary>
+    HalfFloatRenderTargets = 15,
+
+    /// <summary>Linear filtering when sampling a half-float texture, which some renderers that
+    /// accept the format still cannot do.</summary>
+    HalfFloatTextureLinearFiltering = 16,
+
+    /// <summary>Compute shaders. The entry point to CNA's engine layer; see
+    /// <see cref="GraphicsDevice.IsCnaEngineLayerAvailable"/>.</summary>
+    ComputeShaders = 17,
+
+    /// <summary>Indirect draw submission, where draw arguments come from a buffer.</summary>
+    IndirectDraw = 18,
 }

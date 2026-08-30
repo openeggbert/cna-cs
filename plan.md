@@ -1,29 +1,34 @@
 # CNA.NET engineering roadmap
 
-Last measured: 2026-08-23. Session history and superseded decisions live in
-[`NEXT.md`](NEXT.md). This file is the current, normative plan.
+Last measured: 2026-08-30, against CNA `next` `e178282fcd70f4cd1e9be922fde35a9a2b779cf3`
+(C ABI 0.20.0) and the `sharp-runtime` revision that generation builds on. Session history and
+superseded decisions live in [`NEXT.md`](NEXT.md). This file is the current, normative plan.
 
 ## Current verified state
 
-**Not release-ready.** The selected seven-assembly XNA 4.0 Windows runtime profile is now public-
-metadata complete: the strict facade has the same 257 types and produces zero verifier
-diagnostics with an empty allowlist. Remaining compatibility work is behavioral, profile breadth,
-native-platform validation, content fixtures, packaging, and release engineering.
+**Not release-ready.** The selected seven-assembly XNA 4.0 Windows runtime profile remains
+public-metadata complete: the strict facade has the same 257 types and produces zero verifier
+diagnostics with an empty allowlist. The binding now targets CNA C ABI 0.20.0 rather than 0.6/0.7/
+0.8, and consumes six capabilities the 0.19.0 generation added. Remaining compatibility work is
+behavioral, profile breadth, CNA-beyond-XNA surface, native-platform validation, content fixtures,
+packaging, and release engineering.
 
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
 | Managed tests | 560 `CNA.Framework` + 199 `CNA.XnaCompat`, all passing |
-| Native integration | 119/119 passing in Debug and Release on Linux x64 with the selected ABI 0.8.0 CNA OPENGLES3 library; consumer ABI 0.6.0 uses the exact reviewed `cna-cs-native-abi/1` matrix, all 841 imports, and signature/shape canaries rather than same-major admission |
+| Native integration | 122/122 passing in Debug and Release on Linux x64 against the ABI 0.20.0 CNA OPENGLES3 library |
+| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 849 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
-| Behavior corpora | One manifest defines 469 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 4 DeviceLifecycle. CNA executes all 469: 199 pure, 166 device, and 104 native-runtime. Windows XNA runtime capture remains pending |
+| Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
-| Ownership stress | Normal Debug and Release each pass 100/100 cycles (50 explicit, 50 finalizer, 10 throwing-handler). The optional Release deep mode passes 1000/1000 (500 explicit, 500 finalizer, 100 throwing-handler), with 15,000 queued owner-thread releases, 29,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, and 0 native crashes. This is not allocator-level leak proof |
+| Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
-| ABI layout evidence | Portable C-authority probe passes on Linux ELF x64: 86 native and 86 managed layout/type measurements with 0 mismatches, plus prototype compilation for reviewed callbacks/functions. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
+| ABI layout evidence | Portable C-authority probe passes on Linux ELF x64: 86 native and 86 managed layout/type measurements with 0 mismatches, plus prototype compilation for reviewed callbacks/functions. That is a floor, not coverage: it measures 13 of the 80 interop structs. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures |
-| Template | Development/project-reference and isolated package-consumer modes both build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes |
+| Template | The checked-in repository project, the generated development project and the isolated package consumer all build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes against 0.20.0 |
 | Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; configured FNA runtime reports unavailable with exit 2 |
 | Packages | None published. Shipping defaults remain `IsPackable=false`; the isolated acceptance path creates local `CNA.Interop`, `CNA.Framework`, and `CNA.XnaCompat` preview packages, including an experimental `linux-x64` native asset, and passes inspection/install/build/60/600-frame/error-diagnostic checks |
 | Tested platform | Linux x64 only in this run |
@@ -40,6 +45,34 @@ UNEXPECTED_MEMBER=0                   PARAMETER_NAME_MISMATCH=0
 ```
 
 No difference is allowlisted. Both the normal strict verifier and the standalone leak gate exit 0.
+
+## Which CNA this binds
+
+`cnanext` (the `next` branch of `openeggbert/cna`) is the development line this binding targets, and
+`sharp-runtimenext` is the `next` branch of the C++ `System.*` implementation it builds on. The
+older `cna`/`sharp-runtime` `develop` checkouts sit at C ABI 0.7.0 and are not admitted; see
+[Retired entries](docs/native-abi-compatibility.md#retired-entries) for why that is a consequence of
+consuming new routes rather than a judgement about those generations.
+
+### Renderers this binding must not assume
+
+`sokol`, `diligent`, `llgl`, `igl`, `wicked`, `magnum`, `skia`, `blend2d`, `nanovg`, `openvg` and
+`tinygl` are being removed upstream. That merged into `cnanext` during this work and is what moved
+the ABI to 0.20.0: `tools/coverage/baselinediff.py` reports exactly eleven removed
+`CNA_GRAPHICS_RENDERER_*` constants and `CNA_GRAPHICS_RENDERER_MAXIMUM` moving from 50 to 49, with
+no export, prototype, struct or scalar change anywhere.
+
+Nothing in this repository or in `cna-cs-template` may name them, gate on them, or claim support for
+them. Three consequences, two applied and one structural:
+
+- render-target `ContentLost` documentation says "a renderer family that can genuinely lose a
+  device" rather than listing `DIRECTX9`/`DIRECT2D`/`SKIA`, because that list has shrunk;
+- the template asks the renderer for its name and capabilities instead of enumerating renderers, so
+  it needs no change when the set changes;
+- this binding reads the renderer's *name* and never a `CNA_GRAPHICS_RENDERER_*` identity, which is
+  the reason a removal of eleven renderers is a clean diff over the consumed surface rather than a
+  breaking change. Keep it that way: binding the identity enum would make every future renderer
+  change a compatibility event.
 
 ## Compatibility definition
 
@@ -74,6 +107,122 @@ contract.
 - The template and a freshly generated `dotnet new cna-game` project build and complete both short
   and stability native runs.
 - NuGet/RID installation is reproducible on every claimed OS/architecture.
+
+## Open work, in priority order
+
+These are the tasks this plan is asking for next. Everything here is either measured as missing or
+measured as failing; nothing is aspirational.
+
+### A. Consume the rest of what CNA already provides
+
+Six capabilities were wired when the binding moved to 0.19.0/0.20.0: multi-listener `Apply3D`, raw
+optioned vertex uploads, render-target `ContentLost`, the caller-owned `GraphicsDevice`
+constructor, compressed atlas loading, and the engine-layer availability pair with the five
+graphics capabilities that came with it. The routes below exist upstream and are still unbound.
+
+| Task | Route | Completion criterion |
+| --- | --- | --- |
+| A1. `SpriteBatch.DrawString` through the native text route | `cna_sprite_batch_draw_string` | Measure it against the current per-glyph quad path first. Adopt only if it is not observably different in glyph placement on the authored `FontCalibri14` fixture; record the measurement either way. |
+| A2. Batched sprite submission | `cna_sprite_batch_submit_many` | A `SpriteBatch` flush issues one native call per batch rather than one per sprite, with the same draw order and the same `End` failure behaviour. |
+| A3. `PresentationParameters` bounds and clone | `cna_presentation_parameters_get_bounds`, `cna_presentation_parameters_clone` | `PresentationParameters.Bounds` and `Clone()` read/copy through native instead of managed reconstruction, and round-trip in the corpus. |
+| A4. Preferred presentation mode | `cna_graphics_device_manager_get/set_preferred_presentation_mode_ext` | Exposed in `CNA.XnaCompat.Extensions`, not in the strict namespace. |
+| A5. Explicit content-lost notification | `cna_graphics_device_notify_content_lost_resources_ext` | Only as a test hook, to drive the render-target `ContentLost` subscription deterministically on a renderer that cannot lose a device. Never called from an ordinary game path. |
+
+### A0. Admit CNA ABI 0.20.0 — done
+
+Upstream reached 0.20.0 during this work, when the renderer removal merged into `next`, and the
+0.19.0 header tree the gates were pinned to went stale mid-session -- which is how the bump was
+noticed, because `tools/abi-verify` failed against the live worktree exactly as designed.
+
+The review is complete and recorded in
+[`docs/native-abi-compatibility.md`](docs/native-abi-compatibility.md#what-the-0200-admission-measured):
+0 exports removed or added, 0 consumed prototypes changed, 0 struct/scalar/string changes, and 12
+integer-constant differences that are all renderer identities this binding does not consume. The
+full native gate set was re-run against a 0.20.0 build of `libcna_c_api.so`. 0.19.0 was retired the
+way 0.6/0.7/0.8 were, and a fixture proves it is refused.
+
+### B. Deepen the ABI evidence
+
+The C-authority probe measures 13 of the 80 interop structs and compiles 4 of 849 prototypes. That
+was defensible against a one-minor step; against a twelve-minor one it is a floor, and it is now the
+weakest link in an admission that otherwise rests on the upstream baseline diff.
+
+- B1. Extend `tools/abi-verify/native_layout_probe.c` to every struct `CNA.Interop` declares, and
+  `BuildManagedValues()` to match. A managed struct with no measured native counterpart must fail
+  rather than be skipped.
+- B2. Extend the prototype probe from 4 routes to every callback-taking route and every route whose
+  managed declaration uses `in`/`out`/`ref` on a versioned descriptor -- the shapes `sweep.py`'s
+  arity check cannot see.
+- B3. Emit every consumed enum-like constant from the C probe and compare it against the managed
+  enum member, so a renumbered identity fails a gate instead of a game.
+- B4. Execute the Windows PE and macOS Mach-O `portable-abi-header` jobs. They are wired and have
+  never run.
+
+### C. Close or re-adjudicate the remaining native blockers
+
+[`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.md) is the list. Six rows closed
+when the binding moved to 0.19.0/0.20.0. The ones that need managed work rather than upstream work:
+
+- C1. Done: both caller-owned `GraphicsDevice` constructors now warn at the call site that creating
+  a device while a game is running takes the GL context and kills that game's next present. The
+  underlying fix is upstream's -- save and restore the current context around device creation.
+- C2. Re-measure the whole blocker table against a 0.20.0 build. The renderer removal has merged,
+  and several rows are backend statements rather than ABI statements, so a smaller renderer set can
+  change them in either direction.
+
+### D. CNA API beyond XNA 4.0
+
+**D0 is done.** The engine layer's availability and revision are bound
+(`cna_graphics_ext_is_available`, `cna_engine_layer_get_version`) and exposed as
+`CnaGraphicsDeviceExtensions.IsCnaEngineLayerAvailable()` / `CnaEngineLayerVersion()`, and the five
+graphics capabilities CNA 0.8 added -- float and half-float render targets, half-float linear
+filtering, compute shaders, indirect draw -- are reachable from managed code for the first time;
+`CnaGraphicsCapability` had stopped at 13 through three ABI admissions. On the measured OPENGLES3
+build the engine layer reports available, revision 2, with all five capabilities true.
+
+That ordering matters for everything else in this section: the whole engine-layer surface is
+exported by every CNA build and returns `NOT_SUPPORTED` when the layer is absent, so a resolved
+symbol is not evidence of a capability. Any further engine-layer binding must gate on the
+availability query rather than on the symbol existing.
+
+CNA 0.20.0 exports 4,051 routes; this binding consumes 849. The remainder is not all product
+surface -- most of `vectors.h`, `matrix.h`, `math.h`, `quaternion.h`, `curve.h`, `geometry.h` and
+`color.h` is deliberately managed by design invariant 3, and much of the rest is engine-internal.
+What is genuinely a CNA-beyond-XNA product surface, by header and unbound count:
+
+| Header | Unbound | What it is | Placement |
+| --- | --- | --- | --- |
+| `engine_layer.h` | 812 | CNAEXT: storage buffers, compute shaders, GPU timers, render-target pools, shader-effect caches, full-screen/post-process passes, PBR material binding, clustered lighting, shadows, SSAO/SSR/bloom/tonemap, particles, decals, LOD | `CNA.Framework.Extensions` + `CNA.XnaCompat.Extensions` |
+| `cnb.h` | 272 | CNA's own binary content format: encode/decode for textures, models, video, documents, plus the tooling front ends | `CNA.Content.Cnb` |
+| `gamer_services.h` | 204 | Gamers, identities, achievements, leaderboards, avatars, guide | separate future profile; inventory-only today |
+| `models.h` | 161 | Model/mesh/bone/morph-target surface beyond the XNA subset already bound | `CNA.Framework.Extensions` |
+| `sensors.h` | 109 | Accelerometer/compass/inclinometer/motion | separate future profile |
+| `net_sessions.h`, `net.h`, `net_gamers.h` | 165 | Networking and session APIs | separate future profile |
+| `effects.h` | 75 | Effect surface beyond the XNA stock effects | `CNA.Framework.Extensions` |
+| `input_haptics.h`, `input_joystick.h`, `input_devices.h` | 87 | Haptics, joysticks, device hotplug | `CNA.Framework.Extensions` |
+
+Rules for all of it, unchanged from the existing extension policy: nothing here may appear in the
+strict `Microsoft.Xna.Framework` contract, the leak gate must stay at zero, and each addition
+records authority, source-portability value, implementation status, and namespace. Order of work:
+
+- D1. Done; see D0 above.
+- D2. `cnb.h` load path: `ContentManager` extension that loads `.cnb` alongside `.xnb`, starting
+  with textures and models, using the same ownership model as the XNB path.
+- D3. The post-process/render-pipeline objects, as an explicitly experimental namespace.
+- D4. Everything else stays inventory-only until D1-D3 have shipped and been measured.
+
+### E. Template
+
+- E1. The checked-in project builds again and `verify-template.sh` now checks it; keep that check.
+- E2. 600-frame runs on every additional claimed renderer, once the renderer set settles.
+- E3. Diagnose the configured FNA assembly/runtime load failure and complete an FNA frame run.
+- E4. Expand the passing MonoGame and Kni runs beyond this one Linux/x64 environment.
+
+### F. Still blocked on things this repository cannot supply
+
+Listed so they are not mistaken for oversights: the Windows XNA 4.0 runtime snapshot, legally
+redistributable XACT bank / song / video fixtures, sanitizer evidence from an ABI-matched
+instrumented build, and RID coverage beyond Linux x64.
 
 ## P0 — public contract and ownership
 
@@ -112,7 +261,7 @@ math/geometry and input corpora now provide a cross-engine behavior baseline.
 
 Next work must preserve every zero above. Priorities are now:
 
-1. Execute and archive the 469-observation differential corpus on a Windows XNA 4.0 runtime.
+1. Execute and archive the 470-observation differential corpus on a Windows XNA 4.0 runtime.
    Direct XNA source/IL has adjudicated implemented audio validation, parent/child ownership and
    frame-buffer behavior, but only Windows can provide the independent runtime snapshot.
 2. Continue graphics behavior work from the exact blockers in
@@ -123,8 +272,9 @@ Next work must preserve every zero above. Priorities are now:
    deterministic fixture breadth that is still missing. The current corpus already includes
    built-in readers, legal/truncated/malformed LZX, external-reference normalization, a
    shared-resource cycle, nested graph failures, and multiple throwing disposables.
-4. Do not add native-input CI assertions until CNA exposes deterministic state injection. The
-   current ABI has hotplug/reset hooks but no keyboard/mouse/gamepad state injection route.
+4. Do not add native-input CI assertions until CNA exposes deterministic state injection. ABI
+   0.20.0 still has hotplug/reset hooks and gamepad/mouse output routes, but no keyboard, mouse or
+   gamepad *state injection* route.
 5. Preserve the release-qualification CI gates. Protected XNA and native artifacts are optional
    configured jobs; absent configuration must remain explicit rather than silently green.
 6. Keep additional XNA profiles separate. GamerServices/Avatar, Net, and Content Pipeline now
@@ -217,7 +367,7 @@ not a progress metric.
 - Add golden/differential tests for validation order, exception types, null/range/disposed cases,
   event order, collection mutation, math edge cases, graphics state, content caching, input
   transitions, audio/media state, and lifecycle ordering.
-- Keep alternate-engine results as comparators rather than authorities. The current 469-observation
+- Keep alternate-engine results as comparators rather than authorities. The current 470-observation
   snapshot preserves the earlier corpus and derives every category/probe count from one manifest.
   FNA's finalizer abort and MonoGame's audio initialization failure demonstrate why comparator
   crashes cannot define XNA behavior. Actual XNA metadata/source/IL, documentation, and the Windows
@@ -233,28 +383,33 @@ corpus, not a percentage inferred from source.
 
 `tools/coverage` now discovers repositories/libraries relatively or through `CNA_ROOT`,
 `CNA_NATIVE_LIBRARY`, and `CNA_NATIVE_DIR`; ELF, PE, and Mach-O symbol tools are separated. The
-latest header sweep found no declared imports absent from the selected headers and no arity
-mismatches. An older ABI 0.1.0 library was correctly rejected; the selected ABI 0.8.0 library
-passes all 119 integration tests in both configurations. `tools/abi-verify` uses the platform C
-compiler as authority: Linux ELF x64 passes 86 native/managed measurements with zero mismatches
-and compiles the reviewed function/callback prototypes against both reviewed 0.7.0 and 0.8.0
-header trees. PE and Mach-O jobs reuse the same source
-and test logic, but have not been executed in this local Linux checkpoint.
+latest header sweep against the 0.20.0 headers found no declared imports absent and no arity
+mismatches. The selected ABI 0.20.0 library passes all 122 integration tests in both
+configurations. `tools/abi-verify` uses the platform C compiler as authority: Linux ELF x64 passes
+86 native/managed measurements with zero mismatches and compiles the reviewed function/callback
+prototypes against the 0.20.0 header tree. PE and Mach-O jobs reuse the same source and test logic,
+but have not been executed in this local Linux checkpoint.
+
+`tools/coverage/baselinediff.py` supplies the upstream release-to-release evidence the policy asks
+for, and is tested against a planted failure in both directions. See
+[`tools/coverage/README.md`](tools/coverage/README.md).
 
 Native admission is now explicit policy `cna-cs-native-abi/1`; see
 [`docs/native-abi-compatibility.md`](docs/native-abi-compatibility.md) and the machine-readable
 [`eng/cna-native-abi-policy.json`](eng/cna-native-abi-policy.json). CNA's experimental 0.x minors
-are not assumed compatible. The reviewed matrix accepts exact 0.6.0, additive 0.7.0, and a narrow
-0.8.0 consumer exception. CNA 0.8 is not generally backward-compatible because it changes the two
-public graphics `MAXIMUM` constants; this binding consumes neither, and the upstream baseline
-preserves every existing shape/value/prototype it does consume. Every other version is rejected by
-default. The loader additionally requires all 841 imported symbols and executes guarded core
-signature/struct-shape probes. Ten dependency-free fixture libraries prove four positive and six
-negative cases in fresh processes.
+are not assumed compatible. The reviewed matrix accepts exactly 0.19.0. It previously accepted
+0.6.0, 0.7.0 and 0.8.0; those entries were retired when this binding began importing four routes
+CNA added after 0.8.0, which no earlier library exports -- a consequence of the consumer moving,
+not a finding against those reviews. Every other version is rejected by default. The loader
+additionally requires all 849 imported symbols and executes guarded core signature/struct-shape
+probes. Eleven dependency-free fixture libraries prove two positive and nine negative cases in
+fresh processes, including that a retired generation and both neighbours of the accepted one are
+refused.
 
 Next criteria:
 
-- extend the portable manifest when additional interop categories are reviewed;
+- widen the portable manifest from its current floor to every interop struct, prototype and
+  enum-like constant (see Open work B);
 - require a reviewed policy-matrix entry and upstream baseline diff before admitting any new CNA
   ABI generation; never restore a same-major 0.x range;
 - symbol resolution against current Linux, Windows, and macOS builds using the platform's real
@@ -320,12 +475,14 @@ The release-qualification workflow now wires:
 2. both managed test suites and the compile probe;
 3. strict metadata diff plus a separately runnable CNA leak check;
 4. portable ABI/header validation;
-5. fixture-based native ABI policy admission plus native integration when an admitted library is supplied;
-6. development-template and generated-project builds;
-7. pure behavior corpus/count/generated-doc validation;
-8. local package creation and isolated package-consumer install/build test;
-9. protected native integration, ownership, full corpus, template native runs, and package-native
-   acceptance when an ABI-matched library is legally supplied.
+5. the upstream release-to-release ABI diff over the consumed surface, which must report zero
+   breaking differences;
+6. fixture-based native ABI policy admission plus native integration when an admitted library is supplied;
+7. repository-project, development-template and generated-project builds;
+8. pure behavior corpus/count/generated-doc validation;
+9. local package creation and isolated package-consumer install/build test;
+10. protected native integration, ownership, full corpus, template native runs, and package-native
+    acceptance when an ABI-matched library is legally supplied.
 
 The strict API job is green with zero diagnostics and an empty allowlist. Treat any future
 diagnostic—including a leak, hierarchy/interface regression, unexpected extension, or parameter
@@ -342,8 +499,10 @@ specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.
 
 - `Present(source,destination,window)` needs a versioned descriptor; the current route carries no
   arguments, so only the all-default tuple is forwarded.
-- Dynamic vertex raw/window uploads need `SetDataOptions`; dynamic index window uploads currently
-  reject non-`None` options. Representable complete typed uploads now forward all three values.
+- Dynamic index window uploads reject non-`None` options, and upstream states that as intended:
+  "a windowed upload preserves the rest of the buffer, so it accepts no SetDataOptions other than
+  None". XNA accepts them, and the vertex family took the opposite decision in 0.19.0, so this
+  needs a decision rather than a route.
 - Vertex-buffer partial-element strided transfers need independent element-size and buffer-stride
   scatter/gather fields; complete declaration-sized and contiguous full-byte windows work.
 - Texture2D arbitrary compatible structs, broader backbuffer readback, raw Texture3D readback, and
@@ -351,18 +510,21 @@ specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.
 - Resource create/destroy callbacks need a stable resource identity and round-trippable tag. The
   historical managed two-argument thunk did not match the native three-argument callback and could
   crash immediately; the current managed API safely emits no fake event.
-- Dynamic-buffer `ContentLost` needs real renderer loss/recreation notifications.
+- Dynamic vertex/index-buffer `ContentLost` needs real renderer loss/recreation notifications.
+  Render targets got `cna_render_target_subscribe_content_lost` in 0.19.0 and are bound to it; the
+  buffer families did not, and the render-target route is the shape to follow.
 - The selected backend needs XNA-compatible SpriteBatch treatment for unknown sort values and
-  non-finite sprite data, plus compressed DXT texture upload support for the checked font atlas.
-- Dynamic audio: `cna_sound_effect_instance_apply_3d_multi_ext` is now bound and used atomically,
-  but the native implementation deliberately rejects listener counts other than one. True
-  multi-listener mixing therefore requires an implementation change, not a new ABI entry point.
+  non-finite sprite data. Compressed DXT upload is no longer on this list: the renderer reports
+  Dxt1/Dxt3/Dxt5 and the authored font fixture loads.
 - `VideoPlayer.GetTexture` needs stable frame-slot identity or an explicit validity generation;
   the current borrowed alias expires on the next player call and cannot reproduce XNA's two stable
   frame `Texture2D` objects.
-- True cross-device validation needs a supported independent-device creation route; deterministic
-  `DeviceLost` and native input transitions need explicit test hooks. No second device, loss event,
-  or physical input state is fabricated.
+- Independent-device creation exists as of 0.19.0 and is bound, but on OPENGLES3 it makes its own
+  GL context current and does not restore the game's, so a game in the same process dies on its
+  next `SwapBuffers`. Cross-device validation stays not-run behind
+  `CNA_RUNTIME_PROBE_CROSS_DEVICE=1` until the context is saved and restored. Deterministic
+  `DeviceLost` and native input transitions still need explicit test hooks. No second device
+  inside a running game, loss event, or physical input state is fabricated.
 - `cna_storage_container_subscribe_disposing` is documented as synchronous and exactly once but
   emitted zero callbacks in the native regression. Explicit managed disposal safely emits the
   known one-shot event until native honors the route.
@@ -408,7 +570,10 @@ dotnet run --project tools/behavior-corpus -c Release -- verify
 CNA_NATIVE_LIBRARY=/path/to/libcna_c_api.so \
   scripts/Capture-CnaSnapshots.sh --output /tmp/cna-snapshots --force
 
-CNA_UPSTREAM_ROOT=/path/to/cna scripts/Verify-Abi.sh /tmp/cna-abi.json
+CNA_UPSTREAM_ROOT=/path/to/cnanext scripts/Verify-Abi.sh /tmp/cna-abi.json
+
+python3 tools/coverage/baselinediff.py \
+  --from /path/to/cna@<last accepted revision> --to /path/to/cnanext
 
 scripts/Verify-NativeAbiCompatibility.sh --output /tmp/cna-abi-policy
 
@@ -419,7 +584,7 @@ scripts/Package-Acceptance.sh \
 XNA_REFERENCE_PATH=/path/to/xna-reference-assemblies \
   dotnet run --project tools/api-compat -c Release -- --format json
 
-CNA_ROOT=/path/to/cna python3 tools/coverage/sweep.py
+CNA_ROOT=/path/to/cnanext python3 tools/coverage/sweep.py
 ```
 
 On Windows with XNA 4.0 and the .NET Framework 4.8 developer pack:

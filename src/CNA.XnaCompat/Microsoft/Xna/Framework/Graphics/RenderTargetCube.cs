@@ -47,17 +47,66 @@ public class RenderTargetCube : TextureCube, IDynamicGraphicsResource
     /// <summary>See <see cref="DepthStencilFormat"/>.</summary>
     public bool IsContentLost => CNA.Graphics.RenderTarget2D.GetRenderTargetProperties(NativeHandleValue).ContentLost;
 
-    /// <summary>Inert -- <c>render_target.h</c> has no per-target subscription route. See
-    /// <see cref="CNA.Graphics.RenderTarget2D.ContentLost"/>.</summary>
+    /// <summary>
+    /// A real native subscription since CNA 0.19.0 added
+    /// <c>cna_render_target_subscribe_content_lost</c>; it replaces an inert
+    /// <c>add</c>/<c>remove</c> pair. Routed through <c>CNA.Graphics.RenderTarget2D</c>'s
+    /// <c>internal static</c> helper for the same reason <see cref="DepthStencilFormat"/> is:
+    /// this class derives from its own namespace's texture base, so there is no inherited
+    /// implementation to reuse and it must not name a <c>CNA.Interop</c> type.
+    ///
+    /// Only a renderer family that can genuinely lose a device reports one; on the rest the
+    /// subscription is valid and silent, and a caller-initiated <c>Reset</c> is not loss.
+    /// </summary>
     public virtual event EventHandler<EventArgs>? ContentLost
     {
-        add => _contentLost += value;
-        remove => _contentLost -= value;
+        add
+        {
+            lock (_contentLostLock)
+            {
+                ObjectDisposedException.ThrowIf(_contentLostDisposed, this);
+
+                _contentLostBridge ??= CNA.Graphics.RenderTarget2D.SubscribeContentLost(
+                    NativeHandleValue, this, () => _contentLost?.Invoke(this, EventArgs.Empty));
+
+                _contentLost += value;
+            }
+        }
+        remove
+        {
+            lock (_contentLostLock)
+            {
+                _contentLost -= value;
+            }
+        }
     }
 
+    private CNA.NativeEventBridge? _contentLostBridge;
     private EventHandler<EventArgs>? _contentLost;
+    private bool _contentLostDisposed;
+    private readonly object _contentLostLock = new();
 
-    protected override void Dispose(bool arg0) => base.Dispose(arg0);
+    /// <summary>Releases the subscription before the base releases the render-target handle it is
+    /// registered against.</summary>
+    protected override void Dispose(bool arg0)
+    {
+        CNA.NativeEventBridge? bridge;
+        lock (_contentLostLock)
+        {
+            _contentLostDisposed = true;
+            bridge = _contentLostBridge;
+            _contentLostBridge = null;
+            _contentLost = null;
+        }
+
+        Exception? pending = CNA.Graphics.RenderTarget2D.DrainContentLostBridge(bridge);
+        base.Dispose(arg0);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
+    }
 
     private static CNA.Graphics.RenderTargetCube CreateFrameworkRenderTarget(
         GraphicsDevice graphicsDevice,

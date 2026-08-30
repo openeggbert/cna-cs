@@ -65,6 +65,83 @@ public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fix
         });
     }
 
+    /// <summary>
+    /// The CNAEXT engine layer's availability query, and the five graphics capabilities that had
+    /// been unreachable from managed code since CNA 0.8 added them.
+    ///
+    /// Both are CNA surface with no XNA counterpart, so this asserts shape rather than answers: the
+    /// queries must succeed and must agree with each other, whatever this build says. Asserting
+    /// that the layer *is* present would be asserting a build option.
+    /// </summary>
+    [NativeFact]
+    public void CnaEngineLayer_AnswersItsAvailabilityAndVersionConsistently()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            bool available = GraphicsDevice.IsCnaEngineLayerAvailable();
+            int version = GraphicsDevice.CnaEngineLayerVersion();
+            bool computeShaders = device.SupportsCapability(GraphicsCapability.ComputeShaders);
+
+            output.WriteLine(
+                $"engine layer available={available} version={version} " +
+                $"compute={computeShaders} " +
+                $"floatRT={device.SupportsCapability(GraphicsCapability.FloatRenderTargets)} " +
+                $"halfFloatRT={device.SupportsCapability(GraphicsCapability.HalfFloatRenderTargets)} " +
+                $"halfFloatFilter={device.SupportsCapability(GraphicsCapability.HalfFloatTextureLinearFiltering)} " +
+                $"indirectDraw={device.SupportsCapability(GraphicsCapability.IndirectDraw)}");
+
+            // "Zero means no engine layer" is the header's own rule, so the two answers cannot
+            // disagree. A binding that read the wrong route would very likely break exactly here.
+            Assert.Equal(available, version != 0);
+            Assert.True(version >= 0);
+        });
+    }
+
+    /// <summary>
+    /// <c>ContentLost</c> is a real native subscription since CNA 0.19.0, not an inert
+    /// <c>add</c>/<c>remove</c> pair.
+    ///
+    /// What this can prove on any renderer is that the subscription is taken, that a second
+    /// handler reuses it rather than registering twice, and that disposal releases it before the
+    /// render-target handle it is registered against -- the ordering that would otherwise leave
+    /// native able to call into a dead context. What it deliberately does not assert is that the
+    /// event fires: <c>render_target.h</c> says only a renderer family that can genuinely lose a
+    /// device reports one, and that a caller-initiated <c>Reset</c> is not loss, so on this
+    /// renderer a silent subscription is the correct outcome and a test that demanded a callback
+    /// would be demanding a fabrication.
+    /// </summary>
+    [NativeFact]
+    public void RenderTarget2D_ContentLostSubscriptionIsTakenAndReleased()
+    {
+        fixture.InsideAFrame(game =>
+        {
+            int raised = 0;
+            var target = new RenderTarget2D(game.GraphicsDevice, 16, 16);
+            try
+            {
+                void First(object? sender, EventArgs args) => raised++;
+                void Second(object? sender, EventArgs args) => raised++;
+
+                target.ContentLost += First;
+                target.ContentLost += Second;
+                target.ContentLost -= Second;
+
+                output.WriteLine($"subscribed; renderer reports lost={target.IsContentLost}");
+                Assert.Equal(0, raised);
+            }
+            finally
+            {
+                target.Dispose();
+            }
+
+            // Disposal must have released the registration before the handle, so a second dispose
+            // is silent rather than a double release.
+            target.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => target.ContentLost += (_, _) => { });
+        });
+    }
+
     /// <summary>Binding a render target and unbinding it. The cached-binding bookkeeping behind
     /// GetRenderTargets is easy to get wrong in a way only a real bind exposes.</summary>
     [NativeFact]

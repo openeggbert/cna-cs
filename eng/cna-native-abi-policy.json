@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "policyVersion": "cna-cs-native-abi/1",
-  "consumerAbi": "0.6.0",
+  "consumerAbi": "0.20.0",
   "versionSemantics": {
     "major": "For ABI 1.x and later, a change permits breaks only at a new major. ABI 0 is experimental and does not provide this guarantee between minors.",
     "minorBefore1": "A reviewed ABI generation that may be additive or incompatible; never accepted as a same-major range.",
@@ -18,42 +18,52 @@
       "cna_touch_capabilities_init 16-byte version-1 layout, canonical body, and write bounds"
     ],
     "buildTimeEvidence": [
-      "portable C-authority layout measurements",
-      "reviewed prototype compilation",
-      "upstream ABI baseline/history diff"
+      "portable C-authority layout measurements (tools/abi-verify)",
+      "reviewed prototype compilation (tools/abi-verify)",
+      "upstream ABI baseline/history diff (tools/coverage/baselinediff.py), which must report zero breaking differences between an already-accepted generation and the proposed one"
     ]
   },
   "acceptedVersions": [
     {
-      "libraryAbi": "0.6.0",
+      "libraryAbi": "0.20.0",
       "classification": "exact",
       "accepted": true,
-      "evidence": "Consumer baseline; CNA commit 25a7932cb."
+      "evidence": "Consumer baseline at CNA next e178282fcd70f4cd1e9be922fde35a9a2b779cf3. tools/coverage/baselinediff.py measures 0.19.0 -> 0.20.0 as: 0 exports removed or added, 0 consumed prototypes changed, 0 struct/scalar/string changes, and 12 integer-constant differences that are all renderer identities (11 removed plus CNA_GRAPHICS_RENDERER_MAXIMUM 50 -> 49). This binding reads the renderer name through cna_graphics_device_copy_renderer_name and consumes no CNA_GRAPHICS_RENDERER_* identity or sentinel. tools/abi-verify passes 86/86 C-authority layout measurements and reviewed-prototype compilation against the 0.20.0 headers, and the full native gate set runs against the 0.20.0 library."
+    }
+  ],
+  "retiredVersions": [
+    {
+      "libraryAbi": "0.6.0",
+      "retiredBecause": "CNA.NET now imports cna_render_target_subscribe_content_lost, cna_render_target_unsubscribe_content_lost, cna_vertex_buffer_set_data_raw_with_options and cna_vertex_buffer_set_data_raw_at_with_options, none of which this generation exports.",
+      "previousClassification": "exact"
     },
     {
       "libraryAbi": "0.7.0",
-      "classification": "additive",
-      "accepted": true,
-      "evidence": "CBIND-078 added six PBR/morph-target exports without changing the 0.6 surface; CNA commit a09196a64."
+      "retiredBecause": "Same four newly consumed routes are absent. The 0.6.0 -> 0.7.0 additive review itself still holds; it is this consumer that moved.",
+      "previousClassification": "additive"
     },
     {
       "libraryAbi": "0.8.0",
-      "classification": "reviewed-consumer-subset",
-      "accepted": true,
-      "upstreamAbiCompatibleWith070": false,
-      "evidence": "The upstream baseline changes CNA_GRAPHICS_CAPABILITY_MAXIMUM from 13 to 18 and CNA_GRAPHICS_RENDERER_MAXIMUM from 49 to 50, making 0.8 incompatible in general. CNA.NET consumes neither sentinel; its consumed constants, existing exports, prototypes, structs, callbacks, and behavioral contracts are unchanged. CNA merge 1d6da4af8."
+      "retiredBecause": "Same four newly consumed routes are absent. Its consumer-specific admission -- CNA.NET binds neither changed graphics MAXIMUM sentinel -- still holds and carries forward into 0.20.0.",
+      "previousClassification": "reviewed-consumer-subset"
+    },
+    {
+      "libraryAbi": "0.19.0",
+      "retiredBecause": "Superseded by 0.20.0. Nothing this consumer touches differs between them; the entry was retired rather than kept so the matrix stays a reviewed point list instead of accumulating into a range.",
+      "previousClassification": "exact"
     }
   ],
   "default": "reject",
   "fixtures": [
-    { "name": "exact-0.6.0", "expected": "accept" },
-    { "name": "additive-0.7.0", "expected": "accept" },
-    { "name": "additive-0.7.0-extra-symbol", "expected": "accept" },
-    { "name": "reviewed-subset-0.8.0", "expected": "accept" },
+    { "name": "exact-0.20.0", "expected": "accept" },
+    { "name": "exact-0.20.0-extra-symbol", "expected": "accept" },
+    { "name": "retired-0.8.0", "expected": "reject" },
+    { "name": "retired-0.19.0", "expected": "reject" },
+    { "name": "unreviewed-0.21.0", "expected": "reject" },
     { "name": "missing-required-symbol", "expected": "reject" },
     { "name": "changed-required-signature", "expected": "reject" },
     { "name": "incompatible-major-1.0.0", "expected": "reject" },
-    { "name": "structurally-incompatible-0.7.0", "expected": "reject" },
+    { "name": "structurally-incompatible-0.20.0", "expected": "reject" },
     { "name": "malformed-metadata-0.0.0", "expected": "reject" },
     { "name": "unreadable-metadata", "expected": "reject" }
   ]

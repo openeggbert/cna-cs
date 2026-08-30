@@ -265,8 +265,9 @@ internal static class Program
 
         if (Enabled("content"))
         {
-            (ContentManager manager, Model model) = CreateContentAssets(device);
+            (ContentManager manager, Model model, SpriteFont font) = CreateContentAssets(device);
             _ = model.Meshes[0].MeshParts[0].Effect;
+            _ = font.MeasureString("A");
             disposables.Add(manager);
         }
 
@@ -345,8 +346,9 @@ internal static class Program
 
         if (Enabled("content"))
         {
-            (ContentManager manager, Model model) = CreateContentAssets(device);
+            (ContentManager manager, Model model, SpriteFont font) = CreateContentAssets(device);
             references.Add(new WeakReference(manager));
+            references.Add(new WeakReference(font));
             references.Add(new WeakReference(model));
             references.Add(new WeakReference(model.Bones[0]));
             references.Add(new WeakReference(model.Meshes[0]));
@@ -451,13 +453,26 @@ internal static class Program
         return Texture2D.FromStream(device, stream);
     }
 
-    private static (ContentManager Manager, Model Model) CreateContentAssets(
+    /// <summary>
+    /// The content-managed graph one cycle creates: a model, and an authored SpriteFont whose atlas
+    /// is DXT3.
+    ///
+    /// The font used to be excluded here, recorded as a backend limitation: the selected renderer
+    /// rejected compressed uploads, so loading it failed and the cycle could not carry it. The
+    /// renderer supports S3TC blocks now, and the font is worth carrying rather than merely
+    /// possible -- a compressed texture created by the content pipeline is owned by the
+    /// ContentManager, not by a facade constructor, which is a different ownership edge from every
+    /// other resource in this cycle.
+    /// </summary>
+    private static (ContentManager Manager, Model Model, SpriteFont Font) CreateContentAssets(
         GraphicsDevice device)
     {
         string root = Path.Combine(AppContext.BaseDirectory, "assets", "xnb");
         var manager = new ContentManager(new GraphicsDeviceService(device), root);
         Model model = manager.Load<Model>("BlenderDefaultCube");
-        return (manager, model);
+        SpriteFont font = manager.Load<SpriteFont>("FontCalibri14");
+        _ = font.MeasureString("A");
+        return (manager, model, font);
     }
 
     private static SpriteFont CreateAndUseSpriteFont(Texture2D texture)

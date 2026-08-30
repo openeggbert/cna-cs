@@ -17,7 +17,21 @@ python3 tools/coverage/unbound.py          # header functions with no binding
 python3 tools/coverage/typesweep.py        # C++ types with no C# counterpart
 python3 tools/coverage/md2run.py           # member-level diff, both layers
 python3 tools/coverage/runtimecoverage.py  # which compat types have actually executed
+python3 tools/coverage/baselinediff.py --from <checkout[@rev]> --to <checkout[@rev]>
 ```
+
+`baselinediff.py` is the odd one out: it compares two *upstream generations* rather than this
+repository against one of them. It exists because the native ABI policy requires an
+upstream release-to-release diff before a new CNA generation enters the reviewed matrix in
+`eng/cna-native-abi-policy.json`, and that evidence used to be produced by hand. Exit 1 means
+something breaking changed; exit 0 is evidence for a matrix entry, not the entry itself.
+
+Reviewed differences go in `eng/cna-upstream-abi-allowlist.txt`, one exact finding per line with a
+`#` comment recording the decision -- today, the eleven renderer identities CNA 0.20.0 removed and
+the sentinel that moved with them, none of which this binding consumes. The allowlist is checked in
+both directions: an entry that matches nothing is reported as stale and fails, because a reviewed
+exception that has quietly stopped applying is how an allowlist becomes a blindfold. That was
+verified by planting an entry naming a constant that never existed.
 
 `runtimecoverage.py` is the only one that measures *running* rather than *presence*, and it
 deliberately refuses to report a single number. A flat "N of 223 types have run" was steering the
@@ -50,7 +64,7 @@ still being designed, which is exactly how a fabricated P/Invoke gets in.
 ## What each one can and cannot see
 
 This matters more than the scripts do. Each is blind to something the next one
-catches, which is why there are four rather than one:
+catches, which is why there are five rather than one:
 
 | Script | Finds | Cannot see |
 | --- | --- | --- |
@@ -58,6 +72,13 @@ catches, which is why there are four rather than one:
 | `unbound.py` | native routes nothing binds | members with no native counterpart; members onto an already-bound route |
 | `typesweep.py` | CNA C++ types with no C# counterpart | strict XNA contract or anything below type level |
 | `md2run.py` | CNA/C# name differences on types present in both trees | strict XNA signatures and **missing types** |
+| `baselinediff.py` | upstream removals and changes to exports, consumed prototypes, struct layouts, scalar widths, and constant values between two generations | behaviour that keeps its shape -- a route whose implementation reverses its answer diffs clean |
+
+`baselinediff.py` filters *functions* to the 841-odd names this binding imports, because that list
+is exact and machine-readable. It deliberately does **not** filter structs, scalars or constants: the
+binding's 80 interop structs and its enum-like identities name their native counterparts only in
+prose and in the C probe, so a filter there would be a guess, and a guess that hides a layout change
+is worse than a report that occasionally names something irrelevant.
 
 `md2.py` is the shared parser (`cpp_public`, `normalise`, `cs_file_members`), not
 a script to run on its own.
@@ -72,6 +93,18 @@ A gate that has never failed has not been tested. All three checks in `sweep.py`
 | A declaration naming a symbol in no header | `NOT IN HEADERS (1): ['cna_planted_gate_probe_that_does_not_exist']` |
 | The same, against the built libraries | `2855 exports, 1 declaration(s) absent` |
 | A real symbol declared with one parameter too many | `ARITY MISMATCH (1): [('cna_shader_effect_has_renderer', 3, 2)]` |
+
+`baselinediff.py` was tested the same way on 2026-08-30, against a copy of the 0.19.0 headers with
+two defects planted in a consumed route:
+
+| Planted | Reported |
+| --- | --- |
+| An extra parameter on `cna_game_run` | `consumed export cna_game_run changed prototype` with both signatures, exit 1 |
+| `cna_game_run_one_frame` deleted | `consumed export cna_game_run_one_frame is absent from the proposed headers`, exit 1 |
+
+Running it backwards (0.19.0 as `--from`, 0.8.0 as `--to`) also exits 1 and reports 1,643
+differences, which is the same check from the other side: an additive-looking diff has to stop
+looking additive when the two sides are swapped.
 
 Worth repeating whenever one of them is changed. A green run proves the script executed, not that
 it can still see anything.

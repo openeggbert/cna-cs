@@ -74,13 +74,14 @@ composition, internal adapters, and single-owner backends.
 
 - preserve strict metadata, CNA-leak, base-hierarchy, interface, unexpected-member, and allowlist
   counts at zero as hard regression gates;
-- execute the combined 469-observation snapshot on a Windows XNA runtime. CNA executes all 469 on
+- execute the combined 470-observation snapshot on a Windows XNA runtime. CNA executes all 470 on
   Linux. FNA completes the 199-line pure snapshot before its own `SoundEffect` finalizer aborts;
   MonoGame builds the pure source but aborts during audio initialization and omits the Storage/XACT
   runtime surface. Direct XNA source/IL resolves implemented strict behavior, but the installed XNA
   C++/CLI assemblies cannot run on Linux;
 - obtain legal authored XACT, Song, and Video fixtures for success/lifetime/event observations;
-  continue device-loss and true cross-device work only when the C ABI exposes deterministic routes;
+  continue device-loss work only when the C ABI exposes a deterministic route, and cross-device work
+  only once caller-created device creation stops taking the GL context away from a running game;
 - adjudicate the current 46 malformed/error XNB observations on Windows XNA and add further legal
   fixture breadth only for distinct reader/graph/ownership routes;
 - keep the measured GamerServices/Avatar, Net, and Content Pipeline inventories separate from the
@@ -95,8 +96,8 @@ math/geometry, 23 input, 47 pure Audio, and 46 content-error observations. The d
 `CNA.XnaCompat.GraphicsProbe` adds 153 graphics and 13 resource/lifetime observations. Output
 records IEEE-754 bits, exact hash/string results, state flags, exception kinds, identity, and
 lifecycle/collection behavior. `CNA.XnaCompat.RuntimeProbe` adds 36 native Audio, 7 XACT, 20 Media,
-17 Video, 20 Storage, and 4 DeviceLifecycle observations. The resulting total is 469. CNA runs all
-469. FNA emits all 199 pure observations before its finalizer abort, and MonoGame emits the old 106
+17 Video, 20 Storage, and 5 DeviceLifecycle observations. The resulting total is 470. CNA runs all
+470. FNA emits all 199 pure observations before its finalizer abort, and MonoGame emits the old 106
 pure observations before its audio subsystem aborts. Identical source builds against XNA through
 the Windows snapshot workflow, whose native C++/CLI runtime still requires Windows. Direct XNA
 source/IL adjudicates implemented strict values. This remains a focused corpus, not proof that

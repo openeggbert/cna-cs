@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "description": "Authoritative metadata for every deterministic CNA/XNA behavior observation. Probe and category totals are derived from this file; scripts must not duplicate them.",
-  "combinedExpectedObservationCount": 469,
+  "combinedExpectedObservationCount": 470,
   "combinedSnapshotFilename": "xna-all.txt",
   "candidateCombinedSnapshotFilename": "cna-all.txt",
   "probes": [
@@ -111,7 +111,7 @@
     {
       "id": "deviceLifecycle",
       "displayName": "DeviceLifecycle",
-      "expectedObservationCount": 4,
+      "expectedObservationCount": 5,
       "observationPrefixes": ["devicelifecycle."]
     }
   ]

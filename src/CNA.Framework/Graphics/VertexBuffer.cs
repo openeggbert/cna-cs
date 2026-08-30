@@ -19,11 +19,17 @@ namespace CNA.Graphics;
 /// typed route unbound; the "no readback at all" half of the old note was correct only about raw
 /// bytes.
 ///
-/// <see cref="SetData{T}(int,T[],int,int,int)"/> uses <c>cna_vertex_buffer_set_data_raw</c>, a real
-/// raw-upload route, but one with no offset parameter at all (it always writes from native vertex
-/// zero), so a nonzero <c>offsetInBytes</c> throws. The same asymmetry applies to readback: the
-/// header states that native readback begins at vertex zero and <c>start_index</c> selects the
-/// *caller's* array window, so a nonzero <c>offsetInBytes</c> throws there too.
+/// <see cref="SetData{T}(int,T[],int,int,int)"/> uses the raw-upload family. A nonzero
+/// <c>offsetInBytes</c> goes through <c>cna_vertex_buffer_set_data_raw_at</c>, which indexes the
+/// buffer the way XNA's <c>offsetInBytes</c> does; the note that once stood here saying a nonzero
+/// offset throws described a route that had already been added. Since CNA 0.19.0 the same is true
+/// of <c>SetDataOptions</c>: <c>cna_vertex_buffer_set_data_raw_with_options</c> and its windowed
+/// twin carry <c>Discard</c>/<c>NoOverwrite</c> on the raw route too, so only genuinely
+/// unrepresentable scatter/gather transfers still refuse.
+///
+/// Readback keeps the asymmetry the header describes: native readback begins at vertex zero and
+/// <c>start_index</c> selects the *caller's* array window, so a nonzero <c>offsetInBytes</c> throws
+/// there.
 /// </summary>
 public class VertexBuffer : IDisposable
 {
@@ -150,18 +156,11 @@ public class VertexBuffer : IDisposable
             && elementSize == VertexDeclaration.VertexStride
             && typedSource is not null;
 
-        if (options != 0 && !canUseOptionedTypedRoute)
-        {
-            throw new NotSupportedException(
-                "The CNA C ABI carries SetDataOptions only on its built-in typed vertex upload. " +
-                "Raw/custom-stride and buffer-offset vertex uploads cannot represent Discard or NoOverwrite.");
-        }
-
         System.Runtime.InteropServices.GCHandle pinned =
             System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
         try
         {
-            if (options != 0)
+            if (options != 0 && canUseOptionedTypedRoute)
             {
                 var transfer = new CnaVertexBufferTransfer
                 {
@@ -192,7 +191,7 @@ public class VertexBuffer : IDisposable
                 }
 
                 nativeVertexCount = (ulong)(copiedByteCount / nativeStride);
-                UploadRaw(offsetInBytes, bytePtr, (ulong)copiedByteCount, nativeVertexCount, nativeStride);
+                UploadRaw(offsetInBytes, bytePtr, (ulong)copiedByteCount, nativeVertexCount, nativeStride, options);
                 return;
             }
 
@@ -213,7 +212,7 @@ public class VertexBuffer : IDisposable
             nativeVertexCount = (ulong)elementCount;
             UploadRaw(
                 offsetInBytes, bytePtr, (ulong)((long)elementCount * elementSize),
-                nativeVertexCount, nativeStride);
+                nativeVertexCount, nativeStride, options);
         }
         finally
         {
@@ -221,20 +220,38 @@ public class VertexBuffer : IDisposable
         }
     }
 
+    /// <summary>
+    /// The raw upload, in the four shapes the ABI offers: window or whole buffer, with or without a
+    /// streaming hint.
+    ///
+    /// The optioned pair arrived in CNA 0.19.0. Before it, a non-<c>None</c> option on any raw or
+    /// custom-stride upload was refused outright, because forwarding a route that silently dropped
+    /// <c>Discard</c>/<c>NoOverwrite</c> would have been worse than saying so. Both are now
+    /// forwarded, and the unoptioned route is still used for <c>None</c> so the common path keeps
+    /// the shape it always had.
+    /// </summary>
     private unsafe void UploadRaw(
         int offsetInBytes,
         void* data,
         ulong dataByteCount,
         ulong vertexCount,
-        int vertexStride)
+        int vertexStride,
+        uint options)
     {
         // A nonzero offset uses the ABI's buffer-window route; zero replaces from vertex zero.
-        CnaResult result = offsetInBytes == 0
-            ? Native.cna_vertex_buffer_set_data_raw(
-                new CnaHandle(NativeHandleValue), (byte*)data, dataByteCount, vertexCount, (uint)vertexStride)
-            : Native.cna_vertex_buffer_set_data_raw_at(
+        CnaResult result = (offsetInBytes == 0, options == 0) switch
+        {
+            (true, true) => Native.cna_vertex_buffer_set_data_raw(
+                new CnaHandle(NativeHandleValue), (byte*)data, dataByteCount, vertexCount, (uint)vertexStride),
+            (true, false) => Native.cna_vertex_buffer_set_data_raw_with_options(
+                new CnaHandle(NativeHandleValue), data, dataByteCount, vertexCount, (uint)vertexStride, options),
+            (false, true) => Native.cna_vertex_buffer_set_data_raw_at(
                 new CnaHandle(NativeHandleValue), (ulong)offsetInBytes, data, dataByteCount,
-                vertexCount, (uint)vertexStride);
+                vertexCount, (uint)vertexStride),
+            (false, false) => Native.cna_vertex_buffer_set_data_raw_at_with_options(
+                new CnaHandle(NativeHandleValue), (ulong)offsetInBytes, data, dataByteCount,
+                vertexCount, (uint)vertexStride, options),
+        };
 
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(SetData));

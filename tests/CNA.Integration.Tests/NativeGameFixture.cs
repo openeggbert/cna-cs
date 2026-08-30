@@ -42,6 +42,16 @@ public sealed class NativeGameFixture : IDisposable
         _game.RunOneFrame();
     }
 
+    /// <summary>
+    /// How many native <c>Update</c> callbacks the most recent <see cref="InsideAFrame"/> received.
+    ///
+    /// It is not always one. A fixed-timestep loop runs catch-up updates when more than one tick of
+    /// wall time has passed since the previous frame, and between two tests in this assembly a lot
+    /// of wall time can pass. A test that counts per-update effects must divide by this rather than
+    /// assume a single update, or it asserts how fast the host machine ran the suite.
+    /// </summary>
+    public int LastFrameUpdateCount { get; private set; }
+
     /// <summary>Runs <paramref name="body"/> inside a real frame and surfaces whatever it threw as
     /// a test failure, rather than letting it unwind through native -- an exception crossing an
     /// <c>UnmanagedCallersOnly</c> boundary is undefined behaviour.</summary>
@@ -53,12 +63,14 @@ public sealed class NativeGameFixture : IDisposable
         _game!.Pending = body;
         _game.Failure = null;
         _game.Ran = false;
+        _game.Updates = 0;
 
         for (int i = 0; i < 4 && !_game.Ran; i++)
         {
             _game.RunOneFrame();
         }
 
+        LastFrameUpdateCount = _game.Updates;
         _game.Pending = null;
 
         if (_game.Failure is { } failure)
@@ -88,10 +100,14 @@ public sealed class NativeGameFixture : IDisposable
 
         public bool Ran { get; set; }
 
+        public int Updates { get; set; }
+
         /// <summary>Never calls <c>Exit</c>: the game outlives every individual test, and exiting
         /// would end the run for whatever comes next.</summary>
         protected override void Update(GameTime gameTime)
         {
+            Updates++;
+
             if (Pending is { } body && !Ran)
             {
                 Ran = true;

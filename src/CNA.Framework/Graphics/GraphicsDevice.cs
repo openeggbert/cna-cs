@@ -44,9 +44,90 @@ public class GraphicsDevice : IDisposable
     /// </summary>
     protected internal nint NativeGameHandleValue { get; }
 
+    /// <summary>
+    /// Set only for a device this object created and owns. Null for the ordinary case, where the
+    /// device belongs to a game and is borrowed for the duration of a lifecycle callback.
+    ///
+    /// This is the whole of the difference between the two kinds. Everything else -- resource
+    /// creation, state, drawing -- goes through <see cref="ResolveNativeDeviceHandle"/> and cannot
+    /// tell them apart, which is what the header promises: the created handle "is accepted
+    /// everywhere a borrowed device handle is".
+    /// </summary>
+    private readonly NativeResourceHandle? _ownedDevice;
+
     protected internal GraphicsDevice(nint nativeGameHandleValue)
     {
         NativeGameHandleValue = nativeGameHandleValue;
+    }
+
+    /// <summary>
+    /// Creates an independent device the caller owns, matching real XNA's
+    /// <c>GraphicsDevice(GraphicsAdapter, GraphicsProfile, PresentationParameters)</c> constructor.
+    ///
+    /// Every other device in this binding is a game's, borrowed for one callback. CNA 0.19.0 added
+    /// <c>cna_graphics_device_create</c>, which takes XNA's own three constructor arguments and
+    /// hands back a handle the caller destroys. Several may exist at once, one may be destroyed
+    /// while another is live, and -- unlike a game's resources -- resources created on it do not
+    /// gate <c>cna_game_destroy</c>, because they belong to this device and are released with it.
+    ///
+    /// Before that route existed this constructor could only borrow the running game's device and
+    /// overwrite its presentation parameters, or refuse when no game was running. Both were wrong:
+    /// XNA's constructor creates a device, and a second XNA device does not disturb the first.
+    ///
+    /// The device is not attached to a game, so <see cref="NativeGameHandleValue"/> stays zero and
+    /// nothing here may resolve through the game route.
+    ///
+    /// <b>Do not call this while a game is running.</b> On the OPENGLES3 backend
+    /// <c>cna_graphics_device_create</c> makes its own GL context current and does not restore the
+    /// game's, so the game's next frame fails in <c>SwapBuffers</c> with "the specified window has
+    /// not been made current". Measured with creation alone, before any use and without destroying
+    /// the second device. This constructor is usable for a game-free device today; the mixture is
+    /// an open upstream item in <c>docs/native-behavior-blockers.md</c>, not something this binding
+    /// can work around.
+    /// </summary>
+    public GraphicsDevice(
+        GraphicsAdapter adapter,
+        GraphicsProfile graphicsProfile,
+        PresentationParameters presentationParameters)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        ArgumentNullException.ThrowIfNull(presentationParameters);
+
+        CnaPresentationParameters parameters = presentationParameters.ToNative();
+        CnaResult result = Native.cna_graphics_device_create(
+            adapter.AdapterIndex, (uint)graphicsProfile, in parameters, out CnaHandle device);
+        CnaException.ThrowIfFailed(result, nameof(GraphicsDevice));
+
+        _ownedDevice = new NativeResourceHandle(
+            device.AsNint, handle => Native.cna_graphics_device_destroy(new CnaHandle(handle)).IsSuccess());
+    }
+
+    /// <summary>Whether this device was created by <see cref="GraphicsDevice(GraphicsAdapter,
+    /// GraphicsProfile, PresentationParameters)"/> rather than borrowed from a game. Callers need
+    /// this to know who is responsible for destroying it.</summary>
+    public bool IsCallerOwned => _ownedDevice is not null;
+
+    /// <summary>
+    /// Whether this build of CNA has its CNAEXT engine layer.
+    ///
+    /// Static, and not a device query, because the answer is a property of the linked library. The
+    /// engine layer's whole surface is exported by every build and answers <c>NOT_SUPPORTED</c>
+    /// when the layer is absent, so a resolved symbol proves nothing and this is what to ask.
+    /// </summary>
+    public static bool IsCnaEngineLayerAvailable()
+    {
+        CnaResult result = Native.cna_graphics_ext_is_available(out byte available);
+        CnaException.ThrowIfFailed(result, nameof(IsCnaEngineLayerAvailable));
+        return available != 0;
+    }
+
+    /// <summary>The engine layer's revision, or zero when this build has no engine layer. A
+    /// revision marker rather than an ABI compatibility promise.</summary>
+    public static int CnaEngineLayerVersion()
+    {
+        CnaResult result = Native.cna_engine_layer_get_version(out int version);
+        CnaException.ThrowIfFailed(result, nameof(CnaEngineLayerVersion));
+        return version;
     }
 
     /// <summary>
@@ -64,6 +145,15 @@ public class GraphicsDevice : IDisposable
     /// own.</summary>
     internal CnaHandle ResolveNativeDeviceHandle()
     {
+        // A caller-owned device has no game to resolve through, and its handle does not expire at a
+        // callback boundary -- that lifetime rule is a property of the borrow, not of devices.
+        if (_ownedDevice is { } owned)
+        {
+            var handle = new CnaHandle(owned.DangerousGetHandle());
+            GC.KeepAlive(this);
+            return handle;
+        }
+
         CnaResult result = Native.cna_game_get_graphics_device(new CnaHandle(NativeGameHandleValue), out CnaHandle device);
         CnaException.ThrowIfFailed(result, "cna_game_get_graphics_device");
         return device;
@@ -1154,10 +1244,15 @@ public class GraphicsDevice : IDisposable
     /// Disposes the device, matching real XNA where <c>GraphicsDevice</c> is
     /// <see cref="IDisposable"/>.
     ///
-    /// Releases the event subscriptions this object took, then asks native to dispose. The device
-    /// handle itself is <em>not</em> released here: it is the game's, resolved through
+    /// Releases the event subscriptions this object took, then asks native to dispose. A borrowed
+    /// device's handle is <em>not</em> released here: it is the game's, resolved through
     /// <see cref="ResolveNativeDeviceHandle"/> rather than owned, and destroying it would pull the
     /// device out from under a game that is still running.
+    ///
+    /// A device created through
+    /// <see cref="GraphicsDevice(GraphicsAdapter, GraphicsProfile, PresentationParameters)"/> is
+    /// the caller's, so this destroys it -- after the native dispose, in that order, because the
+    /// dispose call needs the handle it is about to release.
     /// </summary>
     public void Dispose()
     {
@@ -1184,6 +1279,8 @@ public class GraphicsDevice : IDisposable
         // Deliberately unchecked: Dispose must not throw, and a device already torn down by its
         // game makes this an ordinary, harmless failure.
         Native.cna_graphics_device_dispose(ResolveNativeDeviceHandle());
+
+        _ownedDevice?.Dispose();
     }
 
     /// <summary>

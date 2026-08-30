@@ -217,19 +217,125 @@ public class RenderTarget2D : Texture2D
     }
 
     /// <summary>
-    /// Raised when a device reset discards this target's contents.
+    /// Raised when a renderer loses and recreates its device, discarding this target's contents.
     ///
-    /// <c>render_target.h</c> has no per-target subscription route -- unlike
-    /// <c>vertex_resources.h</c>/<c>index_resources.h</c>, which do. So this is currently inert,
-    /// and says so rather than pretending: <see cref="IsContentLost"/> is the real signal, and a
-    /// game that needs to react polls it after a reset. Closing this needs a
-    /// <c>cna_render_target_subscribe_content_lost</c> upstream.
+    /// A real native subscription since CNA 0.19.0, which added the
+    /// <c>cna_render_target_subscribe_content_lost</c> this event's previous doc comment asked for.
+    /// It replaces an inert <c>add</c>/<c>remove</c> pair that stored handlers and could never call
+    /// them.
+    ///
+    /// <c>render_target.h</c> is explicit that only a renderer family which can genuinely lose a
+    /// device reports one -- it names <c>DIRECTX9</c>, <c>DIRECT2D</c> and <c>SKIA</c>, and
+    /// upstream is removing <c>SKIA</c> -- and that a caller-initiated <c>Reset</c> is not loss. On
+    /// every other renderer the subscription is valid and silent, which is the renderer's answer
+    /// rather than this binding's.
+    ///
+    /// Taken on the first <c>+=</c> and held until <see cref="Dispose"/>, for the reason
+    /// <see cref="GraphicsDeviceManager.DeviceCreated"/> records.
     /// </summary>
     public event EventHandler<EventArgs>? ContentLost
     {
-        add => _contentLost += value;
-        remove => _contentLost -= value;
+        add
+        {
+            lock (_contentLostLock)
+            {
+                ObjectDisposedException.ThrowIf(_contentLostDisposed, this);
+
+                _contentLostBridge ??= SubscribeContentLost(
+                    NativeHandleValue, this, () => _contentLost?.Invoke(this, EventArgs.Empty));
+
+                _contentLost += value;
+            }
+        }
+        remove
+        {
+            lock (_contentLostLock)
+            {
+                _contentLost -= value;
+            }
+        }
     }
 
+    private NativeEventBridge? _contentLostBridge;
     private EventHandler<EventArgs>? _contentLost;
+    private bool _contentLostDisposed;
+    private readonly object _contentLostLock = new();
+
+    /// <summary>Releases the subscription before the base releases the render-target handle it is
+    /// registered against -- the other order would leave native able to call back into a context
+    /// whose owner is gone. Any handler failure captured but never surfaced is rethrown last.</summary>
+    protected override void Dispose(bool disposing)
+    {
+        Exception? pending = ReleaseContentLostSubscription();
+        base.Dispose(disposing);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
+    }
+
+    private Exception? ReleaseContentLostSubscription()
+    {
+        NativeEventBridge? bridge;
+        lock (_contentLostLock)
+        {
+            _contentLostDisposed = true;
+            bridge = _contentLostBridge;
+            _contentLostBridge = null;
+            _contentLost = null;
+        }
+
+        return DrainContentLostBridge(bridge);
+    }
+
+    /// <summary>
+    /// The subscribe/unsubscribe pair, exposed as <c>internal static</c> over a plain
+    /// <see langword="nint"/> for the reason <see cref="GetRenderTargetProperties"/> records:
+    /// CNA.XnaCompat's parallel render targets need the same route and cannot name a
+    /// <c>CNA.Interop</c> type. The native callback is <c>void(handle, void* context)</c>, so it
+    /// goes through <see cref="NativeEventBridge.SubscribeWithSender"/>; the handle it carries is
+    /// ignored because the handler is already bound to one object.
+    ///
+    /// One route serves both 2D and cube targets: <c>render_target.h</c> takes "an owned 2D or cube
+    /// render-target handle".
+    /// </summary>
+    internal static NativeEventBridge SubscribeContentLost(
+        nint nativeHandleValue,
+        object lifetimeOwner,
+        Action dispatch) =>
+        NativeEventBridge.SubscribeWithSender(
+            dispatch,
+            (callback, context) =>
+            {
+                CnaResult result = Native.cna_render_target_subscribe_content_lost(
+                    new CnaHandle(nativeHandleValue), callback, context, out CnaHandle registration);
+                GC.KeepAlive(lifetimeOwner);
+                CnaException.ThrowIfFailed(result, nameof(ContentLost));
+                return registration;
+            },
+            registration => Native.cna_render_target_unsubscribe_content_lost(registration));
+
+    /// <summary>Unsubscribes and returns a handler failure the bridge captured but never surfaced,
+    /// so the caller can rethrow it after its own teardown rather than in the middle of it.</summary>
+    internal static Exception? DrainContentLostBridge(NativeEventBridge? bridge)
+    {
+        if (bridge is null)
+        {
+            return null;
+        }
+
+        Exception? pending = null;
+        try
+        {
+            bridge.ThrowPendingException();
+        }
+        catch (Exception ex)
+        {
+            pending = ex;
+        }
+
+        bridge.Dispose();
+        return pending;
+    }
 }

@@ -126,19 +126,59 @@ public class RenderTargetCube : TextureCube
     }
 
     /// <summary>
-    /// Raised when a device reset discards this target's contents.
+    /// Raised when a renderer loses and recreates its device, discarding this target's contents.
     ///
-    /// <c>render_target.h</c> has no per-target subscription route -- unlike
-    /// <c>vertex_resources.h</c>/<c>index_resources.h</c>, which do. So this is currently inert,
-    /// and says so rather than pretending: <see cref="IsContentLost"/> is the real signal, and a
-    /// game that needs to react polls it after a reset. Closing this needs a
-    /// <c>cna_render_target_subscribe_content_lost</c> upstream.
+    /// A real native subscription since CNA 0.19.0. One route serves both target shapes, so this
+    /// goes through <see cref="RenderTarget2D.SubscribeContentLost"/>; see that event for which
+    /// renderer families can raise it and why the rest are silent.
     /// </summary>
     public event EventHandler<EventArgs>? ContentLost
     {
-        add => _contentLost += value;
-        remove => _contentLost -= value;
+        add
+        {
+            lock (_contentLostLock)
+            {
+                ObjectDisposedException.ThrowIf(_contentLostDisposed, this);
+
+                _contentLostBridge ??= RenderTarget2D.SubscribeContentLost(
+                    NativeHandleValue, this, () => _contentLost?.Invoke(this, EventArgs.Empty));
+
+                _contentLost += value;
+            }
+        }
+        remove
+        {
+            lock (_contentLostLock)
+            {
+                _contentLost -= value;
+            }
+        }
     }
 
+    private NativeEventBridge? _contentLostBridge;
     private EventHandler<EventArgs>? _contentLost;
+    private bool _contentLostDisposed;
+    private readonly object _contentLostLock = new();
+
+    /// <summary>Releases the subscription before the base releases the render-target handle it is
+    /// registered against.</summary>
+    protected override void Dispose(bool disposing)
+    {
+        NativeEventBridge? bridge;
+        lock (_contentLostLock)
+        {
+            _contentLostDisposed = true;
+            bridge = _contentLostBridge;
+            _contentLostBridge = null;
+            _contentLost = null;
+        }
+
+        Exception? pending = RenderTarget2D.DrainContentLostBridge(bridge);
+        base.Dispose(disposing);
+
+        if (pending is not null)
+        {
+            throw pending;
+        }
+    }
 }

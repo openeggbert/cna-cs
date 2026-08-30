@@ -713,6 +713,29 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static unsafe partial CnaResult cna_render_target_get_info(CnaHandle renderTarget, ref CnaRenderTargetInfo outInfo);
 
+    /// <summary>
+    /// <c>render_target.h</c>. The per-target ContentLost subscription this binding recorded as
+    /// missing upstream, in the exact words "closing this needs a
+    /// <c>cna_render_target_subscribe_content_lost</c> upstream". CNA 0.19.0 has it.
+    ///
+    /// Its callback is <c>void(handle, void* context)</c> -- two arguments, the same shape as the
+    /// vertex/index buffer ContentLost callbacks -- so it goes through
+    /// <c>NativeEventBridge.SubscribeWithSender</c> rather than the game/audio one.
+    ///
+    /// The header is explicit that only a renderer family which can genuinely lose a device ever
+    /// raises it -- it names <c>DIRECTX9</c>, <c>DIRECT2D</c> and <c>SKIA</c>, and upstream is
+    /// removing <c>SKIA</c>, so that set shrinks rather than grows -- and that a caller-initiated
+    /// reset does not. A subscription on any other renderer is valid and silent, which is a real
+    /// answer rather than the inert managed event it replaces. Nothing here depends on which
+    /// families those are.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_subscribe_content_lost(
+        CnaHandle renderTarget, nint callback, nint context, out CnaHandle outRegistration);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_unsubscribe_content_lost(CnaHandle registration);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_render_target_destroy(CnaHandle renderTarget);
 
@@ -2406,8 +2429,48 @@ internal static partial class Native
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_set_reference_stencil(CnaHandle device, int stencil);
 
+    /// <summary>
+    /// <c>graphics_ext.h</c>. Whether this CNA build has its CNAEXT engine layer.
+    ///
+    /// Worth binding on its own, before any of the 812 engine-layer routes: every one of them is
+    /// exported by every build, and the ones that need a native engine-layer object return
+    /// <c>NOT_SUPPORTED</c> when the layer is absent. Upstream did that deliberately, so that the
+    /// exported ABI has one shape regardless of build options and the recorded baseline describes
+    /// something. The consequence for a binding is that a resolved symbol is not evidence of a
+    /// capability, and this is the route that is.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_ext_is_available(out byte outAvailable);
+
+    /// <summary><c>engine_layer.h</c>. The engine layer's revision, or zero when absent. A
+    /// revision marker, not an ABI compatibility promise -- it exists so a header and a library
+    /// from different builds can be told apart.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_engine_layer_get_version(out int outVersion);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_present(CnaHandle device);
+
+    /// <summary>
+    /// <c>graphics_device.h</c>, added in CNA 0.19.0. The only route in this ABI that *creates* a
+    /// device rather than lending out a game's, which is what real XNA's public
+    /// <c>GraphicsDevice</c> constructor does.
+    ///
+    /// The header states the properties that make it usable: several may exist at once, the handle
+    /// is accepted everywhere a borrowed one is, resources remember which device made them and
+    /// mixing them is refused, and resources on a caller-created device do not gate
+    /// <c>cna_game_destroy</c>. This is what closes the corpus's
+    /// <c>not-run(CNA-ABI-has-one-game-owned-device)</c> cross-device observation.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_create(
+        uint adapterIndex,
+        uint graphicsProfile,
+        in CnaPresentationParameters parameters,
+        out CnaHandle outGraphicsDevice);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_graphics_device_destroy(CnaHandle device);
 
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_graphics_device_dispose(CnaHandle device);
@@ -2915,6 +2978,42 @@ internal static partial class Native
         ulong dataByteCount,
         ulong vertexCount,
         uint vertexStride);
+
+    /// <summary>
+    /// <c>vertex_resources.h</c>. The optioned form of <see cref="cna_vertex_buffer_set_data_raw"/>,
+    /// added in CNA 0.19.0.
+    ///
+    /// Until it existed, <c>SetDataOptions</c> reached the ABI only through the built-in typed
+    /// upload, so this binding refused every non-<c>None</c> raw or custom-stride upload rather
+    /// than dropping the hint. That refusal is no longer correct.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertex_buffer_set_data_raw_with_options(
+        CnaHandle vertexBuffer,
+        void* data,
+        ulong dataByteCount,
+        ulong vertexCount,
+        uint vertexStride,
+        uint options);
+
+    /// <summary>
+    /// <c>vertex_resources.h</c>. The optioned form of
+    /// <see cref="cna_vertex_buffer_set_data_raw_at"/>, added in CNA 0.19.0.
+    ///
+    /// The header records a deviation about cost rather than result: a windowed upload cannot keep
+    /// <c>NoOverwrite</c>'s promise that nothing the GPU may still be reading is touched, so the
+    /// renderer receives the whole buffer. Bytes land where XNA puts them; the transfer is merely
+    /// larger. That is materially different from the previous behaviour, which was to refuse.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_vertex_buffer_set_data_raw_at_with_options(
+        CnaHandle vertexBuffer,
+        ulong bufferOffsetInBytes,
+        void* data,
+        ulong dataByteCount,
+        ulong vertexCount,
+        uint vertexStride,
+        uint options);
 
     /// <summary>
     /// <c>vertex_resources.h</c>. Raw readback from a window of the buffer.

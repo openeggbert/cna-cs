@@ -200,9 +200,13 @@ public class SoundEffectInstance : IDisposable
     }
 
     /// <summary>Routes XNA's listener-array overload through the native ABI as one atomic request.
-    /// The current runtime deliberately reports NotSupported for every count other than one; doing
-    /// so is materially different from repeatedly overwriting one instance's single-listener
-    /// spatial state.</summary>
+    ///
+    /// CNA's C ABI carried the whole array from 0.6.0, but until CABI-6 the implementation behind it
+    /// refused every count other than one. CNA 0.19.0 accepts any count of one or more and applies
+    /// the dominant listener, which is what XNA does; a runtime that still refuses reports
+    /// <see cref="CnaResult.NotSupported"/> and is surfaced as <see cref="NotSupportedException"/>
+    /// rather than approximated. Either way this never loops over the array applying one listener
+    /// at a time, which would silently retain only the last.</summary>
     internal unsafe void Apply3D(AudioListener[] listeners, AudioEmitter emitter)
     {
         ArgumentNullException.ThrowIfNull(listeners);
