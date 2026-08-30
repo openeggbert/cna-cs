@@ -26,7 +26,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                return;
+            }
+
             VertexPositionColor[] written = [Vertex(1f), Vertex(2f), Vertex(3f), Vertex(4f)];
 
             using var buffer = new VertexBuffer(
@@ -55,7 +59,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                return;
+            }
+
             VertexPositionColor[] original = [Vertex(1f), Vertex(2f), Vertex(3f), Vertex(4f)];
             int stride = VertexPositionColor.VertexDeclaration.VertexStride;
 
@@ -86,7 +94,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                return;
+            }
+
             VertexPositionColor[] written = [Vertex(5f), Vertex(6f)];
             int stride = VertexPositionColor.VertexDeclaration.VertexStride;
 
@@ -117,7 +129,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                return;
+            }
+
 
             // Unbind first, and assert that the unbind worked, rather than asserting the device
             // arrived unbound. Every test in this assembly shares one game and one device, and
@@ -158,7 +174,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                return;
+            }
+
             // Distinct colours, built byte-wise. `Vertex(float)` cannot be used here: its
             // `new Color((int)x, 0, 0, 255)` binds to the float overload, so every vertex it makes
             // has the same colour and the untouched-gap assertion below would hold vacuously.
@@ -208,7 +228,11 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                return;
+            }
+
             ushort[] original = [10, 11, 12, 13];
 
             using var buffer = new IndexBuffer(

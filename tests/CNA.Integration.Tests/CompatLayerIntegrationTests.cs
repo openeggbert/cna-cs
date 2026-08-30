@@ -258,7 +258,8 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
                     game.GraphicsDevice,
                     global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.Texture3D))
             {
-                throw Xunit.Sdk.SkipException.ForSkip("The active renderer does not support Texture3D.");
+                output.WriteLine("NOT EXERCISED: the active renderer does not support Texture3D.");
+                return;
             }
 
             using var texture = new Texture3D(game.GraphicsDevice, 1, 1, 1, false, SurfaceFormat.Color);
@@ -542,7 +543,8 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
                     game.GraphicsDevice,
                     global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.ThreeD))
             {
-                throw Xunit.Sdk.SkipException.ForSkip("The active renderer does not support 3D buffers.");
+                output.WriteLine("NOT EXERCISED: the active renderer does not support 3D buffers.");
+                return;
             }
 
             var vertices = new[]

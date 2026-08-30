@@ -28,6 +28,43 @@ public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fix
     /// <summary>Input state readers. All three are pure reads of a device snapshot, so they work
     /// headless -- the values are meaningless without a device, but a crash or a garbled struct is
     /// not.</summary>
+    /// <summary>
+    /// The capability gate agrees with the device for every capability, and says which are absent.
+    ///
+    /// Twenty tests decide whether to run by asking this, so a gate that answered wrongly would
+    /// either skip work that could have run or run work the renderer cannot do -- and the second
+    /// reads as a broken binding. Every capability is checked rather than a sample, because the gate
+    /// is a straight forwarding call and the way a forwarding call breaks is one enum value, not all
+    /// of them.
+    ///
+    /// The list of absent capabilities is printed. On a renderer that lacks one, the tests gated on
+    /// it pass without exercising anything, and this is the line that says so.
+    /// </summary>
+    [NativeFact]
+    public void CapabilityGate_AgreesWithTheDeviceForEveryCapability()
+    {
+        fixture.InsideAFrameWithDevice(device =>
+        {
+            var absent = new List<string>();
+
+            foreach (GraphicsCapability capability in Enum.GetValues<GraphicsCapability>())
+            {
+                bool supported = device.SupportsCapability(capability);
+
+                Assert.Equal(supported, CnaNativeProbe.HasCapability(device, capability));
+
+                if (!supported)
+                {
+                    absent.Add(capability.ToString());
+                }
+            }
+
+            output.WriteLine(
+                $"renderer '{device.RendererName}' lacks {absent.Count} capability(ies)" +
+                (absent.Count == 0 ? "." : ": " + string.Join(", ", absent)));
+        });
+    }
+
     [NativeFact]
     public void Input_AllThreeDevices_ReportState()
     {

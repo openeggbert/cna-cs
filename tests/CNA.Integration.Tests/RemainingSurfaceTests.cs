@@ -25,7 +25,11 @@ public class RemainingSurfaceTests(ITestOutputHelper output, NativeGameFixture f
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.ThreeD);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                return;
+            }
+
             using var vertices = new DynamicVertexBuffer(
                 device, VertexPositionColor.VertexDeclaration, 3, BufferUsage.WriteOnly);
             vertices.SetData(

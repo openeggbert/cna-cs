@@ -109,7 +109,11 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.CustomEffects);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
+            {
+                return;
+            }
+
             ShaderDialect dialect = device.ShadingDialect;
             output.WriteLine($"renderer wants {dialect}");
 
@@ -158,7 +162,11 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.CustomEffects);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
+            {
+                return;
+            }
+
             using var effect = new Effect(device, "this is not a shader", "neither is this");
 
             bool valid = effect.IsSourceValid;
@@ -185,7 +193,11 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.CustomEffects);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
+            {
+                return;
+            }
+
             Assert.Throws<ArgumentException>(() => new Effect(device, string.Empty, "x"));
             Assert.Throws<ArgumentException>(() => new Effect(device, "x", string.Empty));
         });
@@ -209,7 +221,11 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            CnaNativeProbe.RequireCapability(device, GraphicsCapability.CustomEffects);
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
+            {
+                return;
+            }
+
             const string Vertex =
                 "#version 330 core\n" +
                 "uniform float u_scale;\n" +

@@ -22,21 +22,42 @@ public static class CnaNativeProbe
     /// <summary>The ABI version the loaded library reports, for tests that want to log it.</summary>
     public static uint NativeVersion { get; private set; }
 
-    /// <summary>Checks a capability on the fixture's already-live device. This must happen in the
-    /// test body, not in a Fact attribute constructor: xUnit constructs attributes during
-    /// discovery, and creating a probe game there mutates CNA's process-global platform state
-    /// before the first test runs.</summary>
-    public static void RequireCapability(
+    /// <summary>
+    /// Whether the fixture's live device has a capability, reporting the answer when it does not.
+    ///
+    /// The check has to happen in the test body rather than in a <c>Fact</c> attribute constructor:
+    /// xUnit builds attributes during discovery, and creating a probe game there mutates CNA's
+    /// process-global platform state before the first test runs.
+    ///
+    /// <b>It used to throw <c>SkipException.ForSkip</c>, which this runner reports as a failure.</b>
+    /// Measured, not assumed: a probe test throwing one is reported <c>[FAIL]</c> with the raw
+    /// marker <c>$XunitDynamicSkip$</c> as its message. Twenty call sites and two inline throws were
+    /// therefore latent false failures -- each one would report a defect the first time it met a
+    /// renderer it was written to tolerate, and "this renderer is 2D-only by design" would have read
+    /// as "the binding is broken".
+    ///
+    /// So the caller returns instead, and the reason is printed. <b>That makes such a test a silent
+    /// pass</b>, which is the honest cost of this runner and is why the reason goes to the output
+    /// rather than nowhere. The better end state is the one the mouse-cursor test reached -- assert
+    /// what must happen when the capability is absent, so both branches carry an assertion -- and
+    /// that is per-test work recorded in plan.md A7 rather than something this helper can do.
+    /// </summary>
+    public static bool HasCapability(
         CNA.Graphics.GraphicsDevice device,
-        CNA.Graphics.GraphicsCapability capability)
+        CNA.Graphics.GraphicsCapability capability,
+        Xunit.Abstractions.ITestOutputHelper? output = null)
     {
         ArgumentNullException.ThrowIfNull(device);
 
-        if (!device.SupportsCapability(capability))
+        if (device.SupportsCapability(capability))
         {
-            throw Xunit.Sdk.SkipException.ForSkip(
-                $"Renderer '{device.RendererName}' does not report {capability}, and this test needs it.");
+            return true;
         }
+
+        output?.WriteLine(
+            $"NOT EXERCISED: renderer '{device.RendererName}' does not report {capability}, " +
+            "and this test needs it.");
+        return false;
     }
 
     private static string? Detect()
@@ -95,7 +116,7 @@ public sealed class NativeFactAttribute : FactAttribute
 }
 
 /// <summary>
-/// Marks a native test that performs a live <see cref="CnaNativeProbe.RequireCapability"/> check
+/// Marks a native test that performs a live <see cref="CnaNativeProbe.HasCapability"/> check
 /// for a 3D pipeline in its body.
 ///
 /// For tests whose subject genuinely needs one -- a vertex or index buffer cannot even be created
@@ -107,7 +128,7 @@ public sealed class NativeFactAttribute : FactAttribute
 public sealed class Native3DFactAttribute() : NativeFactRequiringAttribute(CNA.Graphics.GraphicsCapability.ThreeD);
 
 /// <summary>
-/// Marks a native test that performs a live <see cref="CnaNativeProbe.RequireCapability"/> check
+/// Marks a native test that performs a live <see cref="CnaNativeProbe.HasCapability"/> check
 /// for a named capability in its body.
 ///
 /// General rather than one attribute per capability, because the list keeps growing as tests reach
