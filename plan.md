@@ -561,7 +561,29 @@ records authority, source-portability value, implementation status, and namespac
 
 - D2 (was). `cnb.h` load path: `ContentManager` extension that loads `.cnb` alongside `.xnb`, starting
   with textures and models, using the same ownership model as the XNB path.
-- D3. The post-process/render-pipeline objects, as an explicitly experimental namespace.
+- D3. **First vertical slice done.** `CNA.Graphics.Experimental.RenderTargetPool` and
+  `PooledRenderTarget`: CNA's engine-layer pool of reusable render targets, which is the object a
+  post-process chain is built on and the smallest piece of the engine layer with an ownership
+  contract worth testing.
+
+  `engine_layer.h` is 857 routes. Six are bound. The namespace is `CNA.Graphics.Experimental`, in
+  CNA's own vocabulary rather than `Microsoft.Xna.Framework` -- XNA has no such concept, and a game
+  allocating render targets by hand is what XNA offers.
+
+  **Ownership is the interesting part and it is tested, not documented.** The pool is owned; an
+  acquired target is a *borrowed view* released with `cna_render_target_destroy`, which does not
+  dispose the pool-owned target; and the pool refuses to reset while any view is outstanding. The
+  managed `RenderTarget2D` wrapper is non-owning (`RenderTarget2D.CreateBorrowed`, following
+  `Texture2D.CreateBorrowed`), so one handle never has two owners. Measured: reset while borrowed
+  answers `InvalidState`, and reset after release empties the pool.
+
+  **Availability is asked, not inferred.** Every engine-layer route resolves in every build and a
+  build without the engine layer answers `NOT_SUPPORTED` at call time, so symbol resolution proves
+  nothing. This build reports the engine layer available at version 2, so the supported path is
+  genuinely exercised: a pooled target is bound, cleared to `0,128,255`, and read back as exactly
+  that.
+
+- D3 (was). The post-process/render-pipeline objects, as an explicitly experimental namespace.
 - D4. Everything else stays inventory-only until D1-D3 have shipped and been measured.
 
 ### E. Template

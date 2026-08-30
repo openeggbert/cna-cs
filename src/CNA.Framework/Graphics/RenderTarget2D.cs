@@ -108,6 +108,17 @@ public class RenderTarget2D : Texture2D
     /// <summary>Matches <c>cna_render_target_destroy</c> exactly (<c>render_target.h:277</c>).
     /// <c>internal static</c>, not just this override's body -- see this class's own doc comment
     /// for why CNA.XnaCompat's parallel <c>RenderTarget2D</c> needs to call it directly too.</summary>
+    /// <summary>Wraps a render-target handle whose real owner is something else, following
+    /// <see cref="Texture2D.CreateBorrowed"/>. The engine layer's target pool hands out exactly such
+    /// views: the pool owns the target, and the view is released separately.</summary>
+    private RenderTarget2D(GraphicsDevice graphicsDevice, nint nativeHandleValue, bool ownsHandle)
+        : base(graphicsDevice, nativeHandleValue, ownsHandle)
+    {
+    }
+
+    internal static RenderTarget2D CreateBorrowed(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>
+        new(graphicsDevice, nativeHandleValue, ownsHandle: false);
+
     internal static bool ReleaseNativeRenderTarget(nint handleValue) =>
         Native.cna_render_target_destroy(new CnaHandle(handleValue)).IsSuccess();
 

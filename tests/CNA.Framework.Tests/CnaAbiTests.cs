@@ -103,11 +103,11 @@ public class CnaAbiTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        // 875: five from A3/A4/A5, two for A1, and fourteen for D2's first CNB slice -- the
-        // document read path plus the minimal writer a test uses to author its own fixture.
+        // 881: five from A3/A4/A5, two for A1, fourteen for D2's first CNB slice, and six for D3's
+        // engine-layer render target pool.
         // The literal is a tripwire, not a fact about CNA -- it exists so that adding an import is
         // a deliberate act rather than something that happens on the way to something else.
-        Assert.Equal(875, declared.Length);
+        Assert.Equal(881, declared.Length);
         Assert.Equal(declared, CnaNativeAbiPolicy.RequiredSymbols);
     }
 

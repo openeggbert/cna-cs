@@ -2264,6 +2264,28 @@ internal static partial class Native
     // CNB: CNA's own binary content container. The read path first -- a document is parsed, asked
     // what it is, and destroyed. The writer routes below exist so a test can author a fixture
     // through CNA's own encoder instead of vendoring somebody's content.
+    // Engine layer: the pooled render targets a post-process chain is built on. Present in every
+    // build; a build without the engine layer answers NOT_SUPPORTED rather than failing to resolve.
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_pool_create(CnaHandle graphicsDevice, out CnaHandle outPool);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_pool_destroy(CnaHandle pool);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_pool_acquire(
+        CnaHandle pool, int width, int height, uint format, uint depthFormat, int slot,
+        out CnaHandle outRenderTarget);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_pool_reset(CnaHandle pool);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_pool_get_target_count(CnaHandle pool, out ulong outCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_render_target_pool_get_estimated_bytes(CnaHandle pool, out ulong outBytes);
+
     [LibraryImport(LibraryName)]
     internal static partial CnaResult cna_cnb_read_limits_init(ref CnaCnbReadLimits limits);
 
