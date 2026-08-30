@@ -132,11 +132,21 @@ public sealed class ContentReader : BinaryReader
     public T ReadObject<T>(T existingInstance) =>
         InnerReadObject(existingInstance, existingInstance is not null);
 
-    /// <summary>Reads a raw object body with an explicitly selected type reader.</summary>
+    /// <summary>
+    /// Reads an object using the supplied reader or the stream-selected reader, as appropriate.
+    ///
+    /// This branched on nothing and always read the body inline, which is right for a value type
+    /// and wrong for a reference type: XNA's own <c>ReadObjectInternal</c> takes the polymorphic
+    /// route for those, and the object it reads carries a type-index prefix. Reading it inline
+    /// consumes the prefix as data and misreads every byte after it. Nothing had caught it because
+    /// this overload is reached from collection readers, and there were none.
+    /// </summary>
     public T ReadObject<T>(ContentTypeReader typeReader)
     {
         ArgumentNullException.ThrowIfNull(typeReader);
-        return ReadAndRecord<T>(typeReader, default!, hasExistingInstance: false);
+        return typeReader.TargetType.IsValueType
+            ? ReadAndRecord<T>(typeReader, default!, hasExistingInstance: false)
+            : InnerReadObject<T>(default!, hasExistingInstance: false);
     }
 
     /// <summary>Reads an object using the supplied reader or the stream-selected reader as appropriate.</summary>
@@ -146,8 +156,14 @@ public sealed class ContentReader : BinaryReader
 
         // Reference-type objects carry their reader tag in the stream. Value types are written
         // directly by their known reader, which is why XNA's overload branches here.
+        //
+        // Whether there is an existing instance is a runtime question about the boxed value, not a
+        // compile-time one about T: XNA writes `if (existingInstance != null)`, and a caller that
+        // passes null through a `T existingInstance` parameter -- which is exactly what the
+        // reflective reader does for every writable member -- has no existing instance. Hardcoding
+        // true here made the reader assert that an Int32 read had populated a null.
         return typeReader.TargetType.IsValueType
-            ? ReadAndRecord(typeReader, existingInstance, hasExistingInstance: true)
+            ? ReadAndRecord(typeReader, existingInstance, existingInstance is not null)
             : InnerReadObject(existingInstance, existingInstance is not null);
     }
 

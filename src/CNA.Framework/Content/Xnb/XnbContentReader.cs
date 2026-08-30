@@ -147,12 +147,58 @@ internal sealed class XnbContentReader
         }
 
         string name = _typeReaderNames[index - 1];
-        if (!Readers.TryGetValue(name, out Func<XnbContentReader, object?>? read))
+        return Resolve(name).Read(this);
+    }
+
+    /// <summary>
+    /// Finds the reader for a normalised type-reader name, across the three sources: the readers
+    /// this file's own table names for the composite assets it builds, the built-in value readers,
+    /// and the generic built-ins resolved from their element type names.
+    /// </summary>
+    private static XnbBuiltInReader Resolve(string name)
+    {
+        if (Readers.TryGetValue(name, out Func<XnbContentReader, object?>? composite))
         {
-            throw new ContentLoadException($"This .xnb file uses content type reader '{name}', which this project's .xnb reader does not (yet) support.");
+            return new XnbBuiltInReader(composite, TargetIsValueType: false);
         }
 
-        return read(this);
+        if (XnbBuiltInReaders.ByReaderName.TryGetValue(name, out XnbBuiltInReader builtIn))
+        {
+            return builtIn;
+        }
+
+        if (XnbGenericReaders.TryResolve(name) is { } generic)
+        {
+            return generic;
+        }
+
+        throw new ContentLoadException(
+            $"This .xnb file uses content type reader '{name}', which this project's .xnb reader " +
+            "does not (yet) support.");
+    }
+
+    /// <summary>
+    /// Reads one collection element the way XNA's <c>ReadObject&lt;T&gt;(elementReader)</c> does:
+    /// inline when the element's target is a value type, through the polymorphic type-index route
+    /// when it is not.
+    ///
+    /// This is the distinction that decides a collection's byte layout, and getting it backwards
+    /// misreads every element after the first rather than failing at the mistake.
+    /// </summary>
+    internal object? ReadElement(XnbBuiltInReader element) =>
+        element.TargetIsValueType ? element.Read(this) : ReadObject();
+
+    /// <summary>The 32-bit count a collection reader starts with, bounded so a corrupt file reports
+    /// itself instead of trying to allocate its way out.</summary>
+    internal int ReadCollectionCount(string what)
+    {
+        int count = _reader.ReadInt32();
+        if (count is < 0 or > 1_000_000)
+        {
+            throw new ContentLoadException($"Corrupt .xnb file: implausible {what} length {count}.");
+        }
+
+        return count;
     }
 
     internal T ReadObject<T>() where T : class => RequireType<T>(ReadObject(), "an object read from the stream");
@@ -342,6 +388,97 @@ internal sealed class XnbContentReader
         _reader.ReadSingle(), _reader.ReadSingle(), _reader.ReadSingle(), _reader.ReadSingle());
 
     internal BoundingSphere ReadBoundingSphere() => new(ReadVector3(), _reader.ReadSingle());
+
+    // -- the built-in value formats -------------------------------------------------------------
+    //
+    // Each is transcribed from the decompiled XNA 4.0 reader of the same name. Two would have been
+    // plausible to guess and wrong: DateTime packs its kind into the top two bits of the tick
+    // count, and Color is one packed uint rather than four separate bytes.
+
+    internal byte ReadByteValue() => _reader.ReadByte();
+
+    internal sbyte ReadSByteValue() => _reader.ReadSByte();
+
+    internal short ReadInt16Value() => _reader.ReadInt16();
+
+    internal ushort ReadUInt16Value() => _reader.ReadUInt16();
+
+    internal long ReadInt64Value() => _reader.ReadInt64();
+
+    internal ulong ReadUInt64Value() => _reader.ReadUInt64();
+
+    internal double ReadDoubleValue() => _reader.ReadDouble();
+
+    internal decimal ReadDecimalValue() =>
+        new([_reader.ReadInt32(), _reader.ReadInt32(), _reader.ReadInt32(), _reader.ReadInt32()]);
+
+    internal DateTime ReadDateTimeValue()
+    {
+        long packed = _reader.ReadInt64();
+        long ticks = packed & 0x3FFFFFFFFFFFFFFFL;
+        var kind = (DateTimeKind)(int)((ulong)packed >> 62);
+        return kind == DateTimeKind.Local
+            ? new DateTime(ticks, DateTimeKind.Utc).ToLocalTime()
+            : new DateTime(ticks, kind);
+    }
+
+    internal TimeSpan ReadTimeSpanValue() => TimeSpan.FromTicks(_reader.ReadInt64());
+
+    internal Vector2 ReadVector2Value() => new(_reader.ReadSingle(), _reader.ReadSingle());
+
+    internal Vector4 ReadVector4Value() =>
+        new(_reader.ReadSingle(), _reader.ReadSingle(), _reader.ReadSingle(), _reader.ReadSingle());
+
+    internal Quaternion ReadQuaternionValue() =>
+        new(_reader.ReadSingle(), _reader.ReadSingle(), _reader.ReadSingle(), _reader.ReadSingle());
+
+    /// <summary>One packed <c>uint</c>, little-endian, so its low byte is red. That is the same
+    /// byte order <see cref="Color"/> stores its channels in, which is why this is a straight
+    /// unpack rather than a conversion.</summary>
+    internal Color ReadColorValue()
+    {
+        uint packed = _reader.ReadUInt32();
+        return new Color(
+            (byte)(packed & 0xFF),
+            (byte)((packed >> 8) & 0xFF),
+            (byte)((packed >> 16) & 0xFF),
+            (byte)((packed >> 24) & 0xFF));
+    }
+
+    internal Point ReadPointValue() => new(_reader.ReadInt32(), _reader.ReadInt32());
+
+    internal Plane ReadPlaneValue() => new(ReadVector3(), _reader.ReadSingle());
+
+    internal Ray ReadRayValue() => new(ReadVector3(), ReadVector3());
+
+    internal BoundingBox ReadBoundingBoxValue() => new(ReadVector3(), ReadVector3());
+
+    internal Curve ReadCurveValue()
+    {
+        var curve = new Curve
+        {
+            PreLoop = (CurveLoopType)_reader.ReadInt32(),
+            PostLoop = (CurveLoopType)_reader.ReadInt32(),
+        };
+
+        int count = _reader.ReadInt32();
+        if (count is < 0 or > 1_000_000)
+        {
+            throw new ContentLoadException($"Corrupt .xnb file: implausible curve key count {count}.");
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            float position = _reader.ReadSingle();
+            float value = _reader.ReadSingle();
+            float tangentIn = _reader.ReadSingle();
+            float tangentOut = _reader.ReadSingle();
+            var continuity = (CurveContinuity)_reader.ReadInt32();
+            curve.Keys.Add(new CurveKey(position, value, tangentIn, tangentOut, continuity));
+        }
+
+        return curve;
+    }
 
     /// <summary>A "bone reference": 1 byte if <paramref name="boneCount"/> is less than 255, else a
     /// full <c>uint32</c> -- real XNA's own size-optimizing encoding for <c>ModelReader</c>, ported

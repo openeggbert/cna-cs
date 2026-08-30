@@ -118,9 +118,84 @@ internal static class BuiltinReaders
             "Microsoft.Xna.Framework.Content.MatrixReader" => new MatrixReader(),
             "Microsoft.Xna.Framework.Content.QuaternionReader" => new QuaternionReader(),
             "Microsoft.Xna.Framework.Content.ColorReader" => new ColorReader(),
-            _ => null,
+            "Microsoft.Xna.Framework.Content.DecimalReader" => new DecimalReader(),
+            "Microsoft.Xna.Framework.Content.DateTimeReader" => new DateTimeReader(),
+            "Microsoft.Xna.Framework.Content.TimeSpanReader" => new TimeSpanReader(),
+            "Microsoft.Xna.Framework.Content.PointReader" => new PointReader(),
+            "Microsoft.Xna.Framework.Content.RectangleReader" => new RectangleReader(),
+            "Microsoft.Xna.Framework.Content.PlaneReader" => new PlaneReader(),
+            "Microsoft.Xna.Framework.Content.RayReader" => new RayReader(),
+            "Microsoft.Xna.Framework.Content.BoundingBoxReader" => new BoundingBoxReader(),
+            "Microsoft.Xna.Framework.Content.BoundingSphereReader" => new BoundingSphereReader(),
+            "Microsoft.Xna.Framework.Content.BoundingFrustumReader" => new BoundingFrustumReader(),
+            "Microsoft.Xna.Framework.Content.CurveReader" => new CurveReader(),
+            "Microsoft.Xna.Framework.Content.ExternalReferenceReader" => new ExternalReferenceReader(),
+            _ => BuiltinGenericReaders.TryCreate(serializedName),
         };
         return reader is not null;
+    }
+
+    /// <summary>
+    /// The reader for a target type, for a collection reader whose element reader is not in the
+    /// asset's own table.
+    ///
+    /// XNA's writer does emit it, so this is a fallback rather than the normal path -- but a
+    /// fallback that answers is worth more than one that throws, and the alternative is failing an
+    /// otherwise-loadable asset over a table entry the pipeline chose not to duplicate.
+    /// </summary>
+    internal static ContentTypeReader? TryCreateForTargetType(Type targetType)
+    {
+        ArgumentNullException.ThrowIfNull(targetType);
+
+        if (targetType.IsEnum)
+        {
+            return (ContentTypeReader?)Activator.CreateInstance(
+                typeof(EnumReader<>).MakeGenericType(targetType), nonPublic: true);
+        }
+
+        string? readerName = ReaderNameForTargetType(targetType);
+        return readerName is not null && TryCreate(readerName, out ContentTypeReader? reader) ? reader : null;
+    }
+
+    private static string? ReaderNameForTargetType(Type targetType)
+    {
+        const string prefix = "Microsoft.Xna.Framework.Content.";
+        string? simple = targetType switch
+        {
+            _ when targetType == typeof(bool) => "BooleanReader",
+            _ when targetType == typeof(byte) => "ByteReader",
+            _ when targetType == typeof(sbyte) => "SByteReader",
+            _ when targetType == typeof(char) => "CharReader",
+            _ when targetType == typeof(short) => "Int16Reader",
+            _ when targetType == typeof(ushort) => "UInt16Reader",
+            _ when targetType == typeof(int) => "Int32Reader",
+            _ when targetType == typeof(uint) => "UInt32Reader",
+            _ when targetType == typeof(long) => "Int64Reader",
+            _ when targetType == typeof(ulong) => "UInt64Reader",
+            _ when targetType == typeof(float) => "SingleReader",
+            _ when targetType == typeof(double) => "DoubleReader",
+            _ when targetType == typeof(decimal) => "DecimalReader",
+            _ when targetType == typeof(string) => "StringReader",
+            _ when targetType == typeof(DateTime) => "DateTimeReader",
+            _ when targetType == typeof(TimeSpan) => "TimeSpanReader",
+            _ when targetType == typeof(Vector2) => "Vector2Reader",
+            _ when targetType == typeof(Vector3) => "Vector3Reader",
+            _ when targetType == typeof(Vector4) => "Vector4Reader",
+            _ when targetType == typeof(Matrix) => "MatrixReader",
+            _ when targetType == typeof(Quaternion) => "QuaternionReader",
+            _ when targetType == typeof(Color) => "ColorReader",
+            _ when targetType == typeof(Point) => "PointReader",
+            _ when targetType == typeof(Rectangle) => "RectangleReader",
+            _ when targetType == typeof(Plane) => "PlaneReader",
+            _ when targetType == typeof(Ray) => "RayReader",
+            _ when targetType == typeof(BoundingBox) => "BoundingBoxReader",
+            _ when targetType == typeof(BoundingSphere) => "BoundingSphereReader",
+            _ when targetType == typeof(BoundingFrustum) => "BoundingFrustumReader",
+            _ when targetType == typeof(Curve) => "CurveReader",
+            _ => null,
+        };
+
+        return simple is null ? null : prefix + simple;
     }
 
     private static string StripAssemblyQualification(string name)
@@ -158,4 +233,127 @@ internal static class BuiltinReaders
     private sealed class MatrixReader : ContentTypeReader<Matrix> { protected internal override Matrix Read(ContentReader input, Matrix existingInstance) => input.ReadMatrix(); }
     private sealed class QuaternionReader : ContentTypeReader<Quaternion> { protected internal override Quaternion Read(ContentReader input, Quaternion existingInstance) => input.ReadQuaternion(); }
     private sealed class ColorReader : ContentTypeReader<Color> { protected internal override Color Read(ContentReader input, Color existingInstance) => input.ReadColor(); }
+
+    // The rest of XNA's value readers, transcribed from the decompiled 4.0 readers. Two of them are
+    // why transcription beats inference: DateTime packs its Kind into the top two bits of the tick
+    // count, and Decimal is four Int32 bits words in constructor order.
+    private sealed class DecimalReader : ContentTypeReader<decimal>
+    {
+        protected internal override decimal Read(ContentReader input, decimal existingInstance) =>
+            new([input.ReadInt32(), input.ReadInt32(), input.ReadInt32(), input.ReadInt32()]);
+    }
+
+    private sealed class DateTimeReader : ContentTypeReader<DateTime>
+    {
+        protected internal override DateTime Read(ContentReader input, DateTime existingInstance)
+        {
+            long packed = input.ReadInt64();
+            long ticks = packed & 0x3FFFFFFFFFFFFFFFL;
+            var kind = (DateTimeKind)(int)((ulong)packed >> 62);
+            return kind == DateTimeKind.Local
+                ? new DateTime(ticks, DateTimeKind.Utc).ToLocalTime()
+                : new DateTime(ticks, kind);
+        }
+    }
+
+    private sealed class TimeSpanReader : ContentTypeReader<TimeSpan>
+    {
+        protected internal override TimeSpan Read(ContentReader input, TimeSpan existingInstance) =>
+            TimeSpan.FromTicks(input.ReadInt64());
+    }
+
+    private sealed class PointReader : ContentTypeReader<Point>
+    {
+        protected internal override Point Read(ContentReader input, Point existingInstance) =>
+            new(input.ReadInt32(), input.ReadInt32());
+    }
+
+    private sealed class RectangleReader : ContentTypeReader<Rectangle>
+    {
+        protected internal override Rectangle Read(ContentReader input, Rectangle existingInstance) =>
+            new(input.ReadInt32(), input.ReadInt32(), input.ReadInt32(), input.ReadInt32());
+    }
+
+    private sealed class PlaneReader : ContentTypeReader<Plane>
+    {
+        protected internal override Plane Read(ContentReader input, Plane existingInstance) =>
+            new(input.ReadVector3(), input.ReadSingle());
+    }
+
+    private sealed class RayReader : ContentTypeReader<Ray>
+    {
+        protected internal override Ray Read(ContentReader input, Ray existingInstance) =>
+            new(input.ReadVector3(), input.ReadVector3());
+    }
+
+    private sealed class BoundingBoxReader : ContentTypeReader<BoundingBox>
+    {
+        protected internal override BoundingBox Read(ContentReader input, BoundingBox existingInstance) =>
+            new(input.ReadVector3(), input.ReadVector3());
+    }
+
+    private sealed class BoundingSphereReader : ContentTypeReader<BoundingSphere>
+    {
+        protected internal override BoundingSphere Read(ContentReader input, BoundingSphere existingInstance) =>
+            new(input.ReadVector3(), input.ReadSingle());
+    }
+
+    private sealed class BoundingFrustumReader : ContentTypeReader<BoundingFrustum>
+    {
+        protected internal override BoundingFrustum Read(ContentReader input, BoundingFrustum existingInstance) =>
+            new(input.ReadMatrix());
+    }
+
+    private sealed class CurveReader : ContentTypeReader<Curve>
+    {
+        public override bool CanDeserializeIntoExistingObject => true;
+
+        protected internal override Curve Read(ContentReader input, Curve existingInstance)
+        {
+            Curve curve = existingInstance ?? new Curve();
+            curve.PreLoop = (CurveLoopType)input.ReadInt32();
+            curve.PostLoop = (CurveLoopType)input.ReadInt32();
+
+            int count = input.ReadInt32();
+            if (count is < 0 or > 10_000_000)
+            {
+                throw new ContentLoadException(
+                    $"Content asset '{input.AssetName}' declares an implausible curve key count {count}.");
+            }
+
+            for (int index = 0; index < count; index++)
+            {
+                curve.Keys.Add(new CurveKey(
+                    input.ReadSingle(),
+                    input.ReadSingle(),
+                    input.ReadSingle(),
+                    input.ReadSingle(),
+                    (CurveContinuity)input.ReadInt32()));
+            }
+
+            return curve;
+        }
+    }
+
+    /// <summary>
+    /// An external reference is a path the manager loads as its own asset, so the target type is
+    /// whatever the caller asked for.
+    ///
+    /// It derives from the non-generic base rather than <c>ContentTypeReader&lt;object&gt;</c>:
+    /// that closure makes the generic base's two <c>Read</c> overloads collapse into the same
+    /// signature, which the compiler rejects.
+    /// </summary>
+    private sealed class ExternalReferenceReader : ContentTypeReader
+    {
+        internal ExternalReferenceReader()
+            : base(typeof(object))
+        {
+        }
+
+        protected internal override object Read(ContentReader input, object? existingInstance)
+        {
+            ArgumentNullException.ThrowIfNull(input);
+            return input.ReadExternalReference<object>();
+        }
+    }
 }
