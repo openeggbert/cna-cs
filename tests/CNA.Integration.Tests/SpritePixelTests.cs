@@ -45,6 +45,12 @@ public class SpritePixelTests(ITestOutputHelper output, NativeGameFixture fixtur
             using var target = new RenderTarget2D(device, Size, Size);
             var destination = new Rectangle(8, 4, 16, 8);
 
+            if (!CnaNativeProbe.RequireRenderTargetReadback(device, output))
+            {
+                return;
+            }
+
+
             Color[] pixels = DrawAndRead(device, target, batch =>
                 batch.Draw(white, destination, new Color(255, 255, 255, 255)));
 
@@ -95,6 +101,11 @@ public class SpritePixelTests(ITestOutputHelper output, NativeGameFixture fixtur
             white.SetData([new Color(255, 255, 255, 255)]);
 
             using var target = new RenderTarget2D(device, Size, Size);
+
+            if (!CnaNativeProbe.RequireRenderTargetReadback(device, output))
+            {
+                return;
+            }
 
             // Source is one pixel, destination is 8x8 at (16,16), origin is the whole source pixel.
             // Scaled, that origin is 8 pixels, so the sprite must land at (8,8).

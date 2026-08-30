@@ -35,9 +35,16 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
         });
     }
 
-    /// <summary>Uploading one face. A cube's six faces are separate transfers, and getting the face
+    /// <summary>
+    /// Uploading every face. A cube's six faces are separate transfers, and getting the face
     /// selector wrong writes the right pixels to the wrong side -- which nothing but a read-back or
-    /// a render would show.</summary>
+    /// a render would show.
+    ///
+    /// Cube-face storage is not <c>ThreeD</c> and has no capability identity of its own, so it is
+    /// measured rather than asked: HEADLESS reports <c>ThreeD</c> and still refuses the transfer,
+    /// which used to fail this test as though the binding were broken. The measured-absent branch
+    /// asserts the refusal, so both sides carry a claim.
+    /// </summary>
     [Native3DFact]
     public void TextureCube_AcceptsPerFaceData()
     {
@@ -53,6 +60,15 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
             var face = new Color[2 * 2];
             Array.Fill(face, Color.CornflowerBlue);
 
+            if (!CnaNativeProbe.SupportsCubeFaceStorage(device, output))
+            {
+                CnaNativeProbe.AssertRefusedAsNotSupported(
+                    "uploading a cube face", () => cube.SetData(CubeMapFace.PositiveX, face), output);
+                return;
+            }
+
+            // Every face, not one: the selector is what this test exists to check, and a binding
+            // that passed the same face six times would pass a one-face test.
             foreach (CubeMapFace side in Enum.GetValues<CubeMapFace>())
             {
                 cube.SetData(side, face);
@@ -71,6 +87,12 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
         {
             if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.Texture3D, output))
             {
+                // The branch that used to be a silent pass. Measured on HEADLESS, which reports
+                // Texture3D false: construction refuses with NotSupported and says why. A renderer
+                // that instead built a volume texture with no storage behind it would satisfy every
+                // test in this file and then discard every SetData the game made.
+                CnaNativeProbe.AssertRefusedAsNotSupported(
+                    "constructing a Texture3D", () => new Texture3D(device, 4, 4, 2).Dispose(), output);
                 return;
             }
 

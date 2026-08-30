@@ -27,7 +27,7 @@ public class RenderTargetPoolTests(ITestOutputHelper output, NativeGameFixture f
         {
             if (!GraphicsDevice.IsCnaEngineLayerAvailable())
             {
-                output.WriteLine("NOT EXERCISED: this build has no engine layer.");
+                AssertPoolRefusedWithoutTheEngineLayer(device);
                 return;
             }
 
@@ -75,7 +75,7 @@ public class RenderTargetPoolTests(ITestOutputHelper output, NativeGameFixture f
         {
             if (!GraphicsDevice.IsCnaEngineLayerAvailable())
             {
-                output.WriteLine("NOT EXERCISED: this build has no engine layer.");
+                AssertPoolRefusedWithoutTheEngineLayer(device);
                 return;
             }
 
@@ -101,5 +101,27 @@ public class RenderTargetPoolTests(ITestOutputHelper output, NativeGameFixture f
                 Assert.True(pixel.B > pixel.R, "the clear colour is blue-dominant and must read back that way");
             });
         });
+    }
+
+    /// <summary>
+    /// What a build without the engine layer must do, asserted rather than skipped.
+    ///
+    /// This is the branch D3's design was built around and could not exercise: every engine-layer
+    /// symbol resolves in every CNA build, so "the symbol is there" proves nothing, and the
+    /// OPENGLES3 build this suite normally runs against *has* the layer. A HEADLESS build of the
+    /// same revision does not, and answers <c>NOT_SUPPORTED</c> with "This CNA build does not
+    /// contain the extended graphics layer" -- so the pool refuses to construct instead of handing
+    /// back an object whose every later call would fail.
+    ///
+    /// The version is asserted too, because the header's rule is that zero means absent and the two
+    /// answers come from different routes: a binding that read the wrong one would agree with itself
+    /// on the build where the layer is present and disagree on this one.
+    /// </summary>
+    private void AssertPoolRefusedWithoutTheEngineLayer(GraphicsDevice device)
+    {
+        Assert.Equal(0, GraphicsDevice.CnaEngineLayerVersion());
+
+        CnaNativeProbe.AssertRefusedAsNotSupported(
+            "constructing a RenderTargetPool", () => new RenderTargetPool(device).Dispose(), output);
     }
 }

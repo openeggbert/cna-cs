@@ -1,3 +1,5 @@
+using CNA;
+using CNA.Graphics;
 using CNA.Interop;
 using Xunit;
 
@@ -58,6 +60,162 @@ public static class CnaNativeProbe
             $"NOT EXERCISED: renderer '{device.RendererName}' does not report {capability}, " +
             "and this test needs it.");
         return false;
+    }
+
+    /// <summary>
+    /// Asserts that a native operation is refused with <c>NOT_SUPPORTED</c>, which is what makes an
+    /// absent-capability branch evidence instead of a silent pass.
+    ///
+    /// <see cref="HasCapability"/> lets a test skip the branch it cannot run; this is the other
+    /// half. A test that returns early on an absent capability can never fail there, so on a
+    /// renderer lacking it the test proves nothing at all -- and that is precisely the renderer
+    /// where the binding's refusal behaviour matters, because it is the only place the refusal
+    /// happens.
+    ///
+    /// The result string is checked rather than only the exception type: every native failure
+    /// arrives as <see cref="CnaException"/>, so accepting any of them would accept an
+    /// <c>INVALID_ARGUMENT</c> from a test that built its arguments wrongly.
+    /// </summary>
+    public static void AssertRefusedAsNotSupported(
+        string what,
+        Action operation,
+        Xunit.Abstractions.ITestOutputHelper output)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        CnaException failure = Assert.Throws<CnaException>(operation);
+        Assert.Equal("NotSupported", failure.NativeResult);
+        output?.WriteLine($"ABSENT BRANCH EXERCISED: {what} refused with NotSupported -- {failure.Message}");
+    }
+
+    private static readonly Dictionary<string, bool> ReadbackByRenderer = new(StringComparer.Ordinal);
+    private static readonly object ReadbackLock = new();
+
+    /// <summary>
+    /// Whether this renderer can read a render target's colour attachment back to the CPU.
+    ///
+    /// <b>There is no capability identity for this.</b> <c>CNA_GRAPHICS_CAPABILITY_*</c> names
+    /// nineteen things and readback is not one of them, so unlike <see cref="HasCapability"/> this
+    /// cannot be asked -- it has to be measured. HEADLESS reports every capability except
+    /// <c>Texture3D</c>, <c>AdditiveBlending</c> and <c>MultiStreamVertexInput</c>, and still
+    /// answers <c>Texture2D::GetData: this graphics renderer cannot read a render target's colour
+    /// attachment back to the CPU</c>, which failed five pixel-evidence tests as though the binding
+    /// were broken.
+    ///
+    /// The measurement catches the exception, which a *test* must never do; a probe whose entire
+    /// purpose is to determine one fact is the exception, and it is why this lives here rather than
+    /// in each test. It runs once per renderer name and the answer then selects which assertion the
+    /// caller makes, so both branches still assert.
+    /// </summary>
+    public static bool SupportsRenderTargetReadback(
+        CNA.Graphics.GraphicsDevice device,
+        Xunit.Abstractions.ITestOutputHelper? output = null)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+
+        string renderer = device.RendererName;
+        lock (ReadbackLock)
+        {
+            if (ReadbackByRenderer.TryGetValue(renderer, out bool known))
+            {
+                return known;
+            }
+
+            bool supported;
+            try
+            {
+                using var probe = new RenderTarget2D(device, 1, 1);
+                device.SetRenderTarget(probe);
+                device.Clear(new Color(1, 2, 3, 255));
+                device.SetRenderTarget(null);
+
+                var pixel = new Color[1];
+                probe.GetData(pixel);
+                supported = true;
+            }
+            catch (CnaException failure) when (failure.NativeResult == "NotSupported")
+            {
+                output?.WriteLine(
+                    $"MEASURED: renderer '{renderer}' cannot read a render target back -- {failure.Message}");
+                supported = false;
+            }
+
+            ReadbackByRenderer[renderer] = supported;
+            return supported;
+        }
+    }
+
+    /// <summary>
+    /// The gate a pixel-evidence test opens with: <see langword="true"/> when the renderer can read
+    /// a render target back, and otherwise <see langword="false"/> **after asserting that it refuses
+    /// to**.
+    ///
+    /// That asymmetry with <see cref="HasCapability"/> is the point. <c>HasCapability</c> lets a
+    /// test return early and prove nothing, which is the honest cost of this runner for a branch
+    /// nobody can exercise. This branch *can* be exercised -- HEADLESS refuses readback -- so it
+    /// carries an assertion instead, and a binding that started swallowing the refusal, or reporting
+    /// it as some other result, fails here rather than passing quietly.
+    /// </summary>
+    public static bool RequireRenderTargetReadback(
+        CNA.Graphics.GraphicsDevice device,
+        Xunit.Abstractions.ITestOutputHelper output)
+    {
+        if (SupportsRenderTargetReadback(device, output))
+        {
+            return true;
+        }
+
+        AssertRefusedAsNotSupported(
+            "reading a render target back to the CPU",
+            () =>
+            {
+                using var target = new RenderTarget2D(device, 4, 4);
+                target.GetData(new Color[16]);
+            },
+            output);
+        return false;
+    }
+
+    private static readonly Dictionary<string, bool> CubeFaceByRenderer = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether this renderer stores a cube-map face transfer. Measured for the same reason
+    /// <see cref="SupportsRenderTargetReadback"/> is: there is no capability identity for it, and
+    /// <c>ThreeD</c> is not it -- HEADLESS reports <c>ThreeD</c> and answers
+    /// <c>TextureCube::SetData: this graphics renderer did not store the complete requested cube
+    /// face region</c>.
+    /// </summary>
+    public static bool SupportsCubeFaceStorage(
+        CNA.Graphics.GraphicsDevice device,
+        Xunit.Abstractions.ITestOutputHelper? output = null)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+
+        string renderer = device.RendererName;
+        lock (ReadbackLock)
+        {
+            if (CubeFaceByRenderer.TryGetValue(renderer, out bool known))
+            {
+                return known;
+            }
+
+            bool supported;
+            try
+            {
+                using var probe = new TextureCube(device, 2);
+                probe.SetData(CubeMapFace.PositiveX, new Color[4]);
+                supported = true;
+            }
+            catch (CnaException failure) when (failure.NativeResult == "NotSupported")
+            {
+                output?.WriteLine(
+                    $"MEASURED: renderer '{renderer}' does not store cube faces -- {failure.Message}");
+                supported = false;
+            }
+
+            CubeFaceByRenderer[renderer] = supported;
+            return supported;
+        }
     }
 
     private static string? Detect()

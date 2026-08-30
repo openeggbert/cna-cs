@@ -294,6 +294,87 @@ public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fix
         });
     }
 
+    /// <summary>
+    /// The same, for the buffer families -- and it settles a blocker row.
+    ///
+    /// <c>docs/native-behavior-blockers.md</c> carried "Both headers state that CNA never raises
+    /// ContentLost for a buffer. Render targets got <c>cna_render_target_subscribe_content_lost</c>
+    /// in 0.19.0; the buffer families did not." Both clauses are false against the live headers:
+    /// <c>cna_vertex_buffer_subscribe_content_lost</c> and its index-buffer twin have existed since
+    /// 2026-08-15, this binding has consumed them since, and <c>DynamicVertexBuffer.cs</c>'s own doc
+    /// comment says so. The row had been re-measured only for whether its named routes still exist,
+    /// which is the one thing about it that was never in question.
+    ///
+    /// What was genuinely unproven is what this test now measures: that the subscription is
+    /// *delivered to*. <c>NotifyContentLostResourcesEXT</c> walks every <c>IContentLosable</c> on
+    /// the device, and <c>DynamicVertexBuffer</c>/<c>DynamicIndexBuffer</c> are two of the four
+    /// implementers, so the same real native path that reaches a render target reaches these.
+    ///
+    /// A non-dynamic buffer is created alongside and asserted *not* to be notified. That is not
+    /// symmetry for its own sake: only the dynamic types implement the interface, so a
+    /// notification reaching a static buffer would mean the managed side had invented one.
+    /// </summary>
+    [Native3DFact]
+    public void DynamicBuffers_ContentLostFiresWhenNativeIsToldContentIsGone()
+    {
+        fixture.InsideAFrame(game =>
+        {
+            GraphicsDevice device = game.GraphicsDevice;
+            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            {
+                // Deliberately not asserted. The refusal a 2D-only renderer produces here goes
+                // through IGraphicsRenderer::HandleUnsupported3DCall, which throws a bare
+                // std::runtime_error and therefore arrives as CNA_RESULT_INTERNAL rather than
+                // NOT_SUPPORTED -- while a renderer whose own Ensure3DSupported throws
+                // System::NotSupportedException arrives as NOT_SUPPORTED. Which one a given
+                // renderer produces cannot be measured here, because no renderer available on this
+                // host lacks ThreeD, and an assertion written from the more plausible of two
+                // guesses would be exactly the kind of untested claim this file exists to remove.
+                return;
+            }
+
+            using var vertices = new DynamicVertexBuffer(
+                device, VertexPositionColor.VertexDeclaration, 4, BufferUsage.None);
+            using var indices = new DynamicIndexBuffer(device, IndexElementSize.SixteenBits, 6, BufferUsage.None);
+
+            int vertexKept = 0;
+            int vertexRemoved = 0;
+            int indexKept = 0;
+            object? vertexSender = null;
+            object? indexSender = null;
+
+            void VertexKept(object? sender, EventArgs args)
+            {
+                vertexKept++;
+                vertexSender = sender;
+            }
+
+            void VertexRemoved(object? sender, EventArgs args) => vertexRemoved++;
+
+            void IndexKept(object? sender, EventArgs args)
+            {
+                indexKept++;
+                indexSender = sender;
+            }
+
+            vertices.ContentLost += VertexKept;
+            vertices.ContentLost += VertexRemoved;
+            vertices.ContentLost -= VertexRemoved;
+            indices.ContentLost += IndexKept;
+
+            device.NotifyContentLostResourcesForTesting();
+
+            output.WriteLine(
+                $"after notify: vertexKept={vertexKept} vertexRemoved={vertexRemoved} indexKept={indexKept}");
+
+            Assert.Equal(1, vertexKept);
+            Assert.Equal(0, vertexRemoved);
+            Assert.Equal(1, indexKept);
+            Assert.Same(vertices, vertexSender);
+            Assert.Same(indices, indexSender);
+        });
+    }
+
     /// <summary>Binding a render target and unbinding it. The cached-binding bookkeeping behind
     /// GetRenderTargets is easy to get wrong in a way only a real bind exposes.</summary>
     [NativeFact]

@@ -35,6 +35,11 @@ public class SpriteTextOrderingTests(ITestOutputHelper output, NativeGameFixture
         fixture.InsideAFrame(game =>
         {
             GraphicsDevice device = game.GraphicsDevice;
+            if (!CnaNativeProbe.RequireRenderTargetReadback(device, output))
+            {
+                return;
+            }
+
             using var fixtureAssets = new TextFixture(device);
 
             // Text first, then a sprite over it: the sprite wins.
@@ -76,6 +81,11 @@ public class SpriteTextOrderingTests(ITestOutputHelper output, NativeGameFixture
         fixture.InsideAFrame(game =>
         {
             GraphicsDevice device = game.GraphicsDevice;
+            if (!CnaNativeProbe.RequireRenderTargetReadback(device, output))
+            {
+                return;
+            }
+
             using var fixtureAssets = new TextFixture(device);
 
             void Draw(SpriteBatch batch) => batch.DrawString(

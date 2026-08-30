@@ -30,6 +30,11 @@ public class NativeDrawStringMeasurementTests(ITestOutputHelper output, NativeGa
         fixture.InsideAFrame(game =>
         {
             GraphicsDevice device = game.GraphicsDevice;
+            if (!CnaNativeProbe.RequireRenderTargetReadback(device, output))
+            {
+                return;
+            }
+
 
             using var atlas = new Texture2D(device, 3, 1);
             atlas.SetData([
@@ -124,6 +129,11 @@ public class NativeDrawStringMeasurementTests(ITestOutputHelper output, NativeGa
         fixture.InsideAFrame(game =>
         {
             GraphicsDevice device = game.GraphicsDevice;
+            if (!CnaNativeProbe.RequireRenderTargetReadback(device, output))
+            {
+                return;
+            }
+
 
             using var atlas = new Texture2D(device, 3, 1);
             atlas.SetData([
