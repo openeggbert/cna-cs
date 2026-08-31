@@ -1173,9 +1173,11 @@ specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.
   `devicelifecycle.cross_device` observations report `ok` by default, and the same process still
   emits all 105 observations afterwards. Deterministic `DeviceLost` and native input transitions
   still need explicit test hooks; no loss event or physical input state is fabricated.
-- `cna_storage_container_subscribe_disposing` is documented as synchronous and exactly once but
-  emitted zero callbacks in the native regression. Explicit managed disposal safely emits the
-  known one-shot event until native honors the route.
+- **Closed.** `cna_storage_container_subscribe_disposing` emitted zero callbacks when this row was
+  written, so explicit managed disposal raised the known one-shot itself. Upstream's own
+  `StorageSmoke.c` now asserts the documented contract -- exactly one call, still exactly one after
+  a second dispose -- and passes, so `StorageContainer.Disposing` is a real subscription and the
+  substitute is gone. What a handler sees is CNA's event rather than this binding's imitation.
 - Compiled effect bytecode needs a renderer/native implementation before `.fx` runtime support can
   be claimed on that renderer.
 - **The SIGTERM `pure virtual method called` shutdown report is reproduced**, and is now a blocker

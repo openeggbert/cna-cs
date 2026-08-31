@@ -181,15 +181,40 @@ public class StorageContainer : IDisposable
             pending = exception;
         }
 
-        // ABI 0.6.0 documents a synchronous native callback here, but the measured implementation
-        // emits none. This wrapper is the exclusive explicit-disposal route, so deliver the known
-        // sender once in managed code after native has accepted disposal. That also guarantees a
-        // handler exception never crosses an unmanaged frame.
-        if (nativeDisposed)
+        // Nothing is raised here. The native dispose above delivers the event through the
+        // subscription, synchronously and exactly once -- which is what CNA documents and, as of
+        // 0.21.0, what it does. Raising a managed one as well would deliver two.
+        //
+        // The subscription is released after the native dispose and before the handle, so the
+        // callback has already run by the time the registration goes away, and native can never
+        // call into a context whose owner is gone.
+        _ = nativeDisposed;
+
+        NativeEventBridge? bridge;
+        lock (_disposingLock)
         {
+            bridge = _disposingBridge;
+            _disposingBridge = null;
+            _disposingHandler = null;
+        }
+
+        if (bridge is not null)
+        {
+            // A handler failure the bridge caught rather than let cross an unmanaged frame is
+            // surfaced last, after teardown rather than in the middle of it -- the same drain
+            // RenderTarget2D performs, and for the same reason.
             try
             {
-                _disposingHandler?.Invoke(this, EventArgs.Empty);
+                bridge.ThrowPendingException();
+            }
+            catch (Exception exception)
+            {
+                pending ??= exception;
+            }
+
+            try
+            {
+                bridge.Dispose();
             }
             catch (Exception exception)
             {
@@ -197,7 +222,6 @@ public class StorageContainer : IDisposable
             }
         }
 
-        _disposingHandler = null;
         _handle.Dispose();
         GC.SuppressFinalize(this);
 
@@ -282,15 +306,55 @@ public class StorageContainer : IDisposable
         return names;
     }
 
-    /// <summary>Raised once after native accepts explicit disposal, matching real XNA. ABI 0.6.0's
-    /// documented native callback is observably silent, so this event is kept managed rather than
-    /// pinning a native registration that never fires; see <c>docs/native-behavior-blockers.md</c>.
+    /// <summary>
+    /// Raised once when the container is disposed, matching real XNA.
+    ///
+    /// <b>This is a real native subscription now.</b> It was a managed one-shot for as long as the
+    /// documented callback was observably silent -- ABI 0.6.0 promised "synchronous and exactly
+    /// once" and delivered nothing, so pinning a registration that never fires would have been
+    /// worse than raising the known sender here. Upstream's own storage regression now asserts the
+    /// contract it documents (subscribe, dispose, require exactly one call, dispose again and
+    /// require still exactly one) and passes, so the managed substitute is retired: what a handler
+    /// sees is CNA's event rather than this binding's imitation of it.
+    ///
+    /// Taken on the first <c>+=</c> and released before the container handle it is registered
+    /// against, which is the ordering <see cref="Graphics.RenderTarget2D.ContentLost"/> establishes:
+    /// the other order leaves native able to call back into a context whose owner is gone.
     /// </summary>
     public event EventHandler<EventArgs>? Disposing
     {
-        add => _disposingHandler += value;
-        remove => _disposingHandler -= value;
+        add
+        {
+            lock (_disposingLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+
+                _disposingBridge ??= NativeEventBridge.Subscribe(
+                    () => _disposingHandler?.Invoke(this, EventArgs.Empty),
+                    (callback, context) =>
+                    {
+                        CnaResult result = Native.cna_storage_container_subscribe_disposing(
+                            NativeHandle, callback, context, out CnaHandle registration);
+                        GC.KeepAlive(this);
+                        CnaException.ThrowIfFailed(result, nameof(Disposing));
+                        return registration;
+                    },
+                    registration => Native.cna_storage_container_unsubscribe_disposing(registration));
+
+                _disposingHandler += value;
+            }
+        }
+
+        remove
+        {
+            lock (_disposingLock)
+            {
+                _disposingHandler -= value;
+            }
+        }
     }
 
+    private NativeEventBridge? _disposingBridge;
     private EventHandler<EventArgs>? _disposingHandler;
+    private readonly object _disposingLock = new();
 }
