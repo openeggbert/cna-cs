@@ -27,7 +27,7 @@ packaging, and release engineering.
 | Behavior corpora | One manifest defines 479 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, **55 Content**, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 479: 208 pure, 166 device, and 105 native-runtime. The nine new ones are content **cache identity** -- the area the plan's own list named and the one where the two managers had silently diverged. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Re-measured against ABI 0.21.0. Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
-| Sanitizers | **UBSan, measured.** The upstream configure block that made an instrumented build impossible is gone, so `cnanext/build-ubsan` is a HEADLESS ABI 0.21.0 library built with `-fsanitize=undefined` -- instrumented rather than assumed: 15 `__ubsan` symbols and a `libubsan` dependency, against 0 in the ordinary build. Integration 207/207, ownership stress 30 cycles and the runtime probe's 105 observations all under it. **One finding**, and it is upstream's: `GraphicsResource.cpp:96` calls `graphicsDevice_->OnResourceDestroyed` on an object whose vptr is already `System::Object`, i.e. a virtual call into a device that has begun destruction. ASan remains `not-run` |
+| Sanitizers | **UBSan, measured.** The upstream configure block that made an instrumented build impossible is gone, so `cnanext/build-ubsan` is a HEADLESS ABI 0.21.0 library built with `-fsanitize=undefined` -- instrumented rather than assumed: 15 `__ubsan` symbols and a `libubsan` dependency, against 0 in the ordinary build. Integration 207/207, ownership stress 30 cycles and the runtime probe's 105 observations all under it. **One finding**, and it is upstream's: `GraphicsResource.cpp:96` calls `graphicsDevice_->OnResourceDestroyed` on an object whose vptr is already `System::Object`, i.e. a virtual call into a device that has begun destruction. **ASan agrees, from the same test**: a heap-use-after-free, an 8-byte read -- the size of a vptr. Two independent sanitizers, one reproduction, one story. Neither is caused by this session's content-manager ownership change; both were re-run with that disposal removed and report identically |
 | ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **916 native and 916 managed layout/type measurements with 0 mismatches**, 1002 of 1002 prototypes compiled, 6 callbacks checked, 359 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures. For `CNA.Framework`'s own surface the invariant turns out to be **compiler-enforced** -- every `CNA.Interop` type is `internal`, and the one exported type is a static class, so neither can appear in a signature at all. What is guarded instead is that precondition |
@@ -1312,6 +1312,20 @@ cat /tmp/cna-ubsan.*
 **`log_path` is not optional.** `vstest` swallows the test host's native stderr, so a run without it
 reports zero findings whether or not there are any -- proven by loading a deliberately overflowing
 instrumented library, which reported through a plain C host and was invisible through `dotnet test`.
+
+Under an ASan-instrumented CNA (`cnanext/build-asan`, same shape). `libasan` must be preloaded
+because the .NET host itself is not instrumented, and `dotnet` runs happily that way:
+
+```bash
+CNA_NATIVE_LIBRARY=/path/to/cnanext/build-asan/modules/c-api/libcna_c_api.so \
+  LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8 \
+  ASAN_OPTIONS=detect_leaks=0:halt_on_error=0:log_path=/tmp/cna-asan \
+  xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj -c Release
+cat /tmp/cna-asan.*
+```
+
+`detect_leaks=0` because a leak check over a .NET process reports the runtime's own arenas, not
+CNA's; this is here for memory *errors*, and a leak claim would need a different instrument.
 
 On Windows with XNA 4.0 and the .NET Framework 4.8 developer pack:
 
