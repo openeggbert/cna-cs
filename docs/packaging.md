@@ -100,3 +100,17 @@ Before public packaging, approve native redistribution/licensing, package IDs an
 signing, Source Link/reproducible-build policy, the qualified CNA revision/configuration for every
 RID, and clean CI evidence on every claimed OS and architecture. The candidate matrix is
 `eng/platform-matrix.json`; cross-compilation alone is never qualification.
+
+## The acceptance harness forces `SDL_VIDEODRIVER=offscreen`
+
+`scripts/Package-Acceptance.sh` runs the isolated consumer with `SDL_VIDEODRIVER=offscreen` and
+`SDL_AUDIODRIVER=dummy`, so the gate needs no display. That is right for the gate and worth knowing
+before pointing it at an arbitrary renderer: **it passes with an `OPENGLES3` native asset and aborts
+with a `SDL_RENDERER` one.**
+
+Measured, not inferred. Under a real X display the `SDL_RENDERER` build reports the display's name
+and takes the template's 2D fallback; under `offscreen` the same library reports a renderer called
+`1` and claims a 3D pipeline it does not have, and the packaged consumer then dies with a core dump.
+So the offscreen SDL video driver and CNA's `SDL_RENDERER` backend do not combine, and the harness's
+own default is the configuration to keep using. Pass `--native-library` a renderer that works
+headless.
