@@ -1178,8 +1178,12 @@ specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.
   known one-shot event until native honors the route.
 - Compiled effect bytecode needs a renderer/native implementation before `.fx` runtime support can
   be claimed on that renderer.
-- The historical SIGTERM `pure virtual method called` shutdown report remains open until reproduced
-  or disproved on the current native build.
+- **The SIGTERM `pure virtual method called` shutdown report is reproduced**, and is now a blocker
+  row with a renderer matrix behind it rather than a historical note.
+  `scripts/Reproduce-SigtermShutdown.sh` sends the signal to a template that has been drawing for
+  ten seconds: `SOFTWARE` aborts with that exact message 3 of 3 runs, `OPENGLES3` segfaults 3 of 3,
+  `HEADLESS` shows it 1 of 3 and is therefore timing-dependent, and `SDL_RENDERER` is clean 0 of 3.
+  A normal exit is clean on all four, so it is the signal path specifically.
 
 Custom managed content readers are not listed here because their managed XNB machinery is now
 implemented and does not require an upstream CNA change.
