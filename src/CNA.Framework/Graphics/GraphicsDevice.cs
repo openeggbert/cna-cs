@@ -77,13 +77,13 @@ public class GraphicsDevice : IDisposable
     /// The device is not attached to a game, so <see cref="NativeGameHandleValue"/> stays zero and
     /// nothing here may resolve through the game route.
     ///
-    /// <b>Do not call this while a game is running.</b> On the OPENGLES3 backend
-    /// <c>cna_graphics_device_create</c> makes its own GL context current and does not restore the
-    /// game's, so the game's next frame fails in <c>SwapBuffers</c> with "the specified window has
-    /// not been made current". Measured with creation alone, before any use and without destroying
-    /// the second device. This constructor is usable for a game-free device today; the mixture is
-    /// an open upstream item in <c>docs/native-behavior-blockers.md</c>, not something this binding
-    /// can work around.
+    /// <b>Creating one while a game is running is safe as of CNA 0.21.0.</b> It was not before:
+    /// <c>cna_graphics_device_create</c> made its own GL context current and did not restore the
+    /// game's, so the game's next frame failed in <c>SwapBuffers</c> with "the specified window has
+    /// not been made current". Upstream now saves and restores the caller's binding around device
+    /// creation, and the runtime probe's <c>devicelifecycle.cross_device</c> pair -- gated to
+    /// <c>not-run</c> for exactly this reason -- runs ungated and reports <c>ok</c> for both, with
+    /// the game surviving every later observation in the same process.
     /// </summary>
     public GraphicsDevice(
         GraphicsAdapter adapter,

@@ -520,29 +520,21 @@ internal static class Program
         /// Two live devices, and a resource from one used on the other.
         ///
         /// This recorded <c>not-run(CNA-ABI-has-one-game-owned-device)</c> until CNA 0.19.0 added
-        /// <c>cna_graphics_device_create</c>. It is still not-run by default, for a different and
-        /// newly measured reason: <c>cna_graphics_device_create</c> makes its own GL context current
-        /// and does not restore the game's, so on the OPENGLES3 backend the game's next frame dies
-        /// in <c>SwapBuffers</c> with "the specified window has not been made current". Measured
-        /// with creation alone, before any use and without destroying the second device, so it is
-        /// creation rather than teardown. Upstream's own owned-device smoke test never has a Game
-        /// in the process, so nothing there covers the mixture the header describes.
+        /// <c>cna_graphics_device_create</c>, and then <c>not-run(destroys-the-game-gl-context)</c>
+        /// until 0.21.0: the create made its own GL context current and did not restore the game's,
+        /// so on the OPENGLES3 backend the game's next frame died in <c>SwapBuffers</c> with "the
+        /// specified window has not been made current". Upstream's own owned-device smoke test
+        /// never has a Game in the process, so nothing there covered the mixture the header
+        /// describes.
         ///
-        /// Set <c>CNA_RUNTIME_PROBE_CROSS_DEVICE=1</c> to run it anyway. It is gated rather than
-        /// deleted because the gate is how the blocker gets re-measured when the backend changes,
-        /// and gated rather than ungated because one destroyed frame invalidates every observation
-        /// after it. Both keys are emitted either way, so the corpus count does not depend on the
-        /// gate.
+        /// <b>It runs now, and the <c>CNA_RUNTIME_PROBE_CROSS_DEVICE</c> gate is gone with the
+        /// reason for it.</b> Against ABI 0.21.0 both keys report <c>ok</c>, and -- the part that
+        /// mattered, since one destroyed frame would have invalidated every observation after it --
+        /// the same process still produces all 105 observations afterwards. Two placeholders that
+        /// stood through eleven ABI generations are measurements again.
         /// </summary>
         private void CaptureCrossDevice(GraphicsDevice gameDevice)
         {
-            if (Environment.GetEnvironmentVariable("CNA_RUNTIME_PROBE_CROSS_DEVICE") != "1")
-            {
-                Add("devicelifecycle.cross_device.create", "not-run(destroys-the-game-gl-context)");
-                Add("devicelifecycle.cross_device", "not-run(destroys-the-game-gl-context)");
-                return;
-            }
-
             GraphicsDevice? second = null;
             try
             {

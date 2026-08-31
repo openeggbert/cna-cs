@@ -35,9 +35,10 @@ public class GraphicsDevice : IDisposable
     /// gone: this constructs an independent, caller-owned device that <see cref="Dispose()"/>
     /// destroys.
     ///
-    /// <b>Do not call this while a game is running.</b> On the OPENGLES3 backend the native create
-    /// takes the GL context and does not give it back, so the running game dies on its next
-    /// present. See <c>CNA.Graphics.GraphicsDevice</c>'s constructor for the measurement.
+    /// Creating one while a game is running used to kill that game: the native create took the GL
+    /// context and did not give it back, so the running game died on its next present. CNA 0.21.0
+    /// restores the caller's binding and it no longer does. See
+    /// <c>CNA.Graphics.GraphicsDevice</c>'s constructor for the measurement.
     /// </summary>
     public GraphicsDevice(
         GraphicsAdapter adapter,
