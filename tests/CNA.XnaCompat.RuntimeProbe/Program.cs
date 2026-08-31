@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using CNA.BehaviorProbes;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
@@ -11,7 +12,7 @@ namespace XnaRuntimeBehaviorProbe;
 internal static class Program
 {
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         LoadXnaRuntimeAssembliesIfRequested();
         using var game = new ProbeGame();
@@ -32,10 +33,7 @@ internal static class Program
             return 1;
         }
 
-        foreach (string observation in game.Observations)
-        {
-            Console.WriteLine(observation);
-        }
+        ProbeOutput.Write(args, game.Observations);
 
         game.Dispose();
         return 0;

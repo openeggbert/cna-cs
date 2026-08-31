@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using CNA.BehaviorProbes;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -10,7 +11,7 @@ namespace XnaGraphicsBehaviorProbe;
 internal static class Program
 {
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         LoadXnaRuntimeAssembliesIfRequested();
 
@@ -35,10 +36,7 @@ internal static class Program
             }
 
             game.CaptureDeviceDisposal();
-            foreach (string observation in game.Observations)
-            {
-                Console.WriteLine(observation);
-            }
+            ProbeOutput.Write(args, game.Observations);
 
             return 0;
         }

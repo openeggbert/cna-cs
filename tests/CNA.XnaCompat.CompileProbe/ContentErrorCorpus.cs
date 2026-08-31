@@ -75,6 +75,8 @@ public static class ContentErrorCorpus
         Observe(observations, "content.external_reference_missing", LoadMissingExternalReference);
         Observe(observations, "content.external_reference_normalized", LoadNormalizedExternalReference);
         Observe(observations, "content.external_reference_normalized_chain", LoadNormalizedExternalReferenceChain);
+        Observe(observations, "content.external_reference_chain_failure", LoadExternalReferenceChainFailure);
+        Observe(observations, "content.external_reference_chain_repair", LoadExternalReferenceChainThenRepair);
         Observe(observations, "content.missing_asset", LoadMissingAsset);
 
         observations.Add("content.open_stream_disposed=" + Flag(StreamIsDisposedAfterFailure()));
@@ -188,6 +190,64 @@ public static class ContentErrorCorpus
         };
         using var content = new MappedContentManager(assets);
         return content.Load<int>("folder/sub/root");
+    }
+
+    /// <summary>
+    /// A three-deep reference chain whose *leaf* is missing.
+    ///
+    /// Distinct from <c>external_reference_missing</c>, which fails at depth one. Here two readers
+    /// are already on the stack when the failure happens, so the observation records what a caller
+    /// actually catches after a failure has travelled back up through intermediate
+    /// <c>ReadExternalReference</c> frames -- whether the original fault survives the trip or gets
+    /// wrapped once per level.
+    /// </summary>
+    private static int LoadExternalReferenceChainFailure()
+    {
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/root"] = ExternalReferenceAsset("middle"),
+            ["folder/middle"] = ExternalReferenceAsset("child"),
+        };
+        using var content = new MappedContentManager(assets);
+        return content.Load<int>("folder/root");
+    }
+
+    /// <summary>
+    /// The same broken chain, then repaired, loaded twice through one manager.
+    ///
+    /// This is the route that says something about the cache rather than about the reader: the first
+    /// load fails at depth three, and the question is what the two assets that were *already
+    /// in progress* left behind. A manager that recorded a name before its load succeeded would have
+    /// poisoned both "folder/root" and "folder/middle", and the repaired second load would fail or
+    /// answer with a half-built object. Returning the leaf's value is the proof it recorded neither.
+    ///
+    /// A cycle -- root referencing itself through a child -- is deliberately *not* a corpus route.
+    /// XNA's own cache is written after a load returns, not before, so a cyclic external reference
+    /// recurses until the stack is gone; a .NET stack overflow cannot be caught and would take the
+    /// probe process with it, turning one observation into zero. It is a real behaviour and it is
+    /// recorded here in prose because the corpus cannot survive observing it.
+    /// </summary>
+    private static int LoadExternalReferenceChainThenRepair()
+    {
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/root"] = ExternalReferenceAsset("middle"),
+            ["folder/middle"] = ExternalReferenceAsset("child"),
+        };
+        using var content = new MappedContentManager(assets);
+
+        try
+        {
+            _ = content.Load<int>("folder/root");
+            return -1;
+        }
+        catch (Exception)
+        {
+            // Expected: the leaf is absent. What matters is the state left behind, below.
+        }
+
+        assets["folder/child"] = Container(IntPayload());
+        return content.Load<int>("folder/root");
     }
 
     private static byte[] ExternalReferenceAsset(string reference) => Container(Payload(

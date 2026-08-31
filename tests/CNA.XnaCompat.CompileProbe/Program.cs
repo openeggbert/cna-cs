@@ -1,33 +1,23 @@
 using System.Reflection;
+using CNA.BehaviorProbes;
 
 namespace XnaCompatibilityCompileProbe;
 
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         LoadXnaRuntimeAssembliesIfRequested();
 
-        foreach (string observation in MathBehaviorCorpus.Capture())
-        {
-            Console.WriteLine(observation);
-        }
-
-        foreach (string observation in InputBehaviorCorpus.Capture())
-        {
-            Console.WriteLine(observation);
-        }
-
-        foreach (string observation in AudioBehaviorCorpus.Capture())
-        {
-            Console.WriteLine(observation);
-        }
-
-        foreach (string observation in ContentErrorCorpus.Capture())
-        {
-            Console.WriteLine(observation);
-        }
+        ProbeOutput.Write(
+            args,
+            [
+                .. MathBehaviorCorpus.Capture(),
+                .. InputBehaviorCorpus.Capture(),
+                .. AudioBehaviorCorpus.Capture(),
+                .. ContentErrorCorpus.Capture(),
+            ]);
     }
 
     private static void LoadXnaRuntimeAssembliesIfRequested()

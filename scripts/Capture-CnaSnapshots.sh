@@ -61,17 +61,29 @@ manifest_value() {
   "$dotnet_command" run --project "$behavior_tool" -c Release --no-build -- get "$@"
 }
 
+# A probe writes its observations to a named file rather than to standard output, because it
+# shares standard output with the native library loaded underneath it and some CNA renderers
+# write there: measured, the graphics probe redirected to a file produced 166 lines under
+# OPENGLES3 and 167 under Vulkan, whose backend prints a capability banner at device creation,
+# and the corpus validator rejected the second as a count mismatch. Naming the file makes a
+# snapshot depend on the probe alone.
 run_probe() {
   local probe_id="$1"
   local project="$2"
   local snapshot_file="$3"
   local raw_file="$capture_root/$probe_id.raw.txt"
 
-  "$dotnet_command" run --project "$project" -c Release --no-build >"$raw_file"
+  "${runner[@]}" "$dotnet_command" run --project "$project" -c Release --no-build -- \
+    --output "$raw_file"
   "$dotnet_command" run --project "$behavior_tool" -c Release --no-build -- \
     validate --probe "$probe_id" --input "$raw_file" \
     --output "$capture_root/output/$snapshot_file"
 }
+
+runner=()
+if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
+  runner=(xvfb-run -a)
+fi
 
 cd "$repository_root"
 "$dotnet_command" build "$behavior_tool" -c Release -m:1
@@ -102,24 +114,9 @@ if [[ "$pure_only" == 0 ]]; then
   export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-dummy}"
   export XDG_DATA_HOME="$capture_root/xdg-data"
 
-  runner=()
-  if [[ -z "${DISPLAY:-}" ]] && command -v xvfb-run >/dev/null 2>&1; then
-    runner=(xvfb-run -a)
-  fi
+  run_probe graphics "$graphics_project" "$graphics_snapshot"
 
-  "${runner[@]}" "$dotnet_command" run \
-    --project "$graphics_project" \
-    -c Release --no-build >"$capture_root/graphics.raw.txt"
-  "$dotnet_command" run --project "$behavior_tool" -c Release --no-build -- \
-    validate --probe graphics --input "$capture_root/graphics.raw.txt" \
-    --output "$capture_root/output/$graphics_snapshot"
-
-  "${runner[@]}" "$dotnet_command" run \
-    --project "$runtime_project" \
-    -c Release --no-build >"$capture_root/runtime.raw.txt"
-  "$dotnet_command" run --project "$behavior_tool" -c Release --no-build -- \
-    validate --probe runtime --input "$capture_root/runtime.raw.txt" \
-    --output "$capture_root/output/$runtime_snapshot"
+  run_probe runtime "$runtime_project" "$runtime_snapshot"
 
   "$dotnet_command" run --project "$behavior_tool" -c Release --no-build -- combine \
     --input "compile=$capture_root/output/$compile_snapshot" \

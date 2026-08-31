@@ -46,4 +46,8 @@
            Text="Set FNA_FRAMEWORK_PATH or FnaFrameworkPath to FNA.dll." />
   </Target>
 
+  <ItemGroup>
+    <Compile Include="../probe-shared/ProbeOutput.cs" Link="ProbeOutput.cs" />
+  </ItemGroup>
+
 </Project>
