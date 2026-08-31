@@ -616,6 +616,7 @@ static class InteropLayout
         // struct's own offsets and size are what has to agree, and they are measured.
         "CnaReservedBytes2",
         "CnaReservedBytes3",
+        "CnaReservedBytes5",
         "CnaReservedBytes7",
     };
 

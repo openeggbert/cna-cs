@@ -317,3 +317,116 @@ internal sealed class CnbTestModelBuilder : IDisposable
         return values;
     }
 }
+
+/// <summary>
+/// Builds a <c>.cnb</c> sprite-font fixture through CNA's own encoder, for the same reason
+/// <see cref="CnbTestModelBuilder"/> exists: a font container is an atlas and a glyph table with a
+/// declared relationship, and hand-assembling one would encode this repository's reading of the
+/// schema into the fixture.
+/// </summary>
+internal sealed class CnbTestSpriteFontBuilder : IDisposable
+{
+    private readonly NativeResourceHandle _handle;
+
+    public CnbTestSpriteFontBuilder()
+    {
+        CnaResult result = Native.cna_cnb_sprite_font_data_create(out CnaHandle font);
+        CnaException.ThrowIfFailed(result, nameof(CnbTestSpriteFontBuilder));
+        _handle = new NativeResourceHandle(
+            font.AsNint,
+            h => Native.cna_cnb_sprite_font_data_destroy(new CnaHandle(h)).IsSuccess());
+    }
+
+    public void SetInfo(int lineSpacing, float spacing, char? defaultCharacter)
+    {
+        var info = CnaCnbSpriteFontInfo.Versioned();
+        info.LineSpacing = lineSpacing;
+        info.Spacing = spacing;
+        info.DefaultCharacter = defaultCharacter ?? '\0';
+        info.HasDefaultCharacter = (byte)(defaultCharacter.HasValue ? 1 : 0);
+
+        CnaResult result = Native.cna_cnb_sprite_font_data_set_info(Handle, in info);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(SetInfo));
+    }
+
+    public void AddGlyph(char character, Rectangle bounds, Rectangle cropping, Vector3 kerning)
+    {
+        var glyph = CnaSpriteFontGlyph.Versioned();
+        glyph.Character = character;
+        glyph.GlyphBounds = new CnaRectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        glyph.Cropping = new CnaRectangle(cropping.X, cropping.Y, cropping.Width, cropping.Height);
+        glyph.Kerning = new CnaVector3(kerning.X, kerning.Y, kerning.Z);
+
+        CnaResult result = Native.cna_cnb_sprite_font_data_add_glyph(Handle, in glyph, out _);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(AddGlyph));
+    }
+
+    /// <summary>Gives the font an RGBA8 atlas, built through CNA's own texture constructor.</summary>
+    public unsafe void SetAtlas(int width, int height, ReadOnlySpan<byte> rgba)
+    {
+        CnaHandle atlas;
+        fixed (byte* pixels = rgba)
+        {
+            CnaResult created = Native.cna_cnb_texture_data_create_rgba8(
+                (uint)width, (uint)height, pixels, (ulong)rgba.Length, out atlas);
+            CnaException.ThrowIfFailed(created, nameof(SetAtlas));
+        }
+
+        try
+        {
+            CnaResult result = Native.cna_cnb_sprite_font_data_set_atlas(Handle, atlas);
+            GC.KeepAlive(this);
+            CnaException.ThrowIfFailed(result, nameof(SetAtlas));
+        }
+        finally
+        {
+            // The setter copies; this description stays the caller's to release either way.
+            _ = Native.cna_cnb_texture_data_destroy(atlas);
+        }
+    }
+
+    public unsafe void WriteToFile(string path, string contentName = "")
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        byte[]? encoded = null;
+        CnaResult result = CnaStringMarshal.WithStringView(contentName, view =>
+        {
+            CnaResult sizeResult = Native.cna_cnb_encode_sprite_font(Handle, view, null, 0, out ulong required);
+            if (sizeResult.IsFailure() && sizeResult != CnaResult.BufferTooSmall)
+            {
+                return sizeResult;
+            }
+
+            var bytes = new byte[checked((int)required)];
+            fixed (byte* destination = bytes)
+            {
+                CnaResult encodeResult = Native.cna_cnb_encode_sprite_font(
+                    Handle, view, destination, (ulong)bytes.Length, out ulong written);
+                if (!encodeResult.IsSuccess())
+                {
+                    return encodeResult;
+                }
+
+                if (written != (ulong)bytes.Length)
+                {
+                    throw new CnaException(
+                        $"The CNB sprite-font encoder asked for {required} bytes and wrote {written}.");
+                }
+            }
+
+            encoded = bytes;
+            return CnaResult.Success;
+        });
+
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(WriteToFile));
+        File.WriteAllBytes(path, encoded!);
+    }
+
+    public void Dispose() => _handle.Dispose();
+
+    private CnaHandle Handle => new(_handle.DangerousGetHandle());
+}

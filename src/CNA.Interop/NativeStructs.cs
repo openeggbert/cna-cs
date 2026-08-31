@@ -753,6 +753,32 @@ internal struct CnaCnbTextureInfo
     };
 }
 
+/// <summary>A decoded CNB sprite font's shape -- <c>CNA_CnbSpriteFontInfo</c>. Caller-initialised
+/// and versioned, like <see cref="CnaCnbReadLimits"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbSpriteFontInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public ulong GlyphCount;
+    public int LineSpacing;
+    public float Spacing;
+
+    /// <summary>C's <c>CNA_Char16</c>: a UTF-16 code unit, which is what a <c>char</c> is here.
+    /// Meaningful only when <see cref="HasDefaultCharacter"/> is set -- a font without a default and
+    /// a font whose default is U+0000 are otherwise the same two bytes.</summary>
+    public ushort DefaultCharacter;
+
+    public byte HasDefaultCharacter;
+    public CnaReservedBytes5 Reserved;
+
+    public static unsafe CnaCnbSpriteFontInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbSpriteFontInfo),
+        StructVersion = 1,
+    };
+}
+
 /// <summary>
 /// One video frame plus the identity a caller needs to track it -- <c>CNA_VideoFrameEXT</c>.
 /// Caller-initialised and versioned, like <see cref="CnaCnbReadLimits"/>.

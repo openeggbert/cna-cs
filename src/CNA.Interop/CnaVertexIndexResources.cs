@@ -126,6 +126,14 @@ internal struct CnaReservedBytes2
     private byte _element0;
 }
 
+/// <summary>Five bytes of inline padding, spelled the same way as
+/// <see cref="CnaReservedBytes3"/>.</summary>
+[InlineArray(5)]
+internal struct CnaReservedBytes5
+{
+    private byte _element0;
+}
+
 /// <summary>Mirrors the real, shipped openeggbert/cna C API's own <c>CNA_VertexBufferBinding</c>
 /// exactly (<c>vertex_resources.h:95-102</c>) -- a plain fixed struct with no
 /// <c>struct_size</c>/<c>struct_version</c> header, since it only ever appears as an array element

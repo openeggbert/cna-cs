@@ -2468,6 +2468,52 @@ internal static partial class Native
     internal static partial CnaResult cna_video_player_get_frame_ext(
         CnaHandle player, ref CnaVideoFrameExt outFrame);
 
+    // -- CNB sprite fonts (cnb.h) -------------------------------------------------------------
+    //
+    // The glyph struct is the same CNA_SpriteFontGlyph the ordinary SpriteFont path already uses,
+    // and the atlas comes out as a CNB texture description the texture slice already knows how to
+    // upload -- so a decoded CNB font becomes a real SpriteFont with no new vocabulary.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_decode_sprite_font(CnaHandle document, out CnaHandle outFont);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_destroy(CnaHandle font);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_get_info(
+        CnaHandle font, ref CnaCnbSpriteFontInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_get_glyph(
+        CnaHandle font, ulong index, ref CnaSpriteFontGlyph outGlyph);
+
+    /// <summary>The atlas, as a new CNB texture description the caller releases -- not a view into
+    /// the font, which is why a font disposed first cannot invalidate one already taken.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_copy_atlas(
+        CnaHandle font, out CnaHandle outAtlas);
+
+    // The authoring half, so a fixture is written by CNA's own encoder.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_create(out CnaHandle outFont);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_set_info(
+        CnaHandle font, in CnaCnbSpriteFontInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_add_glyph(
+        CnaHandle font, in CnaSpriteFontGlyph glyph, out ulong outIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sprite_font_data_set_atlas(CnaHandle font, CnaHandle atlas);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_encode_sprite_font(
+        CnaHandle font, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
+
     // -- CNB loader registry (cnb.h) ----------------------------------------------------------
     //
     // The extension mechanism for CNA's own container: a process-wide table mapping a custom asset
