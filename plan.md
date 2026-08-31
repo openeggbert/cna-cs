@@ -777,12 +777,20 @@ records authority, source-portability value, implementation status, and namespac
 
   | renderer | capabilities absent | engine layer | integration | 60/600 frames | clears a render target |
   | --- | --- | --- | --- | --- | --- |
-  | OPENGLES3 | 1 (`MultiSampleAntiAliasing`) | version 2 | 203/207 | pass | **no** -- the EasyGL defect |
+  | OPENGLES3 (EasyGL, GLES 3.2) | 1 (`MultiSampleAntiAliasing`) | version 2 | 203/207 | pass | **no** -- the EasyGL defect |
+  | OPENGL33 (EasyGL, GL 4.6 core) | same | version 2 | whole-run teardown aborts; no single class reproduces it | not run | **no** -- identically |
   | VULKAN | 7 -- `MultiStreamVertexInput`, `CompiledEffects`, float targets, half-float filtering, compute, indirect draw | absent | **207/207** | pass | yes |
   | SDL_RENDERER | **18** -- no `ThreeD`, `CustomEffects`, `OcclusionQuery`, `Texture3D`, stencil, … | absent | **207/207** | pass | yes |
   | SOFTWARE | 9 -- `MultipleRenderTargets`, `Texture3D`, `Instancing`, `CompiledEffects`, float targets, compute, indirect draw | absent | **207/207** | pass | yes |
   | HEADLESS | 9 -- `Texture3D`, `MultiStreamVertexInput`, `AdditiveBlending`, `CompiledEffects`, float targets, compute, indirect draw | absent | **207/207** | pass | refuses readback |
-  | the other 34 | | | | | `NOT_BUILT` |
+  | the other 33 | | | | | `NOT_BUILT` |
+
+  **`OPENGL33` is the one that narrowed the clear defect.** It is the *same* EasyGL renderer driving
+  desktop OpenGL 4.6 core rather than GLES 3.2, and it loses the clear identically -- so the fault is
+  in code both profiles share rather than anything about GLES. It also aborts the suite at whole-run
+  teardown, which no single test class reproduces: the same shape as the SIGTERM crash and the UBSan
+  finding, and recorded rather than chased further, because all three are upstream's teardown
+  ordering and one reproduction of it is enough to report.
 
   **Five distinct capability profiles, and no two are the same set** -- which is the property that
   makes them worth having rather than the frame counts. `SOFTWARE` reports `ThreeD` and still refuses
