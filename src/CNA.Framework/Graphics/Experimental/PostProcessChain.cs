@@ -125,6 +125,54 @@ public sealed class PostProcessPass : IDisposable
         return new PostProcessPass(pass.AsNint);
     }
 
+    /// <summary>
+    /// Creates a bloom pass: extract what is brighter than a threshold, blur it, add it back.
+    ///
+    /// Configure it through <see cref="Bloom"/>. The threshold, intensity and iteration count live
+    /// on the native pass, not here, so a pass added to a chain and reconfigured afterwards takes
+    /// the new settings -- which is the shape a game wants when quality is a menu option.
+    /// </summary>
+    public static PostProcessPass CreateBloom(GraphicsDevice graphicsDevice)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+
+        CnaResult result = Native.cna_bloom_pass_create(
+            graphicsDevice.ResolveNativeDeviceHandle(), out CnaHandle pass);
+        CnaException.ThrowIfFailed(result, nameof(CreateBloom));
+        return new PostProcessPass(pass.AsNint);
+    }
+
+    /// <summary>Creates a tonemap pass, which maps an HDR image into a displayable range.
+    /// Configure it through <see cref="Tonemap"/>.</summary>
+    public static PostProcessPass CreateTonemap(GraphicsDevice graphicsDevice)
+    {
+        ArgumentNullException.ThrowIfNull(graphicsDevice);
+
+        CnaResult result = Native.cna_tonemap_pass_create(
+            graphicsDevice.ResolveNativeDeviceHandle(), out CnaHandle pass);
+        CnaException.ThrowIfFailed(result, nameof(CreateTonemap));
+        return new PostProcessPass(pass.AsNint);
+    }
+
+    /// <summary>
+    /// This pass's bloom settings.
+    ///
+    /// A typed view rather than properties on <see cref="PostProcessPass"/> itself, because a
+    /// threshold means nothing on a blit and a type that offered one on every pass would be saying
+    /// otherwise. Asking a pass of another kind is refused by CNA with
+    /// <c>InvalidArgument</c> -- native does the type check, and this does not second-guess it.
+    /// </summary>
+    public BloomSettings Bloom => _bloom ??= new BloomSettings(this);
+
+    /// <summary>This pass's tonemap settings, on the same terms as <see cref="Bloom"/>.</summary>
+    public TonemapSettings Tonemap => _tonemap ??= new TonemapSettings(this);
+
+    private BloomSettings? _bloom;
+    private TonemapSettings? _tonemap;
+
+    /// <summary>The handle, for the settings views in this file.</summary>
+    internal CnaHandle NativeHandle => Handle;
+
     /// <summary>The pass's own name, as CNA reports it.</summary>
     public unsafe string Name
     {

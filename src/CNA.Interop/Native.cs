@@ -2456,6 +2456,86 @@ internal static partial class Native
     internal static unsafe partial CnaResult cna_cnb_encode_texture2d(
         CnaHandle texture, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
 
+    // -- Engine-layer HDR passes (engine_layer.h) ---------------------------------------------
+    //
+    // Bloom and tonemap, which are post-process passes of the family D3's second slice already
+    // binds -- so they enter the chain through the routes that are already here. The three pure
+    // routes at the end are the reason this family was chosen over a larger one: they compute the
+    // pass's own arithmetic without a device, which is the only exact evidence available for a
+    // shader's behaviour.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_create(CnaHandle graphicsDevice, out CnaHandle outPass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_get_threshold(CnaHandle pass, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_set_threshold(CnaHandle pass, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_get_intensity(CnaHandle pass, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_set_intensity(CnaHandle pass, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_get_iterations(CnaHandle pass, out int outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_set_iterations(CnaHandle pass, int value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_reset_targets(CnaHandle pass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_create(CnaHandle graphicsDevice, out CnaHandle outPass);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_get_mode(CnaHandle pass, out CnaTonemappingMode outMode);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_set_mode(CnaHandle pass, CnaTonemappingMode mode);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_get_exposure(CnaHandle pass, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_set_exposure(CnaHandle pass, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_get_gamma(CnaHandle pass, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_set_gamma(CnaHandle pass, float value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_is_deband_enabled(CnaHandle pass, out byte outEnabled);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_set_deband_enabled(CnaHandle pass, byte value);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_get_deband_strength(CnaHandle pass, out float outValue);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_set_deband_strength(CnaHandle pass, float value);
+
+    /// <summary>The pass's own arithmetic, without a pass. Pure, deviceless and exact -- which makes
+    /// it the strongest evidence available about what these passes do, since a shader's output can
+    /// otherwise only be compared against a reimplementation of the shader.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_extract_channel(
+        float value, float threshold, out float outExtracted);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_bloom_pass_iterations_for_quality(
+        CnaRenderQuality quality, out int outIterations);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_tonemap_pass_tonemap_channel(
+        CnaTonemappingMode mode, float value, float exposure, float gamma, out float outValue);
+
     // -- CNB models (cnb.h) -------------------------------------------------------------------
     //
     // The read path first: decode a model out of an open document and walk the graph it produced.
