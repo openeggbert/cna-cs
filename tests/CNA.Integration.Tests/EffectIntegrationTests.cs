@@ -238,17 +238,47 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            const string Vertex =
-                "#version 330 core\n" +
+            // The source is built for the dialect the renderer asks for, exactly as the sibling
+            // test above does, and for a harder reason than tidiness.
+            //
+            // This test used to hard-code "#version 330 core". On a GlslEs renderer that is desktop
+            // GLSL handed to an ES context, and EasyGL does not refuse it -- it takes the whole
+            // process down inside `cna_shader_effect_create`. That is upstream's defect and it is
+            // recorded as one (docs/native-behavior-blockers.md: a dialect mismatch must be a
+            // refusal, not an abort). But the test was also simply wrong: `effects.h` says a caller
+            // must ask for the dialect rather than guess it, and this one guessed. The cost was out
+            // of all proportion to the mistake -- the crash took the whole integration suite down
+            // on both GL renderers, 94 tests short of the end, and read for a while as an
+            // unexplained environmental failure.
+            ShaderDialect dialect = device.ShadingDialect;
+            string version = dialect switch
+            {
+                ShaderDialect.GlslEs => "#version 300 es\nprecision mediump float;",
+                _ => "#version 330 core",
+            };
+
+            string vertex =
+                version + "\n" +
                 "uniform float u_scale;\n" +
                 "in vec3 a_position;\n" +
                 "void main() { gl_Position = vec4(a_position * u_scale, 1.0); }";
 
-            const string Fragment =
-                "#version 330 core\n" +
+            string fragment =
+                version + "\n" +
                 "uniform vec4 u_tint;\n" +
                 "out vec4 o_color;\n" +
                 "void main() { o_color = u_tint; }";
+
+            if (dialect is ShaderDialect.Unknown && device.SupportsCapability(GraphicsCapability.CustomEffects))
+            {
+                // A renderer that claims custom effects but declares no dialect leaves a caller
+                // nothing to write source for. Reporting that is the honest answer; guessing is
+                // what caused the crash above.
+                output.WriteLine(
+                    $"renderer '{device.RendererName}' supports CustomEffects but declares no " +
+                    "shading dialect, so there is no source to supply.");
+                return;
+            }
 
             if (!device.SupportsCapability(GraphicsCapability.CustomEffects))
             {
@@ -256,7 +286,7 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
                 // than skipped, because "nothing reflects" is exactly the claim this test makes on
                 // the renderers that do support the capability, and it should not be a silent pass
                 // on the one that cannot.
-                using var refused = new Effect(device, Vertex, Fragment);
+                using var refused = new Effect(device, vertex, fragment);
                 output.WriteLine(
                     $"ABSENT BRANCH EXERCISED: '{device.RendererName}' lacks CustomEffects; " +
                     $"valid={refused.IsSourceValid} parameters={refused.Parameters.Count}");
@@ -266,7 +296,7 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
                 return;
             }
 
-            using var effect = new Effect(device, Vertex, Fragment);
+            using var effect = new Effect(device, vertex, fragment);
 
             output.WriteLine(
                 $"renderer '{device.RendererName}' dialect={device.ShadingDialect} " +
