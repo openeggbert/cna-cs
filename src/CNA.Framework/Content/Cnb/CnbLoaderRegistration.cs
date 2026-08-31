@@ -45,6 +45,44 @@ public abstract class CnbAssetLoader
 /// </summary>
 public sealed class CnbLoaderRegistration : IDisposable
 {
+    /// <summary>
+    /// Asset type identifiers a <see cref="CnbLoaderRegistration"/> registered, and therefore the
+    /// only ones whose produced pointer is a <see cref="GCHandle"/> this binding allocated.
+    ///
+    /// <b>This exists because the registry is shared with CNA.</b> Built-in loaders live in the same
+    /// table -- <c>cna_cnb_loader_registry_register_builtins</c> puts them there and every content
+    /// manager calls it -- and what a built-in hands back through <c>out_object</c> is a C++ object
+    /// pointer. Treating that as a managed handle is undefined behaviour, not a wrong answer, so
+    /// <see cref="CnbLoader.Invoke"/> refuses rather than guesses.
+    /// </summary>
+    private static readonly HashSet<uint> ManagedTypeIds = [];
+
+    private static readonly object ManagedTypeIdsGate = new();
+
+    internal static bool IsManagedLoader(uint assetTypeId)
+    {
+        lock (ManagedTypeIdsGate)
+        {
+            return ManagedTypeIds.Contains(assetTypeId);
+        }
+    }
+
+    private static void RememberManaged(uint assetTypeId)
+    {
+        lock (ManagedTypeIdsGate)
+        {
+            ManagedTypeIds.Add(assetTypeId);
+        }
+    }
+
+    private static void ForgetManaged(uint assetTypeId)
+    {
+        lock (ManagedTypeIdsGate)
+        {
+            ManagedTypeIds.Remove(assetTypeId);
+        }
+    }
+
     private readonly GCHandle _self;
     private readonly CnbAssetLoader _loader;
     private readonly List<GCHandle> _roots = [];
@@ -108,6 +146,7 @@ public sealed class CnbLoaderRegistration : IDisposable
                         &OnLoad,
                     GCHandle.ToIntPtr(registration._self)));
             CnaException.ThrowIfFailed(result, nameof(Register));
+            RememberManaged(assetTypeId);
             return registration;
         }
         catch
@@ -150,8 +189,16 @@ public sealed class CnbLoaderRegistration : IDisposable
     /// <summary>
     /// Registers CNA's own loaders for its built-in asset types.
     ///
-    /// Idempotent and process-wide. Separate from a game's registrations because the built-ins live
-    /// in CNA's reserved identifier range, which no caller can claim.
+    /// Idempotent and process-wide, and every content manager calls it already, so a game normally
+    /// need not. It covers the built-ins that need nothing but their own codec -- <c>Curve</c> and
+    /// <c>AnimationClip</c>; the rest need a graphics device or the manager itself and are
+    /// registered by a content manager.
+    ///
+    /// <b>A built-in loader cannot be invoked through <see cref="CnbLoader.Invoke"/>.</b> What it
+    /// produces is a C++ object, and this binding has no way to turn that pointer into a managed
+    /// one; <see cref="CnbLoader.Invoke"/> says so rather than reinterpreting it. Reach CNA's own
+    /// asset types through their typed entry points -- <see cref="CnbTexture"/>,
+    /// <see cref="CnbModel"/> -- which is what those slices are for.
     /// </summary>
     public static void RegisterBuiltins() =>
         CnaException.ThrowIfFailed(Native.cna_cnb_loader_registry_register_builtins(), nameof(RegisterBuiltins));
@@ -172,7 +219,7 @@ public sealed class CnbLoaderRegistration : IDisposable
             document.NativeHandle, out CnaHandle loader);
         GC.KeepAlive(document);
         CnaException.ThrowIfFailed(result, nameof(ResolveFor));
-        return new CnbLoader(loader.AsNint);
+        return new CnbLoader(loader.AsNint, document.AssetTypeId);
     }
 
     /// <summary>Withdraws the registration and releases every object its loader produced.</summary>
@@ -188,6 +235,7 @@ public sealed class CnbLoaderRegistration : IDisposable
         try
         {
             _ = Native.cna_cnb_loader_registry_remove(AssetTypeId, out _);
+            ForgetManaged(AssetTypeId);
         }
         finally
         {
@@ -281,11 +329,26 @@ public sealed class CnbLoaderRegistration : IDisposable
 public sealed class CnbLoader : IDisposable
 {
     private readonly NativeResourceHandle _handle;
+    private readonly uint _assetTypeId;
 
-    internal CnbLoader(nint handleValue) =>
+    internal CnbLoader(nint handleValue, uint assetTypeId)
+    {
         _handle = new NativeResourceHandle(
             handleValue,
             h => Native.cna_cnb_loader_destroy(new CnaHandle(h)).IsSuccess());
+        _assetTypeId = assetTypeId;
+    }
+
+    /// <summary>The asset type identifier this loader was found for.</summary>
+    public uint AssetTypeId => _assetTypeId;
+
+    /// <summary>
+    /// Whether this loader is one a <see cref="CnbLoaderRegistration"/> installed, and therefore
+    /// whether <see cref="Invoke"/> can hand its object back.
+    ///
+    /// <see langword="false"/> for CNA's own built-in loaders, which share the registry.
+    /// </summary>
+    public bool IsManaged => CnbLoaderRegistration.IsManagedLoader(_assetTypeId);
 
     /// <summary>The loader registered for an identifier, or <see langword="null"/> when none is.
     /// Answering null rather than throwing because "nothing is registered" is an ordinary question
@@ -295,7 +358,7 @@ public sealed class CnbLoader : IDisposable
         CnaResult result = Native.cna_cnb_loader_registry_find(
             assetTypeId, out byte found, out CnaHandle loader);
         CnaException.ThrowIfFailed(result, nameof(Find));
-        return found == 0 ? null : new CnbLoader(loader.AsNint);
+        return found == 0 ? null : new CnbLoader(loader.AsNint, assetTypeId);
     }
 
     /// <summary>
@@ -312,6 +375,18 @@ public sealed class CnbLoader : IDisposable
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(contentManager);
         ArgumentNullException.ThrowIfNull(assetName);
+
+        // The registry is shared with CNA. A built-in loader answers with a C++ object pointer, and
+        // the unwrap below would hand that to GCHandle.FromIntPtr -- undefined behaviour rather than
+        // a wrong answer. Refusing is the only safe option, because there is no managed object to
+        // return and no way to tell that from the pointer itself.
+        if (!IsManaged)
+        {
+            throw new NotSupportedException(
+                $"The CNB loader for asset type 0x{_assetTypeId:X8} is one of CNA's own, and what it " +
+                "produces is a C++ object rather than a managed one. Use the typed entry points " +
+                "(CnbTexture, CnbModel) for CNA's built-in asset types.");
+        }
 
         // The out-pointer lives in an array rather than a local: C# will not let a lambda take the
         // address of a local, and the string marshaller's callback shape is what puts one here.

@@ -16,6 +16,15 @@ A second renderer remains part of this measurement and it mattered. HEADLESS rep
 nineteen graphics capabilities absent and contains no engine layer, so refusals this table describes
 can be observed rather than only reasoned about -- and one row turned out to be false.
 
+**Every row was re-audited in this pass, not only the ones that moved.** The four that closed are
+below; the rest were each checked against the 0.21.0 headers and are still real: `present` still
+takes only the device, `CNA_ResourceCreatedEventInfo` still carries nothing but `has_resource` and
+its destroyed twin nothing but a name and `has_tag`, the audio engine still has no renderer
+selection, there is still no deterministic device-loss trigger and no input *state injection* (only
+the `reset_for_tests_ext` family), and `CNA_GRAPHICS_CAPABILITY_*` still names neither render-target
+readback nor cube-face storage -- the last confirmed by measurement rather than by reading, since
+HEADLESS and SDL_RENDERER both refuse operations they report no capability for.
+
 `scripts/Verify-BlockerTable.sh` checks the two things about this table that can be checked
 mechanically: every `cna_*` route a row names still exists in the canonical headers, and the
 generation this document says it was measured against is the generation of the headers it is being

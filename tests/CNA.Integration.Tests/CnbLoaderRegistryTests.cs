@@ -319,4 +319,61 @@ public class CnbLoaderRegistryTests(ITestOutputHelper output, NativeGameFixture 
             }
         });
     }
+
+    /// <summary>
+    /// A built-in loader is refused rather than unwrapped, because the registry is shared with CNA.
+    ///
+    /// <b>This is a defect this binding shipped for about an hour and the registry itself
+    /// surfaced.</b> <c>cna_cnb_loader_registry_register_builtins</c> puts CNA's own loaders in the
+    /// same table -- and every content manager calls it, so they are there whether a game asks or
+    /// not. What a built-in hands back through <c>out_object</c> is a C++ object pointer, and
+    /// <see cref="CnbLoader.Invoke"/> unwraps that pointer as a <c>GCHandle</c>: for a built-in
+    /// that is undefined behaviour, not a wrong answer, and nothing in the pointer distinguishes
+    /// the two.
+    ///
+    /// So the loader carries the identifier it was found for, and only identifiers a
+    /// <see cref="CnbLoaderRegistration"/> installed are unwrapped. <c>Curve</c> is used here
+    /// because it is one of the two built-ins that need nothing but their own codec, so it is
+    /// reliably present.
+    /// </summary>
+    [NativeFact]
+    public void ABuiltInLoader_IsRefusedRatherThanUnwrapped()
+    {
+        fixture.InsideAFrame(game =>
+        {
+            const uint CurveAssetTypeId = 0x00000007;
+            CnbLoaderRegistration.RegisterBuiltins();
+
+            CnbLoader? builtin = CnbLoader.Find(CurveAssetTypeId);
+            Assert.NotNull(builtin);
+
+            using (builtin)
+            {
+                Assert.Equal(CurveAssetTypeId, builtin.AssetTypeId);
+                Assert.False(builtin.IsManaged, "CNA's own loader must not be reported as managed.");
+
+                // The document is irrelevant: the refusal happens before anything is invoked,
+                // because there is no safe way to proceed.
+                string path = WriteCustomAsset("CnaCs.Tests.UnusedForThisTest", [1], out uint _);
+                try
+                {
+                    using CnbDocument document = CnbDocument.Open(path);
+                    NotSupportedException failure = Assert.Throws<NotSupportedException>(
+                        () => builtin.Invoke(document, game.Content, "curve"));
+                    output.WriteLine($"built-in loader refused: {failure.Message}");
+                }
+                finally
+                {
+                    File.Delete(path);
+                }
+            }
+
+            // And a loader this binding did register is still reported as managed, so the guard
+            // separates the two rather than refusing everything.
+            using var mine = CnbLoaderRegistration.Register("CnaCs.Tests.ManagedFlagLevel", new LevelLoader());
+            using CnbLoader? found = CnbLoader.Find(mine.AssetTypeId);
+            Assert.NotNull(found);
+            Assert.True(found.IsManaged);
+        });
+    }
 }
