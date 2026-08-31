@@ -20,7 +20,7 @@ packaging, and release engineering.
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
 | Managed tests | 622 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
-| Native integration | 207 tests in Debug and Release against **five** ABI 0.21.0 renderers on Linux x64. VULKAN, SDL_RENDERER, SOFTWARE and HEADLESS: **207/207 in both configurations**. Both EasyGL profiles (OPENGLES3, OPENGL33) **abort the run partway with a SIGSEGV in the test host** -- see the blocker table; earlier in the same session OPENGLES3 completed 203/207 from the same commit and the same library, so the current state is recorded rather than the better earlier one. **Zero silent capability branches remain on any renderer**; 31 absent branches assert on SDL_RENDERER alone |
+| Native integration | 207 tests in Debug and Release against **five** ABI 0.21.0 renderers on Linux x64. VULKAN, SDL_RENDERER, SOFTWARE and HEADLESS: **207/207 in both configurations**. OPENGLES3: **203/207**, the four being the one EasyGL clear defect wearing three costumes plus its own minimal statement. OPENGL33 cannot be captured at all -- it segfaults on the second `Game` -- and that is a blocker-table row rather than an unknown. **Zero silent capability branches remain on any renderer**; 31 absent branches assert on SDL_RENDERER alone |
 | Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 1002 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 1002 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
@@ -777,8 +777,8 @@ records authority, source-portability value, implementation status, and namespac
 
   | renderer | capabilities absent | engine layer | integration | 60/600 frames | clears a render target |
   | --- | --- | --- | --- | --- | --- |
-  | OPENGLES3 (EasyGL, GLES 3.2) | 1 (`MultiSampleAntiAliasing`) | version 2 | **aborts partway (SIGSEGV)**; completed 203/207 earlier the same session | pass | **no** -- the EasyGL defect |
-  | OPENGL33 (EasyGL, GL 4.6 core) | same | version 2 | **aborts partway (SIGSEGV)**, like its sibling profile | not run | **no** -- identically |
+  | OPENGLES3 (EasyGL, GLES 3.2) | 1 (`MultiSampleAntiAliasing`) | version 2 | **203/207** -- the 4 are the clear defect | pass | **no** -- the EasyGL defect |
+  | OPENGL33 (EasyGL, GL 4.6 core) | same | version 2 | **cannot be captured** -- segfaults on the second `Game` | pass | **no** -- identically |
   | VULKAN | 7 -- `MultiStreamVertexInput`, `CompiledEffects`, float targets, half-float filtering, compute, indirect draw | absent | **207/207** | pass | yes |
   | SDL_RENDERER | **18** -- no `ThreeD`, `CustomEffects`, `OcclusionQuery`, `Texture3D`, stencil, … | absent | **207/207** | pass | yes |
   | SOFTWARE | 9 -- `MultipleRenderTargets`, `Texture3D`, `Instancing`, `CompiledEffects`, float targets, compute, indirect draw | absent | **207/207** | pass | yes |
@@ -787,10 +787,19 @@ records authority, source-portability value, implementation status, and namespac
 
   **`OPENGL33` is the one that narrowed the clear defect.** It is the *same* EasyGL renderer driving
   desktop OpenGL 4.6 core rather than GLES 3.2, and it loses the clear identically -- so the fault is
-  in code both profiles share rather than anything about GLES. It also aborts the suite at whole-run
-  teardown, which no single test class reproduces: the same shape as the SIGTERM crash and the UBSan
-  finding, and recorded rather than chased further, because all three are upstream's teardown
-  ordering and one reproduction of it is enough to report.
+  in code both profiles share rather than anything about GLES.
+
+  **The SIGSEGV both GL profiles used to show has been split into two causes, and one of them was
+  ours.** The `OPENGLES3` abort was this repository's test hard-coding `#version 330 core` and handing
+  desktop GLSL to an ES context, which EasyGL answers by aborting inside `cna_shader_effect_create`
+  rather than reporting an invalid source. Isolating it took running with detailed logging until the
+  stop point proved stable, reproducing it from the class alone, then from one test alone, then
+  instrumenting that test until the crash sat inside the create call rather than in the reflection
+  the test is named for. The test now asks `ShadingDialect` the way its sibling always did, and
+  `OPENGLES3` completes the suite. `OPENGL33` is a genuinely separate upstream fault: it segfaults on
+  the **second** `Game` create/destroy cycle -- one succeeds, two do not, and 200 cycles are clean on
+  the other four renderers -- so the full suite cannot be captured on it. Both are blocker-table rows
+  now, with the reproducers bounded rather than described.
 
   **Five distinct capability profiles, and no two are the same set** -- which is the property that
   makes them worth having rather than the frame counts. `SOFTWARE` reports `ThreeD` and still refuses

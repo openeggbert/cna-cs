@@ -103,6 +103,49 @@ agreement is tested on both rather than asserted in prose.
 - The fixture gate's JSON report stated `requiredSymbolCount: 854` while the resolver had grown past
   it, and the staleness check said "stale" without saying how to fix it.
 
+### The crash that was ours, found last
+
+The session's longest-standing unknown -- both GL renderers aborting the integration suite partway
+with a SIGSEGV -- turned out to be two unrelated faults, and the larger one was this repository's.
+
+The method that worked, after an earlier attempt had concluded "no single test class reproduces it":
+run with `--logger "console;verbosity=detailed"` and read the *last test that completed*. It was the
+same one every run. The class reproduced it alone; one test in the class reproduced it alone; and
+instrumenting that test with markers written straight to a file -- `ITestOutputHelper` is buffered
+and lost when the host dies -- put the crash inside `cna_shader_effect_create`, before any of the
+reflection the test is named for.
+
+The cause was a hard-coded `#version 330 core`. On a GlslEs renderer that is desktop GLSL handed to
+an ES context, which `effects.h` explicitly warns against and which the test's own sibling had
+always avoided by asking `device.ShadingDialect` first. EasyGL's answer to the mismatch is to abort
+rather than report `IsSourceValid=false`, which is upstream's defect and is now a blocker row -- but
+the guess was ours, and it cost 94 tests on two renderers and a session's worth of suspicion of the
+environment.
+
+`OPENGL33` is genuinely separate: it segfaults on the **second** `Game` create/destroy cycle. One
+succeeds, two do not, and 200 cycles are clean on the other four renderers, so it is not the
+ownership model the stress harness exists to test. Bounded to a two-line reproducer and recorded.
+
+After the fix: `OPENGLES3` 203/207 (the four are the known clear defect), `VULKAN`, `SOFTWARE` and
+`SDL_RENDERER` 207/207, `OPENGL33` uncapturable.
+
+### The corpus was measuring the renderer
+
+Adding the last two content routes exposed something worse than either of them. A probe wrote its
+observations to standard output, which it shares with the native library loaded underneath it, and
+some CNA renderers write there: the graphics probe emitted 166 observations under OPENGLES3 and 167
+under Vulkan, whose backend prints a capability banner at device creation. The corpus is meant to be
+a statement about the binding, comparable observation-for-observation against a Windows XNA capture;
+a snapshot that depends on the linked renderer cannot do that job.
+
+The probes now take `--output` and write to a named file. And because the property is worth
+enforcing rather than assuming, `scripts/Verify-CorpusRendererInvariance.sh` proves it: the graphics
+probe's 166 observations are byte-identical under OPENGLES3, OPENGL33 and Vulkan. Two renderers
+cannot be captured at all -- SOFTWARE has no volume textures, SDL_RENDERER no vertex buffers -- and
+that is reported as REFUSED and stated as a manifest field every probe must carry, because a probe
+that *skipped* a route on a weak renderer is exactly what would make the observation set
+renderer-dependent.
+
 ### Do not repeat
 
 - Do not assert that two arguments "produce different answers" to catch a swap. It is symmetric.
@@ -110,6 +153,11 @@ agreement is tested on both rather than asserted in prose.
 - Do not pass a slot index from one CNB space into a route that takes the other.
 - Do not treat a capacity-probe route's `BufferTooSmall` as a failure; it is the documented answer
   to a zero-capacity size query, and it made every CNB model part unreadable until it was fixed.
+- Do not hard-code a shader dialect. Ask `GraphicsDevice.ShadingDialect`, and refuse rather than
+  guess when it answers `Unknown`.
+- Do not conclude "no single test reproduces it" from filtered runs alone. Detailed logging names
+  the last test that completed, which is a far better starting point than a bisection.
+- Do not capture a probe by redirecting standard output when a native library shares it.
 
 ## Content external references, a second renderer, and two more vertical slices (2026-08-31)
 
