@@ -11,6 +11,106 @@
 > is normative for what to build next; this file is normative for why past
 > decisions were made the way they were.
 
+## ABI 0.21.0, four renderers, and the end of the silent capability branch (2026-08-31)
+
+The upstream configure block that had capped this repository at two renderers lifted between
+sessions. Almost everything below follows from that one fact, which is worth stating plainly because
+none of it was on the plan's priority list in this shape.
+
+### The idea that produced most of the session
+
+**A renderer that lacks things is worth more than a renderer that draws well.** The previous entry
+learned that from HEADLESS; this one got the sharper version. `SDL_RENDERER` is the only genuinely
+2D-only backend available here -- eighteen of nineteen capabilities absent -- and building it turned
+seventeen `HasCapability(...) { return; }` sites from recorded gaps into asserted refusals, closed a
+blocker row that had been a coin-flip between two result codes, and found three tests gated on the
+wrong capability entirely.
+
+The measurement that says it was worth it: making `CnaException.ThrowIfFailed` swallow
+`NotSupported` now turns **23 SDL_RENDERER tests and 14 HEADLESS tests red**. Every one of those was
+a silent pass at the start of the session.
+
+### The other idea, which cost more than it saved and was still right
+
+**A test that passes with the fix removed is not evidence.** Six times this session a check turned
+out to be unfalsifiable, and only one of those was found by suspicion rather than by planting the
+mutation:
+
+1. The CNB model's effect-name guard -- removing it changed nothing, because CNA drops the name
+   itself. Rewritten to pin upstream's behaviour, which *can* fail.
+2. The tonemap exposure/gamma test asserted only that swapping them produced *different* answers.
+   That is symmetric; the swap mutation passed. Rewritten to state what each parameter means.
+3. `StorageContainer.Disposing`'s one-shot test passed under both the old managed substitute and the
+   new native subscription. It only became evidence once the substitute was gone.
+4. `Verify-BlockerTable.sh` printed `BLOCKER_ROUTE_ABSENT` and exited 0. Found by writing a row that
+   named a route which does not exist, and watching the gate pass.
+5. The CNB sound effect's non-PCM16 guard is unreachable, because CNA's encoder refuses to author
+   one. Kept, with a comment that says so instead of implying a test.
+6. A mutation was reported as *not caught* when an earlier edit had silently removed the test that
+   catches it and the build output was hidden. Both mistakes were mine, and the rule they produced
+   is: a mutation result is only evidence if the build is seen to succeed and the test is seen to
+   run.
+
+### What changed
+
+**ABI 0.21.0 admitted.** Strictly additive over the consumed surface: 3 exports, 1 scalar and 3
+constants added, nothing removed or changed, and no allowlist entry needed in either direction. The
+allowlist was emptied rather than carried forward -- its twelve entries described the previous step
+and all twelve report as stale against this one. `retired-0.19.0` became `retired-0.20.0` in the
+fixture matrix, which is the sharper control: 0.21.0 only added routes, so a 0.20.0 library exports
+every required symbol and passes every shape probe, and only the version rule refuses it.
+
+**Four renderers.** OPENGLES3, SDL_RENDERER, SOFTWARE and HEADLESS, with four distinct capability
+profiles and no two the same set. `SOFTWARE` reports `ThreeD` and still refuses `Texture3D`, so "has
+a 3D pipeline" and "has volume textures" are separated by measurement rather than by a comment
+predicting it. Each build is ~1.2 GB with tests and examples off, against ~20 GB for a full one.
+
+**Six blocker rows closed and three added.** Closed: non-`Color` content textures (the survey's
+native refusals went 33 -> 0), the secondary-device GL context (the runtime probe's gate is deleted,
+not flipped), the PlatformRatchet configure refusal, the 2D-only refusal classification (measured:
+every refusal is `NOT_SUPPORTED`, because the C API checks the capability before the renderer is
+asked), `StorageContainer.Disposing` (upstream's own regression now asserts the contract it
+documents), and half of `VideoPlayer.GetTexture` (the validity generation exists and is bound).
+Added: a render-target clear lost on EasyGL, and the SIGTERM shutdown crash.
+
+**The SIGTERM report is settled.** It had sat as "open until reproduced or disproved" and it
+reproduces: `SOFTWARE` aborts with `pure virtual method called` 3 of 3 runs, `OPENGLES3` segfaults 3
+of 3, `HEADLESS` shows it 1 of 3, `SDL_RENDERER` is clean. A normal exit is clean on all four, so it
+is the signal path specifically. `scripts/Reproduce-SigtermShutdown.sh` is checked in.
+
+**Four new vertical slices.** CNB models (a real graph: bones, hierarchy, meshes in draw order,
+geometry bytes, materials, skeleton), the CNB loader registry (a game ships its own `.cnb` types),
+CNB sprite fonts and CNB sound effects (a `.cnb` becomes a drawable `SpriteFont` and a playable
+`SoundEffect`), plus bloom and tonemap post-process passes. `cnb.h` 14 -> 83 routes bound,
+`engine_layer.h` 6 -> 43.
+
+**ContentManager caching, settled.** The open question was whether `CNA.Content.ContentManager`'s
+missing cache was a deliberate CNA-native divergence or an omission. **The class's own documentation
+settles it**: two doc comments described a cache that did not exist. Both layers now agree, and the
+agreement is tested on both rather than asserted in prose.
+
+### Defects found in this repository, not upstream
+
+- `get_material_texture_coordinate_set` writes a `uint8_t` and was declared `out uint` -- a
+  three-byte overread, caught by the C prototype probe.
+- A material's texture *names* and its per-slot state live in **different index spaces**, which
+  `cnb.h` calls "a real trap": eight name slots against seven importer slots, with emissive and
+  occlusion swapped. The first version passed the name slot straight through, which compiles, never
+  throws, and silently returns the wrong slot's sampler.
+- `CnbLoader.Invoke` would have unwrapped a **built-in** loader's C++ object pointer as a
+  `GCHandle`. The registry is shared with CNA and every content manager registers the built-ins, so
+  this was reachable. Found by re-auditing the blocker table, not by a test -- the wrong order.
+- The fixture gate's JSON report stated `requiredSymbolCount: 854` while the resolver had grown past
+  it, and the staleness check said "stale" without saying how to fix it.
+
+### Do not repeat
+
+- Do not assert that two arguments "produce different answers" to catch a swap. It is symmetric.
+- Do not hide build output while planting a mutation.
+- Do not pass a slot index from one CNB space into a route that takes the other.
+- Do not treat a capacity-probe route's `BufferTooSmall` as a failure; it is the documented answer
+  to a zero-capacity size query, and it made every CNB model part unreadable until it was fixed.
+
 ## Content external references, a second renderer, and two more vertical slices (2026-08-31)
 
 `NEXT.md` had not been written since 2026-08-23 while `plan.md` absorbed four sessions of results.
