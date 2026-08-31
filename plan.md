@@ -1180,10 +1180,13 @@ specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.
 
 - `Present(source,destination,window)` needs a versioned descriptor; the current route carries no
   arguments, so only the all-default tuple is forwarded.
-- Dynamic index window uploads reject non-`None` options, and upstream states that as intended:
-  "a windowed upload preserves the rest of the buffer, so it accepts no SetDataOptions other than
-  None". XNA accepts them, and the vertex family took the opposite decision in 0.19.0, so this
-  needs a decision rather than a route.
+- **Closed, and the row was stale rather than blocked.** It said dynamic index window uploads
+  reject non-`None` options while the vertex family accepts them, and asked for a decision. The two
+  families now agree: `index_resources.h` documents the same **cost-only** deviation the vertex
+  header does -- the window is composed CPU-side and the whole buffer re-uploaded, and "the indices
+  end up exactly where XNA puts them". `CompatDynamicBuffers_ForwardSetDataOptionsWhereTheAbiCarries-
+  Them` already exercised the windowed `NoOverwrite` upload and asserted the neighbours, and passes;
+  its own comment records that it used to throw. Nothing needed deciding, only re-reading.
 - Vertex-buffer partial-element strided transfers need independent element-size and buffer-stride
   scatter/gather fields; complete declaration-sized and contiguous full-byte windows work.
 - Texture2D arbitrary compatible structs, broader backbuffer readback, raw Texture3D readback, and
