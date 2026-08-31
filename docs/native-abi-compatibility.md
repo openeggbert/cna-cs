@@ -24,17 +24,17 @@ It cannot express CNA's documented experimental-0.x exception by itself.
 
 | CNA.NET consumer | Native library | CNA.NET result | Evidence |
 | --- | --- | --- | --- |
-| 0.20.0 | 0.20.0 | Accept | Consumer baseline at CNA `next` `e178282fc`. |
-| 0.20.0 | Any other 0.x | Reject | No audited matrix entry. |
-| 0.20.0 | Any 1.x+ | Reject | Different ABI major. |
+| 0.21.0 | 0.21.0 | Accept | Consumer baseline at CNA `next` `599d14e54`. |
+| 0.21.0 | Any other 0.x | Reject | No audited matrix entry. |
+| 0.21.0 | Any 1.x+ | Reject | Different ABI major. |
 
 One accepted entry is not a simplification of the policy; it is what the policy produces when the
-consumer moves. There is no `>= 0.20` rule and there never was a `>= 0.6` one.
+consumer moves. There is no `>= 0.21` rule and there never was a `>= 0.6` one.
 
 ### Retired entries
 
-The matrix previously accepted 0.6.0, 0.7.0, 0.8.0 and 0.19.0. Nothing was found wrong with any of
-those reviews; two different things moved.
+The matrix previously accepted 0.6.0, 0.7.0, 0.8.0, 0.19.0 and 0.20.0. Nothing was found wrong with
+any of those reviews; two different things moved.
 
 **0.6.0, 0.7.0 and 0.8.0** were retired because this binding began importing eight routes CNA
 introduced after 0.8.0:
@@ -48,12 +48,19 @@ No 0.6/0.7/0.8 library exports those names, so the loader's required-symbol chec
 anyway. Leaving the entries in place would have made the matrix promise something the loader could
 not deliver, and moved the failure from load time to first use.
 
-**0.19.0** was retired for the opposite reason: 0.20.0 supersedes it and nothing this consumer
-touches differs between the two. Keeping it would have been the first step towards a range, which
-is the shape this policy exists to avoid.
+**0.19.0 and 0.20.0** were retired for the opposite reason: each is superseded by the generation
+after it and nothing this consumer touches differs between them. Keeping either would have been the
+first step towards a range, which is the shape this policy exists to avoid.
 
 Both retirements are enforced rather than merely documented: the `retired-0.8.0` and
-`retired-0.19.0` fixtures prove that a generation this consumer used to accept is actually refused.
+`retired-0.20.0` fixtures prove that a generation this consumer used to accept is actually refused.
+
+`retired-0.20.0` is the sharper of the two, and it is why the fixture was moved rather than left at
+0.19.0. 0.20.0 → 0.21.0 **added** three exports and removed nothing, so a 0.20.0 library exports
+every symbol the loader requires and passes every runtime shape probe; the version rule is the only
+thing standing between it and admission. A policy written as "0.20.0 or newer", or as "whatever
+exports the names we call", would take it. `retired-0.8.0` cannot make that point, because a 0.8.0
+library fails the required-symbol check anyway.
 
 The substantive part of the earlier 0.8.0 review still stands and carries forward: CNA 0.8 changed
 `CNA_GRAPHICS_CAPABILITY_MAXIMUM` from 13 to 18 and `CNA_GRAPHICS_RENDERER_MAXIMUM` from 49 to 50.
@@ -62,10 +69,45 @@ neither. `tools/coverage/baselinediff.py` rediscovers exactly those constant cha
 0.6.0 or 0.7.0 forward and nothing else, which is a useful cross-check on both the tool and that
 review.
 
-### What the 0.20.0 admission measured
+### What the 0.21.0 admission measured
 
-Two diffs, because the consumer moved twice. `tools/coverage/baselinediff.py` compares an
-already-accepted generation against the proposed one across both evidence paths.
+`tools/coverage/baselinediff.py` compares the already-accepted generation against the proposed one
+across both evidence paths.
+
+0.20.0 → 0.21.0, the current admission:
+
+| Measured | Result |
+| --- | --- |
+| Consumed entry points absent | 0 of 910 |
+| Consumed entry points with a changed header prototype | 0 |
+| Exports removed / added | 0 / 3 |
+| Struct size/alignment/field-offset changes | 0 (0 structs added) |
+| Scalar width changes | 0 (1 added) |
+| Existing integer constant values changed | 0 (3 added) |
+| String constants changed | 0 |
+| Allowlist entries needed | **0** |
+
+The step is strictly additive and the additions are named rather than counted:
+`cna_environment_get_device_type` with its `CNA_DeviceType` scalar and three `CNA_DEVICE_TYPE_*`
+identities, plus `cna_object_dictionary_ext_get_runtime_type_name_size` and
+`cna_object_dictionary_ext_copy_runtime_type_name`. Four further header changes in this step are
+documentation only and carry no ABI difference: `cna_content_manager_load_texture2d` and
+`cna_graphics_device_create_texture2d` dropped the Color-only restriction from their contracts, and
+the four `cna_network_session_create*` routes now document a two-to-31 `max_gamers` range that the
+asynchronous pair no longer discards. Those are behavior changes with an unchanged shape, which is
+exactly the class a diff over declarations cannot see and the reason admission also re-runs the
+behavioral gates.
+
+`tools/abi-verify` independently passes **808 native and 808 managed** C-authority layout
+measurements with 0 mismatches, compiles 910 of 910 prototypes, checks 5 callbacks, asserts 327
+enum-like constants and rejects 12 of 12 negative controls against the 0.21.0 headers. Run before
+the version constant moved, its *only* finding was `abi.version` itself -- which is the shape a
+clean additive step should produce, and is what distinguishes this from a step that happens to
+compile.
+
+#### The two earlier diffs, kept for the audit trail
+
+Two diffs, because the consumer moved twice on the way to 0.20.0.
 
 0.8.0 → 0.19.0, when the binding left the 0.6-era matrix:
 
@@ -97,19 +139,21 @@ or sentinel, which is why removing eleven renderers is a clean diff here rather 
 change. That is a design property worth keeping: binding the identity enum would turn every future
 renderer change into a compatibility event.
 
-`tools/abi-verify` independently passes 86/86 C-authority layout measurements and compiles the
-reviewed prototypes against the 0.20.0 headers, and the full native gate set -- integration tests,
-ownership stress, corpus capture, fixture matrix, package acceptance -- runs against the 0.20.0
-library.
+The full native gate set -- integration tests, ownership stress, corpus capture, fixture matrix,
+package acceptance -- runs against the accepted library.
 
-The twelve renderer-identity differences are recorded in
-[`eng/cna-upstream-abi-allowlist.txt`](../eng/cna-upstream-abi-allowlist.txt) so the diff gate can
-run in CI and still fail on anything else. An allowlist entry that matches nothing fails as stale,
-so the exception cannot outlive the difference it was written for.
+[`eng/cna-upstream-abi-allowlist.txt`](../eng/cna-upstream-abi-allowlist.txt) carries the reviewed
+exceptions **for the transition currently being admitted**, so the diff gate can run in CI and still
+fail on anything else. An allowlist entry that matches nothing fails as stale, so an exception
+cannot outlive the difference it was written for -- and that is why the file is empty today: the
+twelve renderer-identity entries described the 0.19.0 → 0.20.0 step and match nothing in
+0.20.0 → 0.21.0. They were removed, not reversed; the decision behind them is recorded above and in
+the retired 0.20.0 policy entry. Running the current step *with* the old entries in place was tried
+first and reports all twelve as stale, which is the gate doing its job.
 
 Run `tools/abi-verify` against a pinned revision rather than a live `next` worktree. That branch
 moves, and a header tree ahead of the matrix makes the gate fail by design -- which is the gate
-working, not a configuration problem. It is how the 0.20.0 bump was noticed.
+working, not a configuration problem. It is how both the 0.20.0 and the 0.21.0 bumps were noticed.
 
 ## Compatible evolution operations
 
@@ -204,15 +248,15 @@ a fresh managed process. The exact matrix is:
 
 | Fixture | Expected | Property proved |
 | --- | --- | --- |
-| `exact-0.20.0` | Accept | Exact expected ABI. |
-| `exact-0.20.0-extra-symbol` | Accept | Unrelated added exports do not break a consumer. |
+| `exact-0.21.0` | Accept | Exact expected ABI. |
+| `exact-0.21.0-extra-symbol` | Accept | Unrelated added exports do not break a consumer. |
 | `retired-0.8.0` | Reject | A generation retired because this consumer outgrew it. |
-| `retired-0.19.0` | Reject | A generation retired because a newer one superseded it -- being previously audited is not admission. |
-| `unreviewed-0.21.0` | Reject | Neither is being newer: the matrix is a point list, not a floor. |
+| `retired-0.20.0` | Reject | A generation retired because a newer one superseded it -- being previously audited is not admission. It exports every required symbol and passes every shape probe, so the version rule alone refuses it. |
+| `unreviewed-0.22.0` | Reject | Neither is being newer: the matrix is a point list, not a floor. |
 | `missing-required-symbol` | Reject | Any missing managed import fails at load, not at first use. |
 | `changed-required-signature` | Reject | A testable core signature/out-parameter change fails its canary. |
 | `incompatible-major-1.0.0` | Reject | Major mismatch. |
-| `structurally-incompatible-0.20.0` | Reject | An accepted version cannot override guarded shape evidence. |
+| `structurally-incompatible-0.21.0` | Reject | An accepted version cannot override guarded shape evidence. |
 | `malformed-metadata-0.0.0` | Reject | An incomplete/unrecognized encoded generation. |
 | `unreadable-metadata` | Reject | Missing version export. |
 

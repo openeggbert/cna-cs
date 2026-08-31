@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "policyVersion": "cna-cs-native-abi/1",
-  "consumerAbi": "0.20.0",
+  "consumerAbi": "0.21.0",
   "versionSemantics": {
     "major": "For ABI 1.x and later, a change permits breaks only at a new major. ABI 0 is experimental and does not provide this guarantee between minors.",
     "minorBefore1": "A reviewed ABI generation that may be additive or incompatible; never accepted as a same-major range.",
@@ -25,10 +25,10 @@
   },
   "acceptedVersions": [
     {
-      "libraryAbi": "0.20.0",
+      "libraryAbi": "0.21.0",
       "classification": "exact",
       "accepted": true,
-      "evidence": "Consumer baseline at CNA next e178282fcd70f4cd1e9be922fde35a9a2b779cf3. tools/coverage/baselinediff.py measures 0.19.0 -> 0.20.0 as: 0 exports removed or added, 0 consumed prototypes changed, 0 struct/scalar/string changes, and 12 integer-constant differences that are all renderer identities (11 removed plus CNA_GRAPHICS_RENDERER_MAXIMUM 50 -> 49). This binding reads the renderer name through cna_graphics_device_copy_renderer_name and consumes no CNA_GRAPHICS_RENDERER_* identity or sentinel. tools/abi-verify passes 86/86 C-authority layout measurements and reviewed-prototype compilation against the 0.20.0 headers, and the full native gate set runs against the 0.20.0 library."
+      "evidence": "Consumer baseline at CNA next 599d14e54e073b566d77b3d6fb30ac52d3d810b7. tools/coverage/baselinediff.py measures 0.20.0 -> 0.21.0 as strictly additive over the consumed surface: 910 consumed exports with 0 absent and 0 changed prototype, 4051 -> 4054 exports with 0 removed and 3 added, 222 -> 222 structs with 0 breaking differences, 349 -> 350 scalars with 0 removed or changed, 14 -> 14 string constants unchanged, and 1550 -> 1553 integer constants with 0 removed or changed. The three added exports are cna_environment_get_device_type and the CNA_ObjectDictionary runtime-type-name pair; the added scalar is CNA_DeviceType and the three added constants are its CNA_DEVICE_TYPE_* identities. No allowlist entry was needed, in either direction. tools/abi-verify passes against the 0.21.0 headers with 808 native and 808 managed layout/type measurements and 0 mismatches, 910 of 910 prototypes compiled, 5 callbacks checked, 327 enum-like constants asserted and 12 of 12 negative controls rejected; the only reported mismatch before this admission was abi.version itself. The full native gate set runs against the 0.21.0 library."
     }
   ],
   "retiredVersions": [
@@ -44,26 +44,31 @@
     },
     {
       "libraryAbi": "0.8.0",
-      "retiredBecause": "Same four newly consumed routes are absent. Its consumer-specific admission -- CNA.NET binds neither changed graphics MAXIMUM sentinel -- still holds and carries forward into 0.20.0.",
+      "retiredBecause": "Same four newly consumed routes are absent. Its consumer-specific admission -- CNA.NET binds neither changed graphics MAXIMUM sentinel -- still holds and carries forward into 0.21.0.",
       "previousClassification": "reviewed-consumer-subset"
     },
     {
       "libraryAbi": "0.19.0",
       "retiredBecause": "Superseded by 0.20.0. Nothing this consumer touches differs between them; the entry was retired rather than kept so the matrix stays a reviewed point list instead of accumulating into a range.",
       "previousClassification": "exact"
+    },
+    {
+      "libraryAbi": "0.20.0",
+      "retiredBecause": "Superseded by 0.21.0. Nothing this consumer touches differs between them -- the step adds three exports, one scalar and three constants and removes or changes nothing -- so the entry was retired rather than kept, for the same reason 0.19.0 was: a point matrix that accumulated every generation it had ever accepted would stop being a review and start being a range.",
+      "previousClassification": "exact"
     }
   ],
   "default": "reject",
   "fixtures": [
-    { "name": "exact-0.20.0", "expected": "accept" },
-    { "name": "exact-0.20.0-extra-symbol", "expected": "accept" },
+    { "name": "exact-0.21.0", "expected": "accept" },
+    { "name": "exact-0.21.0-extra-symbol", "expected": "accept" },
     { "name": "retired-0.8.0", "expected": "reject" },
-    { "name": "retired-0.19.0", "expected": "reject" },
-    { "name": "unreviewed-0.21.0", "expected": "reject" },
+    { "name": "retired-0.20.0", "expected": "reject" },
+    { "name": "unreviewed-0.22.0", "expected": "reject" },
     { "name": "missing-required-symbol", "expected": "reject" },
     { "name": "changed-required-signature", "expected": "reject" },
     { "name": "incompatible-major-1.0.0", "expected": "reject" },
-    { "name": "structurally-incompatible-0.20.0", "expected": "reject" },
+    { "name": "structurally-incompatible-0.21.0", "expected": "reject" },
     { "name": "malformed-metadata-0.0.0", "expected": "reject" },
     { "name": "unreadable-metadata", "expected": "reject" }
   ]

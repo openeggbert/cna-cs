@@ -4,20 +4,18 @@
 # It is not a way to quieten the tool: every entry must match an actual difference, and one that
 # stops matching fails the gate as stale rather than being ignored.
 #
-# 2026-08-30, ABI 0.19.0 -> 0.20.0: upstream removed eleven renderers. All twelve differences are
-# renderer identities. CNA.NET reads the renderer's *name* through
-# cna_graphics_device_copy_renderer_name and binds no CNA_GRAPHICS_RENDERER_* identity or sentinel,
-# which is exactly why a removal of this size is a clean diff over the consumed surface. Keep it
-# that way: binding the identity enum would make every future renderer change a compatibility event.
-integer constants: CNA_GRAPHICS_RENDERER_BLEND2D was removed
-integer constants: CNA_GRAPHICS_RENDERER_DILIGENT was removed
-integer constants: CNA_GRAPHICS_RENDERER_IGL was removed
-integer constants: CNA_GRAPHICS_RENDERER_LLGL was removed
-integer constants: CNA_GRAPHICS_RENDERER_MAGNUM was removed
-integer constants: CNA_GRAPHICS_RENDERER_NANOVG was removed
-integer constants: CNA_GRAPHICS_RENDERER_OPENVG was removed
-integer constants: CNA_GRAPHICS_RENDERER_SKIA was removed
-integer constants: CNA_GRAPHICS_RENDERER_SOKOL was removed
-integer constants: CNA_GRAPHICS_RENDERER_TINYGL was removed
-integer constants: CNA_GRAPHICS_RENDERER_WICKED was removed
-integer constants: CNA_GRAPHICS_RENDERER_MAXIMUM changed 50 -> 49
+# The file is scoped to the transition currently being admitted -- the accepted generation in
+# eng/cna-native-abi-policy.json against the one proposed to replace it -- because a finding is a
+# statement about one step and matches nothing in the next.
+#
+# 2026-08-31, ABI 0.20.0 -> 0.21.0: **empty, and that is the measured result rather than an
+# omission.** The step is strictly additive over the consumed surface -- 3 exports, 1 scalar and 3
+# constants added, nothing removed or changed -- so the gate passes with no entry at all.
+#
+# The twelve entries this file used to hold covered 0.19.0 -> 0.20.0, where upstream removed eleven
+# renderers. They were removed here because they are stale against the current step, not because
+# the decision was reversed: it is recorded in the retired 0.20.0 entry of the policy file and in
+# docs/native-abi-compatibility.md. The reason that removal was a clean diff still governs new work
+# -- CNA.NET reads the renderer's *name* through cna_graphics_device_copy_renderer_name and binds
+# no CNA_GRAPHICS_RENDERER_* identity or sentinel. Keep it that way: binding the identity enum
+# would make every future renderer change a compatibility event.

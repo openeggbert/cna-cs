@@ -11,7 +11,7 @@ namespace CNA.Interop;
 internal static class CnaNativeAbiPolicy
 {
     internal const string PolicyVersion = "cna-cs-native-abi/1";
-    internal const uint ConsumerVersion = (0u << 16) | (20u << 8) | 0u;
+    internal const uint ConsumerVersion = (0u << 16) | (21u << 8) | 0u;
 
     /// <summary>
     /// The reviewed matrix. It is a point list, never a range: CNA documents that an experimental
@@ -22,9 +22,11 @@ internal static class CnaNativeAbiPolicy
     /// caller-owned device pair and the engine-layer availability pair. A library from one of those
     /// generations does not export those names, so admitting it would only move the failure from
     /// load time to first use. 0.19.0 followed them out when 0.20.0 removed eleven renderer
-    /// identities: nothing this consumer touches changed, but a point matrix that kept every
-    /// generation it had ever accepted would stop being a review and start being a range. See
-    /// docs/native-abi-compatibility.md for the retired matrix and the evidence behind each entry.
+    /// identities, and 0.20.0 followed 0.19.0 when 0.21.0 added three routes and the device-type
+    /// identities: in both cases nothing this consumer touches changed, but a point matrix that
+    /// kept every generation it had ever accepted would stop being a review and start being a
+    /// range. See docs/native-abi-compatibility.md for the retired matrix and the evidence behind
+    /// each entry.
     /// </summary>
     private static readonly CnaNativeAbiProfile[] Profiles =
     [

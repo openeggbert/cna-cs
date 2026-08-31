@@ -34,11 +34,12 @@ public class CnaAbiTests
 
     /// <summary>
     /// The constant this binding compares against must be the version it was written for, now
-    /// 0.20.0. It sat at 0.6.0 through the generations that only added routes this binding did not
+    /// 0.21.0. It sat at 0.6.0 through the generations that only added routes this binding did not
     /// call; it moved to 0.19.0 when the binding started importing routes CNA introduced after
     /// 0.8.0 -- the render-target ContentLost pair, the two optioned raw vertex uploads, the
-    /// caller-owned device pair and the engine-layer availability pair -- and to 0.20.0 with the
-    /// renderer removal.
+    /// caller-owned device pair and the engine-layer availability pair -- to 0.20.0 with the
+    /// renderer removal, and to 0.21.0 with the device-type query and the object-dictionary
+    /// runtime-type-name pair.
     ///
     /// Updating this alongside the constant is the point: a constant that drifts silently would
     /// make the compatibility check pass against a library it should reject.
@@ -46,7 +47,7 @@ public class CnaAbiTests
     [Fact]
     public void ExpectedVersion_IsTheAbiThisBindingWasWrittenAgainst()
     {
-        Assert.Equal((0, 20, 0), CnaAbi.Decode(CnaAbi.ExpectedVersion));
+        Assert.Equal((0, 21, 0), CnaAbi.Decode(CnaAbi.ExpectedVersion));
     }
 
     /// <summary>Round-trips every field independently, so a mask that swallowed a neighbouring
@@ -60,7 +61,7 @@ public class CnaAbiTests
     }
 
     [Theory]
-    [InlineData(0, 20, 0, "exact")]
+    [InlineData(0, 21, 0, "exact")]
     public void Policy_AcceptsOnlyReviewedAbiGenerations(int major, int minor, int patch, string classification)
     {
         uint version = ((uint)major << 16) | ((uint)minor << 8) | (uint)patch;
@@ -69,10 +70,15 @@ public class CnaAbiTests
     }
 
     /// <summary>
-    /// 0.6.0 through 0.19.0 are here rather than in the accepting theory above because they were
-    /// retired, not because they were never reviewed. 0.19.0 and 0.21.0 sit on either side of the
+    /// 0.6.0 through 0.20.0 are here rather than in the accepting theory above because they were
+    /// retired, not because they were never reviewed. 0.20.0 and 0.22.0 sit on either side of the
     /// accepted entry to keep the matrix a point list -- being newer than an audited generation is
     /// not evidence about an experimental 0.x ABI, and neither is having been audited once.
+    ///
+    /// 0.20.0 is the sharpest of them. 0.20.0 -> 0.21.0 added three exports and removed nothing, so
+    /// a 0.20.0 library exports every symbol this binding requires and passes every shape probe;
+    /// the version rule is the only thing that refuses it. A policy expressed as "0.20.0 or newer",
+    /// or as "whatever exports what we call", would admit it.
     /// </summary>
     [Theory]
     [InlineData(0, 0, 0)]
@@ -80,8 +86,9 @@ public class CnaAbiTests
     [InlineData(0, 7, 0)]
     [InlineData(0, 8, 0)]
     [InlineData(0, 19, 0)]
-    [InlineData(0, 20, 1)]
-    [InlineData(0, 21, 0)]
+    [InlineData(0, 20, 0)]
+    [InlineData(0, 21, 1)]
+    [InlineData(0, 22, 0)]
     [InlineData(1, 0, 0)]
     public void Policy_RejectsUnauditedVersions(int major, int minor, int patch)
     {
@@ -121,7 +128,7 @@ public class CnaAbiTests
         JsonElement root = document.RootElement;
 
         Assert.Equal(CnaNativeAbiPolicy.PolicyVersion, root.GetProperty("policyVersion").GetString());
-        Assert.Equal("0.20.0", root.GetProperty("consumerAbi").GetString());
+        Assert.Equal("0.21.0", root.GetProperty("consumerAbi").GetString());
         JsonElement[] entries = root.GetProperty("acceptedVersions").EnumerateArray().ToArray();
         string[] versions = entries.Select(item => item.GetProperty("libraryAbi").GetString()!).ToArray();
         Assert.Equal(
