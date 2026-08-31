@@ -582,6 +582,10 @@ static class InteropLayout
         // The buffered sprite path submits through cna_sprite_batch_submit_scaled_many, whose
         // element type C calls CNA_SpriteScaledCommand.
         ["CnaSpriteDrawCommand"] = "CNA_SpriteScaledCommand",
+
+        // C spells the extension suffix in capitals. Derivation would ask for CNA_VideoFrameExt,
+        // and the compiler refusing that is how this entry came to exist.
+        ["CnaVideoFrameExt"] = "CNA_VideoFrameEXT",
     };
 
     /// <summary>

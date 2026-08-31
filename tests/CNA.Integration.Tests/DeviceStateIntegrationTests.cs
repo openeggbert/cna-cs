@@ -146,6 +146,63 @@ public class DeviceStateIntegrationTests(ITestOutputHelper output, NativeGameFix
     }
 
     /// <summary>
+    /// The frame generation CNA exposes alongside the borrowed frame texture.
+    ///
+    /// <b>Why this is worth binding without a video to play.</b> The blocker row for
+    /// <c>VideoPlayer.GetTexture</c> asks for "stable frame-slot identity <em>or an explicit
+    /// validity generation</em>", because XNA hands back two stable <c>Texture2D</c> objects and a
+    /// game compares references to notice a new frame, while CNA's alias expires on the next call
+    /// and no reference comparison means anything. The generation is the second of those two, it
+    /// exists as of this ABI, and leaving it unbound would keep the row saying "needs" about
+    /// something that is there.
+    ///
+    /// <b>What this cannot check, and says so.</b> Whether the generation actually advances needs a
+    /// video, and no legally redistributable fixture is available here -- that is a fixture blocker,
+    /// not an oversight. What is checked is everything reachable without one: the route runs on a
+    /// player that has never played, reports no frame, and answers a defined generation and a
+    /// negative presentation time rather than failing.
+    /// </summary>
+    [NativeFact]
+    public void VideoPlayer_ReportsAFrameGenerationBeforeAnythingHasPlayed()
+    {
+        fixture.InsideAFrame(_ =>
+        {
+            using var player = new VideoPlayer();
+
+            CnaVideoFrame frame = player.GetCnaFrame();
+            output.WriteLine(
+                $"generation={frame.Generation} available={frame.IsAvailable} " +
+                $"presentation={frame.PresentationTime}");
+
+            Assert.False(frame.IsAvailable);
+            Assert.Null(frame.Texture);
+            Assert.Equal(0UL, frame.Generation);
+
+            // Negative is the documented "no frame" timestamp. Asserted rather than ignored because
+            // zero would be a perfectly plausible first presentation time, and a route that
+            // returned zero here would be indistinguishable from one holding a frame at t=0.
+            Assert.True(frame.PresentationTime < 0, $"expected a negative timestamp, got {frame.PresentationTime}");
+
+            // Reading twice must not advance it: the generation counts decoded frames, not calls.
+            Assert.Equal(frame.Generation, player.GetCnaFrame().Generation);
+        });
+    }
+
+    /// <summary>A disposed player refuses rather than answering with a stale frame.</summary>
+    [NativeFact]
+    public void VideoPlayer_FrameOnADisposedPlayer_IsRefused()
+    {
+        fixture.InsideAFrame(_ =>
+        {
+            var player = new VideoPlayer();
+            player.Dispose();
+
+            CnaException failure = Assert.Throws<CnaException>(() => player.GetCnaFrame());
+            output.WriteLine($"disposed player: {failure.NativeResult}: {failure.Message}");
+        });
+    }
+
+    /// <summary>
     /// Microphone enumeration. Zero devices is the expected headless answer and is asserted as
     /// such -- the point is that the enumeration route runs and reports a count, not that this
     /// machine has a microphone.

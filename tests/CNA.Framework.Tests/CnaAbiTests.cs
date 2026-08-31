@@ -110,17 +110,18 @@ public class CnaAbiTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        // 985: five from A3/A4/A5, two for A1, fourteen for D2's first CNB slice, six for D3's
+        // 986: five from A3/A4/A5, two for A1, fourteen for D2's first CNB slice, six for D3's
         // engine-layer render target pool, fourteen for D2's second -- the CNB texture decode family
         // plus the device's surface-format support query -- fifteen for D3's second, the
         // post-process pass and chain family, and thirty-nine for D2's third: the CNB model read
         // path, plus the authoring routes a fixture needs so that CNA's own encoder writes it,
         // twenty-two for D3's third -- the bloom and tonemap passes with the three pure routes that
         // compute their own arithmetic -- and fourteen for the CNB loader registry, the extension
-        // mechanism by which a game teaches CNA about its own .cnb types.
+        // mechanism by which a game teaches CNA about its own .cnb types, and one for the video
+        // frame generation that closed half of the VideoPlayer.GetTexture blocker row.
         // The literal is a tripwire, not a fact about CNA -- it exists so that adding an import is
         // a deliberate act rather than something that happens on the way to something else.
-        Assert.Equal(985, declared.Length);
+        Assert.Equal(986, declared.Length);
         Assert.Equal(declared, CnaNativeAbiPolicy.RequiredSymbols);
     }
 

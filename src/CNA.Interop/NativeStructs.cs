@@ -753,6 +753,34 @@ internal struct CnaCnbTextureInfo
     };
 }
 
+/// <summary>
+/// One video frame plus the identity a caller needs to track it -- <c>CNA_VideoFrameEXT</c>.
+/// Caller-initialised and versioned, like <see cref="CnaCnbReadLimits"/>.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaVideoFrameExt
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaHandle Texture;
+
+    /// <summary>Frames decoded since the player was created. Monotonic and never restarted -- not
+    /// by <c>Stop</c>, not by playing a different video -- which is exactly what lets a caller treat
+    /// inequality as "the frame changed". Restarting would give the first frame of a second
+    /// playback the same value as the first frame of the first.</summary>
+    public ulong Generation;
+
+    public double PresentationTime;
+    public byte Available;
+    public CnaReservedBytes3 Reserved;
+
+    public static unsafe CnaVideoFrameExt Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaVideoFrameExt),
+        StructVersion = 1,
+    };
+}
+
 /// <summary>A decoded CNB model's counts and content flags -- <c>CNA_CnbModelInfo</c>.
 /// Caller-initialised and versioned, like <see cref="CnaCnbReadLimits"/>.</summary>
 [StructLayout(LayoutKind.Sequential)]

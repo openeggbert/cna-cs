@@ -2456,6 +2456,18 @@ internal static partial class Native
     internal static unsafe partial CnaResult cna_cnb_encode_texture2d(
         CnaHandle texture, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
 
+    /// <summary>
+    /// The current frame together with a monotonic generation -- the "explicit validity generation"
+    /// the video blocker row asked for, as an alternative to stable frame-slot identity.
+    ///
+    /// The texture is borrowed on exactly the terms <c>cna_video_player_get_texture</c> documents,
+    /// so this does not make a frame cacheable; what it adds is the ability to say whether the
+    /// pixels changed without comparing them.
+    /// </summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_video_player_get_frame_ext(
+        CnaHandle player, ref CnaVideoFrameExt outFrame);
+
     // -- CNB loader registry (cnb.h) ----------------------------------------------------------
     //
     // The extension mechanism for CNA's own container: a process-wide table mapping a custom asset

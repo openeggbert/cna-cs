@@ -191,6 +191,33 @@ public class VideoPlayer : IDisposable
         return CreateFrameTexture(_video!.GraphicsDevice, texture.AsNint);
     }
 
+    /// <summary>
+    /// The frame and its generation, behind <see cref="CnaVideoPlayerExtensions.GetCnaFrame"/>.
+    ///
+    /// <c>internal</c> and reached through an extension method rather than being a public member
+    /// here: this type is the strict XNA <c>VideoPlayer</c>'s implementation and the metadata
+    /// verifier compares it member for member, so a frame generation -- which XNA has no notion of
+    /// -- cannot appear on it.
+    /// </summary>
+    internal CnaVideoFrame ReadFrame()
+    {
+        CnaVideoFrameExt frame = ReadNativeFrame();
+        Texture? texture = frame.Available != 0 && _video is not null
+            ? CreateFrameTexture(_video.GraphicsDevice, frame.Texture.AsNint)
+            : null;
+
+        return new CnaVideoFrame(texture, frame.Generation, frame.PresentationTime, frame.Available != 0);
+    }
+
+    private CnaVideoFrameExt ReadNativeFrame()
+    {
+        var frame = CnaVideoFrameExt.Versioned();
+        CnaResult result = Native.cna_video_player_get_frame_ext(NativeHandle, ref frame);
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(ReadFrame));
+        return frame;
+    }
+
     /// <summary>Covariant-return factory hook so CNA.XnaCompat can hand back its own
     /// <c>Texture2D</c> -- same pattern as <c>GraphicsDevice.QueryBlendState</c>.</summary>
     protected virtual Texture CreateFrameTexture(GraphicsDevice graphicsDevice, nint nativeHandleValue) =>

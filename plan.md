@@ -21,14 +21,14 @@ packaging, and release engineering.
 | Debug and Release solution build | 0 warnings, 0 errors |
 | Managed tests | 622 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
 | Native integration | 188 tests against four ABI 0.21.0 renderers on Linux x64. SDL_RENDERER, SOFTWARE and HEADLESS: **188/188**. OPENGLES3: 184/188, the four failures all being one upstream EasyGL defect (see the blocker table). **Zero silent capability branches remain on any renderer**; 31 absent branches assert on SDL_RENDERER alone |
-| Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 985 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
-| Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 985 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
+| Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 986 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 986 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 479 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, **55 Content**, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 479: 208 pure, 166 device, and 105 native-runtime. The nine new ones are content **cache identity** -- the area the plan's own list named and the one where the two managers had silently diverged. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
-| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **887 native and 887 managed layout/type measurements with 0 mismatches**, 985 of 985 prototypes compiled, 6 callbacks checked, 353 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
+| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **896 native and 896 managed layout/type measurements with 0 mismatches**, 986 of 986 prototypes compiled, 6 callbacks checked, 353 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures. For `CNA.Framework`'s own surface the invariant turns out to be **compiler-enforced** -- every `CNA.Interop` type is `internal`, and the one exported type is a static class, so neither can appear in a signature at all. What is guarded instead is that precondition |
 | Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
@@ -1164,9 +1164,14 @@ specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.
 - The selected backend needs XNA-compatible SpriteBatch treatment for unknown sort values and
   non-finite sprite data. Compressed DXT upload is no longer on this list: the renderer reports
   Dxt1/Dxt3/Dxt5 and the authored font fixture loads.
-- `VideoPlayer.GetTexture` needs stable frame-slot identity or an explicit validity generation;
-  the current borrowed alias expires on the next player call and cannot reproduce XNA's two stable
-  frame `Texture2D` objects.
+- **Half closed.** `VideoPlayer.GetTexture` needed "stable frame-slot identity *or* an explicit
+  validity generation". The second exists as of this ABI and is bound:
+  `cna_video_player_get_frame_ext` reports a monotonic generation that `Stop` and a change of video
+  both leave alone, so inequality means the pixels changed. `CnaVideoPlayerExtensions.GetCnaFrame`
+  exposes it, outside the strict contract because XNA has no such notion. What is still missing is
+  the first half -- XNA's two stable `Texture2D` frame buffers -- since the alias still expires on
+  the next player call. Whether the generation *advances* needs a legally redistributable video
+  fixture and is `FIXTURE_BLOCKED`; everything reachable without one is asserted.
 - **Closed in 0.21.0.** Independent-device creation used to take the game's GL context and not give
   it back, so a game in the same process died on its next `SwapBuffers`. Upstream now saves and
   restores the caller's binding: the `CNA_RUNTIME_PROBE_CROSS_DEVICE` gate is deleted, both
