@@ -8,6 +8,7 @@ configuration=Release
 native_library=
 output_root=
 no_build=0
+update_fixture_symbols=0
 
 while (($# > 0)); do
   case "$1" in
@@ -25,6 +26,10 @@ while (($# > 0)); do
       ;;
     --no-build)
       no_build=1
+      shift
+      ;;
+    --update-fixture-symbols)
+      update_fixture_symbols=1
       shift
       ;;
     *)
@@ -63,17 +68,37 @@ if [[ ! -f "$probe_dll" ]]; then
   exit 2
 fi
 
-declared_symbols=$(perl -0777 -ne '
-  while (/internal\s+static\s+(?:unsafe\s+)?partial\s+\S+\s+(cna_[a-z0-9_]+)\s*\(/g) { $symbols{$1}=1 }
-  END { print join("\n", grep { $_ ne "cna_get_abi_version" &&
-                                $_ ne "cna_error_get_last_message_size" &&
-                                $_ ne "cna_touch_capabilities_init" &&
-                                $_ ne "cna_game_destroy" } sort keys %symbols), "\n" }
-' "$repo_root/src/CNA.Interop/Native.cs")
+# The four names excluded here are not exemptions: the fixture handles them specially -- they are
+# the routes the probe itself calls -- so they are declared by hand in cna_abi_fixture.c rather than
+# stubbed from this list, and added back to the count reported at the end.
+extract_declared_symbols()
+{
+  perl -0777 -ne '
+    while (/internal\s+static\s+(?:unsafe\s+)?partial\s+\S+\s+(cna_[a-z0-9_]+)\s*\(/g) { $symbols{$1}=1 }
+    END { print join("\n", grep { $_ ne "cna_get_abi_version" &&
+                                  $_ ne "cna_error_get_last_message_size" &&
+                                  $_ ne "cna_touch_capabilities_init" &&
+                                  $_ ne "cna_game_destroy" } sort keys %symbols), "\n" }
+  ' "$repo_root/src/CNA.Interop/Native.cs"
+}
+
+declared_symbols=$(extract_declared_symbols)
+
+if [[ "$update_fixture_symbols" == 1 ]]; then
+  printf 'CNA_ABI_FIXTURE_STUB(%s)\n' $declared_symbols > "$script_dir/abi-fixtures/required_symbols.inc"
+  echo "Regenerated $(basename "$script_dir")/abi-fixtures/required_symbols.inc from CNA.Interop.Native."
+fi
+
 fixture_symbols=$(sed -n 's/^CNA_ABI_FIXTURE_STUB(\(cna_[a-z0-9_]*\))$/\1/p' \
   "$script_dir/abi-fixtures/required_symbols.inc")
 if [[ "$declared_symbols" != "$fixture_symbols" ]]; then
+  # Saying how to fix it, because the fix is a perl one-liner nobody should retype. The check itself
+  # stays a check: --update-fixture-symbols is a deliberate act, not something a failing run does on
+  # the caller's behalf.
   echo "The native ABI fixture symbol inventory is stale relative to CNA.Interop.Native." >&2
+  echo "Regenerate it with: scripts/Verify-NativeAbiCompatibility.sh --update-fixture-symbols" >&2
+  diff <(printf '%s\n' "$fixture_symbols") <(printf '%s\n' "$declared_symbols") \
+    | sed -n '1,20p' >&2 || true
   exit 1
 fi
 
