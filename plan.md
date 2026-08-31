@@ -1,12 +1,11 @@
 # CNA.NET engineering roadmap
 
-Last measured: 2026-08-31, against CNA `next` `71576a7b933c702e1d1384a9720b0237644c2130`
-(C ABI 0.20.0) and `sharp-runtimenext` `eebebd862121953538e3b84d43384d70a8a1728d`. Two renderers
-this time: OPENGLES3 and HEADLESS. The C API headers are byte-identical to those at `72262a33e`,
-where the previous measurement stopped, so the six revisions between them changed nothing this
-binding consumes -- checked with `git diff` over `modules/c-api/include`, not assumed from the
-unchanged version macro. Session history and
-superseded decisions live in [`NEXT.md`](NEXT.md). This file is the current, normative plan.
+Last measured: 2026-08-31, against CNA `next` `599d14e54e073b566d77b3d6fb30ac52d3d810b7`
+(C ABI 0.21.0) and `sharp-runtimenext` `4a49afb0cfe6a41e6e0af0bb62dc5175976731bb`. **Four renderers
+this time**: OPENGLES3, SDL_RENDERER, SOFTWARE and HEADLESS. Six C API headers changed in this
+generation, so nothing was carried forward on the strength of an unchanged version macro. Session
+history and superseded decisions live in [`NEXT.md`](NEXT.md). This file is the current, normative
+plan.
 
 ## Current verified state
 
@@ -20,16 +19,16 @@ packaging, and release engineering.
 | Area | Measured result |
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
-| Managed tests | 621 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
-| Native integration | 159/159 passing in Debug and Release on Linux x64 against **both** the ABI 0.20.0 CNA OPENGLES3 library and a HEADLESS build of the same revision. The second renderer is what turns nine absent capabilities from untested branches into exercised ones |
-| Native ABI admission | Consumer ABI 0.20.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 910 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
-| Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.8.0 → 0.19.0 as strictly additive over the consumed surface (1,189 exports added, nothing removed or changed), and 0.19.0 → 0.20.0 as 12 renderer-identity constant differences and nothing else |
+| Managed tests | 622 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
+| Native integration | 188 tests against four ABI 0.21.0 renderers on Linux x64. SDL_RENDERER, SOFTWARE and HEADLESS: **188/188**. OPENGLES3: 184/188, the four failures all being one upstream EasyGL defect (see the blocker table). **Zero silent capability branches remain on any renderer**; 31 absent branches assert on SDL_RENDERER alone |
+| Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 971 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 971 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
-| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **808 native and 808 managed layout/type measurements with 0 mismatches**, 910 of 910 prototypes compiled, 5 callbacks checked, 327 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
+| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **887 native and 887 managed layout/type measurements with 0 mismatches**, 971 of 971 prototypes compiled, 5 callbacks checked, 353 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures. For `CNA.Framework`'s own surface the invariant turns out to be **compiler-enforced** -- every `CNA.Interop` type is `internal`, and the one exported type is a static class, so neither can appear in a signature at all. What is guarded instead is that precondition |
 | Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
@@ -676,12 +675,24 @@ records authority, source-portability value, implementation status, and namespac
   live `CNA_GRAPHICS_RENDERER_*` enum -- checked, not assumed, and the identity numbering has gaps at
   10, 19 and 20 where they were. cnanext offers 39 renderer CMake options.
 
-  | renderer | state |
-  | --- | --- |
-  | OPENGLES3 | `VERIFIED_60_600` -- the template drew 600 frames; native integration 159/159 in Debug and Release |
-  | HEADLESS | `VERIFIED_60_600` -- 600 frames and native integration 159/159, and it is what made nine absent capabilities testable |
-  | VULKAN | `UPSTREAM_BLOCKED` -- see below |
-  | the other 36 | `NOT_BUILT` |
+  **The configure block is gone** and two more renderers are built. `SDL_RENDERER` is the one that
+  mattered: it is the only 2D-only backend available here, and it is what turned A7's seventeen
+  silent capability branches into asserted ones.
+
+  | renderer | capabilities absent | engine layer | state |
+  | --- | --- | --- | --- |
+  | OPENGLES3 | 1 (`MultiSampleAntiAliasing`) | version 2 | integration 184/188; the four are the render-target clear defect |
+  | SDL_RENDERER | **18** -- no `ThreeD`, `CustomEffects`, `OcclusionQuery`, `Texture3D`, stencil, … | absent | **188/188**, and 31 asserted absent branches |
+  | SOFTWARE | 9 -- `MultipleRenderTargets`, `Texture3D`, `Instancing`, `CompiledEffects`, float targets, compute, indirect draw | absent | **188/188** |
+  | HEADLESS | 9 -- `Texture3D`, `MultiStreamVertexInput`, `AdditiveBlending`, `CompiledEffects`, float targets, compute, indirect draw | absent | **188/188**; refuses render-target readback |
+  | the other 35 | | | `NOT_BUILT` |
+
+  Four distinct capability profiles, and no two are the same set -- which is the property that makes
+  them worth having. `SOFTWARE` reports `ThreeD` and still refuses `Texture3D`, so "has a 3D
+  pipeline" and "has volume textures" are now separated by measurement rather than by a comment.
+
+  Each build is ~1.2 GB with `CNA_BUILD_TESTS=OFF` and `CNA_BUILD_EXAMPLES=OFF`, against ~20 GB for
+  a full one, which is what makes a renderer matrix affordable at all on this machine.
 
   `NOT_BUILT` rather than untested-by-omission: this cnanext configuration bakes in a single
   renderer (`CNA_GRAPHICS_RENDERER=OPENGLES3`), so each additional one needs its own out-of-tree
