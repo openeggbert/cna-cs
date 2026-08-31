@@ -24,7 +24,7 @@ packaging, and release engineering.
 | Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 971 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 971 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
-| Behavior corpora | One manifest defines 470 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, 46 Content, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 470: 199 pure, 166 device, and 105 native-runtime. Windows XNA runtime capture remains pending |
+| Behavior corpora | One manifest defines 479 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, **55 Content**, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 479: 208 pure, 166 device, and 105 native-runtime. The nine new ones are content **cache identity** -- the area the plan's own list named and the one where the two managers had silently diverged. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
@@ -856,7 +856,7 @@ math/geometry and input corpora now provide a cross-engine behavior baseline.
 
 Next work must preserve every zero above. Priorities are now:
 
-1. Execute and archive the 470-observation differential corpus on a Windows XNA 4.0 runtime.
+1. Execute and archive the 479-observation differential corpus on a Windows XNA 4.0 runtime.
    Direct XNA source/IL has adjudicated implemented audio validation, parent/child ownership and
    frame-buffer behavior, but only Windows can provide the independent runtime snapshot.
 2. Continue graphics behavior work from the exact blockers in
@@ -1000,7 +1000,7 @@ not a progress metric.
 - Add golden/differential tests for validation order, exception types, null/range/disposed cases,
   event order, collection mutation, math edge cases, graphics state, content caching, input
   transitions, audio/media state, and lifecycle ordering.
-- Keep alternate-engine results as comparators rather than authorities. The current 470-observation
+- Keep alternate-engine results as comparators rather than authorities. The current 479-observation
   snapshot preserves the earlier corpus and derives every category/probe count from one manifest.
   FNA's finalizer abort and MonoGame's audio initialization failure demonstrate why comparator
   crashes cannot define XNA behavior. Actual XNA metadata/source/IL, documentation, and the Windows

@@ -90,6 +90,20 @@ public static class ContentErrorCorpus
         observations.Add("content.multiple_throwing_dispose=" + MultipleThrowingDispose());
         observations.Add("content.nested_failure_state=" + NestedFailureState());
 
+        // Cache identity. These are here rather than only in the integration suite because the
+        // question they answer is "what does XNA do", and this corpus is what the Windows XNA
+        // snapshot adjudicates. The compat facade's cache had no test of any kind until this
+        // session, which is how CNA.Content.ContentManager came to diverge from it unnoticed.
+        observations.Add("content.cache.repeat_same_instance=" + Flag(CacheRepeatIsSameInstance()));
+        observations.Add("content.cache.repeat_read_count=" + CacheRepeatReadCount());
+        observations.Add("content.cache.case_insensitive=" + Flag(CacheIgnoresCase()));
+        observations.Add("content.cache.backslash_normalized=" + Flag(CacheNormalizesBackslashes()));
+        observations.Add("content.cache.dot_segment_distinct=" + Flag(CacheKeepsDotSegmentDistinct()));
+        observations.Add("content.cache.wrong_type_after_load=" + CacheWrongTypeAfterLoad());
+        observations.Add("content.cache.failed_then_available=" + CacheFailedThenAvailable());
+        observations.Add("content.cache.unload_then_reload_distinct=" + Flag(CacheUnloadThenReloadIsDistinct()));
+        observations.Add("content.cache.dispose_then_load=" + CacheDisposeThenLoad());
+
         return observations;
     }
 
@@ -565,6 +579,135 @@ public static class ContentErrorCorpus
         writer.Write((byte)remaining);
     }
 
+
+    // -- Cache identity -------------------------------------------------------------------------
+    //
+    // FreshDisposableReader produces a new object per read, which is what makes any of this
+    // observable: a reader returning a singleton would report "same instance" from a manager with
+    // no cache at all.
+
+    private static byte[] FreshAsset() => Container(Payload(
+        typeof(FreshDisposableReader).AssemblyQualifiedName!, 0, 1,
+        writer =>
+        {
+            Write7Bit(writer, 1);
+            Write7Bit(writer, 1);
+        }));
+
+    private static bool CacheRepeatIsSameInstance()
+    {
+        FreshDisposableReader.Reset();
+        using var content = new MemoryContentManager(() => new TrackingStream(FreshAsset()));
+        return ReferenceEquals(
+            content.Load<CorpusDisposable>("fixture"), content.Load<CorpusDisposable>("fixture"));
+    }
+
+    /// <summary>
+    /// Reads performed by the first load, then by the second, as <c>first:second</c>.
+    ///
+    /// Reported as a pair rather than a total, and that is not fussiness: the fixture's shared
+    /// resource makes one load run the reader twice, so a total of <c>2</c> for two loads is
+    /// equally consistent with "the cache worked" and with "there is no cache and one read per
+    /// load". The pair separates them -- a working cache reads <c>2:0</c>. This was written as a
+    /// total first and was genuinely ambiguous.
+    /// </summary>
+    private static string CacheRepeatReadCount()
+    {
+        FreshDisposableReader.Reset();
+        using var content = new MemoryContentManager(() => new TrackingStream(FreshAsset()));
+
+        content.Load<CorpusDisposable>("fixture");
+        int afterFirst = FreshDisposableReader.ReadCount;
+        content.Load<CorpusDisposable>("fixture");
+        int afterSecond = FreshDisposableReader.ReadCount;
+
+        return string.Create(
+            CultureInfo.InvariantCulture, $"{afterFirst}:{afterSecond - afterFirst}");
+    }
+
+    private static bool CacheIgnoresCase()
+    {
+        FreshDisposableReader.Reset();
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/asset"] = FreshAsset(),
+        };
+        using var content = new MappedContentManager(assets);
+        return ReferenceEquals(
+            content.Load<CorpusDisposable>("folder/asset"), content.Load<CorpusDisposable>("FOLDER/Asset"));
+    }
+
+    private static bool CacheNormalizesBackslashes()
+    {
+        FreshDisposableReader.Reset();
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["folder/asset"] = FreshAsset(),
+        };
+        using var content = new MappedContentManager(assets);
+        return ReferenceEquals(
+            content.Load<CorpusDisposable>("folder/asset"), content.Load<CorpusDisposable>("folder\\asset"));
+    }
+
+    /// <summary>Whether a relative segment is collapsed. Expected <em>false</em>: XNA normalises
+    /// separators and case and nothing else, so <c>./name</c> is a second asset.</summary>
+    private static bool CacheKeepsDotSegmentDistinct()
+    {
+        FreshDisposableReader.Reset();
+        var assets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["asset"] = FreshAsset(),
+            ["./asset"] = FreshAsset(),
+        };
+        using var content = new MappedContentManager(assets);
+        return !ReferenceEquals(
+            content.Load<CorpusDisposable>("asset"), content.Load<CorpusDisposable>("./asset"));
+    }
+
+    private static string CacheWrongTypeAfterLoad()
+    {
+        FreshDisposableReader.Reset();
+        using var content = new MemoryContentManager(() => new TrackingStream(FreshAsset()));
+        content.Load<CorpusDisposable>("fixture");
+        return ExceptionName(() => content.Load<string>("fixture"));
+    }
+
+    /// <summary>
+    /// Whether a name that failed once can load later.
+    /// </summary>
+    private static string CacheFailedThenAvailable()
+    {
+        FreshDisposableReader.Reset();
+        int attempts = 0;
+        using var content = new MemoryContentManager(() =>
+        {
+            attempts++;
+            return attempts == 1 ? throw new FileNotFoundException("not yet") : new TrackingStream(FreshAsset());
+        });
+
+        string first = ExceptionName(() => content.Load<CorpusDisposable>("fixture"));
+        string second = ExceptionName(() => content.Load<CorpusDisposable>("fixture"));
+        return $"{first}/{second}";
+    }
+
+    private static bool CacheUnloadThenReloadIsDistinct()
+    {
+        FreshDisposableReader.Reset();
+        using var content = new MemoryContentManager(() => new TrackingStream(FreshAsset()));
+        CorpusDisposable before = content.Load<CorpusDisposable>("fixture");
+        content.Unload();
+        return !ReferenceEquals(before, content.Load<CorpusDisposable>("fixture"));
+    }
+
+    private static string CacheDisposeThenLoad()
+    {
+        FreshDisposableReader.Reset();
+        var content = new MemoryContentManager(() => new TrackingStream(FreshAsset()));
+        content.Load<CorpusDisposable>("fixture");
+        content.Dispose();
+        return ExceptionName(() => content.Load<CorpusDisposable>("fixture"));
+    }
+
     private static void Observe(List<string> observations, string name, Func<int> action)
     {
         try
@@ -704,6 +847,23 @@ public sealed class CreateThenThrowReader : ContentTypeReader<CorpusDisposable>
     {
         _ = new CorpusDisposable();
         throw new InvalidOperationException("after-create");
+    }
+}
+
+/// <summary>A reader producing a fresh object per read, and counting them. Both halves matter for
+/// the cache observations: identity is only meaningful if a second read would produce a different
+/// object, and the count is what separates "served from the cache" from "read again and happened to
+/// compare equal".</summary>
+public sealed class FreshDisposableReader : ContentTypeReader<CorpusDisposable>
+{
+    public static int ReadCount { get; private set; }
+
+    public static void Reset() => ReadCount = 0;
+
+    protected override CorpusDisposable Read(ContentReader input, CorpusDisposable existingInstance)
+    {
+        ReadCount++;
+        return new CorpusDisposable();
     }
 }
 
