@@ -110,7 +110,7 @@ public class CnaAbiTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        // 996: five from A3/A4/A5, two for A1, fourteen for D2's first CNB slice, six for D3's
+        // 1002: five from A3/A4/A5, two for A1, fourteen for D2's first CNB slice, six for D3's
         // engine-layer render target pool, fourteen for D2's second -- the CNB texture decode family
         // plus the device's surface-format support query -- fifteen for D3's second, the
         // post-process pass and chain family, and thirty-nine for D2's third: the CNB model read
@@ -119,10 +119,11 @@ public class CnaAbiTests
         // compute their own arithmetic -- and fourteen for the CNB loader registry, the extension
         // mechanism by which a game teaches CNA about its own .cnb types, and one for the video
         // frame generation that closed half of the VideoPlayer.GetTexture blocker row, and ten
-        // for the CNB sprite font -- the slice that turns a .cnb into a drawable SpriteFont.
+        // for the CNB sprite font and six for the CNB sound effect -- the slices that turn a .cnb
+        // into a drawable SpriteFont and a playable SoundEffect.
         // The literal is a tripwire, not a fact about CNA -- it exists so that adding an import is
         // a deliberate act rather than something that happens on the way to something else.
-        Assert.Equal(996, declared.Length);
+        Assert.Equal(1002, declared.Length);
         Assert.Equal(declared, CnaNativeAbiPolicy.RequiredSymbols);
     }
 

@@ -78,7 +78,7 @@ across both evidence paths.
 
 | Measured | Result |
 | --- | --- |
-| Consumed entry points absent | 0 of 996 |
+| Consumed entry points absent | 0 of 1002 |
 | Consumed entry points with a changed header prototype | 0 |
 | Exports removed / added | 0 / 3 |
 | Struct size/alignment/field-offset changes | 0 (0 structs added) |
@@ -98,8 +98,8 @@ asynchronous pair no longer discards. Those are behavior changes with an unchang
 exactly the class a diff over declarations cannot see and the reason admission also re-runs the
 behavioral gates.
 
-`tools/abi-verify` independently passes **906 native and 906 managed** C-authority layout
-measurements with 0 mismatches, compiles 996 of 996 prototypes, checks 6 callbacks, asserts 353
+`tools/abi-verify` independently passes **916 native and 916 managed** C-authority layout
+measurements with 0 mismatches, compiles 1002 of 1002 prototypes, checks 6 callbacks, asserts 359
 enum-like constants and rejects 12 of 12 negative controls against the 0.21.0 headers. Run before
 the version constant moved, its *only* finding was `abi.version` itself -- which is the shape a
 clean additive step should produce, and is what distinguishes this from a step that happens to

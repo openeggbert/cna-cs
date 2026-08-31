@@ -53,3 +53,21 @@ internal enum CnaCnbSkeletonMatrixSet : uint
     InverseBindPose = 1,
     RootPrefix = 2,
 }
+
+/// <summary>
+/// Mirrors <c>cnb.h</c>'s <c>CNA_CnbAudioFormat</c> exactly (<c>cnb.h:3941-3953</c>): how a compiled
+/// sound's samples are stored.
+///
+/// Every identity is declared, including the ones this binding cannot yet hand to CNA's audio
+/// engine. A decoder that only knew the playable subset could not report what a file it refused
+/// actually holds, which is the difference between "this asset needs ADPCM" and "this asset failed".
+/// </summary>
+internal enum CnaCnbAudioFormat : uint
+{
+    Unknown = 0,
+    Pcm16 = 1,
+    Pcm8 = 2,
+    PcmFloat32 = 3,
+    Adpcm = 4,
+    Vorbis = 5,
+}

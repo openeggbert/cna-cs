@@ -2468,6 +2468,35 @@ internal static partial class Native
     internal static partial CnaResult cna_video_player_get_frame_ext(
         CnaHandle player, ref CnaVideoFrameExt outFrame);
 
+    // -- CNB sound effects (cnb.h) ------------------------------------------------------------
+    //
+    // No new audio routes are needed on the other side: a decoded PCM16 sound is samples, a rate
+    // and a channel count, which is exactly what SoundEffect's public constructor already takes.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_decode_sound_effect(CnaHandle document, out CnaHandle outSound);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sound_effect_data_destroy(CnaHandle sound);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_sound_effect_data_get_info(
+        CnaHandle sound, ref CnaCnbSoundEffectInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_sound_effect_data_copy_samples(
+        CnaHandle sound, byte* destination, ulong capacity, out ulong outByteCount);
+
+    // The authoring half, so a fixture is written by CNA's own encoder.
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_sound_effect_data_create(
+        in CnaCnbSoundEffectInfo info, byte* samples, ulong byteCount, out CnaHandle outSound);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_encode_sound_effect(
+        CnaHandle sound, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
+
     // -- CNB sprite fonts (cnb.h) -------------------------------------------------------------
     //
     // The glyph struct is the same CNA_SpriteFontGlyph the ordinary SpriteFont path already uses,

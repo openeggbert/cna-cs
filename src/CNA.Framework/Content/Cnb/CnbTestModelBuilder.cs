@@ -430,3 +430,80 @@ internal sealed class CnbTestSpriteFontBuilder : IDisposable
 
     private CnaHandle Handle => new(_handle.DangerousGetHandle());
 }
+
+/// <summary>
+/// Writes a <c>.cnb</c> sound-effect fixture through CNA's own encoder, for the reason
+/// <see cref="CnbTestModelBuilder"/> records.
+/// </summary>
+internal static class CnbTestSoundEffectWriter
+{
+    public static unsafe void Write(
+        string path,
+        CnbAudioFormat format,
+        int sampleRate,
+        int channels,
+        int frameCount,
+        int loopStart,
+        int loopLength,
+        ReadOnlySpan<byte> samples,
+        string contentName = "")
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var info = CnaCnbSoundEffectInfo.Versioned();
+        info.Format = (CnaCnbAudioFormat)format;
+        info.SampleRate = (uint)sampleRate;
+        info.Channels = (uint)channels;
+        info.FrameCount = (uint)frameCount;
+        info.LoopStart = (uint)loopStart;
+        info.LoopLength = (uint)loopLength;
+
+        CnaHandle sound;
+        fixed (byte* bytes = samples)
+        {
+            CnaResult created = Native.cna_cnb_sound_effect_data_create(
+                in info, bytes, (ulong)samples.Length, out sound);
+            CnaException.ThrowIfFailed(created, nameof(Write));
+        }
+
+        try
+        {
+            byte[]? encoded = null;
+            CnaResult result = CnaStringMarshal.WithStringView(contentName, view =>
+            {
+                CnaResult sizeResult = Native.cna_cnb_encode_sound_effect(sound, view, null, 0, out ulong required);
+                if (sizeResult.IsFailure() && sizeResult != CnaResult.BufferTooSmall)
+                {
+                    return sizeResult;
+                }
+
+                var buffer = new byte[checked((int)required)];
+                fixed (byte* destination = buffer)
+                {
+                    CnaResult encodeResult = Native.cna_cnb_encode_sound_effect(
+                        sound, view, destination, (ulong)buffer.Length, out ulong written);
+                    if (!encodeResult.IsSuccess())
+                    {
+                        return encodeResult;
+                    }
+
+                    if (written != (ulong)buffer.Length)
+                    {
+                        throw new CnaException(
+                            $"The CNB sound encoder asked for {required} bytes and wrote {written}.");
+                    }
+                }
+
+                encoded = buffer;
+                return CnaResult.Success;
+            });
+
+            CnaException.ThrowIfFailed(result, nameof(Write));
+            File.WriteAllBytes(path, encoded!);
+        }
+        finally
+        {
+            _ = Native.cna_cnb_sound_effect_data_destroy(sound);
+        }
+    }
+}

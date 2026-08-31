@@ -753,6 +753,27 @@ internal struct CnaCnbTextureInfo
     };
 }
 
+/// <summary>A decoded CNB sound effect's shape -- <c>CNA_CnbSoundEffectInfo</c>. Caller-initialised
+/// and versioned, like <see cref="CnaCnbReadLimits"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbSoundEffectInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public CnaCnbAudioFormat Format;
+    public uint SampleRate;
+    public uint Channels;
+    public uint FrameCount;
+    public uint LoopStart;
+    public uint LoopLength;
+
+    public static unsafe CnaCnbSoundEffectInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbSoundEffectInfo),
+        StructVersion = 1,
+    };
+}
+
 /// <summary>A decoded CNB sprite font's shape -- <c>CNA_CnbSpriteFontInfo</c>. Caller-initialised
 /// and versioned, like <see cref="CnaCnbReadLimits"/>.</summary>
 [StructLayout(LayoutKind.Sequential)]

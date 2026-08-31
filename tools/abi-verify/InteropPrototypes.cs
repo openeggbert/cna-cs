@@ -76,6 +76,7 @@ static class InteropPrototypes
         ["cna_cnb_model_set_skeleton#5"] = "const float*",   // const, which C# cannot put on a pointer
         ["cna_cnb_model_add_bone#3"] = "const float*",   // const, which C# cannot put on a pointer
         ["cna_cnb_model_add_mesh#3"] = "const uint32_t*",   // const, which C# cannot put on a pointer
+        ["cna_cnb_sound_effect_data_create#1"] = "const uint8_t*",   // const, which C# cannot put on a pointer
         ["cna_cnb_texture_data_select_representation#1"] = "CNA_Bool (*)(CNA_CnbTextureFormat, void*)",   // callback
         ["cna_album_copy_name#1"] = "char*",   // text buffer: C char, which C# has no type for
         ["cna_artist_copy_name#1"] = "char*",   // text buffer: C char, which C# has no type for

@@ -21,14 +21,14 @@ packaging, and release engineering.
 | Debug and Release solution build | 0 warnings, 0 errors |
 | Managed tests | 622 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
 | Native integration | 188 tests against four ABI 0.21.0 renderers on Linux x64. SDL_RENDERER, SOFTWARE and HEADLESS: **188/188**. OPENGLES3: 184/188, the four failures all being one upstream EasyGL defect (see the blocker table). **Zero silent capability branches remain on any renderer**; 31 absent branches assert on SDL_RENDERER alone |
-| Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 996 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
-| Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 996 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
+| Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 1002 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
+| Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 1002 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
 | Behavior corpora | One manifest defines 479 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, **55 Content**, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 479: 208 pure, 166 device, and 105 native-runtime. The nine new ones are content **cache identity** -- the area the plan's own list named and the one where the two managers had silently diverged. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
-| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **906 native and 906 managed layout/type measurements with 0 mismatches**, 996 of 996 prototypes compiled, 6 callbacks checked, 353 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
+| ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **916 native and 916 managed layout/type measurements with 0 mismatches**, 1002 of 1002 prototypes compiled, 6 callbacks checked, 359 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures. For `CNA.Framework`'s own surface the invariant turns out to be **compiler-enforced** -- every `CNA.Interop` type is `internal`, and the one exported type is a static class, so neither can appear in a signature at all. What is guarded instead is that precondition |
 | Real-game compile probe | An unmodified 18,391-line Windows Phone XNA game ported to MonoGame compiles against the facade with one unresolved call: `Mouse.SetCursor`, which is MonoGame's addition rather than XNA 4.0. Now offered as `CnaMouse.SetCursor` in the CNA extensions |
@@ -609,7 +609,7 @@ records authority, source-portability value, implementation status, and namespac
   content container and this is a second, so routing it through `ContentManager.Load<T>` would change
   a contract checked member for member against XNA's metadata.
 
-  `cnb.h` is 272 routes. **Seventy-seven are bound**, across four slices and one extension mechanism.
+  `cnb.h` is 272 routes. **Eighty-three are bound**, across five slices and one extension mechanism.
   Projecting the rest -- encoders, sprite tooling, the `.cnj` compiler front ends -- would still be a
   worse API than none.
 
@@ -664,6 +664,17 @@ records authority, source-portability value, implementation status, and namespac
   them would turn XNA's "throw on a missing glyph" into "draw a null"; and the atlas is a **copy**,
   not a view, so it outlives the font it came from -- asserted, since a borrowed atlas read after
   its font is disposed is the class of bug that does not announce itself.
+
+  **Sixth slice done: sound effects**, and it needed no new audio routes on the other side -- a
+  decoded PCM16 sound is samples, a rate and a channel count, which is exactly what `SoundEffect`'s
+  public constructor already takes. Six routes.
+
+  Measured and not guessable: **CNB schema 1 stores PCM16 only**. The other format identifiers are
+  reserved with no codec in this build, and CNA's own *encoder* refuses to author one -- so the
+  loader's non-PCM16 guard is unreachable today. It stays, because the identifiers are reserved
+  rather than absent, and its comment says it is unreachable rather than implying a test; what is
+  pinned instead is the encoder's refusal, which also tells a consumer that every CNB sound they
+  meet today is PCM16.
 
   **Fourth slice done: the loader registry**, which is what makes the format extensible at all --
   the CNB counterpart of the `.xnb` reader table, and the answer to whether the registry is a
