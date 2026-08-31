@@ -217,7 +217,7 @@ public class ContentManagerCacheTests(ITestOutputHelper output, NativeGameFixtur
     }
 
     /// <summary>Disposing the manager disposes what it loaded, by the same route as
-    /// <see cref="Unload"/>.</summary>
+    /// <see cref="ContentManager.Unload"/>.</summary>
     [NativeFact]
     public void Dispose_DisposesWhatItLoaded()
     {

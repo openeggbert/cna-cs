@@ -93,9 +93,13 @@ public readonly struct CnbSamplerState
 
     public TextureAddressMode AddressV { get; }
 
-    /// <summary>Whether the file declared a sampler for this slot. Same reason as
-    /// <see cref="CnbTextureTransform.IsDeclared"/>: a zeroed sampler reads as "point, clamp,
-    /// clamp", which is also a perfectly ordinary authored choice.</summary>
+    /// <summary>
+    /// Whether the file declared a sampler for this slot.
+    ///
+    /// A zeroed sampler reads as "point, clamp, clamp", which is also a perfectly ordinary authored
+    /// choice, so the two are not separable from the values alone. <see cref="CnbTextureTransform"/>
+    /// carries no such flag -- not an omission here, but the shape of the route that reads it.
+    /// </summary>
     public bool IsDeclared { get; }
 }
 
