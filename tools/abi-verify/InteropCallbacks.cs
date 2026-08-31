@@ -23,8 +23,9 @@ static class InteropCallbacks
     ///
     /// The pairing cannot be read from metadata -- a function pointer is handed to a route at a call
     /// site, not declared as implementing anything -- so it is listed, and each entry is a statement
-    /// that the call site was read. It is deliberately small: two event shapes and the three
-    /// content-reader callbacks account for every callback this binding provides.
+    /// that the call site was read. It is deliberately small: two event shapes, the three
+    /// content-reader callbacks and the CNB loader account for every callback this binding
+    /// provides.
     /// </summary>
     public static readonly (string Owner, string Member, string Typedef)[] Pairings =
     [
@@ -33,6 +34,7 @@ static class InteropCallbacks
         ("CnaContentTypeReaderCallbacks", "Create", "CNA_ContentTypeReaderCreateCallback"),
         ("CnaContentTypeReaderCallbacks", "Read", "CNA_ContentTypeReaderReadCallback"),
         ("CnaContentTypeReaderCallbacks", "Destroy", "CNA_ContentTypeReaderDestroyCallback"),
+        ("CNA.Content.Cnb.CnbLoaderRegistration", "OnLoad", "CNA_CnbLoaderCallback"),
     ];
 
     /// <summary>The managed signature of one pairing, as C, or null when it cannot be found.</summary>

@@ -41,6 +41,26 @@ internal sealed class CnbTestWriter : IDisposable
         }
     }
 
+    /// <summary>
+    /// Stamps the container's metadata.
+    ///
+    /// The asset type name is what a custom-typed file must carry for the loader registry to resolve
+    /// it: the registry compares it against the name registered under the file's identifier and
+    /// refuses a disagreement, so a fixture that omits it produces a file no loader will take.
+    /// </summary>
+    public void SetMetadata(string assetTypeName, string contentName)
+    {
+        ArgumentNullException.ThrowIfNull(assetTypeName);
+        ArgumentNullException.ThrowIfNull(contentName);
+
+        CnaResult result = CnaStringMarshal.WithStringView(
+            assetTypeName,
+            typeView => CnaStringMarshal.WithStringView(
+                contentName, nameView => Native.cna_cnb_writer_set_metadata(Handle, typeView, nameView)));
+        GC.KeepAlive(this);
+        CnaException.ThrowIfFailed(result, nameof(SetMetadata));
+    }
+
     public void WriteToFile(string path)
     {
         ArgumentNullException.ThrowIfNull(path);

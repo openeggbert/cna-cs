@@ -62,6 +62,12 @@ static class InteropPrototypes
         ["cna_cnb_model_copy_part_external_effect#2"] = "char*",   // text buffer: C char, which C# has no type for
         ["cna_cnb_model_copy_part_name#2"] = "char*",   // text buffer: C char, which C# has no type for
         ["cna_cnb_model_copy_material_texture#3"] = "char*",   // text buffer: C char, which C# has no type for
+        ["cna_cnb_document_copy_metadata_asset_type_name#1"] = "char*",   // text buffer: C char, which C# has no type for
+        ["cna_cnb_loader_registry_copy_registered_type_name#1"] = "char*",   // text buffer: C char, which C# has no type for
+        // The loader callback, which the managed side declares nint. Its own shape is proven
+        // separately, from the delegate actually passed -- see InteropCallbacks.
+        ["cna_cnb_loader_registry_register#2"] =
+            "CNA_Result (*)(void*, CNA_CnbDocumentHandle, CNA_Handle, CNA_StringView, void**)",   // callback
         ["cna_cnb_model_set_part_index_bytes#2"] = "const uint8_t*",   // const, which C# cannot put on a pointer
         ["cna_cnb_model_set_part_vertex_bytes#2"] = "const uint8_t*",   // const, which C# cannot put on a pointer
         ["cna_cnb_model_set_skeleton#1"] = "const int32_t*",   // const, which C# cannot put on a pointer

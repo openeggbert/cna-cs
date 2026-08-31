@@ -2456,6 +2456,72 @@ internal static partial class Native
     internal static unsafe partial CnaResult cna_cnb_encode_texture2d(
         CnaHandle texture, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
 
+    // -- CNB loader registry (cnb.h) ----------------------------------------------------------
+    //
+    // The extension mechanism for CNA's own container: a process-wide table mapping a custom asset
+    // type identifier to a loader callback, which the header itself describes as matching how the
+    // .xnb reader table already works. This binding's ContentTypeReaderRegistration is that table's
+    // managed face, and CnbLoaderRegistration is this one's.
+
+    /// <summary>Mints the custom asset type identifier a canonical type name hashes to. The
+    /// registry refuses an identifier that does not hash from the name it is registered under, so
+    /// this is the only correct way to obtain one.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_asset_type_id_from_name(
+        CnaStringView name, out uint outAssetTypeId);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_loader_registry_register(
+        uint assetTypeId, CnaStringView canonicalTypeName, nint callback, nint context);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_loader_registry_remove(uint assetTypeId, out byte outRemoved);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_loader_registry_is_registered(
+        uint assetTypeId, out byte outRegistered);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_loader_registry_find(
+        uint assetTypeId, out byte outFound, out CnaHandle outLoader);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_loader_registry_resolve_for_document(
+        CnaHandle document, out CnaHandle outLoader);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_loader_registry_get_registered_type_name_size(
+        uint assetTypeId, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_loader_registry_copy_registered_type_name(
+        uint assetTypeId, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_loader_registry_register_builtins();
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_loader_destroy(CnaHandle loader);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_loader_invoke(
+        CnaHandle loader, CnaHandle document, CnaHandle contentManager,
+        CnaStringView assetName, nint* outObject);
+
+    /// <summary>Stamps the container's metadata, which is what carries the canonical type name a
+    /// custom-typed file must declare for the registry to resolve it.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_writer_set_metadata(
+        CnaHandle writer, CnaStringView assetTypeName, CnaStringView contentName);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_document_get_metadata_asset_type_name_size(
+        CnaHandle document, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_document_copy_metadata_asset_type_name(
+        CnaHandle document, byte* destination, ulong capacity, out ulong outByteCount);
+
     // -- Engine-layer HDR passes (engine_layer.h) ---------------------------------------------
     //
     // Bloom and tonemap, which are post-process passes of the family D3's second slice already

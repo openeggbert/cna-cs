@@ -69,6 +69,24 @@ public sealed class CnbDocument : IDisposable
             h => Native.cna_cnb_document_destroy(new CnaHandle(h)).IsSuccess());
     }
 
+    private CnbDocument(nint handleValue, bool owned)
+    {
+        _handle = owned
+            ? new NativeResourceHandle(
+                handleValue, h => Native.cna_cnb_document_destroy(new CnaHandle(h)).IsSuccess())
+            : new NativeResourceHandle(handleValue, static _ => true);
+    }
+
+    /// <summary>
+    /// A non-owning view of a document CNA owns, for the duration of a callback.
+    ///
+    /// <b>Non-owning is the whole point.</b> A <see cref="CnbLoaderRegistration"/> callback is handed
+    /// the container borrowed, and a wrapper that destroyed it on the way out would take down the
+    /// caller's document mid-load. The release delegate is a no-op rather than absent so that
+    /// <c>using</c> reads normally at the call site and does the right thing.
+    /// </summary>
+    internal static CnbDocument Borrowing(CnaHandle document) => new(document.AsNint, owned: false);
+
     /// <summary>
     /// Parses a <c>.cnb</c> file with CNA's own default reader ceilings.
     ///
