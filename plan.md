@@ -594,9 +594,9 @@ records authority, source-portability value, implementation status, and namespac
   content container and this is a second, so routing it through `ContentManager.Load<T>` would change
   a contract checked member for member against XNA's metadata.
 
-  `cnb.h` is 272 routes. Fourteen are bound. Projecting the rest -- encoders, model builders, sprite
-  tooling -- would be a worse API than none; what a game needs first is to open a container, find out
-  what it holds and reach its bytes.
+  `cnb.h` is 272 routes. **Sixty-seven are bound**, across three slices and one extension mechanism.
+  Projecting the rest -- encoders, sprite tooling, the `.cnj` compiler front ends -- would still be a
+  worse API than none.
 
   **Ownership**: the document handle is owned and destroyed by the facade. A `CnbChunk` is a copied
   snapshot rather than a view into the document, and chunk data is copied into a caller array, so
@@ -616,6 +616,41 @@ records authority, source-portability value, implementation status, and namespac
   a caller-initialised pointer and an output pointer are both `T*`, so no C prototype check can tell
   them apart. Runtime is the only authority for that one.
 
+  **Third slice done: the model graph.** `CNA.Content.Cnb.CnbModel` decodes a compiled model into
+  bones with their hierarchy and transforms, meshes with their parts in draw order, parts with their
+  compiled vertex and index bytes and effect kind, materials with the texture slots the file filled,
+  and the skinning skeleton. Thirty-nine routes.
+
+  Deliberately not `Microsoft.Xna.Framework.Graphics.Model`. The two are different shapes and saying
+  otherwise loses half of each: CNB carries PBR materials, eight texture slots, glTF alpha modes and
+  a skeleton that XNA's `Model` cannot hold, and XNA's `Model` carries live device-bound buffers and
+  effects that a decoded file does not have.
+
+  **Ownership**: one owner, and the graph is a managed snapshot taken in a single pass. Lazy
+  accessors would have made every child hold the native model alive, which is the two-owners shape
+  the rules forbid. The snapshot is asserted to outlive the document it came from, since the header
+  says decoding copies rather than views.
+
+  Three defects found by the gates rather than by reading. `get_material_texture_coordinate_set`
+  writes a `uint8_t` and was declared `out uint`, which reads three bytes past what native wrote;
+  `get_material_texture_transform` takes four parameters, not five, so `CnbTextureTransform` claims
+  no "was one declared" flag; and **a material's texture *names* and its per-slot state live in
+  different index spaces**, which `cnb.h` calls "a real trap" -- eight name slots against seven
+  importer slots, with emissive and occlusion swapped. Passing the name slot through compiles, never
+  throws, and silently returns the occlusion map's sampler when asked for the emissive map's.
+
+  **Fourth slice done: the loader registry**, which is what makes the format extensible at all --
+  the CNB counterpart of the `.xnb` reader table, and the answer to whether the registry is a
+  reusable basis for later asset kinds. It is: a game mints an identifier from its type name, ships
+  a container carrying both, registers a `CnbAssetLoader`, and CNA resolves the loader *from the
+  file*. Fourteen routes, and `CALLBACKS_CHECKED` rose 5 -> 6 with it.
+
+  What the registry measured, none of it guessable: `cna_cnb_loader_invoke` requires a content
+  manager; re-registering the same type name is accepted and replaces, so two managed registrations
+  share one native slot and disposing either empties it; a container whose type name does not hash to
+  its identifier cannot be written at all; and a throwing loader surfaces as `Io` naming the
+  registration, not as `Callback`.
+
 - D2 (was). `cnb.h` load path: `ContentManager` extension that loads `.cnb` alongside `.xnb`, starting
   with textures and models, using the same ownership model as the XNB path.
 - D3. **First vertical slice done.** `CNA.Graphics.Experimental.RenderTargetPool` and
@@ -623,7 +658,7 @@ records authority, source-portability value, implementation status, and namespac
   post-process chain is built on and the smallest piece of the engine layer with an ownership
   contract worth testing.
 
-  `engine_layer.h` is 857 routes. Six are bound. The namespace is `CNA.Graphics.Experimental`, in
+  `engine_layer.h` is 857 routes. **Forty-three are bound**, across three slices. The namespace is `CNA.Graphics.Experimental`, in
   CNA's own vocabulary rather than `Microsoft.Xna.Framework` -- XNA has no such concept, and a game
   allocating render targets by hand is what XNA offers.
 
@@ -663,6 +698,30 @@ records authority, source-portability value, implementation status, and namespac
   nothing. This build reports the engine layer available at version 2, so the supported path is
   genuinely exercised: a pooled target is bound, cleared to `0,128,255`, and read back as exactly
   that.
+
+  **Third slice done: the bloom and tonemap passes.** Chosen over the larger families -- PBR
+  materials at 63 routes, clustered lighting at 60 -- for one reason: these two expose their own
+  arithmetic as functions taking no device, so the curve can be *asked for* rather than inferred from
+  pixels. Everywhere else in this header a shader's output can only be checked against a
+  reimplementation of the shader, which tests the reimplementation. Twenty-two routes.
+
+  It also repairs the second slice's weak spot. A blit is the identity, which is what made the
+  chain's pixel assertions vacuous until the pooled-target count was found to separate them; a
+  tonemap is not.
+
+  What the pure routes pin, all measured: bloom extraction is a **soft knee**, not
+  `max(value - threshold, 0)` -- at the threshold it contributes a quarter where a subtraction gives
+  zero, and well above it the value passes through unchanged. Iterations per quality tier are
+  2/3/5/7. The five tonemapping modes are five distinct curves. `TonemappingMode.None` still clamps.
+  Exposure is a linear multiplier, gamma is applied as `value^(1/gamma)`, and exposure runs first.
+
+  That last one is where a test that could not fail was found and fixed: asserting only that swapping
+  exposure and gamma produced *different* answers is symmetric, and a binding that swapped them at
+  the call site passed it. Stating what each parameter means catches it.
+
+  And "deviceless" turned out not to mean "unconditional": these routes take no device and are still
+  refused with `NOT_SUPPORTED` on a build without the engine layer. The doc comments said otherwise
+  until HEADLESS disagreed.
 
 - D3 (was). The post-process/render-pipeline objects, as an explicitly experimental namespace.
 - D4. Everything else stays inventory-only until D1-D3 have shipped and been measured.
