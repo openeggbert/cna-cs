@@ -837,6 +837,44 @@ managed `Game` safe point. The 1000-cycle deep run has passed, without an alloca
 
 ## P0 — content compatibility
 
+### Cache identity: settled, and it was a missing implementation
+
+`CNA.Content.ContentManager` did not cache. `CNA.XnaCompat`'s facade did, and XNA does, so the two
+layers disagreed about what "the same asset" means -- and the question of whether that was a
+deliberate CNA-native design or an omission was left open by the previous pass.
+
+**It was an omission, and the class's own documentation is what settles it.** Two doc comments
+described a cache that did not exist: `Unload`'s said it "releases every asset this manager loaded",
+and `LoadForeign<T>`'s said results are "cached by asset name exactly as every other load is". No
+load cached anything. Measured before the fix: two `Load<SpriteFont>` calls for one name produced
+two fonts over two GPU atlases, and `Unload` disposed neither -- so a game calling `Load` inside a
+frame accumulated an atlas per call that nothing would ever free.
+
+The two layers now agree, and the agreement is tested on both rather than asserted in prose:
+
+| | Behaviour |
+| --- | --- |
+| `Load` twice under one name | the same instance, and the same atlas behind it |
+| Cache key | the asset name with `\` normalised to `/`, compared case-insensitively -- XNA's rule |
+| `./name` against `name` | **two assets**. XNA does not collapse relative segments and neither does this; a manager that did would invent an identity the format does not have |
+| Asking for a loaded name as another type | `ContentLoadException` naming the asset and what it already is |
+| A failed load | cached neither as a failure nor as a null, so the name loads once the asset exists |
+| `Unload` | disposes what the manager owns, then clears in a `finally`, then unloads native |
+| `Dispose` then `Load` | `ObjectDisposedException` |
+
+Ownership is the half that makes caching worth having. CNA's header is explicit that a load returns
+an *independently owned* handle which "must still be destroyed explicitly" and which
+`cna_content_manager_unload` does not touch -- so somebody has to be that owner, and XNA's answer is
+the manager. **The case that proves it is `SpriteFont`**, which is not `IDisposable` in XNA or here
+while its atlas is: a manager recording only the object it returns leaves the atlas alive and passes
+every other test. It did, until `ReadAsset` started collecting the resources it creates on the way.
+Anything collected by a load that then fails is disposed rather than leaked, which is better than
+XNA and costs no compatibility.
+
+Nine tests on the CNA-native manager and one on the compat facade; seven mutations were planted and
+all seven caught -- no cache, `Unload` disposing nothing, the atlas not recorded, an ordinal key, no
+separator normalisation, a cache that remembers failures, and a missing disposed guard.
+
 The structural managed work is complete. `ContentManager` has the correct public base relationship,
 service-provider constructors, cache, unload and resource-manager facade. `ContentReader` derives
 from `BinaryReader`; abstract and generic `ContentTypeReader` contracts, reader-table activation

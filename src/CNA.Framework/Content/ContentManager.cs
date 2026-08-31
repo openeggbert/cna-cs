@@ -184,18 +184,167 @@ public class ContentManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// What this manager has loaded, keyed by canonical asset name.
+    ///
+    /// <b>This class documented a cache before it had one.</b> <see cref="Unload"/>'s comment said
+    /// "releases every asset this manager loaded", and <see cref="LoadForeign{T}"/>'s said "results
+    /// are cached by asset name exactly as every other load is" -- and no load cached anything.
+    /// Measured before this was written: two <c>Load&lt;SpriteFont&gt;</c> calls for one name
+    /// returned two fonts with two textures, <c>Unload</c> disposed neither, and a game looping over
+    /// <c>Load</c> accumulated a GPU texture per call that nothing would ever free. So this is a
+    /// missing implementation rather than a deliberate CNA-native divergence, which is the question
+    /// that had to be settled before it could be fixed.
+    ///
+    /// Case-insensitive over backslash-normalised names, matching <c>CNA.XnaCompat</c>'s facade and
+    /// XNA before it. The two layers agreeing matters more than either spelling: a game that ports
+    /// from one to the other should not find its content identity changing underneath it.
+    /// </summary>
+    private readonly Dictionary<string, object> _loadedAssets = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The subset of <see cref="_loadedAssets"/> this manager must dispose, in load order.
+    ///
+    /// Separate from the cache because the two answer different questions -- the cache is "have I
+    /// loaded this name", and this is "what do I own". A native-backed asset returned twice under
+    /// two names would otherwise be disposed twice.
+    ///
+    /// Ownership is the half that makes caching worth having here. CNA's own header is explicit
+    /// that a load hands back an <em>independently owned</em> handle which "must still be destroyed
+    /// explicitly" and which <c>cna_content_manager_unload</c> does not touch. Somebody has to be
+    /// that owner; XNA's answer is the manager, and adopting it is what turns an accumulating pile
+    /// of textures into a lifetime.
+    /// </summary>
+    private readonly List<IDisposable> _ownedAssets = [];
+
     private bool _disposed;
 
-    /// <summary>Releases every asset this manager loaded. Matches real XNA's <c>Unload</c>: the
-    /// manager stays usable and can load again afterwards.</summary>
+    /// <summary>
+    /// Releases every asset this manager loaded. Matches real XNA's <c>Unload</c>: the manager stays
+    /// usable and can load again afterwards.
+    ///
+    /// Disposal runs before the native unload and the collections are cleared in a <c>finally</c>,
+    /// so a handler that throws cannot leave this manager holding references it has already
+    /// disposed -- a second <c>Unload</c> would then dispose the same prefix again. That is XNA's
+    /// own ordering and the compat facade's.
+    /// </summary>
     public virtual void Unload()
     {
+        try
+        {
+            foreach (IDisposable owned in _ownedAssets)
+            {
+                owned.Dispose();
+            }
+        }
+        finally
+        {
+            _ownedAssets.Clear();
+            _loadedAssets.Clear();
+        }
+
         CnaResult result = Native.cna_content_manager_unload(new CnaHandle(NativeHandleValue));
         GC.KeepAlive(this);
         CnaException.ThrowIfFailed(result, nameof(Unload));
     }
 
+    /// <summary>
+    /// Loads an asset, or returns the one already loaded under that name.
+    ///
+    /// <b>Cached, and the manager owns what it caches.</b> A second call for the same name returns
+    /// the same instance, and <see cref="Unload"/> disposes it. See <see cref="_loadedAssets"/> for
+    /// why that is a fix rather than a design change.
+    ///
+    /// A failed load caches nothing, so a later call retries. Caching the failure would make a
+    /// missing file that has since appeared stay missing for the life of the manager.
+    /// </summary>
+    /// <exception cref="ContentLoadException">The name is already loaded as a different type.
+    /// Reported here rather than as an <c>InvalidCastException</c> deeper in the caller, because
+    /// only this frame knows which asset caused it.</exception>
     public virtual T Load<T>(string assetName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(assetName);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        string key = CanonicalAssetName(assetName);
+        if (_loadedAssets.TryGetValue(key, out object? cached))
+        {
+            if (cached is T typed)
+            {
+                return typed;
+            }
+
+            throw new ContentLoadException(
+                $"Content asset '{assetName}' was already loaded as {cached.GetType()}, not {typeof(T)}.");
+        }
+
+        // Disposables created on the way to the asset are collected here rather than recorded as
+        // they appear, so a load that fails halfway leaves nothing behind. XNA leaks them; there is
+        // no compatibility reason to copy that, and the alternative is a texture nobody can reach.
+        var pending = new List<IDisposable>();
+        T loaded;
+        try
+        {
+            loaded = ReadAsset<T>(assetName, pending);
+        }
+        catch
+        {
+            foreach (IDisposable partial in pending)
+            {
+                partial.Dispose();
+            }
+
+            throw;
+        }
+
+        Track(key, loaded, pending);
+        return loaded;
+    }
+
+    /// <summary>
+    /// The canonical form of an asset name, for cache identity.
+    ///
+    /// Backslashes become forward slashes and comparison is case-insensitive, which is what XNA does
+    /// and what <c>CNA.XnaCompat</c> already did. Nothing more: no rooting, no <c>.</c>/<c>..</c>
+    /// collapsing. That is deliberate -- XNA does not do it either, and a manager that decided
+    /// <c>./hero</c> and <c>hero</c> were one asset would be inventing an identity the format does
+    /// not have.
+    /// </summary>
+    private static string CanonicalAssetName(string assetName) => assetName.Replace('\\', '/');
+
+    /// <summary>
+    /// Records a loaded asset in the cache, and everything it owns in the owned list.
+    ///
+    /// Called only on success, so a failure caches nothing and owns nothing. The asset itself is
+    /// added only when it is not already among <paramref name="pending"/>, because a composite
+    /// asset that recorded itself would otherwise be disposed twice.
+    /// </summary>
+    private void Track(string key, object? loaded, List<IDisposable> pending)
+    {
+        if (loaded is null)
+        {
+            return;
+        }
+
+        _loadedAssets[key] = loaded;
+        _ownedAssets.AddRange(pending);
+
+        if (loaded is IDisposable disposable && !pending.Contains(disposable))
+        {
+            _ownedAssets.Add(disposable);
+        }
+    }
+
+    /// <summary>
+    /// Materialises the asset. Anything disposable created along the way that is <em>not</em> the
+    /// returned object goes into <paramref name="pending"/>.
+    ///
+    /// <c>SpriteFont</c> is the case that makes this parameter necessary and is why it exists.
+    /// XNA's <c>SpriteFont</c> is not <c>IDisposable</c> -- so is this one -- while the texture
+    /// behind it very much is, and a manager that recorded only the returned object would leave a
+    /// font atlas alive after <see cref="Unload"/>. Measured: it did.
+    /// </summary>
+    private T ReadAsset<T>(string assetName, List<IDisposable> pending)
     {
         if (typeof(T) == typeof(Texture2D))
         {
@@ -205,8 +354,10 @@ public class ContentManager : IDisposable
         if (typeof(T) == typeof(SpriteFont))
         {
             SpriteFontData data = LoadSpriteFontData(assetName);
+            var atlas = new Texture2D(RequireGraphicsDevice<T>(assetName), data.TextureHandle);
+            pending.Add(atlas);
             return (T)(object)new SpriteFont(
-                new Texture2D(RequireGraphicsDevice<T>(assetName), data.TextureHandle),
+                atlas,
                 data.GlyphBounds,
                 data.Cropping,
                 data.Characters,
@@ -488,6 +639,22 @@ public class ContentManager : IDisposable
         where T : class
     {
         ArgumentException.ThrowIfNullOrEmpty(assetName);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // One cache with Load<T>, which is what the sentence above always claimed and what a caller
+        // would assume: a custom reader's asset is an asset, and loading it twice under one name
+        // should not produce two.
+        string key = CanonicalAssetName(assetName);
+        if (_loadedAssets.TryGetValue(key, out object? alreadyLoaded))
+        {
+            if (alreadyLoaded is T typedCache)
+            {
+                return typedCache;
+            }
+
+            throw new ContentLoadException(
+                $"Content asset '{assetName}' was already loaded as {alreadyLoaded.GetType()}, not {typeof(T)}.");
+        }
 
         nint produced = 0;
         CnaResult result = CnaStringMarshal.WithStringView(
@@ -499,10 +666,15 @@ public class ContentManager : IDisposable
 
         object? value = ContentTypeReaderRegistration.Resolve(produced);
 
-        return value as T ?? throw new ContentLoadException(
+        T typed = value as T ?? throw new ContentLoadException(
             value is null
             ? $"'{assetName}' loaded, but its reader produced no object."
             : $"'{assetName}' produced a {value.GetType()}, not a {typeof(T)}.");
+
+        // A foreign reader's object is the whole asset: there is no intermediate
+        // resource to collect, so the pending list is empty by construction.
+        Track(key, typed, []);
+        return typed;
     }
 
     /// <summary>

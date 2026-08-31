@@ -222,6 +222,51 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         });
     }
 
+    /// <summary>
+    /// The strict facade's cache identity, and the claim that the two layers agree about it.
+    ///
+    /// The compat manager has had a cache since it was written and never had a test for it, which is
+    /// how <c>CNA.Content.ContentManager</c> came to diverge without anything noticing. The rows
+    /// here are the same rows <c>ContentManagerCacheTests</c> asserts on the CNA-native manager --
+    /// same instance, same atlas, case- and separator-insensitive key -- so "both layers agree" is
+    /// checked rather than asserted in a comment.
+    ///
+    /// XNA is the authority for this layer, and this is XNA's behaviour: <c>loadedAssets</c> keyed
+    /// by the asset name with backslashes normalised, compared case-insensitively.
+    /// </summary>
+    [global::CNA.Integration.Tests.NativeFact]
+    public void CompatContent_CachesByCanonicalAssetNameLikeTheCnaNativeManager()
+    {
+        InsideACompatFrame(game =>
+        {
+            // The game's own manager, not a hand-built one: a ContentManager resolves its device
+            // through IGraphicsDeviceService, which GraphicsDeviceManager registers, so a manager
+            // constructed straight from Services has a provider with nothing in it. Each compat
+            // frame builds its own game, so setting the root here affects no other test.
+            Microsoft.Xna.Framework.Content.ContentManager content = game.Content;
+            content.RootDirectory = Path.Combine(AppContext.BaseDirectory, "assets", "xnb");
+
+            SpriteFont canonical = content.Load<SpriteFont>("lzx/FontCalibri14");
+            SpriteFont again = content.Load<SpriteFont>("lzx/FontCalibri14");
+            SpriteFont backslashed = content.Load<SpriteFont>("lzx\\FontCalibri14");
+            SpriteFont lowercased = content.Load<SpriteFont>("lzx/fontcalibri14");
+
+            Assert.Same(canonical, again);
+            Assert.Same(canonical, backslashed);
+            Assert.Same(canonical, lowercased);
+
+            // No atlas assertion here, and that is the facade being right rather than a gap: XNA's
+            // SpriteFont.Texture is internal, so the strict contract exposes none. Same instance is
+            // the whole observable claim on this layer.
+
+            // And the same non-collapsing rule, so the two layers do not disagree about what is
+            // *not* one asset either.
+            Assert.NotSame(canonical, content.Load<SpriteFont>("./lzx/FontCalibri14"));
+
+            output.WriteLine("compat and CNA-native managers agree on content identity");
+        });
+    }
+
     [global::CNA.Integration.Tests.NativeFact]
     public void CompatContent_LoadModelAcceptsXnbRawByteBufferPayloads()
     {
