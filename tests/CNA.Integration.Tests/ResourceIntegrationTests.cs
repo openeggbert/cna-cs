@@ -16,21 +16,21 @@ namespace CNA.Integration.Tests;
 [Collection(NativeGameCollection.Name)]
 public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixture fixture)
 {
+    /// <summary>
+    /// Constructing a cube map and reading its shape back.
+    ///
+    /// <b>Not gated on <c>ThreeD</c>, and it used to be.</b> Measured on a <c>SDL_RENDERER</c>
+    /// build, which reports <c>ThreeD</c> false: constructing a <c>TextureCube</c> succeeds there
+    /// anyway. The gate was on the wrong capability and was costing this test entirely on the one
+    /// renderer that could have disagreed with the others. What a 2D-only renderer does refuse is
+    /// *storing* a face, and that is a separate measured branch in
+    /// <see cref="TextureCube_AcceptsPerFaceData"/>.
+    /// </summary>
     [Native3DFact]
     public void TextureCube_CreatesAndReportsItsSize()
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
-            {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
-                return;
-            }
-
             using var cube = new TextureCube(device, 8);
 
             output.WriteLine($"size={cube.Size} levels={cube.LevelCount} format={cube.Format}");
@@ -49,22 +49,17 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
     /// measured rather than asked: HEADLESS reports <c>ThreeD</c> and still refuses the transfer,
     /// which used to fail this test as though the binding were broken. The measured-absent branch
     /// asserts the refusal, so both sides carry a claim.
+    ///
+    /// The <c>ThreeD</c> gate that used to sit above that is gone. It was redundant and wrong in the
+    /// same breath: a <c>SDL_RENDERER</c> build reports <c>ThreeD</c> false and still constructs the
+    /// cube, so the gate skipped the test on the one renderer whose refusal is worth measuring --
+    /// and the measured storage branch below was always the real check.
     /// </summary>
     [Native3DFact]
     public void TextureCube_AcceptsPerFaceData()
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
-            {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
-                return;
-            }
-
             using var cube = new TextureCube(device, 2);
 
             var face = new Color[2 * 2];
@@ -95,14 +90,21 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.Texture3D, output))
+            // The branch that used to be a silent pass. Measured on both HEADLESS and SDL_RENDERER,
+            // which report Texture3D false: construction refuses with NotSupported and says why. A
+            // renderer that instead built a volume texture with no storage behind it would satisfy
+            // every test in this file and then discard every SetData the game made.
+            //
+            // Through the asserting gate rather than HasCapability plus a separate assertion: the
+            // old shape printed "NOT EXERCISED" and then exercised it, which read as a skip in the
+            // log of a test that was doing real work.
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.Texture3D,
+                    "constructing a Texture3D",
+                    () => new Texture3D(device, 4, 4, 2).Dispose(),
+                    output))
             {
-                // The branch that used to be a silent pass. Measured on HEADLESS, which reports
-                // Texture3D false: construction refuses with NotSupported and says why. A renderer
-                // that instead built a volume texture with no storage behind it would satisfy every
-                // test in this file and then discard every SetData the game made.
-                CnaNativeProbe.AssertRefusedAsNotSupported(
-                    "constructing a Texture3D", () => new Texture3D(device, 4, 4, 2).Dispose(), output);
                 return;
             }
 
@@ -116,21 +118,18 @@ public class ResourceIntegrationTests(ITestOutputHelper output, NativeGameFixtur
         });
     }
 
+    /// <summary>
+    /// A cube render target's properties, from the live object.
+    ///
+    /// Same correction as <see cref="TextureCube_CreatesAndReportsItsSize"/>: a renderer reporting
+    /// <c>ThreeD</c> false still constructs one. Binding a face is what it refuses, and this test
+    /// does not bind.
+    /// </summary>
     [Native3DFact]
     public void RenderTargetCube_CreatesAndReportsItsProperties()
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
-            {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
-                return;
-            }
-
             using var target = new RenderTargetCube(
                 device, 16, false, SurfaceFormat.Color, DepthFormat.Depth24);
 

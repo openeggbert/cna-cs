@@ -34,14 +34,18 @@ public class RenderTargetClearTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            using var target = new RenderTarget2D(device, 4, 4);
             if (!CnaNativeProbe.SupportsRenderTargetReadback(device, output))
             {
-                output.WriteLine(
-                    $"NOT EXERCISED: renderer '{device.RendererName}' cannot read a render target back.");
+                // Asserted, not skipped. A renderer that cannot read a target back cannot answer
+                // the question this test asks, but it must still *refuse* rather than hand back a
+                // buffer of zeros -- which is indistinguishable from the very defect being chased
+                // here, and is why this branch is worth a claim of its own.
+                CnaNativeProbe.AssertRefusedAsNotSupported(
+                    "reading a render target back", () => target.GetData(new Color[16]), output);
                 return;
             }
 
-            using var target = new RenderTarget2D(device, 4, 4);
             device.SetRenderTarget(target);
             try
             {
@@ -76,14 +80,15 @@ public class RenderTargetClearTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
+            using var source = new Texture2D(device, 1, 1);
             if (!CnaNativeProbe.SupportsRenderTargetReadback(device, output))
             {
-                output.WriteLine(
-                    $"NOT EXERCISED: renderer '{device.RendererName}' cannot read a render target back.");
+                using var unreadable = new RenderTarget2D(device, 8, 8);
+                CnaNativeProbe.AssertRefusedAsNotSupported(
+                    "reading a render target back", () => unreadable.GetData(new Color[64]), output);
                 return;
             }
 
-            using var source = new Texture2D(device, 1, 1);
             source.SetData([new Color(255, 0, 0, 255)]);
 
             using var target = new RenderTarget2D(device, 8, 8);

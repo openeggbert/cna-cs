@@ -26,13 +26,14 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.ThreeD,
+                    "creating a VertexBuffer",
+                    () => new VertexBuffer(
+                        device, VertexPositionColor.VertexDeclaration, 4, BufferUsage.None).Dispose(),
+                    output))
             {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -64,13 +65,14 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.ThreeD,
+                    "creating a VertexBuffer",
+                    () => new VertexBuffer(
+                        device, VertexPositionColor.VertexDeclaration, 4, BufferUsage.None).Dispose(),
+                    output))
             {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -104,13 +106,14 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.ThreeD,
+                    "creating a VertexBuffer",
+                    () => new VertexBuffer(
+                        device, VertexPositionColor.VertexDeclaration, 4, BufferUsage.None).Dispose(),
+                    output))
             {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -144,25 +147,29 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
-            {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
-                return;
-            }
-
-
             // Unbind first, and assert that the unbind worked, rather than asserting the device
             // arrived unbound. Every test in this assembly shares one game and one device, and
             // anything that has drawn a Model in an earlier test left a stream bound -- so the
             // original "nothing is bound yet" precondition held by accident of test order, and
             // adding a test to this class was enough to break it. What the assertion is for is
             // whether SetVertexBuffer(null) clears the record, and that survives the change.
+            //
+            // Ahead of the capability gate on purpose: measured, a 2D-only renderer accepts both of
+            // these, so half this test is exercisable everywhere and gating it would throw that
+            // away.
             device.SetVertexBuffer(null);
             Assert.Empty(device.GetVertexBuffers());
+
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.ThreeD,
+                    "creating a VertexBuffer",
+                    () => new VertexBuffer(
+                        device, VertexPositionColor.VertexDeclaration, 4, BufferUsage.None).Dispose(),
+                    output))
+            {
+                return;
+            }
 
             using var buffer = new VertexBuffer(
                 device, VertexPositionColor.VertexDeclaration, 3, BufferUsage.None);
@@ -194,13 +201,14 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.ThreeD,
+                    "creating a VertexBuffer",
+                    () => new VertexBuffer(
+                        device, VertexPositionColor.VertexDeclaration, 4, BufferUsage.None).Dispose(),
+                    output))
             {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
@@ -253,13 +261,14 @@ public class BufferIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.ThreeD,
+                    "creating an IndexBuffer",
+                    () => new IndexBuffer(
+                        device, IndexElementSize.SixteenBits, 4, BufferUsage.None).Dispose(),
+                    output))
             {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 

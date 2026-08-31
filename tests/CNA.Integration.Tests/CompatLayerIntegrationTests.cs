@@ -228,6 +228,22 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
         InsideACompatFrame(game =>
         {
             game.Content.RootDirectory = Path.Combine(AppContext.BaseDirectory, "assets", "xnb");
+
+            // Same measured branch as NestedModelContentTests: a model is buffers, and a renderer
+            // with no 3D pipeline refuses them. The refusal is asserted so the absent side carries a
+            // claim rather than being skipped.
+            if (!global::CNA.XnaCompat.Extensions.CnaGraphicsDeviceExtensions.SupportsCnaCapability(
+                    game.GraphicsDevice,
+                    global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.ThreeD))
+            {
+                var refusal = Assert.Throws<global::CNA.CnaException>(
+                    () => game.Content.Load<Model>("BlenderDefaultCube"));
+                Assert.Equal("NotSupported", refusal.NativeResult);
+                output.WriteLine(
+                    $"ABSENT BRANCH EXERCISED: a 2D-only renderer refuses the model's buffers -- {refusal.Message}");
+                return;
+            }
+
             Model model = game.Content.Load<Model>("BlenderDefaultCube");
             ModelMeshPart part = model.Meshes[0].MeshParts[0];
 
@@ -258,7 +274,15 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
                     game.GraphicsDevice,
                     global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.Texture3D))
             {
-                output.WriteLine("NOT EXERCISED: the active renderer does not support Texture3D.");
+                // The absent branch, asserted rather than skipped. Measured on both a HEADLESS and
+                // a SDL_RENDERER build: constructing a Texture3D answers NotSupported with a
+                // specific message. A renderer that instead handed back a volume texture with no
+                // storage behind it would satisfy this whole file and discard every SetData.
+                var refusal = Assert.Throws<global::CNA.CnaException>(
+                    () => new Texture3D(game.GraphicsDevice, 1, 1, 1, false, SurfaceFormat.Color).Dispose());
+                Assert.Equal("NotSupported", refusal.NativeResult);
+                output.WriteLine(
+                    $"ABSENT BRANCH EXERCISED: Texture3D refused with NotSupported -- {refusal.Message}");
                 return;
             }
 
@@ -543,7 +567,18 @@ public class CompatLayerIntegrationTests(ITestOutputHelper output)
                     game.GraphicsDevice,
                     global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.ThreeD))
             {
-                output.WriteLine("NOT EXERCISED: the active renderer does not support 3D buffers.");
+                // The absent branch, asserted rather than skipped. Measured on a SDL_RENDERER
+                // build: the dynamic buffer itself is refused with NotSupported, so there is never
+                // anything to forward a SetDataOptions to.
+                var refusal = Assert.Throws<global::CNA.CnaException>(
+                    () => new DynamicVertexBuffer(
+                        game.GraphicsDevice,
+                        VertexPositionColor.VertexDeclaration,
+                        3,
+                        BufferUsage.None).Dispose());
+                Assert.Equal("NotSupported", refusal.NativeResult);
+                output.WriteLine(
+                    $"ABSENT BRANCH EXERCISED: DynamicVertexBuffer refused with NotSupported -- {refusal.Message}");
                 return;
             }
 

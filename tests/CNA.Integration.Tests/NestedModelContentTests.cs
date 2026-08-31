@@ -42,6 +42,21 @@ public class NestedModelContentTests(ITestOutputHelper output)
         }
 
         Assert.True(game.Ran, "The frame never ran, so nothing was exercised.");
+
+        // A model is vertex and index buffers, so on a renderer with no 3D pipeline the load cannot
+        // succeed and must not be reported as a defect in the readers this test is about. Measured
+        // on a SDL_RENDERER build: the load fails at the first VertexBuffer with NotSupported.
+        // Asserted rather than skipped -- "this asset needs a 3D renderer" is a claim, and a silent
+        // return would make this test prove nothing there.
+        if (!game.SupportsThreeD)
+        {
+            var refusal = Assert.IsAssignableFrom<global::CNA.CnaException>(game.Failure);
+            Assert.Equal("NotSupported", refusal.NativeResult);
+            output.WriteLine(
+                $"ABSENT BRANCH EXERCISED: a 2D-only renderer refuses the model's buffers -- {refusal.Message}");
+            return;
+        }
+
         if (game.Failure is { } failure)
         {
             throw new Xunit.Sdk.XunitException($"Loading the nested model threw: {failure}");
@@ -114,11 +129,23 @@ public class NestedModelContentTests(ITestOutputHelper output)
         // lifetime mistake behind it.
         private ContentManager? _content;
 
+        /// <summary>
+        /// Whether the renderer has a 3D pipeline, captured <b>during</b> the frame.
+        ///
+        /// Not asked afterwards: the device may be borrowed only inside a lifecycle callback, and
+        /// asking outside one answers <c>InvalidState</c>. That is the ABI's rule and this class is
+        /// the only place in the test that is inside a callback at all.
+        /// </summary>
+        public bool SupportsThreeD { get; private set; }
+
         protected override void Update(GameTime gameTime)
         {
             if (!Ran)
             {
                 Ran = true;
+                SupportsThreeD = global::CNA.XnaCompat.Extensions.CnaGraphicsDeviceExtensions
+                    .SupportsCnaCapability(
+                        GraphicsDevice, global::CNA.XnaCompat.Extensions.CnaGraphicsCapability.ThreeD);
                 try
                 {
                     _content = new MemoryContentManager(Services, _asset);

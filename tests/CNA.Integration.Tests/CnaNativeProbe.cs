@@ -63,6 +63,50 @@ public static class CnaNativeProbe
     }
 
     /// <summary>
+    /// The capability gate that <b>asserts</b> on the absent branch instead of returning silently.
+    ///
+    /// <see cref="HasCapability"/> leaves a test proving nothing on the one renderer where the
+    /// binding's refusal behaviour actually matters. This closes that: when the capability is
+    /// present it returns <see langword="true"/> and the test proceeds; when it is absent it runs
+    /// <paramref name="refused"/> and requires <c>NotSupported</c>, so both branches carry an
+    /// assertion and neither is a silent pass.
+    ///
+    /// <b><c>NotSupported</c> is measured, not assumed.</b> The reason those branches stayed
+    /// unasserted was a real uncertainty: <c>IGraphicsRenderer::HandleUnsupported3DCall</c> throws a
+    /// bare <c>std::runtime_error</c>, which the C API's exception barrier maps to
+    /// <c>CNA_RESULT_INTERNAL</c>, so a 2D-only renderer might plausibly have refused with either
+    /// code. A <c>SDL_RENDERER</c> build settles it: every 3D operation the C API offers -- vertex
+    /// and index buffers, dynamic buffers, occlusion queries, <c>Texture3D</c>, all three draw
+    /// families, cube render targets and cube-face storage -- is refused with <c>NotSupported</c>
+    /// and a specific message. None reaches the unguarded path, because the C API checks the
+    /// capability before the renderer is asked. That is a fact about upstream and is why this helper
+    /// can require one code rather than tolerate two.
+    ///
+    /// <paramref name="refused"/> should be the *smallest* operation the test depends on, not the
+    /// whole test body: the point is to pin which call the renderer refuses.
+    /// </summary>
+    public static bool HasCapabilityOrRefuses(
+        CNA.Graphics.GraphicsDevice device,
+        CNA.Graphics.GraphicsCapability capability,
+        string what,
+        Action refused,
+        Xunit.Abstractions.ITestOutputHelper output)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(refused);
+
+        if (device.SupportsCapability(capability))
+        {
+            return true;
+        }
+
+        output?.WriteLine(
+            $"renderer '{device.RendererName}' does not report {capability}; asserting the refusal.");
+        AssertRefusedAsNotSupported(what, refused, output!);
+        return false;
+    }
+
+    /// <summary>
     /// Asserts that a native operation is refused with <c>NOT_SUPPORTED</c>, which is what makes an
     /// absent-capability branch evidence instead of a silent pass.
     ///

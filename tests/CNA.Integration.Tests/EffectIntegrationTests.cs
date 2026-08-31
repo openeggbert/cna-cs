@@ -109,10 +109,27 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
+            if (!device.SupportsCapability(GraphicsCapability.CustomEffects))
             {
-                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
-                // and no renderer on this host lacks it, so the refusal has never been observed.
+                // The branch that used to be a silent pass, now measured on a SDL_RENDERER build.
+                //
+                // It is not a refusal. Creating the effect *succeeds* -- CustomEffects does not gate
+                // `cna_shader_effect_create` -- and what the renderer says instead is that the
+                // source is not valid, for perfectly good GLSL. That is the assertion worth making:
+                // a game supplying source to such a renderer gets an object back and must read
+                // IsSourceValid rather than trust the constructor.
+                using var refused = new Effect(
+                    device,
+                    "#version 330 core\nin vec3 a_position;\nvoid main() { gl_Position = vec4(a_position, 1.0); }",
+                    "#version 330 core\nout vec4 o_color;\nvoid main() { o_color = vec4(1.0); }");
+
+                output.WriteLine(
+                    $"ABSENT BRANCH EXERCISED: renderer '{device.RendererName}' does not report " +
+                    $"CustomEffects; valid source reports IsSourceValid={refused.IsSourceValid}");
+
+                Assert.False(
+                    refused.IsSourceValid,
+                    "A renderer without CustomEffects must not claim it compiled a custom effect.");
                 return;
             }
 
@@ -164,12 +181,9 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
-            {
-                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
-                // and no renderer on this host lacks it, so the refusal has never been observed.
-                return;
-            }
+            // No capability gate. This test records whatever the renderer says and asserts nothing
+            // about which answer it gives, so a renderer that lacks CustomEffects is not an obstacle
+            // -- it is the most informative case, and gating it away was pure loss.
 
             using var effect = new Effect(device, "this is not a shader", "neither is this");
 
@@ -197,12 +211,9 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
-            {
-                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
-                // and no renderer on this host lacks it, so the refusal has never been observed.
-                return;
-            }
+            // No capability gate: the refusal is managed argument validation that happens before
+            // any renderer is asked, so it must hold identically everywhere. Measured on a
+            // SDL_RENDERER build, which reports CustomEffects false and still throws.
 
             Assert.Throws<ArgumentException>(() => new Effect(device, string.Empty, "x"));
             Assert.Throws<ArgumentException>(() => new Effect(device, "x", string.Empty));
@@ -227,13 +238,6 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.CustomEffects, output))
-            {
-                // Not asserted, for the reason plan.md A7 records: HEADLESS reports CustomEffects
-                // and no renderer on this host lacks it, so the refusal has never been observed.
-                return;
-            }
-
             const string Vertex =
                 "#version 330 core\n" +
                 "uniform float u_scale;\n" +
@@ -245,6 +249,22 @@ public class EffectIntegrationTests(ITestOutputHelper output, NativeGameFixture 
                 "uniform vec4 u_tint;\n" +
                 "out vec4 o_color;\n" +
                 "void main() { o_color = u_tint; }";
+
+            if (!device.SupportsCapability(GraphicsCapability.CustomEffects))
+            {
+                // Measured absent branch: no compilation, so no reflected graph. Asserted rather
+                // than skipped, because "nothing reflects" is exactly the claim this test makes on
+                // the renderers that do support the capability, and it should not be a silent pass
+                // on the one that cannot.
+                using var refused = new Effect(device, Vertex, Fragment);
+                output.WriteLine(
+                    $"ABSENT BRANCH EXERCISED: '{device.RendererName}' lacks CustomEffects; " +
+                    $"valid={refused.IsSourceValid} parameters={refused.Parameters.Count}");
+
+                Assert.False(refused.IsSourceValid);
+                Assert.Empty(refused.Parameters);
+                return;
+            }
 
             using var effect = new Effect(device, Vertex, Fragment);
 

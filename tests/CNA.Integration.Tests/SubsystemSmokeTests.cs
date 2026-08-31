@@ -320,16 +320,18 @@ public class SubsystemSmokeTests(ITestOutputHelper output, NativeGameFixture fix
         fixture.InsideAFrame(game =>
         {
             GraphicsDevice device = game.GraphicsDevice;
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            // The guess this used to refuse to make is now a measurement. A SDL_RENDERER build
+            // reports ThreeD false and refuses a dynamic buffer with NotSupported and a specific
+            // message -- it never reaches HandleUnsupported3DCall's bare std::runtime_error,
+            // because the C API checks the capability before the renderer is asked.
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.ThreeD,
+                    "creating a DynamicVertexBuffer",
+                    () => new DynamicVertexBuffer(
+                        device, VertexPositionColor.VertexDeclaration, 4, BufferUsage.None).Dispose(),
+                    output))
             {
-                // Deliberately not asserted. The refusal a 2D-only renderer produces here goes
-                // through IGraphicsRenderer::HandleUnsupported3DCall, which throws a bare
-                // std::runtime_error and therefore arrives as CNA_RESULT_INTERNAL rather than
-                // NOT_SUPPORTED -- while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException arrives as NOT_SUPPORTED. Which one a given
-                // renderer produces cannot be measured here, because no renderer available on this
-                // host lacks ThreeD, and an assertion written from the more plausible of two
-                // guesses would be exactly the kind of untested claim this file exists to remove.
                 return;
             }
 

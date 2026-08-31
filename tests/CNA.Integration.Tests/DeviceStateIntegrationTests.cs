@@ -82,13 +82,16 @@ public class DeviceStateIntegrationTests(ITestOutputHelper output, NativeGameFix
     {
         fixture.InsideAFrameWithDevice(device =>
         {
-            if (!CnaNativeProbe.HasCapability(device, GraphicsCapability.ThreeD, output))
+            // Asked as OcclusionQuery, not ThreeD. It has a capability identity of its own, and
+            // using the broader one would have claimed that any renderer with a 3D pipeline can run
+            // a query -- which is a different statement, and not one this test measures.
+            if (!CnaNativeProbe.HasCapabilityOrRefuses(
+                    device,
+                    GraphicsCapability.OcclusionQuery,
+                    "creating an OcclusionQuery",
+                    () => new OcclusionQuery(device).Dispose(),
+                    output))
             {
-                // Not asserted: no renderer on this host lacks ThreeD, and the refusal a 2D-only
-                // one produces is not knowable from the headers -- HandleUnsupported3DCall throws a
-                // bare std::runtime_error, which the C API's exception barrier maps to
-                // CNA_RESULT_INTERNAL, while a renderer whose own Ensure3DSupported throws
-                // System::NotSupportedException maps to NOT_SUPPORTED. See plan.md A7.
                 return;
             }
 
