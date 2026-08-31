@@ -31,6 +31,13 @@ static class InteropConstants
         ["CnaEffectValueType"] = "CNA_EFFECT_VALUE_",
         ["CnaTouchLocationState"] = "CNA_TOUCH_LOCATION_",
         ["CnaEffectTextureType"] = "CNA_EFFECT_TEXTURE_",
+
+        // Same shape in CNB: C drops the trailing "slot"/"set" noun. Worth noting that the two are
+        // not interchangeable despite the similar spelling -- CNA_CNB_MATERIAL_TEXTURE_* names the
+        // eight *name* slots, while CNB's per-slot arrays are a seven-element importer space with a
+        // different order. See CnbMaterialTextureSlotMap.
+        ["CnaCnbMaterialTextureSlot"] = "CNA_CNB_MATERIAL_TEXTURE_",
+        ["CnaCnbSkeletonMatrixSet"] = "CNA_CNB_SKELETON_MATRIX_",
     };
 
     /// <summary>Individual enum members with no macro of their own, and why.</summary>

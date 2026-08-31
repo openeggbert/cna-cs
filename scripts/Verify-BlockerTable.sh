@@ -4,7 +4,7 @@
 # A blocker is a claim about upstream: "this route does not exist", "that one carries only these
 # arguments". Claims rot silently -- a route gets added upstream and the row keeps saying it is
 # missing, which is how a table becomes a museum. This does not re-litigate each row's prose; it
-# checks the two things that can be checked mechanically: every cna_* route a row names still exists
+# checks the two things that can be checked mechanically: every cna_* route a table row names still exists
 # in the canonical headers, and the generation the document says it was measured against is the
 # generation of the headers it is being checked against.
 #
@@ -26,7 +26,12 @@ doc=${1:-"$repo_root/docs/native-behavior-blockers.md"}
 [ -d "$include_dir" ] || { echo "No CNA include directory at $include_dir" >&2; exit 2; }
 
 declared=$(grep -rhoP 'CNA_C_API CNA_Result \K\w+' "$include_dir"/CNA/C/*.h | sort -u)
-named=$(grep -oP '`\Kcna_[a-z0-9_]+' "$doc" | sort -u)
+
+# Table rows only, which is what this check has always claimed to be about: a row is a claim about
+# upstream, and prose is not. The distinction became load-bearing the moment the document started
+# explaining a mistake -- the paragraph recording that a row once named a route which does not exist
+# has to be able to write that route's name without the check reading it as a fresh claim.
+named=$(grep '^|' "$doc" | grep -oP '`\Kcna_[a-z0-9_]+' | sort -u)
 
 present=0
 absent=0

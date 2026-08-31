@@ -2456,6 +2456,189 @@ internal static partial class Native
     internal static unsafe partial CnaResult cna_cnb_encode_texture2d(
         CnaHandle texture, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
 
+    // -- CNB models (cnb.h) -------------------------------------------------------------------
+    //
+    // The read path first: decode a model out of an open document and walk the graph it produced.
+    // The write routes below it exist so a test fixture can be authored through CNA's own encoder
+    // rather than assembled here from a reading of the decoder, which would test this repository's
+    // understanding against itself.
+
+    /// <summary>Decodes a model from an open document. The document's asset type must be
+    /// <c>CNA_CNB_ASSET_TYPE_MODEL</c>; anything else is <c>IO</c>. The model is a new owned handle
+    /// that outlives the document -- decoding copies rather than viewing.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_decode_model(CnaHandle document, out CnaHandle outModel);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_destroy(CnaHandle model);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_info(CnaHandle model, ref CnaCnbModelInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_bone(
+        CnaHandle model, ulong index, ref CnaCnbModelBone outBone);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_bone_name_size(
+        CnaHandle model, ulong index, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_bone_name(
+        CnaHandle model, ulong index, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_part(
+        CnaHandle model, ulong index, ref CnaCnbModelPartInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_part_name_size(
+        CnaHandle model, ulong index, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_part_name(
+        CnaHandle model, ulong index, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_part_external_effect_size(
+        CnaHandle model, ulong index, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_part_external_effect(
+        CnaHandle model, ulong index, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_part_vertex_bytes(
+        CnaHandle model, ulong index, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_part_index_bytes(
+        CnaHandle model, ulong index, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_material(
+        CnaHandle model, ulong part, ref CnaCnbMaterialInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_material_texture_size(
+        CnaHandle model, ulong part, CnaCnbMaterialTextureSlot slot, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_material_texture(
+        CnaHandle model, ulong part, CnaCnbMaterialTextureSlot slot,
+        byte* destination, ulong capacity, out ulong outByteCount);
+
+    // The three per-slot routes take a plain **importer** slot index, not a
+    // CnaCnbMaterialTextureSlot -- the header says so and calls the difference "a real trap". The
+    // two spaces are different sizes (7 against 8) and different orders (emissive and occlusion are
+    // swapped), so the parameter is deliberately spelled `ulong` here rather than the name-slot
+    // enum: a declaration that accepted the enum would let a call site pass the wrong space without
+    // a cast. CnbMaterialTextureSlotMap does the crossing, once.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_material_texture_coordinate_set(
+        CnaHandle model, ulong part, ulong importerSlot, out byte outCoordinateSet);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_material_texture_transform(
+        CnaHandle model, ulong part, ulong importerSlot, out CnaCnbTextureTransform outTransform);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_material_sampler(
+        CnaHandle model, ulong part, ulong importerSlot, out CnaCnbSamplerState outSampler);
+
+    /// <summary>The authoring twins, taking the same importer slot index. Present so a fixture can
+    /// give each importer slot a distinguishable value, which is what makes the two slot spaces
+    /// tellable apart at all. The transform is the one that can carry seven distinct values: CNA
+    /// refuses a coordinate set above 1, because its vertex layouts carry two at most.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_set_material_texture_coordinate_set(
+        CnaHandle model, ulong part, ulong importerSlot, byte coordinateSet);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_set_material_texture_transform(
+        CnaHandle model, ulong part, ulong importerSlot, in CnaCnbTextureTransform transform);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_mesh(
+        CnaHandle model, ulong index, ref CnaCnbMeshInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_mesh_name_size(
+        CnaHandle model, ulong index, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_mesh_name(
+        CnaHandle model, ulong index, byte* destination, ulong capacity, out ulong outByteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_mesh_part_indices(
+        CnaHandle model, ulong index, uint* destination, ulong capacity, out ulong outIndexCount);
+
+    /// <summary>The skeleton's shape. A model with no skeleton answers <c>InvalidArgument</c>, which
+    /// <c>cna_cnb_model_get_info</c>'s <c>has_skeleton</c> distinguishes in advance -- so asking
+    /// first is the contract, not a defensive habit.</summary>
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_get_skeleton(CnaHandle model, ref CnaCnbSkeletonInfo outInfo);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_skeleton_hierarchy(
+        CnaHandle model, int* destination, ulong capacity, out ulong outIndexCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_copy_skeleton_matrices(
+        CnaHandle model, CnaCnbSkeletonMatrixSet set, float* destination, ulong capacity, out ulong outValueCount);
+
+    // The authoring half. Present so a fixture is written by CNA's own encoder: a byte array
+    // assembled here from a reading of the decoder would test this repository's understanding
+    // against itself and keep passing if reader and fixture were wrong in the same way.
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_create(out CnaHandle outModel);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_set_flags(
+        CnaHandle model, byte appliesGltfLightingPolicy, byte hasBoneHierarchy);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_add_bone(
+        CnaHandle model, CnaStringView name, int parent, float* transform, out ulong outIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_add_part(
+        CnaHandle model, in CnaCnbModelPartInfo info, CnaStringView name,
+        CnaStringView externalEffect, out ulong outIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_set_part_vertex_bytes(
+        CnaHandle model, ulong index, byte* bytes, ulong byteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_set_part_index_bytes(
+        CnaHandle model, ulong index, byte* bytes, ulong byteCount);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_set_material(
+        CnaHandle model, ulong part, in CnaCnbMaterialInfo info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial CnaResult cna_cnb_model_set_material_texture(
+        CnaHandle model, ulong part, CnaCnbMaterialTextureSlot slot, CnaStringView assetName);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_add_mesh(
+        CnaHandle model, CnaStringView name, int parentBone,
+        uint* partIndices, ulong partIndexCount, out ulong outIndex);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_model_set_skeleton(
+        CnaHandle model, int* hierarchy, ulong jointCount,
+        float* bindPose, float* inverseBindPose, float* rootPrefix);
+
+    [LibraryImport(LibraryName)]
+    internal static unsafe partial CnaResult cna_cnb_encode_model(
+        CnaHandle model, CnaStringView contentName, byte* destination, ulong capacity, out ulong outBytes);
+
     /// <summary>Known and supported usage masks for one surface format. A bit absent from the known
     /// mask means <em>unknown</em>, not unsupported -- the header says so explicitly, and collapsing
     /// the two would turn "this renderer has not classified BC7" into "this renderer refuses

@@ -610,6 +610,7 @@ static class InteropLayout
         // How this binding spells a run of padding bytes inside another struct. C writes the run
         // inline as uint8_t reserved[N], so there is no separate type to measure -- the containing
         // struct's own offsets and size are what has to agree, and they are measured.
+        "CnaReservedBytes2",
         "CnaReservedBytes3",
         "CnaReservedBytes7",
     };
@@ -849,6 +850,15 @@ static class InteropLayout
         ["CNA_UserPrimitives.vertex_data"] = "const void*",
         ["CNA_VisualizationData.frequencies"] = "",   // a C array member: its address is a pointer-to-array, so offset only
         ["CNA_VisualizationData.samples"] = "",   // a C array member: its address is a pointer-to-array, so offset only
+
+        // The same, in CNB's model structures. C declares these as float arrays and this binding
+        // spells them as the vector and matrix they are -- CNA_CnbModelBone.transform is documented
+        // as M11..M44, which is CnaMatrix's own field order. Offset only, for the pointer-to-array
+        // reason above; the containing struct's total size still has to agree, and does.
+        ["CNA_CnbMaterialInfo.base_color_factor"] = "",
+        ["CNA_CnbMaterialInfo.emissive_factor"] = "",
+        ["CNA_CnbMaterialInfo.specular_color_factor"] = "",
+        ["CNA_CnbModelBone.transform"] = "",
     };
 
     /// <summary>Field names that name a C array of padding rather than a typed member.</summary>

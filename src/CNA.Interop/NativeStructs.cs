@@ -753,6 +753,171 @@ internal struct CnaCnbTextureInfo
     };
 }
 
+/// <summary>A decoded CNB model's counts and content flags -- <c>CNA_CnbModelInfo</c>.
+/// Caller-initialised and versioned, like <see cref="CnaCnbReadLimits"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbModelInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public ulong BoneCount;
+    public ulong PartCount;
+    public ulong MeshCount;
+    public ulong AnimationCount;
+    public ulong LightCount;
+    public byte HasSkeleton;
+    public byte AppliesGltfLightingPolicy;
+    public byte HasBoneHierarchy;
+    public byte Reserved;
+
+    public static unsafe CnaCnbModelInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbModelInfo),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>One scene-graph bone -- <c>CNA_CnbModelBone</c>. <c>parent</c> is -1 for a root, which
+/// is why it is signed here and not an index type.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbModelBone
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public int Parent;
+    public uint Reserved;
+
+    /// <summary>C's <c>float transform[16]</c>. Spelled as the matrix it is: the header says the
+    /// sixteen floats are <c>M11</c>..<c>M44</c>, which is exactly <see cref="CnaMatrix"/>'s own
+    /// field order, so this is the same bytes under a name that says what they mean.</summary>
+    public CnaMatrix Transform;
+
+    public static unsafe CnaCnbModelBone Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbModelBone),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>One renderable part's numeric state -- <c>CNA_CnbModelPartInfo</c>, without its names,
+/// bytes or material.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbModelPartInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public uint VertexStride;
+    public uint VertexCount;
+    public uint IndexCount;
+    public uint IndexElementSize;
+    public uint PrimitiveTopology;
+    public uint PrimitiveCount;
+    public CnaCnbEffectKind EffectKind;
+    public byte VertexColorEnabled;
+    public byte Unlit;
+    public CnaReservedBytes2 Reserved;
+
+    public static unsafe CnaCnbModelPartInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbModelPartInfo),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>One part's material state -- <c>CNA_CnbMaterialInfo</c>, without its eight texture
+/// names or its per-slot arrays.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbMaterialInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+
+    /// <summary>C's <c>float base_color_factor[4]</c>, as the RGBA it is.</summary>
+    public CnaVector4 BaseColorFactor;
+
+    /// <summary>C's <c>float emissive_factor[3]</c>.</summary>
+    public CnaVector3 EmissiveFactor;
+
+    /// <summary>C's <c>float specular_color_factor[3]</c>.</summary>
+    public CnaVector3 SpecularColorFactor;
+
+    public float MetallicFactor;
+    public float RoughnessFactor;
+    public float Ior;
+    public float SpecularFactor;
+    public float NormalScale;
+    public float OcclusionStrength;
+    public float AlphaCutoff;
+    public uint AlphaMode;
+    public byte DoubleSided;
+    public CnaReservedBytes3 Reserved;
+
+    public static unsafe CnaCnbMaterialInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbMaterialInfo),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>One mesh's parent bone and part count -- <c>CNA_CnbMeshInfo</c>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbMeshInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public int ParentBone;
+    public uint Reserved;
+    public ulong PartIndexCount;
+
+    public static unsafe CnaCnbMeshInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbMeshInfo),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>The skinning skeleton's shape -- <c>CNA_CnbSkeletonInfo</c>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbSkeletonInfo
+{
+    public uint StructSize;
+    public uint StructVersion;
+    public ulong JointCount;
+    public byte HasRootPrefix;
+    public CnaReservedBytes7 Reserved;
+
+    public static unsafe CnaCnbSkeletonInfo Versioned() => new()
+    {
+        StructSize = (uint)sizeof(CnaCnbSkeletonInfo),
+        StructVersion = 1,
+    };
+}
+
+/// <summary>One texture slot's UV transform -- <c>CNA_CnbTextureTransform</c>. Unversioned
+/// upstream, so there is no <c>Versioned()</c> here either.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbTextureTransform
+{
+    public float OffsetX;
+    public float OffsetY;
+    public float ScaleX;
+    public float ScaleY;
+    public float Rotation;
+}
+
+/// <summary>One texture slot's sampler state -- <c>CNA_CnbSamplerState</c>. <c>declared</c> is the
+/// field that matters: a zeroed sampler and an authored "point, clamp, clamp" sampler have the same
+/// three numbers, and only this flag tells them apart.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal struct CnaCnbSamplerState
+{
+    public uint Filter;
+    public uint AddressU;
+    public uint AddressV;
+    public byte Declared;
+    public CnaReservedBytes3 Reserved;
+}
+
 /// <summary>One entry of a document's table of contents -- <c>CNA_CnbChunkEntry</c>.</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct CnaCnbChunkEntry
