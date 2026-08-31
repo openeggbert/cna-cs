@@ -33,3 +33,13 @@
 | `compile` | Windows x86 with XNA Framework 4.0 runtime and .NET Framework 4.8 | emits all observations before an FNA SoundEffect finalizer abort in the measured Linux environment | emits the math/geometry and input prefix, then aborts during audio initialization in the measured Linux environment |
 | `graphics` | Windows x86 with XNA Framework 4.0 runtime, Direct3D-capable display, and .NET Framework 4.8 | 118 safe observations execute and 48 destructive comparator paths are explicitly gated in the measured Linux environment | all observations execute in the measured Linux DesktopGL environment |
 | `runtime` | Windows x86 with XNA Framework 4.0 runtime, Direct3D/audio/storage services, and .NET Framework 4.8 | source builds, but the measured Linux native runtime cannot initialize a video device | not source-compatible with the selected DesktopGL profile because XNA Storage and authored XACT are absent |
+
+## CNA renderer requirement
+
+A probe's observation set is fixed: the same names with the same values, whichever CNA renderer is linked underneath. That is what makes a snapshot comparable to one captured on Windows XNA. It also means a probe cannot skip a route on a renderer that lacks the capability behind it -- it fails instead, and the renderer is simply one this probe cannot be captured on.
+
+| Probe | Renderer requirement |
+| --- | --- |
+| `compile` | none: every observation is pure managed code or an in-memory fixture, so the probe captures identically with no native library present at all. |
+| `graphics` | a fully capable renderer. Measured byte-identical under OPENGLES3, OPENGL33 and VULKAN; refuses under SOFTWARE (no volume texture storage) and SDL_RENDERER (no vertex buffers), which are renderers this probe cannot be captured on rather than failures of the binding. |
+| `runtime` | a renderer that can present a window; captured under VULKAN and OPENGLES3. |

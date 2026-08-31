@@ -19,7 +19,8 @@
         "input",
         "audioPure",
         "contentError"
-      ]
+      ],
+      "cnaRendererRequirement": "none: every observation is pure managed code or an in-memory fixture, so the probe captures identically with no native library present at all."
     },
     {
       "id": "graphics",
@@ -33,7 +34,8 @@
       "categories": [
         "graphics",
         "resourceLifetime"
-      ]
+      ],
+      "cnaRendererRequirement": "a fully capable renderer. Measured byte-identical under OPENGLES3, OPENGL33 and VULKAN; refuses under SOFTWARE (no volume texture storage) and SDL_RENDERER (no vertex buffers), which are renderers this probe cannot be captured on rather than failures of the binding."
     },
     {
       "id": "runtime",
@@ -51,7 +53,8 @@
         "video",
         "storage",
         "deviceLifecycle"
-      ]
+      ],
+      "cnaRendererRequirement": "a renderer that can present a window; captured under VULKAN and OPENGLES3."
     }
   ],
   "categories": [

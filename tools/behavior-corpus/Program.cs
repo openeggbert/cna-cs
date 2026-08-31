@@ -297,6 +297,17 @@ internal static partial class Program
             RequireUnique(prefixes, $"observation prefix in probe '{probe.Id}'");
         }
 
+        foreach (ProbeManifest probe in manifest.Probes)
+        {
+            if (string.IsNullOrWhiteSpace(probe.CnaRendererRequirement))
+            {
+                throw new InvalidDataException(
+                    $"Probe '{probe.Id}' does not state its CNA renderer requirement. Every probe " +
+                    "must, because a capture that fails on a renderer must be distinguishable from " +
+                    "a capture that is wrong.");
+            }
+        }
+
         int total = manifest.Categories.Sum(category => category.ExpectedObservationCount);
         if (total != manifest.CombinedExpectedObservationCount)
         {
@@ -457,6 +468,23 @@ internal static partial class Program
                 $"{EscapeTable(probe.FnaSupportStatus)} | {EscapeTable(probe.MonoGameSupportStatus)} |");
         }
 
+        builder.AppendLine();
+        builder.AppendLine("## CNA renderer requirement");
+        builder.AppendLine();
+        builder.AppendLine(
+            "A probe's observation set is fixed: the same names with the same values, whichever CNA " +
+            "renderer is linked underneath. That is what makes a snapshot comparable to one captured " +
+            "on Windows XNA. It also means a probe cannot skip a route on a renderer that lacks the " +
+            "capability behind it -- it fails instead, and the renderer is simply one this probe " +
+            "cannot be captured on.");
+        builder.AppendLine();
+        builder.AppendLine("| Probe | Renderer requirement |");
+        builder.AppendLine("| --- | --- |");
+        foreach (ProbeManifest probe in manifest.Probes)
+        {
+            builder.AppendLine($"| `{probe.Id}` | {EscapeTable(probe.CnaRendererRequirement)} |");
+        }
+
         return builder.ToString();
     }
 
@@ -596,6 +624,7 @@ internal sealed class ProbeManifest
     public string FnaSupportStatus { get; init; } = string.Empty;
     public string MonoGameSupportStatus { get; init; } = string.Empty;
     public string AssetRequirement { get; init; } = string.Empty;
+    public string CnaRendererRequirement { get; init; } = string.Empty;
     public string ExpectedSnapshotFilename { get; init; } = string.Empty;
     public List<string> Categories { get; init; } = [];
 }
