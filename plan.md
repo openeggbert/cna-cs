@@ -20,7 +20,7 @@ packaging, and release engineering.
 | --- | --- |
 | Debug and Release solution build | 0 warnings, 0 errors |
 | Managed tests | 622 `CNA.Framework` + 225 `CNA.XnaCompat`, all passing |
-| Native integration | 188 tests against four ABI 0.21.0 renderers on Linux x64. SDL_RENDERER, SOFTWARE and HEADLESS: **188/188**. OPENGLES3: 184/188, the four failures all being one upstream EasyGL defect (see the blocker table). **Zero silent capability branches remain on any renderer**; 31 absent branches assert on SDL_RENDERER alone |
+| Native integration | 207 tests in Debug and Release against **five** ABI 0.21.0 renderers on Linux x64. VULKAN, SDL_RENDERER, SOFTWARE and HEADLESS: **207/207**. OPENGLES3: 203/207, the four failures all being one upstream EasyGL defect (see the blocker table). **Zero silent capability branches remain on any renderer**; 31 absent branches assert on SDL_RENDERER alone |
 | Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 1002 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 1002 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
@@ -36,7 +36,7 @@ packaging, and release engineering.
 | Template | The checked-in repository project, the generated development project and the isolated package consumer all build. The package-generated project contains no source root, sibling `ProjectReference`, or developer absolute path; native 60/600-frame acceptance passes against 0.21.0 on **all four renderers**. SDL_RENDERER is the first to take the template's 2D fallback path, so that branch is measured rather than promised |
 | Other engines | Source builds pass for FNA, MonoGame, and Kni; 60-frame MonoGame and Kni runs pass; FNA runs 600 frames over Vulkan from the same game source, re-measured this session against the current binding (see E3) |
 | Packages | None published. Shipping defaults remain `IsPackable=false`; the isolated acceptance path creates local `CNA.Interop`, `CNA.Framework`, and `CNA.XnaCompat` preview packages, including an experimental `linux-x64` native asset, and passes inspection/install/build/60/600-frame/error-diagnostic checks |
-| Tested platform | Linux x64 only in this run |
+| Tested platform | Linux x64 only in this run, across five renderers |
 
 The metadata result is produced by `tools/api-compat`, not by the legacy name counter. The current
 hard invariants are:
@@ -775,17 +775,20 @@ records authority, source-portability value, implementation status, and namespac
   mattered: it is the only 2D-only backend available here, and it is what turned A7's seventeen
   silent capability branches into asserted ones.
 
-  | renderer | capabilities absent | engine layer | state |
-  | --- | --- | --- | --- |
-  | OPENGLES3 | 1 (`MultiSampleAntiAliasing`) | version 2 | integration 184/188; the four are the render-target clear defect |
-  | SDL_RENDERER | **18** -- no `ThreeD`, `CustomEffects`, `OcclusionQuery`, `Texture3D`, stencil, … | absent | **188/188**, and 31 asserted absent branches |
-  | SOFTWARE | 9 -- `MultipleRenderTargets`, `Texture3D`, `Instancing`, `CompiledEffects`, float targets, compute, indirect draw | absent | **188/188** |
-  | HEADLESS | 9 -- `Texture3D`, `MultiStreamVertexInput`, `AdditiveBlending`, `CompiledEffects`, float targets, compute, indirect draw | absent | **188/188**; refuses render-target readback |
-  | the other 35 | | | `NOT_BUILT` |
+  | renderer | capabilities absent | engine layer | integration | 60/600 frames | clears a render target |
+  | --- | --- | --- | --- | --- | --- |
+  | OPENGLES3 | 1 (`MultiSampleAntiAliasing`) | version 2 | 203/207 | pass | **no** -- the EasyGL defect |
+  | VULKAN | 7 -- `MultiStreamVertexInput`, `CompiledEffects`, float targets, half-float filtering, compute, indirect draw | absent | **207/207** | pass | yes |
+  | SDL_RENDERER | **18** -- no `ThreeD`, `CustomEffects`, `OcclusionQuery`, `Texture3D`, stencil, … | absent | **207/207** | pass | yes |
+  | SOFTWARE | 9 -- `MultipleRenderTargets`, `Texture3D`, `Instancing`, `CompiledEffects`, float targets, compute, indirect draw | absent | **207/207** | pass | yes |
+  | HEADLESS | 9 -- `Texture3D`, `MultiStreamVertexInput`, `AdditiveBlending`, `CompiledEffects`, float targets, compute, indirect draw | absent | **207/207** | pass | refuses readback |
+  | the other 34 | | | | | `NOT_BUILT` |
 
-  Four distinct capability profiles, and no two are the same set -- which is the property that makes
-  them worth having. `SOFTWARE` reports `ThreeD` and still refuses `Texture3D`, so "has a 3D
-  pipeline" and "has volume textures" are now separated by measurement rather than by a comment.
+  **Five distinct capability profiles, and no two are the same set** -- which is the property that
+  makes them worth having rather than the frame counts. `SOFTWARE` reports `ThreeD` and still refuses
+  `Texture3D`, so "has a 3D pipeline" and "has volume textures" are separated by measurement rather
+  than by a comment; `SDL_RENDERER` lacks `ThreeD` entirely and is the only renderer that takes the
+  template's 2D fallback path; and the last column is what isolates the clear defect to one backend.
 
   Each build is ~1.2 GB with `CNA_BUILD_TESTS=OFF` and `CNA_BUILD_EXAMPLES=OFF`, against ~20 GB for
   a full one, which is what makes a renderer matrix affordable at all on this machine.
