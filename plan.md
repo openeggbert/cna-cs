@@ -27,7 +27,7 @@ packaging, and release engineering.
 | Behavior corpora | One manifest defines 479 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, **55 Content**, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 479: 208 pure, 166 device, and 105 native-runtime. The nine new ones are content **cache identity** -- the area the plan's own list named and the one where the two managers had silently diverged. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Re-measured against ABI 0.21.0. Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
-| Sanitizers | `not-run`: no exact ABI-compatible ASan/UBSan CNA build was available; no sanitizer-cleanliness inference is made |
+| Sanitizers | **UBSan, measured.** The upstream configure block that made an instrumented build impossible is gone, so `cnanext/build-ubsan` is a HEADLESS ABI 0.21.0 library built with `-fsanitize=undefined` -- instrumented rather than assumed: 15 `__ubsan` symbols and a `libubsan` dependency, against 0 in the ordinary build. Integration 207/207, ownership stress 30 cycles and the runtime probe's 105 observations all under it. **One finding**, and it is upstream's: `GraphicsResource.cpp:96` calls `graphicsDevice_->OnResourceDestroyed` on an object whose vptr is already `System::Object`, i.e. a virtual call into a device that has begun destruction. ASan remains `not-run` |
 | ABI layout evidence | Generated C-authority probe passes on Linux ELF x64: **916 native and 916 managed layout/type measurements with 0 mismatches**, 1002 of 1002 prototypes compiled, 6 callbacks checked, 359 enum-like constants asserted, and **12 negative controls all rejected** -- including `field-signedness` and `field-wrong-width`, so a struct field's type is measured and not only its offset. Windows PE and macOS Mach-O jobs are wired but actual execution remains pending |
 | XNA Windows runtime metadata | 257 reference types, 257 target types, 0 differences, empty allowlist. Run locally against a legally obtained reference set with `XNA_REFERENCE_PATH`; the gate caught three signature regressions during this session and is worth running after every facade change |
 | CNA public-type leakage | 0 findings in public/protected strict-profile signatures. For `CNA.Framework`'s own surface the invariant turns out to be **compiler-enforced** -- every `CNA.Interop` type is `internal`, and the one exported type is a static class, so neither can appear in a signature at all. What is guarded instead is that precondition |
@@ -1207,6 +1207,23 @@ specified in [`docs/native-behavior-blockers.md`](docs/native-behavior-blockers.
   substitute is gone. What a handler sees is CNA's event rather than this binding's imitation.
 - Compiled effect bytecode needs a renderer/native implementation before `.fx` runtime support can
   be claimed on that renderer.
+- **A virtual call into a partly-destroyed `GraphicsDevice`**, found by the UBSan build:
+  `GraphicsResource::Dispose` reaches `graphicsDevice_->OnResourceDestroyed(name_, tag_)` at
+  `modules/graphics/src/Xna/GraphicsResource.cpp:96` with a pointer whose vptr is already
+  `System::Object`, so the device's own destructor has run its derived part. Reproduced by
+  `SpriteFont_LoadsAnAuthoredCompressedAtlasThroughContent`, twice per run, and **not caused by this
+  binding's content-manager ownership change** -- it appears identically with that disposal removed,
+  which was checked before reporting it.
+
+  Whether this is the same defect as the SIGTERM crash below is not claimed. Both are virtual
+  dispatch on an object mid-destruction, which is suggestive and is what `pure virtual method
+  called` means, but no run has been shown to produce both from one object.
+
+  <b>Reproducing it needs `UBSAN_OPTIONS=log_path=...`.</b> `vstest` swallows the test host's native
+  stderr, so a run without `log_path` reports zero and means nothing -- proven with a deliberately
+  overflowing instrumented library, which reported through a plain C host and was invisible through
+  `dotnet test` until the option was set.
+
 - **The SIGTERM `pure virtual method called` shutdown report is reproduced**, and is now a blocker
   row with a renderer matrix behind it rather than a historical note.
   `scripts/Reproduce-SigtermShutdown.sh` sends the signal to a template that has been drawing for
@@ -1267,6 +1284,20 @@ XNA_REFERENCE_PATH=/path/to/xna-reference-assemblies \
 
 CNA_ROOT=/path/to/cnanext python3 tools/coverage/sweep.py
 ```
+
+Under a UBSan-instrumented CNA (`cnanext/build-ubsan`, configured with `-fsanitize=undefined` on
+both compilers and both linkers):
+
+```bash
+CNA_NATIVE_LIBRARY=/path/to/cnanext/build-ubsan/modules/c-api/libcna_c_api.so \
+  UBSAN_OPTIONS=halt_on_error=0:print_stacktrace=1:log_path=/tmp/cna-ubsan \
+  xvfb-run -a dotnet test tests/CNA.Integration.Tests/CNA.Integration.Tests.csproj -c Release
+cat /tmp/cna-ubsan.*
+```
+
+**`log_path` is not optional.** `vstest` swallows the test host's native stderr, so a run without it
+reports zero findings whether or not there are any -- proven by loading a deliberately overflowing
+instrumented library, which reported through a plain C host and was invisible through `dotnet test`.
 
 On Windows with XNA 4.0 and the .NET Framework 4.8 developer pack:
 
