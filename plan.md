@@ -1030,7 +1030,14 @@ shared-resource cycle, late shared-graph cleanup, multiple throwing disposables 
    to a shared resource **nobody references**: measured, it is constructed anyway, so the table is
    read through rather than resolved lazily, and a game's disposal count depends on that. Proven to
    move: collapsing the fixup list to one entry per index -- a plausible optimisation -- turns both
-   from 1 to 0. Deeper external-reference failure chains remain.
+   from 1 to 0. **Deeper external-reference failure chains are now closed too.** A three-deep
+   chain with a missing leaf records what a caller catches after a fault has travelled back up
+   through two intermediate `ReadExternalReference` frames -- `KeyNotFoundException`,
+   unwrapped -- and its repaired twin proves the two assets that were mid-load left nothing
+   behind: caching a name before its load succeeds turns `ok:42` into `ok:0`. A *cycle* is
+   deliberately not a route and the reason is written where the next reader will look for it:
+   XNA writes its cache after a load returns, so a cyclic reference recurses until the stack is
+   gone, and an uncatchable stack overflow would cost every other observation in the process.
 3. Execute the identical 46 observations on Windows XNA and preserve the zero-diagnostic content
    surface while adjudicating any differences.
 
