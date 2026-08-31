@@ -94,6 +94,12 @@ public static class ContentErrorCorpus
         // question they answer is "what does XNA do", and this corpus is what the Windows XNA
         // snapshot adjudicates. The compat facade's cache had no test of any kind until this
         // session, which is how CNA.Content.ContentManager came to diverge from it unnoticed.
+        // Shared resources, in the two shapes the existing cycle and late-failure observations do
+        // not cover: one child referenced by two parents, which is the whole point of the mechanism,
+        // and a shared resource nobody references at all.
+        observations.Add("content.shared.one_child_two_parents=" + Flag(SharedChildIsOneObject()));
+        observations.Add("content.shared.unreferenced_constructed=" + UnreferencedSharedConstructed());
+
         observations.Add("content.cache.repeat_same_instance=" + Flag(CacheRepeatIsSameInstance()));
         observations.Add("content.cache.repeat_read_count=" + CacheRepeatReadCount());
         observations.Add("content.cache.case_insensitive=" + Flag(CacheIgnoresCase()));
@@ -594,6 +600,68 @@ public static class ContentErrorCorpus
             Write7Bit(writer, 1);
         }));
 
+    /// <summary>
+    /// One shared resource referenced twice must be one object.
+    ///
+    /// This is what "shared" means, and the existing cycle observation does not cover it: there,
+    /// each resource is referenced once and the graph merely loops. A reader resolving eagerly, or
+    /// constructing per fixup rather than per shared entry, produces two children here and passes
+    /// every other shared-resource observation in this file.
+    /// </summary>
+    private static bool SharedChildIsOneObject()
+    {
+        byte[] asset = Container(Payload(
+            [
+                (typeof(GraphNodeReader).AssemblyQualifiedName!, 0),
+                (typeof(ForkNodeReader).AssemblyQualifiedName!, 0),
+            ],
+            sharedResourceCount: 1,
+            writer =>
+            {
+                Write7Bit(writer, 2); // root is a fork
+                Write7Bit(writer, 1); // left  -> shared 1
+                Write7Bit(writer, 1); // right -> shared 1
+                Write7Bit(writer, 1); // shared 1 is a node
+                Write7Bit(writer, 0); // whose own child is null
+            }));
+
+        using var content = new MemoryContentManager(() => new TrackingStream(asset));
+        CorpusForkNode root = content.Load<CorpusForkNode>("fixture");
+        return root.Left is not null && ReferenceEquals(root.Left, root.Right);
+    }
+
+    /// <summary>
+    /// How many shared resources are constructed when one of two is never referenced.
+    ///
+    /// Not obvious in either direction: the table is a list, so an implementation may read it
+    /// through, or it may resolve lazily from the fixups and never touch the second entry. Whichever
+    /// XNA does is what a game's disposal count depends on, so it is recorded rather than assumed.
+    /// </summary>
+    private static string UnreferencedSharedConstructed()
+    {
+        CountingGraphNodeReader.Reset();
+        byte[] asset = Container(Payload(
+            [
+                (typeof(CountingGraphNodeReader).AssemblyQualifiedName!, 0),
+                (typeof(ForkNodeReader).AssemblyQualifiedName!, 0),
+            ],
+            sharedResourceCount: 2,
+            writer =>
+            {
+                Write7Bit(writer, 2); // root is a fork
+                Write7Bit(writer, 1); // left  -> shared 1
+                Write7Bit(writer, 1); // right -> shared 1
+                Write7Bit(writer, 1); // shared 1 is a node
+                Write7Bit(writer, 0); // null child
+                Write7Bit(writer, 1); // shared 2 is a node nobody points at
+                Write7Bit(writer, 0); // null child
+            }));
+
+        using var content = new MemoryContentManager(() => new TrackingStream(asset));
+        string outcome = ExceptionName(() => content.Load<CorpusForkNode>("fixture"));
+        return $"{outcome}/{CountingGraphNodeReader.Constructed.ToString(CultureInfo.InvariantCulture)}";
+    }
+
     private static bool CacheRepeatIsSameInstance()
     {
         FreshDisposableReader.Reset();
@@ -921,6 +989,42 @@ public sealed class SequencedDisposableReader : ContentTypeReader<CorpusDisposab
 public sealed class CorpusNode
 {
     public CorpusNode? Next { get; set; }
+}
+
+/// <summary>A node with two children, so one shared resource can be referenced twice.</summary>
+public sealed class CorpusForkNode
+{
+    public CorpusNode? Left { get; set; }
+
+    public CorpusNode? Right { get; set; }
+}
+
+public sealed class ForkNodeReader : ContentTypeReader<CorpusForkNode>
+{
+    protected override CorpusForkNode Read(ContentReader input, CorpusForkNode existingInstance)
+    {
+        var node = new CorpusForkNode();
+        input.ReadSharedResource<CorpusNode>(child => node.Left = child);
+        input.ReadSharedResource<CorpusNode>(child => node.Right = child);
+        return node;
+    }
+}
+
+/// <summary>Counts how many nodes were constructed, which is what says whether a shared resource
+/// nobody references is read anyway.</summary>
+public sealed class CountingGraphNodeReader : ContentTypeReader<CorpusNode>
+{
+    public static int Constructed { get; private set; }
+
+    public static void Reset() => Constructed = 0;
+
+    protected override CorpusNode Read(ContentReader input, CorpusNode existingInstance)
+    {
+        Constructed++;
+        var node = new CorpusNode();
+        input.ReadSharedResource<CorpusNode>(next => node.Next = next);
+        return node;
+    }
 }
 
 public sealed class GraphNodeReader : ContentTypeReader<CorpusNode>

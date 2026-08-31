@@ -24,7 +24,7 @@ packaging, and release engineering.
 | Native ABI admission | Consumer ABI 0.21.0; the reviewed `cna-cs-native-abi/1` matrix accepts exactly that generation, requires all 1002 imports, and runs signature/shape canaries. 11 isolated fixtures: 2 accepted, 9 rejected |
 | Upstream ABI diff | `tools/coverage/baselinediff.py` measures 0.20.0 → 0.21.0 as strictly additive over the 1002 consumed exports: 3 exports, 1 scalar and 3 constants added, nothing removed or changed, and **no allowlist entry needed in either direction** |
 | Compile probe | Same source builds for CNA and FNA; the MonoGame pure probe builds after recording absent `RendererDetail` dynamically. The future XNA net48/x86 build remains integrated in the Windows snapshot command. Kni still differs at `VertexDeclaration : GraphicsResource` |
-| Behavior corpora | One manifest defines 479 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, **55 Content**, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 479: 208 pure, 166 device, and 105 native-runtime. The nine new ones are content **cache identity** -- the area the plan's own list named and the one where the two managers had silently diverged. Windows XNA runtime capture remains pending |
+| Behavior corpora | One manifest defines 481 observations: 83 Math, 23 Input, 153 Graphics, 13 Resource, **57 Content**, 83 Audio, 7 XACT, 20 Media, 17 Video, 20 Storage, and 5 DeviceLifecycle. CNA executes all 481: 210 pure, 166 device, and 105 native-runtime. The eleven new ones are content **cache identity** and two shared-resource shapes the corpus did not cover. Windows XNA runtime capture remains pending |
 | Windows XNA snapshots | Release-grade validation/build/normalize/manifest/compare workflow implemented; platform-independent manifest/count/compare paths pass locally. Actual Windows XNA execution is not-run/pending |
 | Ownership stress | Re-measured against ABI 0.21.0. Normal Debug and Release each pass 100/100 cycles, now including the authored DXT3 `SpriteFont` the cycle used to exclude: 1,600 queued owner-thread releases, 3,000 successful release attempts, 0 retries/failures/pending releases, 0 refused game destroys, 0 native crashes. This is not allocator-level leak proof |
 | Sanitizers | **UBSan, measured.** The upstream configure block that made an instrumented build impossible is gone, so `cnanext/build-ubsan` is a HEADLESS ABI 0.21.0 library built with `-fsanitize=undefined` -- instrumented rather than assumed: 15 `__ubsan` symbols and a `libubsan` dependency, against 0 in the ordinary build. Integration 207/207, ownership stress 30 cycles and the runtime probe's 105 observations all under it. **One finding**, and it is upstream's: `GraphicsResource.cpp:96` calls `graphicsDevice_->OnResourceDestroyed` on an object whose vptr is already `System::Object`, i.e. a virtual call into a device that has begun destruction. **ASan agrees, from the same test**: a heap-use-after-free, an 8-byte read -- the size of a vptr. Two independent sanitizers, one reproduction, one story. Neither is caused by this session's content-manager ownership change; both were re-run with that disposal removed and report identically |
@@ -1014,8 +1014,14 @@ shared-resource cycle, late shared-graph cleanup, multiple throwing disposables 
 
 1. Expand additional built-in-reader and legal compressed fixtures only where they add a distinct
    failure/ownership route; keep MonoGame LZ4 inventoried separately as an extension.
-2. Add further representable partial shared-resource graphs and deeper external-reference failure
-   chains without using copyrighted content.
+2. **Two shared-resource shapes added, and both were genuinely missing.** The corpus had a cycle and
+   a late failure; it did not have the defining case -- *one child referenced by two parents* --
+   which is what "shared" means and which a reader constructing per fixup rather than per entry gets
+   wrong while passing every other shared-resource observation. It also did not record what happens
+   to a shared resource **nobody references**: measured, it is constructed anyway, so the table is
+   read through rather than resolved lazily, and a game's disposal count depends on that. Proven to
+   move: collapsing the fixup list to one entry per index -- a plausible optimisation -- turns both
+   from 1 to 0. Deeper external-reference failure chains remain.
 3. Execute the identical 46 observations on Windows XNA and preserve the zero-diagnostic content
    surface while adjudicating any differences.
 
