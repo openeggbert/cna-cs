@@ -115,6 +115,52 @@ internal static class XnaContentPath
             .Replace('\\', Path.DirectorySeparatorChar)
             .Replace('/', Path.DirectorySeparatorChar);
 
-        return Path.Combine(rootDirectory, relative + extension);
+        string exact = Path.Combine(rootDirectory, relative + extension);
+        return File.Exists(exact) ? exact : MatchIgnoringCase(exact);
+    }
+
+    /// <summary>
+    /// The file whose name differs from <paramref name="exact"/> only in case, or
+    /// <paramref name="exact"/> itself when there is none.
+    ///
+    /// XNA games are written against a case-INSENSITIVE filesystem and rely on it. The XNA sample
+    /// collection does so casually: `cna-cs-samples` CSSAMPLE-022 Pathfinding ships `Map1.xnb`
+    /// through `Map4.xnb` and asks for <c>"map1"</c>, which is correct on Windows and on Xbox 360
+    /// and fails on this host with "Could not open content asset 'map1'".
+    ///
+    /// CNA's own native content manager already resolves this way -- the C++ port of that sample
+    /// loads the same files under the same names -- so this is the managed side matching the
+    /// runtime it binds, not a new policy.
+    ///
+    /// The exact path is tried first and costs one <c>File.Exists</c>, so a correctly-cased game
+    /// never reaches the directory scan. When several files differ only in case, the ordinal-first
+    /// one wins: an arbitrary tie-break, but a deterministic one, and the situation cannot arise on
+    /// the filesystems these games were authored for.
+    /// </summary>
+    private static string MatchIgnoringCase(string exact)
+    {
+        string? directory = Path.GetDirectoryName(exact);
+        if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+        {
+            return exact;
+        }
+
+        string wanted = Path.GetFileName(exact);
+        string? match = null;
+
+        foreach (string candidate in Directory.EnumerateFiles(directory))
+        {
+            if (!string.Equals(Path.GetFileName(candidate), wanted, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (match is null || string.CompareOrdinal(candidate, match) < 0)
+            {
+                match = candidate;
+            }
+        }
+
+        return match ?? exact;
     }
 }
