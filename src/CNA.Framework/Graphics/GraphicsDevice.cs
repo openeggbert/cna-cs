@@ -203,21 +203,32 @@ public class GraphicsDevice : IDisposable
         return device;
     }
 
-    /// <summary>Matches real XNA's own simple <c>Clear(Color)</c> overload, which clears only the
-    /// color (target) buffer -- <c>cna_graphics_device_clear_options</c> is the real ABI's general
-    /// clear route (a third, narrower <c>cna_graphics_device_clear_rgba</c> also exists, taking
-    /// four separate 0..1 float channels instead of a <see cref="CnaColor"/>, and a
-    /// <c>cna_graphics_device_clear_color_depth</c> also exists for clearing color+depth together --
-    /// neither is what this overload needs). <paramref name="color"/>'s depth/stencil arguments are
-    /// required by the native call even though the depth/stencil bits are not selected -- passed as
-    /// the documented default values (full depth, zero stencil) real XNA's own simple overload uses
-    /// internally too.</summary>
-    public void Clear(Color color)
-    {
-        CnaResult result = Native.cna_graphics_device_clear_options(
-            ResolveNativeDeviceHandle(), CnaClearOptions.Target, color.ToNative(), 1.0f, 0);
-        CnaException.ThrowIfFailed(result, nameof(Clear));
-    }
+    /// <summary>Matches real XNA's own simple <c>Clear(Color)</c> overload, which clears the target,
+    /// the depth buffer AND the stencil buffer together -- <c>Clear(ClearOptions.Target |
+    /// ClearOptions.DepthBuffer | ClearOptions.Stencil, color, Viewport.MaxDepth, 0)</c>.
+    ///
+    /// <b>This used to select <c>Target</c> alone</b>, on the stated belief that the simple overload
+    /// is colour-only. It is not, and the consequence was invisible until a game drew with depth
+    /// testing on: every frame cleared the colour and left last frame's depth, so from the second
+    /// frame onwards a coplanar draw failed <c>LessEqual</c> against itself and the window went
+    /// black while <c>Clear</c> alone still worked. `cna-cs-samples` CSSAMPLE-001 (the original XNA
+    /// PrimitivesSample) is the case in point: its stars, ships and sun disappeared entirely, while
+    /// the identical geometry drawn into a depth-less <c>RenderTarget2D</c> appeared normally.
+    ///
+    /// FNA is the authority for the exact form (`src/Graphics/GraphicsDevice.cs`): all three bits,
+    /// and <c>Viewport.MaxDepth</c> rather than a hardcoded 1.0f. CNA's own C++ layer already agrees
+    /// (Task 928 in <c>modules/graphics/src/Xna/GraphicsDevice.cpp</c>), so this only ever diverged
+    /// on the managed side.
+    ///
+    /// Passing the depth and stencil bits is safe on a target that has neither: the C++
+    /// <c>GraphicsDevice::Clear</c> asks each attachment independently and masks the bits it cannot
+    /// honour (GDI-050) rather than failing. <c>cna_graphics_device_clear_options</c> is the ABI's
+    /// general route; <c>cna_graphics_device_clear_rgba</c> (four 0..1 float channels) and
+    /// <c>cna_graphics_device_clear_color_depth</c> (colour plus depth, no stencil) cannot express
+    /// this overload.</summary>
+    public void Clear(Color color) =>
+        Clear(ClearOptions.Target | ClearOptions.DepthBuffer | ClearOptions.Stencil,
+              color, Viewport.MaxDepth, 0);
 
     /// <summary>Matches real XNA's full <c>Clear(ClearOptions, Color, float, int)</c> overload --
     /// unlike the simple <see cref="Clear(Color)"/> overload above, <paramref name="options"/> is
