@@ -199,12 +199,60 @@ public class Game : IDisposable
     {
     }
 
-    protected virtual void Initialize()
-    {
-    }
+    /// <summary>
+    /// XNA's <c>Game.Initialize</c> ends by calling <see cref="LoadContent"/>, and a great deal of
+    /// real XNA code depends on it. The pattern is everywhere in the sample collection:
+    ///
+    /// <code>
+    /// protected override void Initialize()
+    /// {
+    ///     base.Initialize();
+    ///     personPosition.X = (safeBounds.Width - personTexture.Width) / 2;   // loaded by now
+    /// }
+    /// </code>
+    ///
+    /// <b>This used to be empty</b>, and content was loaded only by the separate native
+    /// <c>load_content</c> callback, which arrives after <c>initialize</c>. Every game written that
+    /// way therefore read a null texture and died inside the initialize callback with nothing but
+    /// "Object reference not set to an instance of an object" to go on. `cna-cs-samples`
+    /// CSSAMPLE-019, the unmodified original RectangleCollision, is the case in point.
+    ///
+    /// FNA is the authority (`src/Game.cs:623`): its <c>Initialize</c> initializes the components
+    /// and then calls <c>LoadContent()</c> directly when a graphics device already exists, or
+    /// defers it to <c>DeviceCreated</c> when one does not. Here the device is guaranteed --
+    /// <c>CNA.Game.RunInitializeOnce</c> calls <c>EnsureGraphicsDevice()</c> before this runs, and
+    /// <see cref="OnInitializeFromBackend"/> touches <see cref="GraphicsDevice"/> again -- so the
+    /// direct call is the whole of it.
+    ///
+    /// The once-guard is what keeps the native callback from loading a second time, and it is also
+    /// what keeps a game that does <b>not</b> call <c>base.Initialize()</c> working exactly as
+    /// before: content then loads at the native callback, as it always did.
+    ///
+    /// This lives in the XNA facade rather than in <c>CNA.Game</c> on purpose. The lifecycle
+    /// <c>CNA.Game</c> presents is the C ABI's own -- initialize, load_content, begin_run, update,
+    /// draw, each delivered separately -- and that is a coherent contract for a CNA-first game. XNA's
+    /// contract is a different one, and this is the layer that owes it.
+    /// </summary>
+    protected virtual void Initialize() => EnsureContentLoaded();
 
     protected virtual void LoadContent()
     {
+    }
+
+    private bool _contentLoaded;
+
+    /// <summary>Runs <see cref="LoadContent"/> exactly once, whichever of the two paths reaches it
+    /// first: <see cref="Initialize"/> through a game's <c>base.Initialize()</c>, or the native
+    /// <c>load_content</c> callback for a game that does not call it.</summary>
+    private void EnsureContentLoaded()
+    {
+        if (_contentLoaded)
+        {
+            return;
+        }
+
+        _contentLoaded = true;
+        LoadContent();
     }
 
     protected virtual void OnActivated(object sender, EventArgs args) => Activated?.Invoke(sender, args);
@@ -271,7 +319,9 @@ public class Game : IDisposable
 
         protected override void Initialize() => _owner.OnInitializeFromBackend();
 
-        protected override void LoadContent() => _owner.LoadContent();
+        // Through the guard, not straight to the override: a game whose Initialize called
+        // base.Initialize() has already loaded, and XNA loads content once.
+        protected override void LoadContent() => _owner.EnsureContentLoaded();
 
         protected override void Update(CNA.GameTime gameTime) =>
             _owner.Update(GameTime.FromFramework(gameTime));
