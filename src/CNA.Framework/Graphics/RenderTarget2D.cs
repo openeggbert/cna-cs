@@ -143,25 +143,14 @@ public class RenderTarget2D : Texture2D
         return ((int)info.Width, (int)info.Height);
     }
 
-    public override int Width
-    {
-        get
-        {
-            int value = GetDimensions(NativeHandleValue).Width;
-            GC.KeepAlive(this);
-            return value;
-        }
-    }
+    public override int Width => CachedDimensions.Width;
 
-    public override int Height
-    {
-        get
-        {
-            int value = GetDimensions(NativeHandleValue).Height;
-            GC.KeepAlive(this);
-            return value;
-        }
-    }
+    public override int Height => CachedDimensions.Height;
+
+    /// <summary>A render target is a separate native resource type from a texture, with its own
+    /// info call -- see this class's own doc comment.</summary>
+    private protected override (int Width, int Height) ReadDimensionsFromNative() =>
+        GetDimensions(NativeHandleValue);
 
     /// <summary>Reads the whole info block. Kept alongside <see cref="GetDimensions"/> rather than
     /// replacing it: most callers want only the two dimensions, and this one exists because

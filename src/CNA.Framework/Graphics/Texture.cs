@@ -46,6 +46,45 @@ public abstract class Texture : GraphicsResource
 
     internal nint NativeHandleValue => _handle.DangerousGetHandle();
 
+    private int _cachedWidth = -1;
+    private int _cachedHeight;
+
+    /// <summary>
+    /// This texture's pixel dimensions, read from native once and remembered.
+    ///
+    /// <see cref="Texture2D.Width"/>/<see cref="Texture2D.Height"/> deliberately read through to
+    /// native on every access, and stay that way. This is the separate accessor the sprite path
+    /// needs: <c>SpriteBatch.Draw</c> resolves a null source rectangle against the whole texture,
+    /// so before this it issued a <c>cna_texture2d_get_info</c> transition <em>per sprite per
+    /// frame</em> -- two, for the destination-rectangle overloads -- to re-read a number that
+    /// cannot change. A texture's dimensions are fixed when it is created (nothing in the ABI
+    /// resizes one; <c>SetData</c> rewrites texels, not extents), so the first answer is the only
+    /// answer.
+    ///
+    /// The read itself goes through <see cref="ReadDimensionsFromNative"/>, so each texture kind
+    /// answers from its own native info block -- a render target from
+    /// <c>cna_render_target_get_info</c>, everything else from <c>cna_texture2d_get_info</c>.
+    /// </summary>
+    internal (int Width, int Height) CachedDimensions
+    {
+        get
+        {
+            if (_cachedWidth < 0)
+            {
+                (_cachedWidth, _cachedHeight) = ReadDimensionsFromNative();
+                GC.KeepAlive(this);
+            }
+
+            return (_cachedWidth, _cachedHeight);
+        }
+    }
+
+    /// <summary>Where this texture kind's dimensions actually come from. Overridden by
+    /// <see cref="RenderTarget2D"/>, whose handle belongs to a separate native resource type with
+    /// its own info call.</summary>
+    private protected virtual (int Width, int Height) ReadDimensionsFromNative() =>
+        Texture2D.GetTexture2DDimensions(NativeHandleValue);
+
     /// <summary>Hands this texture's native handle to a new owner, leaving this object inert -- see
     /// <see cref="NativeResourceHandle.Detach"/> for the one case that needs it.</summary>
     internal nint DetachNativeHandle() => _handle.Detach();

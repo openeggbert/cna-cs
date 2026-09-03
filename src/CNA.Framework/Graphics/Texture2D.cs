@@ -118,25 +118,9 @@ public class Texture2D : Texture
     /// differently-shaped <c>CNA_TextureInfo</c>, which has no dimensions at all. <see langword="virtual"/>
     /// so <see cref="RenderTarget2D"/> can source its own dimensions from
     /// <c>cna_render_target_get_info</c> instead.</summary>
-    public virtual int Width
-    {
-        get
-        {
-            int value = GetTexture2DDimensions(NativeHandleValue).Width;
-            GC.KeepAlive(this);
-            return value;
-        }
-    }
+    public virtual int Width => CachedDimensions.Width;
 
-    public virtual int Height
-    {
-        get
-        {
-            int value = GetTexture2DDimensions(NativeHandleValue).Height;
-            GC.KeepAlive(this);
-            return value;
-        }
-    }
+    public virtual int Height => CachedDimensions.Height;
 
     /// <summary>Returns a plain tuple rather than <see cref="CnaTexture2DInfo"/> so CNA.XnaCompat
     /// can call it without naming a CNA.Interop type -- identical in shape and rationale to

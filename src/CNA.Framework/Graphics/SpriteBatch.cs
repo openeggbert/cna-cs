@@ -71,6 +71,11 @@ public class SpriteBatch : IDisposable
     /// renderer, not of the string.</summary>
     private bool _nativeTextRefused;
 
+    /// <summary>The texture of the previous buffered sprite, so a run of one texture consults
+    /// <see cref="_referencedTextures"/> once instead of once per sprite. Cleared wherever that
+    /// set is, since a stale value would skip adding a texture the cleared set no longer holds.</summary>
+    private Texture? _lastReferencedTexture;
+
     /// <summary>
     /// Makes this batch draw text the per-glyph way, as a renderer that refuses the native route
     /// would.
@@ -218,6 +223,7 @@ public class SpriteBatch : IDisposable
         _commandBuffer.Clear();
         _pendingText.Clear();
         _referencedTextures.Clear();
+        _lastReferencedTexture = null;
         _referencedFonts.Clear();
         _hasBegun = true;
     }
@@ -291,10 +297,49 @@ public class SpriteBatch : IDisposable
         ArgumentNullException.ThrowIfNull(texture);
         EnsureHasBegun(caller);
 
-        (int textureWidth, int textureHeight) = Texture2D.GetTexture2DDimensions(texture.NativeHandleValue);
-        Rectangle source = sourceRectangle ?? new Rectangle(0, 0, textureWidth, textureHeight);
+        // Only a null source rectangle needs the texture's extents, and then only from the cache.
+        // This used to call cna_texture2d_get_info unconditionally -- once per sprite per frame --
+        // and then discard the answer whenever the caller had supplied a source rectangle.
+        Rectangle source;
+        if (sourceRectangle.HasValue)
+        {
+            source = sourceRectangle.GetValueOrDefault();
+        }
+        else
+        {
+            (int textureWidth, int textureHeight) = texture.CachedDimensions;
+            source = new Rectangle(0, 0, textureWidth, textureHeight);
+        }
 
-        _referencedTextures.Add(texture);
+        AddDrawCommand(texture, position, source, color, rotation, origin, scale, effects, layerDepth);
+    }
+
+    /// <summary>
+    /// Buffers one already-resolved sprite, and keeps its texture reachable until the flush.
+    ///
+    /// The reachability set stays exact -- every distinct texture drawn this batch is in it -- but
+    /// a batch normally draws long runs of one texture, so a run is collapsed by one reference
+    /// comparison before the set is consulted at all. <see cref="_referencedTextures"/> hashes on
+    /// <see cref="System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(object)"/>, a real
+    /// call that was being paid thousands of times a frame to re-add the same object.
+    /// </summary>
+    private void AddDrawCommand(
+        Texture texture,
+        Vector2 position,
+        Rectangle source,
+        Color color,
+        float rotation,
+        Vector2 origin,
+        Vector2 scale,
+        SpriteEffects effects,
+        float layerDepth)
+    {
+        if (!ReferenceEquals(texture, _lastReferencedTexture))
+        {
+            _referencedTextures.Add(texture);
+            _lastReferencedTexture = texture;
+        }
+
         _commandBuffer.Add(new CnaSpriteDrawCommand(
             new CnaHandle(texture.NativeHandleValue),
             position.ToNative(),
@@ -324,25 +369,37 @@ public class SpriteBatch : IDisposable
         string caller)
     {
         ArgumentNullException.ThrowIfNull(texture);
+        EnsureHasBegun(caller);
 
-        (int textureWidth, int textureHeight) = Texture2D.GetTexture2DDimensions(texture.NativeHandleValue);
-        int sourceWidth = sourceRectangle?.Width ?? textureWidth;
-        int sourceHeight = sourceRectangle?.Height ?? textureHeight;
+        // The source rectangle is resolved here and handed down already resolved. Before this the
+        // extents were read from native here and then read a second time by the position-based
+        // DrawEx below, so every destination-rectangle sprite cost two ABI transitions rather than
+        // the none it costs now.
+        Rectangle source;
+        if (sourceRectangle.HasValue)
+        {
+            source = sourceRectangle.GetValueOrDefault();
+        }
+        else
+        {
+            (int textureWidth, int textureHeight) = texture.CachedDimensions;
+            source = new Rectangle(0, 0, textureWidth, textureHeight);
+        }
+
         var scale = new Vector2(
-            sourceWidth == 0 ? 0f : destinationRectangle.Width / (float)sourceWidth,
-            sourceHeight == 0 ? 0f : destinationRectangle.Height / (float)sourceHeight);
+            source.Width == 0 ? 0f : destinationRectangle.Width / (float)source.Width,
+            source.Height == 0 ? 0f : destinationRectangle.Height / (float)source.Height);
 
-        DrawEx(
+        AddDrawCommand(
             texture,
             new Vector2(destinationRectangle.X, destinationRectangle.Y),
-            sourceRectangle,
+            source,
             color,
             rotation,
             origin,
             scale,
             effects,
-            layerDepth,
-            caller);
+            layerDepth);
     }
 
     public void DrawString(SpriteFont spriteFont, string text, Vector2 position, Color color) =>
@@ -463,6 +520,7 @@ public class SpriteBatch : IDisposable
         _commandBuffer.Clear();
         _pendingText.Clear();
         _referencedTextures.Clear();
+        _lastReferencedTexture = null;
         _referencedFonts.Clear();
     }
 
